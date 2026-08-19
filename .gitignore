@@ -1,0 +1,47 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+
+# Go
+bin/
+dist/
+coverage.out
+*.test
+*.prof
+vendor/
+
+# Node / SvelteKit
+node_modules/
+.svelte-kit/
+build/
+.vite/
+coverage/
+playwright-report/
+test-results/
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Generated API and local data
+generated/
+tmp/
+data/
+*.db
+*.sqlite
+
+# Editors and operating systems
+.claude/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

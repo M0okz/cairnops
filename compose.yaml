@@ -1,0 +1,75 @@
+name: cairnops
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: cairnops
+      POSTGRES_USER: cairnops
+      POSTGRES_PASSWORD: ${CAIRNOPS_POSTGRES_PASSWORD:-cairnops-local-only}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cairnops -d cairnops"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - cairnops-postgres:/var/lib/postgresql
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+      target: server
+    environment:
+      CAIRNOPS_DATABASE_URL: postgres://cairnops:${CAIRNOPS_POSTGRES_PASSWORD:-cairnops-local-only}@postgres:5432/cairnops?sslmode=disable
+      CAIRNOPS_BOOTSTRAP_TOKEN: ${CAIRNOPS_BOOTSTRAP_TOKEN:?CAIRNOPS_BOOTSTRAP_TOKEN must be set}
+      CAIRNOPS_HTTP_ADDRESS: :8080
+      CAIRNOPS_PUBLIC_URL: ${CAIRNOPS_PUBLIC_URL:-http://localhost:8080}
+      CAIRNOPS_WEB_DIR: /app/web
+      CAIRNOPS_MASTER_KEY_FILE: /var/lib/cairnops/master.key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/cairnops", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    ports:
+      - "${CAIRNOPS_HTTP_PORT:-8080}:8080"
+    volumes:
+      - cairnops-secrets:/var/lib/cairnops
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+      target: worker
+    environment:
+      CAIRNOPS_DATABASE_URL: postgres://cairnops:${CAIRNOPS_POSTGRES_PASSWORD:-cairnops-local-only}@postgres:5432/cairnops?sslmode=disable
+      CAIRNOPS_WORKER_HEALTH_ADDRESS: :8081
+      CAIRNOPS_PUBLIC_URL: ${CAIRNOPS_PUBLIC_URL:-http://localhost:8080}
+      CAIRNOPS_MASTER_KEY_FILE: /var/lib/cairnops/master.key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/cairnops", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    cap_add:
+      - NET_RAW
+    volumes:
+      - cairnops-secrets:/var/lib/cairnops
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  cairnops-postgres:
+  cairnops-secrets:

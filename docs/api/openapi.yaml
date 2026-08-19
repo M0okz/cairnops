@@ -1,0 +1,1911 @@
+openapi: 3.1.0
+info:
+  title: CairnOps API
+  version: 0.1.0-connected
+  description: API CairnOps pour la supervision native et les Connecteurs guidés.
+servers:
+  - url: /
+components:
+  securitySchemes:
+    BootstrapBearer:
+      type: http
+      scheme: bearer
+      description: >
+        Jeton défini par CAIRNOPS_BOOTSTRAP_TOKEN. Il n'ouvre que deux portes, toutes
+        deux hors session : l'initialisation de l'instance et le rétablissement d'un
+        accès perdu. Il prouve le contrôle du déploiement, rien d'autre.
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: cairnops_session
+      description: Session HttpOnly révocable. Sous HTTPS, le serveur utilise le préfixe de sécurité __Host-.
+    WebhookBearer:
+      type: http
+      scheme: bearer
+      description: Secret de 256 bits affiché une seule fois lors de la création du webhook générique.
+  schemas:
+    User:
+      type: object
+      required: [id, username, display_name, role]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string, pattern: '^[a-z0-9][a-z0-9._-]{2,63}$' }
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+        role: { type: string, enum: [administrator, operator, observer] }
+    Account:
+      description: >
+        Un compte vu depuis l'écran qui les administre. Il ajoute au User ce qui
+        n'intéresse que cet écran : depuis quand le compte existe, et depuis
+        quand il ne sert plus. Un compte désactivé n'ouvre plus de session et sa
+        date de désactivation est renseignée ; il n'est jamais supprimé, pour que
+        ses décisions restent à son nom dans le Journal d'activité.
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          required: [created_at, deactivated_at]
+          properties:
+            created_at: { type: string, format: date-time }
+            deactivated_at: { type: string, format: date-time, nullable: true }
+    InboxEntry:
+      description: >
+        Une notification reçue par la personne connectée. Elle appartient à un
+        compte : cette API ne rend jamais la boîte de quelqu'un d'autre.
+      type: object
+      required: [id, incident_id, event_kind, target_name, nature_label, severity, occurred_at, read_at]
+      properties:
+        id: { type: integer, format: int64 }
+        incident_id: { type: string, format: uuid }
+        target_id: { type: string, format: uuid }
+        event_kind: { type: string, enum: [firing, resolved] }
+        target_name: { type: string }
+        nature_label: { type: string }
+        severity: { type: string, enum: [information, warning, major, critical] }
+        occurred_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time, nullable: true }
+    AuthenticatedSession:
+      type: object
+      required: [user, expires_at]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        expires_at: { type: string, format: date-time }
+    Target:
+      type: object
+      required: [id, name, description, created_at, external_source_count, sources]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        created_at: { type: string, format: date-time }
+        external_source_count: { type: integer, minimum: 0 }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/Source' }
+    Measure:
+      type: object
+      description: >-
+        Ce qu'une fenêtre permet d'affirmer. Chaque ratio est nul tant que rien
+        ne l'établit : une mesure absente ne vaut pas une mesure à zéro.
+      required:
+        [window, availability, coverage, average_latency_milliseconds,
+         maximum_latency_milliseconds, conclusive_observations,
+         unknown_observations, expected_observations]
+      properties:
+        window: { type: string, enum: ['24h', '7d', '30d'] }
+        availability:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          nullable: true
+          description: >-
+            Part des Observations concluantes qui ont conclu à la disponibilité.
+            Une Observation Inconnue n'y entre pas.
+        coverage:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          nullable: true
+          description: >-
+            Part des Observations attendues qui ont effectivement conclu. Une
+            Observation Inconnue, une sonde suspendue ou un worker absent la
+            font baisser.
+        average_latency_milliseconds:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Moyenne exacte des Observations saines de la fenêtre.
+        maximum_latency_milliseconds:
+          type: integer
+          minimum: 0
+          nullable: true
+        conclusive_observations: { type: integer, minimum: 0 }
+        unknown_observations: { type: integer, minimum: 0 }
+        expected_observations: { type: integer, minimum: 0 }
+    TargetMeasures:
+      type: object
+      required: [target_id, measures, trend, latency_trend]
+      properties:
+        target_id: { type: string, format: uuid }
+        measures:
+          type: array
+          items: { $ref: '#/components/schemas/Measure' }
+        trend:
+          type: array
+          description: >-
+            Disponibilité de chaque heure qui a conclu quelque chose, du plus
+            ancien au plus récent. Une heure muette ne produit pas de point.
+          items: { type: number, format: double, minimum: 0, maximum: 1 }
+        latency_trend:
+          type: array
+          description: >-
+            Latence moyenne, en millisecondes, de chaque heure ayant mesuré une
+            Observation saine, du plus ancien au plus récent. Même règle que la
+            tendance de Disponibilité : une heure muette ne produit pas de point.
+          items: { type: number, format: double, minimum: 0 }
+    SourceMeasures:
+      type: object
+      required: [source_id, name, kind, origin, measures]
+      properties:
+        source_id: { type: string, format: uuid }
+        name: { type: string }
+        kind:
+          type: string
+          enum: [http, tcp, dns, icmp, heartbeat, zabbix, uptime_kuma, generic_webhook]
+        origin:
+          type: string
+          enum: [native, integration]
+          description: >-
+            Un Contrôle natif est exécuté par le worker ; une Source
+            d'Intégration est alimentée par la synchronisation de son
+            Connecteur. Les deux se mesurent de la même façon.
+        measures:
+          type: array
+          items: { $ref: '#/components/schemas/Measure' }
+    TargetMeasureDetail:
+      type: object
+      required: [target_id, generated_at, measures, trend, latency_trend, sources]
+      properties:
+        target_id: { type: string, format: uuid }
+        generated_at: { type: string, format: date-time }
+        measures:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items: { $ref: '#/components/schemas/Measure' }
+        trend:
+          type: array
+          items: { type: number, format: double, minimum: 0, maximum: 1 }
+        latency_trend:
+          type: array
+          items: { type: number, format: double, minimum: 0 }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/SourceMeasures' }
+    Source:
+      type: object
+      required:
+        [id, target_id, name, kind, enabled, interval_seconds, timeout_milliseconds,
+         failure_threshold, recovery_threshold, severity]
+      properties:
+        id: { type: string, format: uuid }
+        target_id: { type: string, format: uuid }
+        name: { type: string }
+        kind:
+          type: string
+          enum: [http, tcp, dns, icmp, heartbeat]
+        enabled: { type: boolean }
+        interval_seconds: { type: integer, minimum: 20, maximum: 86400 }
+        timeout_milliseconds: { type: integer, minimum: 100, maximum: 60000 }
+        failure_threshold:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: >-
+            Observations défavorables consécutives à partir desquelles la Source
+            alimente un Incident. Une Observation inconnue ne conclut rien.
+        recovery_threshold:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: >-
+            Observations saines consécutives qui confirment le rétablissement de
+            la Source et mettent fin à son éventuelle Invalidation.
+        severity:
+          type: string
+          enum: [information, warning, major, critical]
+          description: Gravité source signalée lorsque cette Source déclenche.
+        last_signal_at: { type: string, format: date-time }
+        last_observed_at: { type: string, format: date-time }
+        latest_outcome:
+          type: string
+          enum: [healthy, unhealthy, unknown]
+    Observation:
+      type: object
+      required: [id, source_id, source_name, observed_at, outcome, latency_milliseconds, details]
+      properties:
+        id: { type: integer, format: int64 }
+        source_id: { type: string, format: uuid }
+        source_name: { type: string }
+        observed_at: { type: string, format: date-time }
+        outcome:
+          type: string
+          enum: [healthy, unhealthy, unknown]
+        latency_milliseconds: { type: integer, minimum: 0 }
+        reason: { type: string }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+    SystemComponent:
+      type: object
+      required: [name, status, instances]
+      properties:
+        name: { type: string, enum: [server, worker, postgresql] }
+        status: { type: string, enum: [operational, stale, unavailable] }
+        instances: { type: integer, minimum: 0 }
+        last_seen_at: { type: string, format: date-time }
+    SystemHealth:
+      type: object
+      required: [status, checked_at, components, database, hours]
+      properties:
+        status: { type: string, enum: [operational, degraded] }
+        checked_at: { type: string, format: date-time }
+        components:
+          type: array
+          items: { $ref: '#/components/schemas/SystemComponent' }
+        database:
+          $ref: '#/components/schemas/DatabaseHealth'
+        hours:
+          type: array
+          description: >-
+            Activité de l'instance heure par heure sur les 24 dernières heures,
+            de la plus ancienne à la plus récente, Cibles archivées exclues. Une
+            heure sans Observation ni attente ne produit pas de ligne.
+          items: { $ref: '#/components/schemas/InstanceHour' }
+    DatabaseHealth:
+      type: object
+      required: [latency_milliseconds, maximum_latency_milliseconds, samples, measured_since]
+      description: >-
+        Temps de réponse de PostgreSQL mesuré par le serveur à chaque lecture de
+        cette projection. Les mesures vivent en mémoire et ne survivent pas à un
+        redémarrage : elles disent l'instant, pas l'historique.
+      properties:
+        latency_milliseconds: { type: number, format: double, minimum: 0 }
+        maximum_latency_milliseconds: { type: number, format: double, minimum: 0 }
+        samples:
+          type: array
+          maxItems: 24
+          items: { type: number, format: double, minimum: 0 }
+        measured_since: { type: string, format: date-time }
+    InstanceHour:
+      type: object
+      required: [hour, expected_observations, conclusive_observations, healthy_observations, average_latency_milliseconds]
+      properties:
+        hour: { type: string, format: date-time }
+        expected_observations: { type: integer, minimum: 0 }
+        conclusive_observations: { type: integer, minimum: 0 }
+        healthy_observations: { type: integer, minimum: 0 }
+        average_latency_milliseconds: { type: integer, minimum: 0, nullable: true }
+    Connector:
+      type: object
+      required: [id, kind, name, endpoint, status, remote_version, compatibility, encrypted_transport, binding_count, quarantine_count, last_checked_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [zabbix, uptime_kuma, generic_webhook] }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        endpoint: { type: string, format: uri, maxLength: 2048 }
+        status: { type: string, enum: [connected, degraded, disabled] }
+        remote_version: { type: string }
+        compatibility: { type: string, enum: [supported, warning] }
+        encrypted_transport: { type: boolean }
+        binding_count: { type: integer, minimum: 0 }
+        quarantine_count: { type: integer, minimum: 0 }
+        last_checked_at: { type: string, format: date-time }
+        last_error: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ConnectorRemoval:
+      type: object
+      required: [id, kind, name, bindings, quarantined, resolved_incidents]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [zabbix, uptime_kuma, generic_webhook] }
+        name: { type: string }
+        bindings: { type: integer, minimum: 0, description: Sources externes déliées. Les Cibles correspondantes sont conservées. }
+        quarantined: { type: integer, minimum: 0, description: Identités en quarantaine emportées sans décision. }
+        resolved_incidents: { type: integer, minimum: 0, description: Incidents clos faute de preuve après la suppression. }
+    IncidentSignal:
+      type: object
+      required: [id, origin, name, active, severity, opened_at, upstream_acknowledged]
+      properties:
+        id: { type: string, format: uuid }
+        origin: { type: string, enum: [native, zabbix, uptime_kuma, webhook] }
+        connector_id: { type: string, format: uuid }
+        connector_name: { type: string }
+        external_event_id: { type: string }
+        external_object_id: { type: string }
+        name: { type: string }
+        active: { type: boolean }
+        severity: { type: string, enum: [information, warning, major, critical] }
+        opened_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+        upstream_acknowledged: { type: boolean }
+        invalidated_at: { type: string, format: date-time }
+        invalidated_by: { type: string }
+        invalidation_reason: { type: string, minLength: 8, maxLength: 500 }
+        rearmed_at: { type: string, format: date-time }
+    IncidentActivity:
+      type: object
+      required: [id, kind, origin, message, data, occurred_at]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string }
+        origin: { type: string }
+        actor_name: { type: string }
+        message: { type: string }
+        data: { type: object, additionalProperties: true }
+        occurred_at: { type: string, format: date-time }
+    Incident:
+      type: object
+      required: [id, target_id, target_name, nature_key, nature_label, status, source_severity, effective_severity, opened_at, acknowledgement_sync_status, maintenance_active, signals, activity, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        target_id: { type: string, format: uuid }
+        target_name: { type: string }
+        nature_key: { type: string }
+        nature_label: { type: string }
+        status: { type: string, enum: [active, resolved] }
+        source_severity: { type: string, enum: [information, warning, major, critical] }
+        effective_severity: { type: string, enum: [information, warning, major, critical] }
+        opened_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+        acknowledged_at: { type: string, format: date-time }
+        acknowledged_by: { type: string }
+        acknowledgement_origin: { type: string, enum: [user, connector] }
+        acknowledgement_sync_status: { type: string, enum: [not_applicable, pending, synchronized, failed] }
+        acknowledgement_sync_error: { type: string }
+        maintenance_active: { type: boolean }
+        maintenance_ends_at: { type: string, format: date-time }
+        signals:
+          type: array
+          items: { $ref: '#/components/schemas/IncidentSignal' }
+        activity:
+          type: array
+          items: { $ref: '#/components/schemas/IncidentActivity' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TargetReference:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+    Maintenance:
+      type: object
+      required: [id, name, reason, state, starts_at, ends_at, targets, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 3, maxLength: 160 }
+        reason: { type: string, minLength: 8, maxLength: 500 }
+        state: { type: string, enum: [active, upcoming, ended, cancelled] }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        cancelled_at: { type: string, format: date-time }
+        created_by: { type: string }
+        targets:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/TargetReference' }
+        created_at: { type: string, format: date-time }
+    NotificationChannel:
+      type: object
+      required: [id, kind, name, endpoint, severities, enabled, status, encrypted_transport, last_checked_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, const: mattermost }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        endpoint:
+          type: string
+          format: uri
+          description: Origine Mattermost sans le chemin secret du webhook.
+        severities:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items: { type: string, enum: [information, warning, major, critical] }
+        enabled: { type: boolean }
+        status: { type: string, enum: [connected, degraded, disabled] }
+        encrypted_transport: { type: boolean, const: true }
+        last_checked_at: { type: string, format: date-time }
+        last_error: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ZabbixInterface:
+      type: object
+      required: [type, address, main]
+      properties:
+        type: { type: string, enum: [agent, snmp, ipmi, jmx, other] }
+        address: { type: string }
+        port: { type: string }
+        main: { type: boolean }
+    ZabbixHostPreview:
+      type: object
+      required: [external_id, name, technical_name, interfaces]
+      properties:
+        external_id: { type: string }
+        name: { type: string }
+        technical_name: { type: string }
+        interfaces:
+          type: array
+          items: { $ref: '#/components/schemas/ZabbixInterface' }
+        suggested_target: { $ref: '#/components/schemas/TargetReference' }
+        already_imported_to: { $ref: '#/components/schemas/TargetReference' }
+    ZabbixPreview:
+      type: object
+      required: [kind, name, endpoint, version, compatibility, compatibility_label, encrypted_transport, hosts, receipt, expires_at]
+      properties:
+        kind: { type: string, const: zabbix }
+        name: { type: string }
+        endpoint: { type: string, format: uri }
+        version: { type: string }
+        compatibility: { type: string, enum: [supported, warning] }
+        compatibility_label: { type: string }
+        encrypted_transport: { type: boolean }
+        hosts:
+          type: array
+          items: { $ref: '#/components/schemas/ZabbixHostPreview' }
+        receipt:
+          type: string
+          writeOnly: true
+          description: Reçu opaque chiffré, valable quinze minutes et requis par la confirmation d'import.
+        expires_at: { type: string, format: date-time }
+    ZabbixImport:
+      type: object
+      required: [connector, targets]
+      properties:
+        connector: { $ref: '#/components/schemas/Connector' }
+        targets:
+          type: array
+          items:
+            type: object
+            required: [external_id, target_id, target_name, disposition]
+            properties:
+              external_id: { type: string }
+              target_id: { type: string, format: uuid }
+              target_name: { type: string }
+              disposition: { type: string, enum: [created, reused, already_imported] }
+    UptimeKumaMonitorPreview:
+      type: object
+      required: [external_id, name, type, status]
+      properties:
+        external_id: { type: string }
+        name: { type: string }
+        type: { type: string }
+        address: { type: string }
+        status:
+          type: integer
+          enum: [0, 1, 2, 3]
+          description: DOWN, UP, PENDING ou MAINTENANCE selon Uptime Kuma.
+        suggested_target: { $ref: '#/components/schemas/TargetReference' }
+        already_imported_to: { $ref: '#/components/schemas/TargetReference' }
+    UptimeKumaPreview:
+      type: object
+      required: [kind, name, endpoint, compatibility, compatibility_label, encrypted_transport, monitors, receipt, expires_at]
+      properties:
+        kind: { type: string, const: uptime_kuma }
+        name: { type: string }
+        endpoint: { type: string, format: uri }
+        compatibility: { type: string, const: supported }
+        compatibility_label: { type: string }
+        encrypted_transport: { type: boolean }
+        monitors:
+          type: array
+          items: { $ref: '#/components/schemas/UptimeKumaMonitorPreview' }
+        receipt:
+          type: string
+          writeOnly: true
+          description: Reçu opaque chiffré, valable quinze minutes et requis par la confirmation d'import.
+        expires_at: { type: string, format: date-time }
+    UptimeKumaImport:
+      type: object
+      required: [connector, targets]
+      properties:
+        connector: { $ref: '#/components/schemas/Connector' }
+        targets:
+          type: array
+          items:
+            type: object
+            required: [external_id, target_id, target_name, disposition]
+            properties:
+              external_id: { type: string }
+              target_id: { type: string, format: uuid }
+              target_name: { type: string }
+              disposition: { type: string, enum: [created, reused, already_imported] }
+    GenericWebhookCreated:
+      type: object
+      required: [connector, endpoint, token]
+      properties:
+        connector: { $ref: '#/components/schemas/Connector' }
+        endpoint: { type: string, format: uri }
+        token:
+          type: string
+          minLength: 64
+          maxLength: 64
+          writeOnly: true
+          description: Secret affiché uniquement dans cette réponse et stocké scellé côté serveur.
+    GenericWebhookEvent:
+      type: object
+      required: [identity, target_name, event_key, status, summary]
+      properties:
+        identity: { type: string, minLength: 1, maxLength: 255 }
+        target_name: { type: string, minLength: 1, maxLength: 160 }
+        event_key: { type: string, minLength: 1, maxLength: 255 }
+        nature_key: { type: string, minLength: 1, maxLength: 255, default: availability }
+        nature: { type: string, minLength: 1, maxLength: 512, default: Indisponibilité }
+        status: { type: string, enum: [firing, resolved] }
+        severity: { type: string, enum: [information, warning, major, critical], default: major }
+        summary: { type: string, minLength: 1, maxLength: 512 }
+        details: { type: object, additionalProperties: true }
+    WebhookQuarantine:
+      type: object
+      required: [id, connector_id, external_identity, target_name, event_key, nature_key, nature, status, severity, summary, details, occurrences, first_seen_at, last_seen_at]
+      properties:
+        id: { type: string, format: uuid }
+        connector_id: { type: string, format: uuid }
+        external_identity: { type: string, minLength: 1, maxLength: 255 }
+        target_name: { type: string, minLength: 1, maxLength: 160 }
+        event_key: { type: string, minLength: 1, maxLength: 255 }
+        nature_key: { type: string, minLength: 1, maxLength: 255 }
+        nature: { type: string, minLength: 1, maxLength: 512 }
+        status: { type: string, enum: [firing, resolved] }
+        severity: { type: string, enum: [information, warning, major, critical] }
+        summary: { type: string, minLength: 1, maxLength: 512 }
+        details: { type: object, additionalProperties: true }
+        occurrences: { type: integer, minimum: 1 }
+        first_seen_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+    WebhookApproval:
+      type: object
+      required: [target_id, target_name, identity, replayed]
+      properties:
+        target_id: { type: string, format: uuid }
+        target_name: { type: string }
+        identity: { type: string }
+        replayed: { type: integer, minimum: 0 }
+    RealtimeMessage:
+      type: object
+      required: [type, version]
+      properties:
+        type: { type: string, enum: [ready, event] }
+        version: { type: integer, format: int64, minimum: 0 }
+        kind:
+          type: string
+          enum: [target.changed, source.changed, observation.created, component.heartbeat, connector.changed, incident.changed, maintenance.changed]
+        entity_type: { type: string, enum: [target, source, component, connector, incident, maintenance] }
+        entity_id: { type: string }
+        occurred_at: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+paths:
+  /api/v1/health/live:
+    get:
+      operationId: getLiveness
+      responses:
+        '200': { description: Processus actif }
+  /api/v1/health/ready:
+    get:
+      operationId: getReadiness
+      responses:
+        '200': { description: Serveur prêt }
+        '503': { description: Dépendance indisponible }
+  /api/v1/system/health:
+    get:
+      operationId: getSystemHealth
+      security: [{ SessionCookie: [] }]
+      responses:
+        '200':
+          description: Projection de santé du serveur, des workers et de PostgreSQL
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemHealth' }
+        '401': { description: Authentification requise }
+        '503': { description: Projection de santé indisponible }
+  /api/v1/events:
+    get:
+      operationId: connectEventStream
+      description: >-
+        Établit un WebSocket authentifié. Sans curseur, le premier message ready fixe la
+        version courante. Avec after, les événements postérieurs sont rejoués dans l'ordre,
+        puis diffusés au fil de leur enregistrement. Ce canal signale les changements ; les
+        lectures et commandes restent dans l'API REST.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: query
+          name: after
+          schema: { type: integer, format: int64, minimum: 0 }
+          description: Dernière version appliquée par le client avant une reconnexion.
+      x-websocket-messages:
+        $ref: '#/components/schemas/RealtimeMessage'
+      responses:
+        '101': { description: WebSocket établi }
+        '400': { description: Curseur invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Origine Web non autorisée }
+        '503': { description: Suite d'événements indisponible }
+  /api/v1/connectors:
+    get:
+      operationId: listConnectors
+      security: [{ SessionCookie: [] }]
+      responses:
+        '200':
+          description: Connecteurs persistés sans leurs secrets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [connectors]
+                properties:
+                  connectors:
+                    type: array
+                    items: { $ref: '#/components/schemas/Connector' }
+        '401': { description: Authentification requise }
+  /api/v1/connectors/zabbix/preview:
+    post:
+      operationId: previewZabbixConnector
+      description: Vérifie TLS, la version API et la portée du jeton, puis propose les rapprochements exacts sans importer.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address, api_token]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160, default: Zabbix }
+                address: { type: string, format: uri, maxLength: 2048 }
+                api_token: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+      responses:
+        '200':
+          description: Aperçu temporaire sans modification des Cibles
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZabbixPreview' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '422': { description: Zabbix inaccessible, incompatible ou jeton insuffisant }
+  /api/v1/connectors/zabbix/import:
+    post:
+      operationId: importZabbixConnector
+      description: Revalide l'aperçu, scelle le jeton et importe uniquement les hôtes explicitement sélectionnés.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receipt, host_ids]
+              properties:
+                receipt: { type: string, writeOnly: true }
+                host_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 5000
+                  uniqueItems: true
+                  items: { type: string }
+      responses:
+        '201':
+          description: Connecteur enregistré et Cibles créées, réutilisées ou déjà liées
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ZabbixImport' }
+        '400': { description: Sélection ou reçu invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '410': { description: Aperçu expiré }
+        '422': { description: La revalidation Zabbix a échoué }
+  /api/v1/connectors/uptime-kuma/preview:
+    post:
+      operationId: previewUptimeKumaConnector
+      description: Vérifie TLS, la clé API et la métrique monitor_status, puis propose les rapprochements exacts sans importer.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address, api_key]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160, default: Uptime Kuma }
+                address: { type: string, format: uri, maxLength: 2048 }
+                api_key: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+      responses:
+        '200':
+          description: Aperçu temporaire des moniteurs sans modification des Cibles
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UptimeKumaPreview' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '422': { description: Endpoint métriques inaccessible, invalide ou clé refusée }
+  /api/v1/connectors/uptime-kuma/import:
+    post:
+      operationId: importUptimeKumaConnector
+      description: Revalide l'aperçu, scelle la clé API et importe uniquement les moniteurs explicitement sélectionnés.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receipt, monitor_ids]
+              properties:
+                receipt: { type: string, writeOnly: true }
+                monitor_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 5000
+                  uniqueItems: true
+                  items: { type: string }
+      responses:
+        '201':
+          description: Connecteur enregistré et Cibles créées, réutilisées ou déjà liées
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UptimeKumaImport' }
+        '400': { description: Sélection ou reçu invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '410': { description: Aperçu expiré }
+        '422': { description: La revalidation Uptime Kuma a échoué }
+  /api/v1/connectors/{connectorID}/suspension:
+    post:
+      operationId: suspendConnector
+      description: >-
+        Arrête la lecture sans rien effacer : liaisons, quarantaine et Incidents ouverts
+        restent en place, et un webhook générique suspendu refuse ses appels entrants.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: connectorID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Connecteur suspendu.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Connector' }
+        '400': { description: Identité de Connecteur invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Connecteur absent }
+    delete:
+      operationId: resumeConnector
+      description: Replace le Connecteur dans le cycle et le rend dû immédiatement ; son état réel est confirmé au premier cycle.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: connectorID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Connecteur repris.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Connector' }
+        '400': { description: Identité de Connecteur invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Connecteur absent }
+  /api/v1/connectors/{connectorID}:
+    delete:
+      operationId: removeConnector
+      description: >-
+        Retire le Connecteur, ses liaisons, sa quarantaine et les preuves qu'il a produites.
+        Les Cibles sont conservées ; les Incidents qui ne gardaient aucune autre preuve sont
+        clos et le journal l'explique. Aucune écriture n'est faite chez l'outil d'origine.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: connectorID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Compte rendu de ce que la suppression a emporté.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectorRemoval' }
+        '400': { description: Identité de Connecteur invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Connecteur absent }
+  /api/v1/connectors/generic-webhook:
+    post:
+      operationId: createGenericWebhookConnector
+      description: Génère un point d'entrée non devinable et un secret Bearer affiché une seule fois.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160, default: Webhook générique }
+      responses:
+        '201':
+          description: Webhook créé ; le secret doit être conservé avant de quitter cette réponse.
+          headers:
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GenericWebhookCreated' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+  /api/v1/webhooks/{publicID}:
+    post:
+      operationId: receiveGenericWebhook
+      description: >-
+        Reçoit un état explicite. Une identité déjà liée est projetée en Incident ;
+        une identité inconnue est acceptée en quarantaine sans modifier l'état opérationnel.
+      security: [{ WebhookBearer: [] }]
+      parameters:
+        - in: path
+          name: publicID
+          required: true
+          schema: { type: string, pattern: '^[a-f0-9]{32}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenericWebhookEvent' }
+      responses:
+        '202':
+          description: État accepté ou retenu en quarantaine.
+          headers:
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [disposition]
+                properties:
+                  disposition: { type: string, enum: [accepted, quarantined] }
+                  quarantine_id: { type: string, format: uuid }
+        '400': { description: Corps invalide, inconnu ou supérieur à 64 KiB }
+        '401': { description: Point d'entrée, secret ou état du Connecteur invalide }
+  /api/v1/connectors/{connectorID}/quarantine:
+    get:
+      operationId: listWebhookQuarantine
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: connectorID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Dernier état de chaque événement porté par une identité encore inconnue.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [quarantine]
+                properties:
+                  quarantine:
+                    type: array
+                    items: { $ref: '#/components/schemas/WebhookQuarantine' }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+  /api/v1/connectors/{connectorID}/quarantine/{quarantineID}/approve:
+    post:
+      operationId: approveWebhookIdentity
+      description: Lie durablement l'identité à une Cible puis rejoue ses derniers états retenus de façon idempotente.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: connectorID
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: quarantineID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_id:
+                  type: string
+                  format: uuid
+                  description: Cible existante. Sans valeur, CairnOps réutilise un nom exact ou crée une Cible.
+      responses:
+        '200':
+          description: Identité liée et derniers états rejoués.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookApproval' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Connecteur, quarantaine ou Cible absent }
+        '409': { description: Identité déjà liée à une autre Cible }
+  /api/v1/incidents:
+    get:
+      operationId: listIncidents
+      description: Retourne la projection ordonnée des Incidents et leurs preuves. Les Incidents actifs non acquittés sont prioritaires.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [active, resolved, all], default: active }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        '200':
+          description: Incidents correspondant au filtre
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [incidents]
+                properties:
+                  incidents:
+                    type: array
+                    items: { $ref: '#/components/schemas/Incident' }
+        '400': { description: Filtre invalide }
+        '401': { description: Authentification requise }
+  /api/v1/incidents/{incidentID}:
+    get:
+      operationId: getIncident
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: incidentID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Incident, preuves et Journal d'activité
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Incident' }
+        '400': { description: Identifiant invalide }
+        '401': { description: Authentification requise }
+        '404': { description: Incident absent }
+  /api/v1/incidents/{incidentID}/acknowledgement:
+    post:
+      operationId: acknowledgeIncident
+      description: >-
+        Enregistre d'abord l'acquittement dans CairnOps, puis le propage aux
+        Sources compatibles. Une panne distante laisse l'Incident acquitté avec
+        un statut de synchronisation failed afin de permettre une reprise sûre.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: incidentID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Incident acquitté et état de propagation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Incident' }
+        '400': { description: Identifiant invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur ou Opérateur requis }
+        '404': { description: Incident absent }
+        '409': { description: Incident déjà résolu }
+  /api/v1/incidents/{incidentID}/signals/{signalID}/invalidation:
+    post:
+      operationId: invalidateIncidentSignal
+      description: >-
+        Écarte une preuve active sans la supprimer. La décision motivée est
+        ajoutée au Journal ; une Source à état réutilisable doit ensuite montrer
+        un rétablissement avant qu'un nouveau cycle identique puisse ouvrir un Incident.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: incidentID
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: signalID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 8, maxLength: 500 }
+      responses:
+        '200':
+          description: Incident recalculé et preuve conservée comme invalidée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Incident' }
+        '400': { description: Identifiant ou motif invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur ou Opérateur requis }
+        '404': { description: Incident ou preuve absent }
+        '409': { description: Preuve déjà inactive }
+  /api/v1/maintenances:
+    get:
+      operationId: listMaintenances
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      responses:
+        '200':
+          description: Fenêtres actives, planifiées et récemment terminées
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [maintenances]
+                properties:
+                  maintenances:
+                    type: array
+                    items: { $ref: '#/components/schemas/Maintenance' }
+        '401': { description: Authentification requise }
+    post:
+      operationId: createMaintenance
+      description: Crée une fenêtre immédiate ou planifiée sur une ou plusieurs Cibles.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, reason, target_ids, ends_at]
+              properties:
+                name: { type: string, minLength: 3, maxLength: 160 }
+                reason: { type: string, minLength: 8, maxLength: 500 }
+                target_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items: { type: string, format: uuid }
+                starts_at: { type: string, format: date-time, description: Omis pour démarrer immédiatement. }
+                ends_at: { type: string, format: date-time }
+      responses:
+        '201':
+          description: Maintenance créée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Maintenance' }
+        '400': { description: Fenêtre ou Cibles invalides }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur ou Opérateur requis }
+  /api/v1/maintenances/{maintenanceID}/cancellation:
+    post:
+      operationId: cancelMaintenance
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: maintenanceID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Maintenance arrêtée de façon anticipée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Maintenance' }
+        '400': { description: Identifiant invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur ou Opérateur requis }
+        '404': { description: Maintenance absente }
+        '409': { description: Maintenance déjà terminée ou annulée }
+  /api/v1/notification-channels:
+    get:
+      operationId: listNotificationChannels
+      description: Liste les sorties de notification sans jamais révéler leurs secrets.
+      security: [{ SessionCookie: [] }]
+      responses:
+        '200':
+          description: Canaux configurés
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [channels]
+                properties:
+                  channels:
+                    type: array
+                    items: { $ref: '#/components/schemas/NotificationChannel' }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+  /api/v1/notification-channels/mattermost:
+    post:
+      operationId: createMattermostNotificationChannel
+      description: Vérifie le webhook HTTPS par un message de contrôle, puis chiffre son URL complète avant persistance.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [webhook_url]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160, default: Mattermost }
+                webhook_url: { type: string, format: uri, writeOnly: true }
+                severities:
+                  type: array
+                  minItems: 1
+                  maxItems: 4
+                  uniqueItems: true
+                  default: [warning, major, critical]
+                  items: { type: string, enum: [information, warning, major, critical] }
+      responses:
+        '201':
+          description: Canal testé, scellé et activé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationChannel' }
+        '400': { description: URL, nom ou Gravités invalides }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '422': { description: Mattermost n’a pas confirmé le message de contrôle }
+  /api/v1/setup/status:
+    get:
+      operationId: getSetupStatus
+      security: []
+      responses:
+        '200':
+          description: État d'initialisation de l'Espace opérationnel
+          headers:
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [initialized, name]
+                properties:
+                  initialized: { type: boolean }
+                  name:
+                    type: string
+                    maxLength: 80
+                    description: Nom que porte l'instance ; vide sur les installations mises en service avant qu'on puisse les nommer
+  /api/v1/setup:
+    post:
+      operationId: initializeInstallation
+      security: [{ BootstrapBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instance_name, username, display_name, password]
+              properties:
+                instance_name: { type: string, minLength: 1, maxLength: 80 }
+                username: { type: string, pattern: '^[a-z0-9][a-z0-9._-]{2,63}$' }
+                display_name: { type: string, minLength: 1, maxLength: 100 }
+                password: { type: string, format: password, minLength: 12, maxLength: 128 }
+      responses:
+        '201':
+          description: Premier Administrateur créé et Session ouverte
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthenticatedSession' }
+        '400': { description: Entrée invalide }
+        '401': { description: Jeton d'amorçage absent ou invalide }
+        '409': { description: Installation déjà initialisée }
+  /api/v1/instance:
+    patch:
+      operationId: renameInstance
+      description: Renomme l'instance. Réservé aux Administrateurs ; ne déplace aucune donnée.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        '200':
+          description: Nom retenu par l'instance
+          headers:
+            Cache-Control: { schema: { type: string, const: no-store } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [initialized, name]
+                properties:
+                  initialized: { type: boolean }
+                  name: { type: string, maxLength: 80 }
+        '400': { description: Entrée invalide }
+        '401': { description: Session absente ou expirée }
+        '403': { description: Rôle insuffisant }
+  /api/v1/session:
+    post:
+      operationId: createSession
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Session ouverte
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthenticatedSession' }
+        '401': { description: Identifiants invalides }
+    get:
+      operationId: getSession
+      security: [{ SessionCookie: [] }]
+      responses:
+        '200':
+          description: Utilisateur de la Session courante
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { description: Authentification requise }
+    delete:
+      operationId: deleteSession
+      security: [{ SessionCookie: [] }]
+      responses:
+        '204': { description: Session révoquée et cookie supprimé }
+        '401': { description: Authentification requise }
+  /api/v1/session/password:
+    put:
+      operationId: changeOwnPassword
+      summary: Remplacer son propre mot de passe
+      description: >
+        Vérifie le mot de passe actuel, puis révoque toutes les sessions du compte.
+        La session porteuse est immédiatement rouverte afin de ne pas éjecter
+        l'opérateur après un geste réussi.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string }
+                new_password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '200':
+          description: Mot de passe remplacé
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [changed] }
+                  session: { type: string, enum: [renewed, ended] }
+        '400': { description: Mot de passe hors bornes, ou identique à l'actuel }
+        '401': { description: Mot de passe actuel incorrect, ou session absente }
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      summary: Lister les comptes
+      description: >
+        Réservé aux Administrateurs. Aucune empreinte de mot de passe n'est
+        retournée. Les comptes actifs viennent en premier, puis les désactivés.
+      security: [{ SessionCookie: [] }]
+      responses:
+        '200':
+          description: Comptes de l'instance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items: { $ref: '#/components/schemas/Account' }
+        '403': { description: Rôle insuffisant }
+    post:
+      operationId: createAccount
+      summary: Ouvrir un compte
+      description: >
+        Réservé aux Administrateurs. CairnOps n'envoie pas de courrier en V1 :
+        l'Administrateur choisit le premier mot de passe et le transmet hors de
+        CairnOps. L'identifiant est normalisé en minuscules et ne changera plus.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, display_name, role, password]
+              properties:
+                username: { type: string, pattern: '^[a-z0-9][a-z0-9._-]{2,63}$' }
+                display_name: { type: string, minLength: 1, maxLength: 100 }
+                role: { type: string, enum: [administrator, operator, observer] }
+                password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '201':
+          description: Compte ouvert
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/Account' }
+        '400': { description: Identifiant, nom, rôle ou mot de passe hors bornes }
+        '403': { description: Rôle insuffisant }
+        '409': { description: Identifiant déjà pris }
+  /api/v1/users/{userID}:
+    patch:
+      operationId: updateAccount
+      summary: Corriger un nom d'affichage ou changer un rôle
+      description: >
+        Réservé aux Administrateurs. Un champ absent reste inchangé.
+        L'identifiant, lui, ne se corrige pas : il désigne la personne dans les
+        sessions et dans le Journal d'activité. Changer un rôle révoque les
+        sessions ouvertes du compte visé, car un rôle décide de ce qui est permis
+        à chaque requête. Un Administrateur ne change pas son propre rôle, et
+        l'instance refuse de perdre son dernier Administrateur actif.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: userID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                display_name: { type: string, minLength: 1, maxLength: 100 }
+                role: { type: string, enum: [administrator, operator, observer] }
+      responses:
+        '200':
+          description: Compte corrigé
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/Account' }
+        '400': { description: Nom ou rôle hors bornes, ou requête sans rien à modifier }
+        '403': { description: Rôle insuffisant }
+        '404': { description: Compte introuvable }
+        '409': { description: Propre rôle, ou dernier Administrateur actif }
+  /api/v1/users/{userID}/deactivation:
+    post:
+      operationId: deactivateAccount
+      summary: Retirer l'accès d'un compte
+      description: >
+        Réservé aux Administrateurs. Un compte ne se supprime pas : ses
+        acquittements, ses invalidations et ses entrées au Journal d'activité
+        restent à son nom. La désactivation révoque ses sessions ouvertes, ferme
+        la connexion et ferme aussi la porte de secours ; elle ne touche ni son
+        empreinte de mot de passe, ni son identifiant, qui reste pris. Un
+        Administrateur ne se désactive pas lui-même, et l'instance refuse de
+        perdre son dernier Administrateur actif.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: userID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Accès retiré
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/Account' }
+        '403': { description: Rôle insuffisant }
+        '404': { description: Compte introuvable }
+        '409': { description: Propre compte, ou dernier Administrateur actif }
+    delete:
+      operationId: reactivateAccount
+      summary: Rendre l'accès d'un compte
+      description: >
+        Réservé aux Administrateurs. Le compte retrouve son accès avec le mot de
+        passe qu'il avait, inchangé depuis la désactivation.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: userID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Accès rendu
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/Account' }
+        '403': { description: Rôle insuffisant }
+        '404': { description: Compte introuvable }
+  /api/v1/users/{userID}/password:
+    post:
+      operationId: setUserPassword
+      summary: Réinitialiser le mot de passe d'un compte
+      description: >
+        Réservé aux Administrateurs. Ne demande pas l'ancien mot de passe et
+        révoque les sessions ouvertes du compte visé.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: userID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_password]
+              properties:
+                new_password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '200':
+          description: Mot de passe remplacé
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '403': { description: Rôle insuffisant }
+        '404': { description: Compte introuvable }
+  /api/v1/notifications:
+    get:
+      operationId: readInbox
+      summary: Lire sa boîte de réception
+      description: >
+        Les dernières notifications reçues par la personne connectée, les plus
+        récentes d'abord, et le nombre de celles qu'elle n'a pas lues. Le compte
+        porte sur toute la boîte, pas seulement sur la page rendue. Ouverte à
+        tous les rôles : ce ne sont pas des Canaux à administrer, ce sont des
+        nouvelles reçues.
+      security: [{ SessionCookie: [] }]
+      responses:
+        '200':
+          description: Boîte de réception
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries, unread]
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: '#/components/schemas/InboxEntry' }
+                  unread: { type: integer, minimum: 0 }
+        '401': { description: Session absente }
+  /api/v1/notifications/read:
+    post:
+      operationId: markNotificationsRead
+      summary: Marquer des notifications comme lues
+      description: >
+        Sans corps, ou avec une liste vide, toute la boîte est lue. Le geste ne
+        concerne jamais que son auteur, et n'efface rien : une entrée lue reste
+        dans la boîte avec sa date.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Entrées marquées lues
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [read]
+                properties:
+                  read: { type: integer, minimum: 0 }
+        '401': { description: Session absente }
+  /api/v1/recovery:
+    post:
+      operationId: recoverPassword
+      summary: Rétablir l'accès sans session
+      description: >
+        Porte de secours pour le cas où plus aucun compte ne peut ouvrir de
+        session. Le Jeton d'amorçage tient lieu de preuve, comme à la mise en
+        service. Un identifiant inconnu répond comme un jeton refusé : cette
+        route ne révèle pas quels comptes existent. Les sessions du compte visé
+        sont révoquées.
+      security: [{ BootstrapBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, new_password]
+              properties:
+                username: { type: string }
+                new_password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '200':
+          description: Accès rétabli
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [recovered] }
+        '400': { description: Mot de passe hors bornes }
+        '401': { description: Jeton d'amorçage ou identifiant incorrect }
+  /api/v1/targets:
+    get:
+      operationId: listTargets
+      security: [{ SessionCookie: [] }]
+      responses:
+        '200':
+          description: Cibles actives et Sources associées
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [targets]
+                properties:
+                  targets:
+                    type: array
+                    items: { $ref: '#/components/schemas/Target' }
+        '401': { description: Authentification requise }
+    post:
+      operationId: createTarget
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                description: { type: string, maxLength: 2000 }
+      responses:
+        '201':
+          description: Cible créée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Target' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+  /api/v1/targets/{targetID}:
+    patch:
+      operationId: updateTarget
+      security: [{ SessionCookie: [] }]
+      description: >-
+        Corrige le nom et la description d'une Cible. Son identité, son
+        historique et ses Sources ne bougent pas.
+      parameters:
+        - in: path
+          name: targetID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                description: { type: string, maxLength: 2000 }
+      responses:
+        '200':
+          description: Cible corrigée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Target' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Cible absente ou archivée }
+    delete:
+      operationId: archiveTarget
+      security: [{ SessionCookie: [] }]
+      description: >-
+        Archive une Cible sans effacer son passé. Ses Incidents actifs sont
+        résolus, ses Contrôles cessent d'être dus et aucun signal ne la rouvre.
+      parameters:
+        - in: path
+          name: targetID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Cible archivée }
+        '400': { description: Identifiant invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Cible absente ou déjà archivée }
+  /api/v1/targets/{targetID}/restoration:
+    post:
+      operationId: restoreTarget
+      security: [{ SessionCookie: [] }]
+      description: >-
+        Remet une Cible archivée en service. Aucun Incident n'est rouvert :
+        il y faudra une preuve fraîche.
+      parameters:
+        - in: path
+          name: targetID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Cible restaurée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Target' }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Cible absente ou déjà en service }
+  /api/v1/sources/{sourceID}:
+    patch:
+      operationId: updateSource
+      security: [{ SessionCookie: [] }]
+      description: >-
+        Modifie un Contrôle natif. Un champ absent reste inchangé, ce qui permet
+        de suspendre une sonde sans réémettre sa configuration. Une Source
+        apportée par une Intégration est refusée : elle appartient au produit
+        distant.
+      parameters:
+        - in: path
+          name: sourceID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                enabled: { type: boolean }
+                interval_seconds: { type: integer, minimum: 20, maximum: 86400 }
+                timeout_milliseconds: { type: integer, minimum: 100, maximum: 60000 }
+                failure_threshold: { type: integer, minimum: 1, maximum: 10 }
+                recovery_threshold: { type: integer, minimum: 1, maximum: 10 }
+                severity:
+                  type: string
+                  enum: [information, warning, major, critical]
+                config: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Contrôle modifié
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Source' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Source absente ou Cible archivée }
+        '409': { description: Source appartenant à une Intégration }
+    delete:
+      operationId: deleteSource
+      security: [{ SessionCookie: [] }]
+      description: >-
+        Retire un Contrôle natif et les Observations qu'il portait : une preuve
+        sans Source qui la porte ne s'interprète plus.
+      parameters:
+        - in: path
+          name: sourceID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Contrôle retiré }
+        '400': { description: Identifiant invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Source absente }
+        '409': { description: Source appartenant à une Intégration }
+  /api/v1/targets/{targetID}/sources:
+    post:
+      operationId: createSource
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: targetID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, kind, interval_seconds, timeout_milliseconds, config]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                kind:
+                  type: string
+                  enum: [http, tcp, dns, icmp, heartbeat]
+                interval_seconds: { type: integer, minimum: 20, maximum: 86400 }
+                timeout_milliseconds: { type: integer, minimum: 100, maximum: 60000 }
+                failure_threshold:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  default: 3
+                recovery_threshold:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  default: 2
+                severity:
+                  type: string
+                  enum: [information, warning, major, critical]
+                  default: major
+                config: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: Source créée. Le secret Heartbeat éventuel est présent uniquement ici.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [source]
+                properties:
+                  source: { $ref: '#/components/schemas/Source' }
+                  heartbeat_token: { type: string, writeOnly: true }
+                  heartbeat_path: { type: string, writeOnly: true }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '404': { description: Cible absente }
+  /api/v1/metrics/targets:
+    get:
+      operationId: listTargetMeasures
+      security: [{ SessionCookie: [] }]
+      description: >-
+        Mesures sur 24 heures de toutes les Cibles actives, tendance comprise.
+        Une liste de Cibles ne coûte donc qu'une requête, quelle que soit sa
+        longueur.
+      responses:
+        '200':
+          description: Mesures sur 24 heures
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [window, targets]
+                properties:
+                  window: { type: string, const: '24h' }
+                  targets:
+                    type: array
+                    items: { $ref: '#/components/schemas/TargetMeasures' }
+        '401': { description: Authentification requise }
+  /api/v1/targets/{targetID}/metrics:
+    get:
+      operationId: getTargetMeasures
+      security: [{ SessionCookie: [] }]
+      description: >-
+        Les trois fenêtres d'une Cible et la part de chacune de ses Sources,
+        Contrôles natifs comme Sources apportées par une Intégration.
+      parameters:
+        - in: path
+          name: targetID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Mesures sur 24 heures, 7 et 30 jours
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TargetMeasureDetail' }
+        '400': { description: Identifiant invalide }
+        '401': { description: Authentification requise }
+        '404': { description: Cible absente }
+  /api/v1/targets/{targetID}/observations:
+    get:
+      operationId: listTargetObservations
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: targetID
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        '200':
+          description: Observations les plus récentes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [observations]
+                properties:
+                  observations:
+                    type: array
+                    items: { $ref: '#/components/schemas/Observation' }
+        '401': { description: Authentification requise }
+  /api/v1/heartbeat/{token}:
+    post:
+      operationId: receiveHeartbeat
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [ok, failed] }
+                duration_milliseconds: { type: integer, minimum: 0, maximum: 86400000 }
+                message: { type: string, maxLength: 500 }
+      responses:
+        '202':
+          description: Signal reçu et horodaté par l'instance
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Observation' }
+        '400': { description: Contenu invalide }
+        '404': { description: Secret inconnu }

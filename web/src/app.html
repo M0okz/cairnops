@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#090d0b" />
+    <!-- L'échelle de l'interface se règle sur l'écran, pas sur la fenêtre. Une
+         media query, elle, mesure la fenêtre : l'interface grossissait et
+         rapetissait pendant qu'on la redimensionnait, et le rail changeait de
+         largeur avec elle. Posée ici, avant la première peinture, l'échelle
+         est acquise sans clignotement, et redimensionner ne la touche plus. -->
+    <script>
+      (function () {
+        var width = (window.screen && window.screen.width) || 1600;
+        var size = Math.min(22.5, Math.max(16, 16 + (width - 1600) / 100));
+        document.documentElement.style.fontSize = size + 'px';
+      })();
+    </script>
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div id="svelte">%sveltekit.body%</div>
+  </body>
+</html>

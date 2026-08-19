@@ -1,0 +1,42 @@
+name: Rapport de bug
+description: Signaler un comportement incorrect ou inattendu
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Merci de ne jamais inclure de secret ou de donnée sensible. Utilisez SECURITY.md pour une vulnérabilité.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problème observé
+      description: Décrivez ce qui s'est produit et le résultat attendu.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Donnez les étapes minimales et reproductibles.
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version ou commit
+      placeholder: v0.0.0 ou SHA
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environnement utile
+      description: Navigateur, OS, architecture, mode de déploiement — uniquement ce qui est pertinent.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Preuves complémentaires
+      description: Journaux expurgés, captures ou autre contexte utile.

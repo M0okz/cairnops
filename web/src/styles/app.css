@@ -1,0 +1,1431 @@
+/* CairnOps — feuille de style unique.
+ *
+ * Source de vérité : « CairnOps - Écrans.dc.html » (projet Claude Design), huit
+ * écrans en sombre et en clair. Le sombre est la référence ; le clair inverse
+ * les rôles de fond et de surface sans changer la grille ni la densité.
+ *
+ * Tout passe par les jetons ci-dessous. Aucune couleur littérale sous ce bloc. */
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/fonts/IBMPlexSans-Regular.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/fonts/IBMPlexSans-SemiBold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans Condensed';
+  src: url('/fonts/IBMPlexSansCondensed-SemiBold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+/* ── Jetons ─────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Surfaces */
+  --bg: #101014;
+  --surface: #17171c;
+  --surface-2: #22222a;
+  --surface-3: #26262e;
+  --line: #26262e;
+  --line-strong: #2b2b34;
+  --line-row: #22222a;
+
+  /* Encres */
+  --ink: #ececed;
+  --muted: #a9a9b2;
+  --faint: #8c8c95;
+  --dim: #6f6f79;
+  --icon: #45454f;
+
+  /* Accent — cuivre. Une seule couleur d'action. */
+  --accent: #e08c4a;
+  --accent-ink: #161006;
+
+  /* Sémantique — réservée à l'État de santé et à la Gravité. */
+  --ok: #34d399;
+  --ok-bg: #0f2e22;
+  --ok-line: #174c39;
+  --warn: #fbbf24;
+  --warn-bg: #2a2110;
+  --warn-line: #4a3a18;
+  --crit: #f87171;
+  --crit-bg: #2a1513;
+  --crit-line: #4a2320;
+  --info: #60a5fa;
+  --info-bg: #1e3a5f;
+  --info-line: #1f5183;
+
+  /* Typographie */
+  --font: system-ui, -apple-system, 'Segoe UI', 'IBM Plex Sans', sans-serif;
+  --font-num: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Échelle d'espacement — 7 crans, rien entre les deux. */
+  --s1: 2px;
+  --s2: 0.25rem;
+  --s3: 0.5rem;
+  --s4: 0.875rem;
+  --s5: 1.25rem;
+  --s6: 1.625rem;
+  --s7: 2.5rem;
+
+  /* Formes */
+  --r-s: 0.25rem;
+  --r-m: 0.375rem;
+  --r-l: 0.5rem;
+  --r-pill: 1.25rem;
+
+  /* Ossature */
+  --rail-w: 14rem;
+  --topbar-h: 3rem;
+  --ctl-h: 1.875rem;
+  --ctl-h-lg: 2rem;
+
+  /* Mouvement */
+  --d1: 120ms;
+  --d2: 200ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.34);
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --bg: #fbfbfa;
+  --surface: #ffffff;
+  --surface-2: #f0efec;
+  --surface-3: #e8e8e5;
+  --line: #e8e8e5;
+  --line-strong: #e3e3e0;
+  --line-row: #f0efec;
+
+  --ink: #1c1c1a;
+  --muted: #4a4a46;
+  --faint: #6b6b66;
+  --dim: #737370;
+  --icon: #c9c9c4;
+
+  /* Ces trois teintes portent du texte de 12 px, sur la surface comme sur leur
+   * propre lavis dans les pastilles. Les valeurs claires de la maquette n'y
+   * atteignaient pas le rapport de 4,5:1 exigé par WCAG AA — 3,51:1 pour l'ok,
+   * 3,25:1 pour l'avertissement, 4,37:1 pour l'accent. L'ok et l'avertissement
+   * reprennent les variantes sombres que la maquette fournit déjà ; l'accent
+   * est assombri au minimum nécessaire pour franchir le seuil sans changer la
+   * couleur de marque. Le sombre, lui, passait partout et n'a pas bougé. */
+  --accent: #af5d1d;
+  --accent-ink: #ffffff;
+
+  --ok: #0f7a47;
+  --ok-bg: #eaf6ef;
+  --ok-line: #c8e6d5;
+  --warn: #8a6410;
+  --warn-bg: #fdf5e3;
+  --warn-line: #ecdcb4;
+  --crit: #c0392b;
+  --crit-bg: #fdecea;
+  --crit-line: #f3cfca;
+  --info: #2b6cb0;
+  --info-bg: #eaf1f8;
+  --info-line: #cfe0f0;
+
+  --shadow: 0 12px 32px rgba(54, 48, 36, 0.1);
+
+  color-scheme: light;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* L'échelle de toute l'interface.
+ *
+ * Les Écrans ont été dessinés sur un canevas de 1400 px : à cette largeur, la
+ * densité est juste. Au-delà — et particulièrement sur un écran Retina réglé
+ * en « plus d'espace », où le pixel CSS est physiquement petit — la même
+ * densité devient illisible.
+ *
+ * Toutes les dimensions de l'interface sont exprimées en rem, donc ce seul
+ * réglage fait grossir ensemble la typographie, les contrôles, les gouttières,
+ * le rail et les colonnes de tableau, sans jamais déformer les proportions.
+ * Les filets de 1 px restent des filets.
+ *
+ * Les points de rupture de mise en page restent en rem : une media query évalue
+ * toujours le rem à sa valeur initiale (16 px), jamais à celle de :root. Ils ne
+ * se déplacent donc pas quand l'échelle change. */
+/* L'échelle de base. La valeur réelle est posée par le script d'app.html, qui
+ * la tire de la largeur de l'écran et non de celle de la fenêtre : 16 px sous
+ * 1600 px, un pixel de plus par centaine, 22,5 px au plafond. Celle-ci ne sert
+ * qu'aux rendus sans script. Redimensionner la fenêtre ne change donc plus
+ * rien à la taille du texte, du rail, ni d'aucun contrôle. */
+html {
+  height: 100%;
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-s);
+}
+
+/* Tous les nombres alignés en colonne sont tabulaires. */
+.num,
+kbd,
+td.num,
+.mono {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+}
+
+/* ── Ossature applicative ───────────────────────────────────────────────── */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  padding: var(--s4) 0.625rem;
+  border-right: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.rail-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem var(--s3) var(--s4);
+}
+
+/* Le rail porte le nom de l'instance, qui peut être long là où « CairnOps »
+   tenait toujours : il se coupe plutôt que de pousser la pastille de version
+   hors du rail. */
+.rail-brand > strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cairn {
+  display: grid;
+  gap: var(--s1);
+}
+
+.cairn i {
+  display: block;
+  height: 0.1875rem;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.cairn i:nth-child(1) { width: 0.5rem; }
+.cairn i:nth-child(2) { width: 0.8125rem; }
+.cairn i:nth-child(3) { width: 1.125rem; }
+
+.version {
+  margin-left: auto;
+  padding: var(--s1) 0.375rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-s);
+  color: var(--faint);
+  font-family: var(--font-num);
+  font-size: 0.625rem;
+  font-weight: 500;
+}
+
+.workspace {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  height: 2rem;
+  padding: 0 var(--s3);
+  margin-bottom: var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  font-size: 0.75rem;
+  font-weight: 500;
+  width: 100%;
+  text-align: left;
+}
+
+.workspace-mark {
+  width: 1rem;
+  height: 1rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.1875rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.5625rem;
+  font-weight: 600;
+}
+
+.workspace > span:last-child {
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 0.6875rem;
+}
+
+.rail nav,
+.rail-foot {
+  display: grid;
+  gap: 1px;
+}
+
+.rail-foot {
+  margin-top: auto;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.rail a {
+  display: flex;
+  align-items: center;
+  gap: 0.5625rem;
+  height: 2rem;
+  padding: 0 var(--s3);
+  border-radius: var(--r-m);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: background var(--d1) var(--ease), color var(--d1) var(--ease);
+}
+
+.rail a svg {
+  width: 0.9375rem;
+  height: 0.9375rem;
+  flex: none;
+  stroke: var(--icon);
+  transition: stroke var(--d1) var(--ease);
+}
+
+.rail a:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.rail a[aria-current='page'] {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.rail a[aria-current='page'] svg {
+  stroke: var(--accent);
+}
+
+.rail a > b {
+  margin-left: auto;
+  color: var(--faint);
+  font-family: var(--font-num);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+.rail a > b.hot {
+  padding: 1px 0.375rem;
+  border-radius: var(--r-pill);
+  background: var(--crit-bg);
+  color: var(--crit);
+  font-size: 0.625rem;
+}
+
+.rail a > i.dot {
+  margin-left: auto;
+}
+
+.realtime {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  height: 2.25rem;
+  padding: 0 var(--s3);
+  color: var(--faint);
+  font-size: 0.6875rem;
+}
+
+/* ── Barre supérieure ───────────────────────────────────────────────────── */
+
+.topbar {
+  height: var(--topbar-h);
+  padding: 0 var(--s5);
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+/* Le fil monte avec le défilement : invisible tant que le titre de l'écran est
+ * à sa place, il prend le relais quand celui-ci passe sous la barre. Il reste
+ * dans le flux pour que rien ne bouge autour de lui. */
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+  font-size: 0.8125rem;
+  opacity: 0;
+  transform: translateY(0.375rem);
+  pointer-events: none;
+  transition: opacity var(--d2) var(--ease), transform var(--d2) var(--ease);
+}
+
+.crumb.shown {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crumb {
+    transform: none;
+    transition: opacity var(--d1) var(--ease);
+  }
+}
+
+.crumb > a,
+.crumb > span:not(.sep):not(:last-child) {
+  color: var(--faint);
+}
+
+.crumb > a:hover {
+  color: var(--ink);
+}
+
+.crumb .sep {
+  color: var(--icon);
+}
+
+.crumb > :last-child {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+/* Le déclencheur de la Palette a l'allure d'un champ sans en être un : ce qu'on
+ * y tape n'atterrit jamais ici, la frappe se fait dans la Palette elle-même. Un
+ * vrai champ promettrait un filtre local que la barre supérieure ne rend pas. */
+.search {
+  width: 15rem;
+  height: var(--ctl-h);
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 0 0.5625rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-m);
+  background: var(--bg);
+  color: var(--dim);
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.search > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search:hover {
+  border-color: var(--icon);
+  color: var(--muted);
+}
+
+kbd {
+  margin-left: auto;
+  padding: 1px 0.3125rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-s);
+  font-size: 0.625rem;
+  color: var(--dim);
+}
+
+.avatar {
+  width: 1.625rem;
+  height: 1.625rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--ink);
+  font-size: 0.625rem;
+  font-weight: 600;
+  flex: none;
+}
+
+/* ── Contenu ────────────────────────────────────────────────────────────── */
+
+/* La mesure des écrans. La gouttière est une part de la place, pas une largeur
+ * plafonnée : un plafond en rem se déplace avec l'échelle du texte et saute
+ * quand elle change, là où une part reste la même à toutes les largeurs. Le
+ * contenu garde près de 95 % de ce qui est à droite du rail — assez pour que le bord
+ * respire, pas au point que l'écran paraisse à moitié vide. Sous les fenêtres
+ * étroites, la gouttière de garde reprend la main. */
+.page {
+  padding: var(--s6) max(var(--s5), 2.7%) var(--s7);
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s6);
+  margin-bottom: var(--s5);
+  flex-wrap: wrap;
+}
+
+.page-head h1 {
+  font-size: 1.375rem;
+  margin-bottom: 0.375rem;
+}
+
+.page-head p {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.page-actions {
+  display: flex;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+/* ── Contrôles ──────────────────────────────────────────────────────────── */
+
+.btn {
+  height: var(--ctl-h-lg);
+  padding: 0 0.6875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--d1) var(--ease), border-color var(--d1) var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  padding: 0 var(--s4);
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+
+.btn.sm {
+  height: var(--ctl-h);
+  padding: 0 0.625rem;
+}
+
+/* Le primaire garde son aise même petit : c'est le geste qu'on encourage, il
+ * ne doit pas être le plus serré de la rangée. */
+.btn.sm.primary {
+  padding: 0 var(--s4);
+}
+
+/* Le bouton destructeur emprunte le registre des états critiques plutôt qu'un
+ * aplat rouge : il se distingue sans crier, et l'accent reste réservé à
+ * l'action qu'on encourage. */
+.btn.danger {
+  border-color: var(--crit-line);
+  background: var(--crit-bg);
+  color: var(--crit);
+  font-weight: 600;
+}
+
+.btn.danger:hover:not(:disabled) {
+  border-color: var(--crit);
+  background: var(--crit-bg);
+}
+
+.btn.quiet {
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+}
+
+.btn.quiet:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* Segments — « Toutes 18 / Problèmes 3 / Maintenance 1 » */
+.segments {
+  display: flex;
+  height: var(--ctl-h);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.segments button {
+  padding: 0 0.6875rem;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: background var(--d1) var(--ease), color var(--d1) var(--ease);
+}
+
+.segments button:first-child {
+  border-left: 0;
+}
+
+.segments button:hover {
+  color: var(--ink);
+}
+
+.segments button[aria-pressed='true'] {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.segments b {
+  margin-left: 0.3125rem;
+  font-family: var(--font-num);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--faint);
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s4);
+  flex-wrap: wrap;
+}
+
+.filters .note {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 0.75rem;
+}
+
+/* Le filtre local partage la hauteur et le dessin des segments voisins : il
+ * appartient à la même barre, il fait le même genre de travail. */
+.filter input {
+  width: 13rem;
+  height: var(--ctl-h);
+  padding: 0 0.5625rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-m);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.filter input::placeholder {
+  color: var(--dim);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Pastilles d'état et de gravité ─────────────────────────────────────── */
+
+.dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+  background: var(--dim);
+}
+
+.pill {
+  padding: 2px 0.4375rem;
+  justify-self: start;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Une seule famille de modificateurs, partagée par les pastilles et les points. */
+.ok    { color: var(--ok) }
+.warn  { color: var(--warn) }
+.crit  { color: var(--crit) }
+.info  { color: var(--info) }
+
+.dot.ok   { background: var(--ok) }
+.dot.warn { background: var(--warn) }
+.dot.crit { background: var(--crit) }
+.dot.info { background: var(--info) }
+.dot.idle { background: var(--dim) }
+
+.pill.ok   { border-color: var(--ok-line);   background: var(--ok-bg);   color: var(--ok) }
+.pill.warn { border-color: var(--warn-line); background: var(--warn-bg); color: var(--warn) }
+.pill.crit { border-color: var(--crit-line); background: var(--crit-bg); color: var(--crit) }
+.pill.info { border-color: var(--info-line); background: var(--info-bg); color: var(--info) }
+
+/* ── Dalles et tables ───────────────────────────────────────────────────── */
+
+.card {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-l);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.card > header {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4) 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.card > header h2 {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.card > header .note {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 0.75rem;
+}
+
+.card-body {
+  padding: 1rem;
+}
+
+/* La grille de colonnes est portée par chaque écran via --cols. */
+.thead,
+.trow {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+  gap: var(--s4);
+}
+
+.thead {
+  padding: 0.5625rem 1rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.trow {
+  padding: 0.6875rem 1rem;
+  border-bottom: 1px solid var(--line-row);
+  color: var(--ink);
+  transition: background var(--d1) var(--ease);
+}
+
+.trow:last-child {
+  border-bottom: 0;
+}
+
+a.trow:hover {
+  background: var(--bg);
+}
+
+.cell-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5625rem;
+  min-width: 0;
+}
+
+.cell-name > span {
+  min-width: 0;
+}
+
+.cell-name strong {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.cell-name small {
+  display: block;
+  margin-top: var(--s1);
+  color: var(--faint);
+  font-family: var(--font-num);
+  font-size: 0.6875rem;
+}
+
+.caret {
+  color: var(--icon);
+  font-size: 0.8125rem;
+  justify-self: end;
+}
+
+a.trow:hover .caret {
+  color: var(--accent);
+}
+
+.muted { color: var(--muted) }
+.faint { color: var(--faint) }
+.dim   { color: var(--dim) }
+
+/* ── Chiffres de synthèse ───────────────────────────────────────────────── */
+
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s6);
+}
+
+.fig b {
+  display: block;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.fig span {
+  display: block;
+  margin-top: 0.1875rem;
+  color: var(--faint);
+  font-size: 0.6875rem;
+}
+
+/* ── États vides et messages ────────────────────────────────────────────── */
+
+.empty {
+  padding: var(--s7) var(--s5);
+  text-align: center;
+  color: var(--faint);
+  font-size: 0.8125rem;
+}
+
+.empty strong {
+  display: block;
+  margin-bottom: 0.375rem;
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s4);
+  padding: var(--s4) 1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-l);
+  background: var(--surface);
+}
+
+.banner.crit { border-color: var(--crit-line); background: var(--crit-bg) }
+.banner.warn { border-color: var(--warn-line); background: var(--warn-bg) }
+.banner.ok   { border-color: var(--ok-line);   background: var(--ok-bg) }
+
+/* ── Notice flottante ───────────────────────────────────────────────────── */
+
+.notice {
+  position: fixed;
+  right: var(--s5);
+  bottom: var(--s5);
+  z-index: 60;
+  max-width: 30rem;
+  padding: var(--s4) 1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-l);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 0.75rem;
+  box-shadow: var(--shadow);
+  animation: rise var(--d2) var(--ease);
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px) }
+  to   { opacity: 1; transform: none }
+}
+
+/* ── Portes d'entrée : amorçage, connexion, indisponibilité ─────────────── */
+
+.gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--s5);
+  background: var(--bg);
+}
+
+/* Les portes d'entrée ne sont pas des tables : elles respirent plus que le
+ * reste de l'application, sans changer de vocabulaire. */
+.gate-card {
+  width: 100%;
+  max-width: 34rem;
+  padding: var(--s7) var(--s6) var(--s6);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.gate-card h1 {
+  font-size: 1.375rem;
+  margin-bottom: var(--s3);
+}
+
+.gate-card > p {
+  margin-bottom: var(--s5);
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  max-width: 42ch;
+}
+
+.gate-card .field {
+  margin-bottom: var(--s5);
+}
+
+.gate-card .field label {
+  font-size: 0.8125rem;
+}
+
+.gate-card .field input {
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.3125rem;
+  margin-bottom: var(--s4);
+}
+
+.field label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.field input,
+.field textarea,
+.field select {
+  height: var(--ctl-h-lg);
+  padding: 0 0.625rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-m);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.field textarea {
+  height: auto;
+  padding: var(--s3) 0.625rem;
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.field small {
+  color: var(--faint);
+  font-size: 0.6875rem;
+}
+
+.error {
+  margin-bottom: var(--s4);
+  padding: var(--s3) 0.625rem;
+  border: 1px solid var(--crit-line);
+  border-radius: var(--r-m);
+  background: var(--crit-bg);
+  color: var(--crit);
+  font-size: 0.75rem;
+}
+
+/* ── Modales ────────────────────────────────────────────────────────────── */
+
+/* `safe` change le centrage dès que la modale dépasse la hauteur disponible :
+ * elle se cale alors en haut au lieu de déborder des deux côtés, ce qui rendait
+ * son en-tête inatteignable — on ne peut pas remonter au-dessus du point de
+ * départ d'un conteneur défilant. Les assistants de Connecteur, les plus longs,
+ * étaient coupés en haut et en bas. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: safe center;
+  padding: var(--s5);
+  background: rgba(0, 0, 0, 0.55);
+  overflow-y: auto;
+}
+
+/* La modale ne dépasse jamais l'écran : au-delà, c'est son corps qui défile,
+ * en gardant l'en-tête, le fil d'étapes et les actions toujours visibles.
+ *
+ * Les assistants intercalent un <form> entre la modale et son corps ; il doit
+ * donc relayer la colonne, sinon la hauteur ne descend pas jusqu'au corps et
+ * rien ne défile. `min-height: 0` lève la taille minimale automatique des
+ * éléments flex, sans quoi ils refusent de se réduire sous leur contenu. */
+/* La hauteur se borne sur l'écran, pas sur le parent : `max-height: 100%` se
+ * résout contre une piste de grille dimensionnée par son propre contenu, donc
+ * ne borne rien. `dvh` suit la barre d'adresse mobile ; `vh` reste en repli
+ * pour les navigateurs qui l'ignorent. */
+.modal {
+  max-height: calc(100vh - 2 * var(--s5));
+  max-height: calc(100dvh - 2 * var(--s5));
+  display: flex;
+  flex-direction: column;
+}
+
+.modal > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.modal-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.modal {
+  width: 100%;
+  max-width: 44rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* Descendant et non enfant direct : les assistants intercalent un <form> entre
+ * la modale et son pied, si bien qu'un sélecteur `>` ne l'atteignait jamais —
+ * le pied se retrouvait sans marge intérieure, sa note collée au bord et ses
+ * boutons loin de la colonne de contenu. */
+.modal header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s4);
+  padding: var(--s5);
+  border-bottom: 1px solid var(--line);
+}
+
+.modal header h2 {
+  font-size: 1rem;
+}
+
+.modal header p {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* Sans align-items, la note du pied s'étire sur toute la hauteur de la ligne
+ * et son texte se cale en haut, tandis que les boutons gardent la leur : le
+ * pied paraît alors désaligné sans qu'aucune marge ne soit en cause. */
+.modal footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+/* La note explique, elle n'agit pas : elle occupe le vide à gauche, garde ses
+ * distances avec les boutons et se replie au-dessus d'eux quand la place
+ * manque plutôt que de les compresser. */
+.modal footer .note {
+  flex: 1 1 18rem;
+  margin-right: auto;
+  padding-right: var(--s4);
+  max-width: 44ch;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+}
+
+.modal-body {
+  padding: var(--s5);
+}
+
+.close {
+  margin-left: auto;
+  width: 1.625rem;
+  height: 1.625rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-m);
+  background: none;
+  color: var(--muted);
+  flex: none;
+}
+
+.close:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* ── Palette ────────────────────────────────────────────────────────────── */
+
+/* La Palette se cale haut plutôt qu'au centre : sa hauteur change à chaque
+ * frappe, et un panneau centré ferait sauter le champ sous les doigts. */
+.palette-scrim {
+  place-items: safe start center;
+  padding-top: 12vh;
+}
+
+.palette {
+  width: 100%;
+  max-width: 36rem;
+  max-height: calc(100dvh - 16vh);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.palette-field {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 0 var(--s4);
+  height: 2.75rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--dim);
+  flex: none;
+}
+
+.palette-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.palette-field input::placeholder {
+  color: var(--dim);
+}
+
+.palette-results {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s3) 0;
+}
+
+.palette-group + .palette-group {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.palette-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--s4) var(--s2);
+  color: var(--faint);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.palette-hit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: 0.4375rem var(--s4);
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--ink);
+}
+
+/* La ligne courante est désignée par le clavier comme par la souris : une seule
+ * marque, pour que les deux gestes racontent la même chose. */
+.palette-hit[aria-selected='true'] {
+  background: var(--surface-2);
+}
+
+.palette-hit-text {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.palette-hit-text strong {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-hit-text small {
+  color: var(--faint);
+  font-size: 0.6875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-empty {
+  padding: var(--s5) var(--s4);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.palette-empty strong {
+  display: block;
+  margin-bottom: var(--s2);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.palette-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 0.6875rem;
+  flex: none;
+}
+
+.palette-foot span {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* `kbd` se pousse à droite dans la barre supérieure ; ici les touches suivent
+ * leur légende et doivent rester à leur place. */
+.palette-foot kbd,
+.palette-field kbd {
+  margin-left: 0;
+}
+
+/* ── Densité adaptative ─────────────────────────────────────────────────── */
+
+@media (max-width: 68rem) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s3);
+    padding: var(--s3) var(--s4);
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+  }
+
+  .rail-brand,
+  .rail nav,
+  .rail-foot {
+    padding: 0;
+    margin: 0;
+    border: 0;
+  }
+
+  .rail nav,
+  .rail-foot {
+    display: flex;
+    gap: var(--s1);
+  }
+
+  .rail-foot {
+    margin-left: auto;
+  }
+
+  .workspace,
+  .version,
+  .realtime span {
+    display: none;
+  }
+
+  .search {
+    width: 9rem;
+  }
+}
+
+@media (max-width: 48rem) {
+  .page {
+    padding: var(--s5) var(--s4) var(--s6);
+  }
+
+  .thead {
+    display: none;
+  }
+
+  .trow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0.375rem;
+  }
+
+  .trow .hide-sm {
+    display: none;
+  }
+
+  /* Le déclencheur se réduit à son icône plutôt que de disparaître : la
+   * recherche globale est le seul moyen d'atteindre une Cible sans faire
+   * défiler, et c'est précisément ici qu'on fait le plus défiler. */
+  .search {
+    width: auto;
+    padding: 0 0.5rem;
+  }
+
+  .search > span,
+  .search kbd {
+    display: none;
+  }
+
+  .filter,
+  .filter input {
+    width: 100%;
+  }
+
+  .palette-scrim {
+    padding-top: var(--s5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,344 @@
+package notifications
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/M0okz/cairnops/internal/incidents"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type PostgresStore struct{ pool *pgxpool.Pool }
+
+func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore { return &PostgresStore{pool: pool} }
+
+func (store *PostgresStore) List(ctx context.Context) ([]Channel, error) {
+	rows, err := store.pool.Query(ctx, `
+		SELECT id::text, kind, name, endpoint, severities, enabled, status,
+		       encrypted_transport, last_checked_at, last_error, created_at, updated_at
+		FROM cairnops_notification_channels
+		ORDER BY enabled DESC, lower(name), id
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list notification channels: %w", err)
+	}
+	defer rows.Close()
+	items := make([]Channel, 0)
+	for rows.Next() {
+		item, err := scanChannel(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate notification channels: %w", err)
+	}
+	return items, nil
+}
+
+func (store *PostgresStore) CreateMattermost(ctx context.Context, input PersistMattermostInput) (Channel, error) {
+	severityValues := make([]string, len(input.Severities))
+	for index, severity := range input.Severities {
+		severityValues[index] = string(severity)
+	}
+	item, err := scanChannel(store.pool.QueryRow(ctx, `
+		INSERT INTO cairnops_notification_channels (
+			kind, name, endpoint, credential_sealed, severities, enabled, status,
+			encrypted_transport, last_checked_at, last_error, created_by
+		) VALUES ('mattermost', $1, $2, $3, $4, true, 'connected', $5, now(), '', $6::uuid)
+		RETURNING id::text, kind, name, endpoint, severities, enabled, status,
+		          encrypted_transport, last_checked_at, last_error, created_at, updated_at
+	`, input.Name, input.Endpoint, input.CredentialSealed, severityValues,
+		input.EncryptedTransport, input.ActorID))
+	if err != nil {
+		return Channel{}, fmt.Errorf("create Mattermost notification channel: %w", err)
+	}
+	return item, nil
+}
+
+type channelScanner interface{ Scan(...any) error }
+
+func scanChannel(row channelScanner) (Channel, error) {
+	var item Channel
+	var severities []string
+	if err := row.Scan(
+		&item.ID, &item.Kind, &item.Name, &item.Endpoint, &severities,
+		&item.Enabled, &item.Status, &item.EncryptedTransport,
+		&item.LastCheckedAt, &item.LastError, &item.CreatedAt, &item.UpdatedAt,
+	); err != nil {
+		return Channel{}, fmt.Errorf("scan notification channel: %w", err)
+	}
+	item.Severities = make([]incidents.Severity, len(severities))
+	for index, severity := range severities {
+		item.Severities[index] = incidents.Severity(severity)
+	}
+	return item, nil
+}
+
+func (store *PostgresStore) Schedule(ctx context.Context) error {
+	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin notification scheduling: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE cairnops_notification_outbox delivery
+		SET status = 'cancelled', last_error = 'incident acquitté, résolu ou placé en maintenance',
+		    lease_owner = NULL, lease_until = NULL, updated_at = now()
+		FROM cairnops_incidents incident
+		WHERE delivery.incident_id = incident.id
+		  AND delivery.event_kind = 'firing'
+		  AND delivery.status IN ('pending', 'failed')
+		  AND (
+		      incident.status <> 'active' OR incident.acknowledged_at IS NOT NULL
+		      OR EXISTS (
+		          SELECT 1
+		          FROM cairnops_maintenance_targets maintenance_target
+		          JOIN cairnops_maintenances maintenance ON maintenance.id = maintenance_target.maintenance_id
+		          WHERE maintenance_target.target_id = incident.target_id
+		            AND maintenance.cancelled_at IS NULL
+		            AND now() BETWEEN maintenance.starts_at AND maintenance.ends_at
+		      )
+		  )
+	`); err != nil {
+		return fmt.Errorf("cancel obsolete firing notifications: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO cairnops_notification_outbox (
+			incident_id, channel_id, event_kind, target_name, nature_label,
+			severity, opened_at
+		)
+		SELECT incident.id, channel.id, 'firing', target.name, incident.nature_label,
+		       incident.effective_severity, incident.opened_at
+		FROM cairnops_incidents incident
+		JOIN cairnops_targets target ON target.id = incident.target_id
+		JOIN cairnops_notification_channels channel
+		  ON channel.enabled AND channel.status <> 'disabled'
+		 AND incident.effective_severity = ANY(channel.severities)
+		WHERE incident.status = 'active' AND incident.acknowledged_at IS NULL
+		  AND NOT EXISTS (
+		      SELECT 1
+		      FROM cairnops_maintenance_targets maintenance_target
+		      JOIN cairnops_maintenances maintenance ON maintenance.id = maintenance_target.maintenance_id
+		      WHERE maintenance_target.target_id = incident.target_id
+		        AND maintenance.cancelled_at IS NULL
+		        AND now() BETWEEN maintenance.starts_at AND maintenance.ends_at
+		  )
+		ON CONFLICT (incident_id, channel_id, event_kind) DO NOTHING
+	`); err != nil {
+		return fmt.Errorf("schedule firing notifications: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO cairnops_notification_outbox (
+			incident_id, channel_id, event_kind, target_name, nature_label,
+			severity, opened_at, resolved_at
+		)
+		SELECT incident.id, opening.channel_id, 'resolved', opening.target_name,
+		       opening.nature_label, opening.severity, opening.opened_at, incident.resolved_at
+		FROM cairnops_incidents incident
+		JOIN cairnops_notification_outbox opening
+		  ON opening.incident_id = incident.id
+		 AND opening.event_kind = 'firing' AND opening.status = 'delivered'
+		JOIN cairnops_notification_channels channel
+		  ON channel.id = opening.channel_id AND channel.enabled AND channel.status <> 'disabled'
+		WHERE incident.status = 'resolved' AND incident.resolved_at IS NOT NULL
+		ON CONFLICT (incident_id, channel_id, event_kind) DO NOTHING
+	`); err != nil {
+		return fmt.Errorf("schedule resolution notifications: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE cairnops_notification_outbox delivery
+		SET status = 'cancelled', last_error = 'canal désactivé',
+		    lease_owner = NULL, lease_until = NULL, updated_at = now()
+		FROM cairnops_notification_channels channel
+		WHERE delivery.channel_id = channel.id
+		  AND delivery.status IN ('pending', 'failed')
+		  AND (NOT channel.enabled OR channel.status = 'disabled')
+	`); err != nil {
+		return fmt.Errorf("cancel disabled channel notifications: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit notification scheduling: %w", err)
+	}
+	return nil
+}
+
+func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Delivery, error) {
+	var delivery Delivery
+	err := store.pool.QueryRow(ctx, `
+		WITH candidate AS (
+		    SELECT delivery.id
+		    FROM cairnops_notification_outbox delivery
+		    JOIN cairnops_notification_channels channel ON channel.id = delivery.channel_id
+		    JOIN cairnops_incidents incident ON incident.id = delivery.incident_id
+		    WHERE delivery.status IN ('pending', 'failed')
+		      AND delivery.next_attempt_at <= now()
+		      AND (delivery.lease_until IS NULL OR delivery.lease_until < now())
+		      AND channel.enabled AND channel.status <> 'disabled'
+		      AND (
+		          delivery.event_kind = 'resolved'
+		          OR (
+		              incident.status = 'active' AND incident.acknowledged_at IS NULL
+		              AND NOT EXISTS (
+		                  SELECT 1
+		                  FROM cairnops_maintenance_targets maintenance_target
+		                  JOIN cairnops_maintenances maintenance ON maintenance.id = maintenance_target.maintenance_id
+		                  WHERE maintenance_target.target_id = incident.target_id
+		                    AND maintenance.cancelled_at IS NULL
+		                    AND now() BETWEEN maintenance.starts_at AND maintenance.ends_at
+		              )
+		          )
+		      )
+		    ORDER BY delivery.next_attempt_at, delivery.id
+		    FOR UPDATE OF delivery SKIP LOCKED
+		    LIMIT 1
+		), claimed AS (
+		    UPDATE cairnops_notification_outbox delivery
+		    SET lease_owner = $1, lease_until = now() + interval '30 seconds', updated_at = now()
+		    FROM candidate
+		    WHERE delivery.id = candidate.id
+		    RETURNING delivery.*
+		)
+		SELECT claimed.id, claimed.incident_id::text, claimed.channel_id::text,
+		       channel.kind, claimed.event_kind, claimed.target_name,
+		       claimed.nature_label, claimed.severity, claimed.opened_at,
+		       claimed.resolved_at, channel.credential_sealed
+		FROM claimed
+		JOIN cairnops_notification_channels channel ON channel.id = claimed.channel_id
+	`, strings.TrimSpace(workerID)).Scan(
+		&delivery.ID, &delivery.IncidentID, &delivery.ChannelID,
+		&delivery.ChannelKind, &delivery.EventKind, &delivery.TargetName,
+		&delivery.NatureLabel, &delivery.Severity, &delivery.OpenedAt,
+		&delivery.ResolvedAt, &delivery.CredentialSealed,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Delivery{}, ErrNoDelivery
+	}
+	if err != nil {
+		return Delivery{}, fmt.Errorf("claim notification delivery: %w", err)
+	}
+	return delivery, nil
+}
+
+func (store *PostgresStore) Complete(ctx context.Context, deliveryID int64, workerID string) error {
+	result, err := store.pool.Exec(ctx, `
+		WITH delivered AS (
+		    UPDATE cairnops_notification_outbox
+		    SET status = 'delivered', delivered_at = now(), last_error = '',
+		        lease_owner = NULL, lease_until = NULL, updated_at = now()
+		    WHERE id = $1 AND lease_owner = $2
+		    RETURNING channel_id
+		)
+		UPDATE cairnops_notification_channels channel
+		SET status = 'connected', last_checked_at = now(), last_error = '', updated_at = now()
+		FROM delivered
+		WHERE channel.id = delivered.channel_id
+	`, deliveryID, strings.TrimSpace(workerID))
+	if err != nil {
+		return fmt.Errorf("complete notification delivery: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return fmt.Errorf("notification delivery lease lost")
+	}
+	return nil
+}
+
+func (store *PostgresStore) Fail(ctx context.Context, deliveryID int64, workerID, deliveryError string) error {
+	deliveryError = strings.TrimSpace(deliveryError)
+	if len(deliveryError) > 500 {
+		deliveryError = deliveryError[:500]
+	}
+	result, err := store.pool.Exec(ctx, `
+		WITH failed AS (
+		    UPDATE cairnops_notification_outbox
+		    SET status = 'failed', attempts = attempts + 1,
+		        next_attempt_at = now() + least(interval '10 minutes', interval '5 seconds' * power(2, least(attempts, 7))),
+		        last_error = $3, lease_owner = NULL, lease_until = NULL, updated_at = now()
+		    WHERE id = $1 AND lease_owner = $2
+		    RETURNING channel_id
+		)
+		UPDATE cairnops_notification_channels channel
+		SET status = 'degraded', last_checked_at = now(), last_error = $3, updated_at = now()
+		FROM failed
+		WHERE channel.id = failed.channel_id
+	`, deliveryID, strings.TrimSpace(workerID), deliveryError)
+	if err != nil {
+		return fmt.Errorf("fail notification delivery: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return fmt.Errorf("notification delivery lease lost")
+	}
+	return nil
+}
+
+// Deliver porte une livraison intégrée jusqu'aux personnes. Elle ne sort pas de
+// l'instance : la livraison est l'écriture elle-même.
+//
+// L'ouverture s'adresse à tous les comptes actifs — la V1 n'a pas de Groupes de
+// notification, et un Observateur a le droit de savoir même s'il ne décide de
+// rien. La Résolution, elle, ne s'adresse qu'à ceux qui ont reçu l'ouverture :
+// c'est ce que veut dire « aux mêmes destinataires ». Quelqu'un désactivé
+// depuis n'en reçoit pas la fin, et quelqu'un arrivé depuis ne reçoit pas la
+// fin d'une histoire dont il n'a pas eu le début.
+func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int, error) {
+	occurredAt := delivery.OpenedAt
+	if delivery.EventKind == "resolved" && delivery.ResolvedAt != nil {
+		occurredAt = *delivery.ResolvedAt
+	}
+
+	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return 0, fmt.Errorf("begin in-app delivery: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	recipients := `
+		SELECT id FROM cairnops_users WHERE deactivated_at IS NULL
+	`
+	if delivery.EventKind == "resolved" {
+		recipients = `
+			SELECT inbox.user_id
+			FROM cairnops_notification_inbox inbox
+			WHERE inbox.incident_id = $1::uuid AND inbox.event_kind = 'firing'
+		`
+	}
+
+	result, err := tx.Exec(ctx, `
+		INSERT INTO cairnops_notification_inbox (
+			user_id, incident_id, target_id, event_kind, target_name,
+			nature_label, severity, occurred_at
+		)
+		SELECT recipient.id, $1::uuid, incident.target_id, $2, $3, $4, $5, $6
+		FROM (`+recipients+`) AS recipient(id)
+		JOIN cairnops_incidents incident ON incident.id = $1::uuid
+		ON CONFLICT (user_id, incident_id, event_kind) DO NOTHING
+	`, delivery.IncidentID, delivery.EventKind, delivery.TargetName,
+		delivery.NatureLabel, string(delivery.Severity), occurredAt)
+	if err != nil {
+		return 0, fmt.Errorf("deposit in-app notifications: %w", err)
+	}
+
+	// Un seul signalement pour toute la volée : les sessions ouvertes relisent
+	// leur propre boîte, et une entrée par personne en émettrait autant.
+	if result.RowsAffected() > 0 {
+		if _, err := tx.Exec(ctx, `
+			SELECT cairnops_append_event('notification.changed', 'notification', $1)
+		`, delivery.ChannelID); err != nil {
+			return 0, fmt.Errorf("signal in-app notifications: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit in-app delivery: %w", err)
+	}
+	return int(result.RowsAffected()), nil
+}

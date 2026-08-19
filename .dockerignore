@@ -1,0 +1,11 @@
+.git
+.github
+.env
+.env.*
+bin
+data
+node_modules
+web/node_modules
+web/.svelte-kit
+web/build
+docs/mockups/*.png

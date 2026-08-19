@@ -1,0 +1,30 @@
+name: Proposition d'évolution
+description: Proposer un besoin ou une amélioration du produit
+title: "[Évolution] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Besoin utilisateur
+      description: Quel problème concret cherchez-vous à résoudre ?
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Situation actuelle
+      description: Comment ce besoin est-il traité aujourd'hui ?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposition
+      description: Décrivez une solution possible sans vous limiter à son interface.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Effet sur le périmètre
+      description: Précisez les interfaces, rôles, contrôles ou intégrations concernés.
