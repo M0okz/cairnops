@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '$lib/i18n.svelte';
   import type { User } from '$lib/api';
+  import InfoHint from '$lib/components/InfoHint.svelte';
 
   /* Les Écrans ne couvrent pas les portes d'entrée. Elles reprennent donc les
    * mêmes jetons, la même densité et les mêmes contrôles que le reste, sans
@@ -128,32 +129,48 @@
       <p>{t('gate.setupSay')}</p>
       <form onsubmit={submitSetup}>
         <div class="field">
-          <label for="bootstrap">{t('gate.bootstrapToken')}</label>
-          <input id="bootstrap" bind:value={bootstrap} type="password" autocomplete="off" required minlength="32" spellcheck="false" />
-          <small>{t('gate.bootstrapHint')} <code>CAIRNOPS_BOOTSTRAP_TOKEN</code>.</small>
+          <div class="field-label">
+            <InfoHint id="bootstrap-hint" ariaLabel={t('gate.fieldHelp', { field: t('gate.bootstrapToken') })} text={`${t('gate.bootstrapHint')} CAIRNOPS_BOOTSTRAP_TOKEN.`} />
+            <label for="bootstrap">{t('gate.bootstrapToken')}</label>
+          </div>
+          <input id="bootstrap" bind:value={bootstrap} type="password" autocomplete="off" required minlength="32" spellcheck="false" aria-describedby="bootstrap-hint" />
         </div>
         <!-- Le nom vient avant l'Administrateur : on nomme d'abord ce que l'on
              pose, on dit ensuite qui le tiendra. -->
         <div class="field">
-          <label for="instance-name">{t('gate.instanceName')}</label>
-          <input id="instance-name" bind:value={instanceName} autocomplete="off" required maxlength="80" placeholder={t('gate.instanceNamePlaceholder')} />
-          <small>{t('gate.instanceNameHint')}</small>
+          <div class="field-label">
+            <InfoHint id="instance-name-hint" ariaLabel={t('gate.fieldHelp', { field: t('gate.instanceName') })} text={t('gate.instanceNameHint')} />
+            <label for="instance-name">{t('gate.instanceName')}</label>
+          </div>
+          <input id="instance-name" bind:value={instanceName} autocomplete="off" required maxlength="80" placeholder={t('gate.instanceNamePlaceholder')} aria-describedby="instance-name-hint" />
         </div>
         <div class="field">
-          <label for="display-name">{t('gate.displayName')}</label>
-          <input id="display-name" bind:value={displayName} autocomplete="name" required maxlength="100" placeholder={t('gate.displayNamePlaceholder')} />
+          <div class="field-label">
+            <InfoHint id="display-name-hint" ariaLabel={t('gate.fieldHelp', { field: t('gate.adminName') })} text={t('gate.adminNameHint')} />
+            <label for="display-name">{t('gate.adminName')}</label>
+          </div>
+          <input id="display-name" bind:value={displayName} autocomplete="name" required maxlength="100" placeholder={t('gate.displayNamePlaceholder')} aria-describedby="display-name-hint" />
         </div>
         <div class="field">
-          <label for="setup-username">{t('gate.username')}</label>
-          <input id="setup-username" bind:value={username} autocomplete="username" required minlength="3" maxlength="64" pattern={'[a-z0-9][a-z0-9._\\-]{2,63}'} placeholder={t('gate.usernamePlaceholder')} />
+          <div class="field-label">
+            <InfoHint id="setup-username-hint" ariaLabel={t('gate.fieldHelp', { field: t('gate.username') })} text={t('gate.usernameHint')} />
+            <label for="setup-username">{t('gate.username')}</label>
+          </div>
+          <input id="setup-username" bind:value={username} autocomplete="username" required minlength="3" maxlength="64" pattern={'[a-z0-9][a-z0-9._\\-]{2,63}'} placeholder={t('gate.usernamePlaceholder')} aria-describedby="setup-username-hint" />
         </div>
         <div class="field">
-          <label for="setup-password">{t('gate.password')}</label>
-          <input id="setup-password" bind:value={password} type="password" autocomplete="new-password" required minlength="12" maxlength="128" />
+          <div class="field-label">
+            <InfoHint id="setup-password-hint" ariaLabel={t('gate.fieldHelp', { field: t('gate.password') })} text={t('gate.passwordHint')} />
+            <label for="setup-password">{t('gate.password')}</label>
+          </div>
+          <input id="setup-password" bind:value={password} type="password" autocomplete="new-password" required minlength="12" maxlength="128" aria-describedby="setup-password-hint" />
         </div>
         <div class="field">
-          <label for="confirmation">{t('settings.confirm')}</label>
-          <input id="confirmation" bind:value={confirmation} type="password" autocomplete="new-password" required minlength="12" maxlength="128" />
+          <div class="field-label">
+            <InfoHint id="confirmation-hint" ariaLabel={t('gate.fieldHelp', { field: t('gate.confirmPassword') })} text={t('gate.confirmPasswordHint')} />
+            <label for="confirmation">{t('gate.confirmPassword')}</label>
+          </div>
+          <input id="confirmation" bind:value={confirmation} type="password" autocomplete="new-password" required minlength="12" maxlength="128" aria-describedby="confirmation-hint" />
         </div>
         {#if localError || error}<p class="error" role="alert">{localError || error}</p>{/if}
         <div class="gate-submit">
@@ -262,6 +279,13 @@
     margin-top: var(--s6);
   }
 
+  .field-label {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    min-height: 1.5rem;
+  }
+
   code {
     font-family: var(--font-num);
     font-size: 0.6875rem;
@@ -305,5 +329,21 @@
     height: 2.375rem;
     padding: 0 var(--s5);
     font-size: 0.8125rem;
+  }
+
+  @media (max-width: 30rem) {
+    .gate-submit {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .gate-submit small {
+      line-height: 1.5;
+    }
+
+    .gate-submit .btn {
+      justify-content: center;
+      width: 100%;
+    }
   }
 </style>
