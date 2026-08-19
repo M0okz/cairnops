@@ -177,6 +177,7 @@ func TestPreviewAndImportUptimeKumaUseMetricsAPIKeyReceipt(t *testing.T) {
 	}
 	result, err := service.ImportUptimeKuma(context.Background(), "administrator-one", UptimeKumaImportInput{
 		Receipt: preview.Receipt, MonitorIDs: []string{"12"},
+		TargetAssignments: map[string]string{"12": "12345678-1234-4234-8234-123456789012"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -186,5 +187,62 @@ func TestPreviewAndImportUptimeKumaUseMetricsAPIKeyReceipt(t *testing.T) {
 	}
 	if len(result.Targets) != 1 || result.Targets[0].ExternalID != "12" {
 		t.Fatalf("unexpected Uptime Kuma import result: %#v", result)
+	}
+	if store.persistedKuma.TargetAssignments["12"] != "12345678-1234-4234-8234-123456789012" {
+		t.Fatalf("explicit target assignment was lost: %#v", store.persistedKuma.TargetAssignments)
+	}
+}
+
+func TestPreviewSuggestsCrossConnectorTargetWithEvidence(t *testing.T) {
+	t.Parallel()
+	box, err := secretbox.New(bytes.Repeat([]byte{0x73}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := TargetIdentity{
+		TargetReference: TargetReference{ID: "12345678-1234-4234-8234-123456789012", Name: "Passerelle"},
+		Names:           []string{"Passerelle"}, Addresses: []string{"192.0.2.42"},
+	}
+	store := &fakeStore{state: PreviewState{
+		TargetsByName: map[string]TargetReference{}, Targets: []TargetIdentity{target},
+		ImportedByExternalID: map[string]TargetReference{},
+	}}
+	remote := &fakeZabbix{inspection: zabbix.Inspection{
+		Endpoint: "https://zabbix.example.net/api_jsonrpc.php", Version: "7.4.2", Compatibility: "supported",
+		Hosts: []zabbix.Host{{ID: "42", Name: "gw-prod", Interfaces: []zabbix.Interface{{Address: "192.0.2.42", Main: true}}}},
+	}}
+	service := NewService(store, remote, &fakeUptimeKuma{}, box)
+
+	preview, err := service.PreviewZabbix(context.Background(), ZabbixPreviewInput{Address: "https://zabbix.example.net", APIToken: "token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.AvailableTargets) != 1 || preview.Hosts[0].SuggestedTarget == nil || preview.Hosts[0].SuggestedTarget.ID != target.ID {
+		t.Fatalf("expected an IP suggestion and the active target list, got %#v", preview)
+	}
+	if len(preview.Hosts[0].CandidateTargets) != 1 || preview.Hosts[0].CandidateTargets[0].Evidence[0].Kind != "same_ip" {
+		t.Fatalf("expected explainable matching evidence, got %#v", preview.Hosts[0].CandidateTargets)
+	}
+}
+
+func TestImportRejectsAssignmentForUnselectedObject(t *testing.T) {
+	t.Parallel()
+	box, _ := secretbox.New(bytes.Repeat([]byte{0x74}, 32))
+	remote := &fakeZabbix{inspection: zabbix.Inspection{
+		Endpoint: "https://zabbix.example.net/api_jsonrpc.php", Version: "7.4.2", Compatibility: "supported",
+		Hosts: []zabbix.Host{{ID: "1", Name: "One"}, {ID: "2", Name: "Two"}},
+	}}
+	store := &fakeStore{state: PreviewState{TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{}}}
+	service := NewService(store, remote, &fakeUptimeKuma{}, box)
+	preview, err := service.PreviewZabbix(context.Background(), ZabbixPreviewInput{Address: "https://zabbix.example.net", APIToken: "token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.ImportZabbix(context.Background(), "admin", ZabbixImportInput{
+		Receipt: preview.Receipt, HostIDs: []string{"1"},
+		TargetAssignments: map[string]string{"2": "12345678-1234-4234-8234-123456789012"},
+	})
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected an invalid assignment error, got %v", err)
 	}
 }

@@ -71,6 +71,37 @@ func TestPostgresZabbixImportIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestPostgresImportUsesExplicitTargetAssignment(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+
+	var actorID, targetID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_users (username, display_name, password_hash, role)
+		VALUES ('assignment-test', 'Assignment Test', 'not-used', 'administrator')
+		RETURNING id::text
+	`).Scan(&actorID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO cairnops_targets (name) VALUES ('Passerelle') RETURNING id::text`).Scan(&targetID); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := NewPostgresStore(pool).ImportZabbix(ctx, PersistZabbixInput{
+		ActorID: actorID, Name: "Production", Endpoint: "https://zabbix-assignment.example.net/api_jsonrpc.php",
+		CredentialSealed: "sealed-credential-with-sufficient-length", Version: "7.4.2",
+		Compatibility: "supported", EncryptedTransport: true,
+		Hosts:             []zabbix.Host{{ID: "42", Name: "gw-prod", Interfaces: []zabbix.Interface{{Address: "192.0.2.42", Main: true}}}},
+		TargetAssignments: map[string]string{"42": targetID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Targets) != 1 || result.Targets[0].TargetID != targetID || result.Targets[0].Disposition != "reused" {
+		t.Fatalf("explicit assignment was not used: %#v", result.Targets)
+	}
+}
+
 func TestPostgresRemovalClosesIncidentsLeftWithoutEvidence(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)

@@ -186,11 +186,23 @@ export type ZabbixInterface = {
 
 export type TargetReference = { id: string; name: string };
 
+export type MatchEvidence = {
+  kind: 'same_name' | 'same_ip' | 'same_hostname';
+  value: string;
+};
+
+export type TargetMatch = {
+  target: TargetReference;
+  confidence: 'high' | 'medium';
+  evidence: MatchEvidence[];
+};
+
 export type ZabbixHostPreview = {
   external_id: string;
   name: string;
   technical_name: string;
   interfaces: ZabbixInterface[];
+  candidate_targets?: TargetMatch[];
   suggested_target?: TargetReference;
   already_imported_to?: TargetReference;
 };
@@ -204,6 +216,7 @@ export type ZabbixPreview = {
   compatibility_label: string;
   encrypted_transport: boolean;
   hosts: ZabbixHostPreview[];
+  available_targets: TargetReference[];
   receipt: string;
   expires_at: string;
 };
@@ -226,6 +239,7 @@ export type UptimeKumaMonitorPreview = {
   type: string;
   address?: string;
   status: 0 | 1 | 2 | 3;
+  candidate_targets?: TargetMatch[];
   suggested_target?: TargetReference;
   already_imported_to?: TargetReference;
 };
@@ -238,6 +252,7 @@ export type UptimeKumaPreview = {
   compatibility_label: string;
   encrypted_transport: boolean;
   monitors: UptimeKumaMonitorPreview[];
+  available_targets: TargetReference[];
   receipt: string;
   expires_at: string;
 };
