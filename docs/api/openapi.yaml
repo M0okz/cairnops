@@ -428,6 +428,22 @@ components:
         address: { type: string }
         port: { type: string }
         main: { type: boolean }
+    MatchEvidence:
+      type: object
+      required: [kind, value]
+      properties:
+        kind: { type: string, enum: [same_name, same_ip, same_hostname] }
+        value: { type: string }
+    TargetMatch:
+      type: object
+      required: [target, confidence, evidence]
+      properties:
+        target: { $ref: '#/components/schemas/TargetReference' }
+        confidence: { type: string, enum: [high, medium] }
+        evidence:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/MatchEvidence' }
     ZabbixHostPreview:
       type: object
       required: [external_id, name, technical_name, interfaces]
@@ -438,11 +454,14 @@ components:
         interfaces:
           type: array
           items: { $ref: '#/components/schemas/ZabbixInterface' }
+        candidate_targets:
+          type: array
+          items: { $ref: '#/components/schemas/TargetMatch' }
         suggested_target: { $ref: '#/components/schemas/TargetReference' }
         already_imported_to: { $ref: '#/components/schemas/TargetReference' }
     ZabbixPreview:
       type: object
-      required: [kind, name, endpoint, version, compatibility, compatibility_label, encrypted_transport, hosts, receipt, expires_at]
+      required: [kind, name, endpoint, version, compatibility, compatibility_label, encrypted_transport, hosts, available_targets, receipt, expires_at]
       properties:
         kind: { type: string, const: zabbix }
         name: { type: string }
@@ -454,6 +473,9 @@ components:
         hosts:
           type: array
           items: { $ref: '#/components/schemas/ZabbixHostPreview' }
+        available_targets:
+          type: array
+          items: { $ref: '#/components/schemas/TargetReference' }
         receipt:
           type: string
           writeOnly: true
@@ -486,11 +508,14 @@ components:
           type: integer
           enum: [0, 1, 2, 3]
           description: DOWN, UP, PENDING ou MAINTENANCE selon Uptime Kuma.
+        candidate_targets:
+          type: array
+          items: { $ref: '#/components/schemas/TargetMatch' }
         suggested_target: { $ref: '#/components/schemas/TargetReference' }
         already_imported_to: { $ref: '#/components/schemas/TargetReference' }
     UptimeKumaPreview:
       type: object
-      required: [kind, name, endpoint, compatibility, compatibility_label, encrypted_transport, monitors, receipt, expires_at]
+      required: [kind, name, endpoint, compatibility, compatibility_label, encrypted_transport, monitors, available_targets, receipt, expires_at]
       properties:
         kind: { type: string, const: uptime_kuma }
         name: { type: string }
@@ -501,6 +526,9 @@ components:
         monitors:
           type: array
           items: { $ref: '#/components/schemas/UptimeKumaMonitorPreview' }
+        available_targets:
+          type: array
+          items: { $ref: '#/components/schemas/TargetReference' }
         receipt:
           type: string
           writeOnly: true
@@ -655,7 +683,7 @@ paths:
   /api/v1/connectors/zabbix/preview:
     post:
       operationId: previewZabbixConnector
-      description: Vérifie TLS, la version API et la portée du jeton, puis propose les rapprochements exacts sans importer.
+      description: Vérifie TLS, la version API et la portée du jeton, puis propose des rapprochements explicables par nom, IP ou nom DNS sans importer.
       security: [{ SessionCookie: [] }]
       requestBody:
         required: true
@@ -698,6 +726,10 @@ paths:
                   maxItems: 5000
                   uniqueItems: true
                   items: { type: string }
+                target_assignments:
+                  type: object
+                  description: Affectations explicites des identifiants Zabbix sélectionnés vers des Cibles actives.
+                  additionalProperties: { type: string, format: uuid }
       responses:
         '201':
           description: Connecteur enregistré et Cibles créées, réutilisées ou déjà liées
@@ -712,7 +744,7 @@ paths:
   /api/v1/connectors/uptime-kuma/preview:
     post:
       operationId: previewUptimeKumaConnector
-      description: Vérifie TLS, la clé API et la métrique monitor_status, puis propose les rapprochements exacts sans importer.
+      description: Vérifie TLS, la clé API et la métrique monitor_status, puis propose des rapprochements explicables par nom, IP ou nom DNS sans importer.
       security: [{ SessionCookie: [] }]
       requestBody:
         required: true
@@ -755,6 +787,10 @@ paths:
                   maxItems: 5000
                   uniqueItems: true
                   items: { type: string }
+                target_assignments:
+                  type: object
+                  description: Affectations explicites des identifiants Kuma sélectionnés vers des Cibles actives.
+                  additionalProperties: { type: string, format: uuid }
       responses:
         '201':
           description: Connecteur enregistré et Cibles créées, réutilisées ou déjà liées

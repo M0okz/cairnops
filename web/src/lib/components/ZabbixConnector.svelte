@@ -20,6 +20,7 @@
   let preview = $state<ZabbixPreview | null>(null);
   let imported = $state<ZabbixImportResult | null>(null);
   let selected = $state<string[]>([]);
+  let targetAssignments = $state<Record<string, string>>({});
   let query = $state('');
   let busy = $state(false);
   let error = $state('');
@@ -66,6 +67,26 @@
     selected = allSelected ? selected.filter((id) => !visible.includes(id)) : [...new Set([...selected, ...visible])];
   }
 
+  function assignTarget(externalID: string, targetID: string) {
+    targetAssignments = { ...targetAssignments, [externalID]: targetID };
+  }
+
+  function evidenceFor(host: ZabbixHostPreview) {
+    const targetID = targetAssignments[host.external_id];
+    const evidence = host.candidate_targets?.find((match) => match.target.id === targetID)?.evidence[0];
+    if (!evidence && !targetID && host.candidate_targets?.length) {
+      return plural('wizard.possibleMatches', host.candidate_targets.length);
+    }
+    if (!evidence) return targetID ? t('wizard.manualChoice') : t('wizard.newTarget');
+    if (evidence.kind === 'same_ip') return t('wizard.sameIP', { value: evidence.value });
+    if (evidence.kind === 'same_hostname') return t('wizard.sameHostname', { value: evidence.value });
+    return t('wizard.sameName', { value: evidence.value });
+  }
+
+  function isCandidate(host: ZabbixHostPreview, targetID: string) {
+    return host.candidate_targets?.some((match) => match.target.id === targetID) ?? false;
+  }
+
   async function inspect(event: SubmitEvent) {
     event.preventDefault();
     busy = true;
@@ -77,6 +98,11 @@
       });
       apiToken = '';
       selected = preview.hosts.filter((host) => !host.already_imported_to).map((host) => host.external_id);
+      targetAssignments = Object.fromEntries(
+        preview.hosts
+          .filter((host) => !host.already_imported_to && host.suggested_target)
+          .map((host) => [host.external_id, host.suggested_target?.id ?? ''])
+      );
     } catch (cause) {
       error = cause instanceof Error ? cause.message : t('zabbix.verifyFailed');
     } finally {
@@ -91,7 +117,13 @@
     try {
       imported = await api<ZabbixImportResult>('/api/v1/connectors/zabbix/import', {
         method: 'POST',
-        body: JSON.stringify({ receipt: preview.receipt, host_ids: selected })
+        body: JSON.stringify({
+          receipt: preview.receipt,
+          host_ids: selected,
+          target_assignments: Object.fromEntries(
+            selected.filter((id) => targetAssignments[id]).map((id) => [id, targetAssignments[id]])
+          )
+        })
       });
       await onsuccess(imported);
     } catch (cause) {
@@ -104,6 +136,7 @@
   function resetPreview() {
     preview = null;
     selected = [];
+    targetAssignments = {};
     query = '';
     error = '';
     setTimeout(() => addressInput?.focus());
@@ -228,26 +261,35 @@
             {@const connection = primaryInterface(host)}
             {@const locked = Boolean(host.already_imported_to)}
             <li class:picked={selected.includes(host.external_id)} class:locked>
-              <label>
+              <label class="rack-select">
                 <input type="checkbox" checked={selected.includes(host.external_id)}
                   onchange={() => toggleHost(host.external_id)} disabled={locked} />
                 <span class="rack-name">
                   <strong>{host.name}</strong>
                   <small class="faint mono">{connection?.address || t('zabbix.noInterface')}</small>
                 </span>
-                <span class="rack-decision">
-                  {#if locked}
-                    <span class="pill">{t('wizard.alreadyBound')}</span>
-                    <small class="faint">{host.already_imported_to?.name}</small>
-                  {:else if host.suggested_target}
-                    <span class="pill info">{t('wizard.reuse')}</span>
-                    <small class="faint">{host.suggested_target.name}</small>
-                  {:else}
-                    <span class="pill ok">{t('wizard.create')}</span>
-                    <small class="faint">Nouvelle Cible</small>
-                  {/if}
-                </span>
               </label>
+              <span class="rack-decision">
+                {#if locked}
+                  <span class="pill">{t('wizard.alreadyBound')}</span>
+                  <small class="faint">{host.already_imported_to?.name}</small>
+                {:else}
+                  <select
+                    aria-label={t('wizard.targetChoice', { name: host.name })}
+                    value={targetAssignments[host.external_id] ?? ''}
+                    disabled={!selected.includes(host.external_id)}
+                    onchange={(event) => assignTarget(host.external_id, event.currentTarget.value)}
+                  >
+                    <option value="">{t('wizard.createNewTarget')}</option>
+                    {#each preview.available_targets as target (target.id)}
+                      <option value={target.id}>
+                        {target.name}{isCandidate(host, target.id) ? ` — ${t('wizard.candidate')}` : ''}
+                      </option>
+                    {/each}
+                  </select>
+                  <small class="faint">{evidenceFor(host)}</small>
+                {/if}
+              </span>
             </li>
           {:else}
             <li class="none faint">{t('zabbix.noHostMatches')}</li>
@@ -543,6 +585,10 @@
   }
 
   .rack li {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    padding-right: var(--s4);
     border-bottom: 1px solid var(--line-row);
   }
 
@@ -556,6 +602,8 @@
     gap: var(--s4);
     padding: var(--s3) var(--s4);
     cursor: pointer;
+    flex: 1;
+    min-width: 0;
   }
 
   .rack li.picked {
@@ -584,14 +632,52 @@
   }
 
   .rack-decision {
-    flex: none;
+    flex: 0 1 15rem;
+    min-width: 9rem;
     text-align: right;
+  }
+
+  .rack-decision select {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0 var(--s3);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-s);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.6875rem;
+  }
+
+  .rack-decision select:focus-visible {
+    border-color: var(--accent);
+    outline: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    outline-offset: 1px;
   }
 
   .rack-decision small {
     display: block;
     margin-top: 2px;
     font-size: 0.6875rem;
+  }
+
+  @media (max-width: 40rem) {
+    .rack li {
+      flex-wrap: wrap;
+      gap: 0;
+      padding-right: 0;
+    }
+
+    .rack-select {
+      flex-basis: 100%;
+    }
+
+    .rack-decision {
+      flex: 1 1 100%;
+      min-width: 0;
+      padding: 0 var(--s4) var(--s3) calc(var(--s4) + 2rem);
+      text-align: left;
+    }
   }
 
   .none {

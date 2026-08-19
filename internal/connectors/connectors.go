@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -62,6 +63,7 @@ type DiscoveredHost struct {
 	Name              string             `json:"name"`
 	TechnicalName     string             `json:"technical_name"`
 	Interfaces        []zabbix.Interface `json:"interfaces"`
+	CandidateTargets  []TargetMatch      `json:"candidate_targets,omitempty"`
 	SuggestedTarget   *TargetReference   `json:"suggested_target,omitempty"`
 	AlreadyImportedTo *TargetReference   `json:"already_imported_to,omitempty"`
 }
@@ -73,21 +75,23 @@ type ZabbixPreviewInput struct {
 }
 
 type ZabbixPreview struct {
-	Kind               string           `json:"kind"`
-	Name               string           `json:"name"`
-	Endpoint           string           `json:"endpoint"`
-	Version            string           `json:"version"`
-	Compatibility      string           `json:"compatibility"`
-	CompatibilityLabel string           `json:"compatibility_label"`
-	EncryptedTransport bool             `json:"encrypted_transport"`
-	Hosts              []DiscoveredHost `json:"hosts"`
-	Receipt            string           `json:"receipt"`
-	ExpiresAt          time.Time        `json:"expires_at"`
+	Kind               string            `json:"kind"`
+	Name               string            `json:"name"`
+	Endpoint           string            `json:"endpoint"`
+	Version            string            `json:"version"`
+	Compatibility      string            `json:"compatibility"`
+	CompatibilityLabel string            `json:"compatibility_label"`
+	EncryptedTransport bool              `json:"encrypted_transport"`
+	Hosts              []DiscoveredHost  `json:"hosts"`
+	AvailableTargets   []TargetReference `json:"available_targets"`
+	Receipt            string            `json:"receipt"`
+	ExpiresAt          time.Time         `json:"expires_at"`
 }
 
 type ZabbixImportInput struct {
-	Receipt string   `json:"receipt"`
-	HostIDs []string `json:"host_ids"`
+	Receipt           string            `json:"receipt"`
+	HostIDs           []string          `json:"host_ids"`
+	TargetAssignments map[string]string `json:"target_assignments,omitempty"`
 }
 
 type ImportedTarget struct {
@@ -108,6 +112,7 @@ type UptimeKumaMonitorPreview struct {
 	Type              string           `json:"type"`
 	Address           string           `json:"address,omitempty"`
 	Status            int              `json:"status"`
+	CandidateTargets  []TargetMatch    `json:"candidate_targets,omitempty"`
 	SuggestedTarget   *TargetReference `json:"suggested_target,omitempty"`
 	AlreadyImportedTo *TargetReference `json:"already_imported_to,omitempty"`
 }
@@ -126,13 +131,15 @@ type UptimeKumaPreview struct {
 	CompatibilityLabel string                     `json:"compatibility_label"`
 	EncryptedTransport bool                       `json:"encrypted_transport"`
 	Monitors           []UptimeKumaMonitorPreview `json:"monitors"`
+	AvailableTargets   []TargetReference          `json:"available_targets"`
 	Receipt            string                     `json:"receipt"`
 	ExpiresAt          time.Time                  `json:"expires_at"`
 }
 
 type UptimeKumaImportInput struct {
-	Receipt    string   `json:"receipt"`
-	MonitorIDs []string `json:"monitor_ids"`
+	Receipt           string            `json:"receipt"`
+	MonitorIDs        []string          `json:"monitor_ids"`
+	TargetAssignments map[string]string `json:"target_assignments,omitempty"`
 }
 
 type UptimeKumaImport struct {
@@ -142,6 +149,7 @@ type UptimeKumaImport struct {
 
 type PreviewState struct {
 	TargetsByName        map[string]TargetReference
+	Targets              []TargetIdentity
 	ImportedByExternalID map[string]TargetReference
 }
 
@@ -154,6 +162,7 @@ type PersistZabbixInput struct {
 	Compatibility      string
 	EncryptedTransport bool
 	Hosts              []zabbix.Host
+	TargetAssignments  map[string]string
 }
 
 type PersistUptimeKumaInput struct {
@@ -163,6 +172,7 @@ type PersistUptimeKumaInput struct {
 	CredentialSealed   string
 	EncryptedTransport bool
 	Monitors           []uptimekuma.Monitor
+	TargetAssignments  map[string]string
 }
 
 type Store interface {
@@ -269,9 +279,13 @@ func (service *Service) PreviewZabbix(ctx context.Context, input ZabbixPreviewIn
 			ExternalID: host.ID, Name: host.Name, TechnicalName: host.Technical,
 			Interfaces: host.Interfaces,
 		}
-		if target, ok := state.TargetsByName[normalizeName(host.Name)]; ok {
-			targetCopy := target
-			discovered.SuggestedTarget = &targetCopy
+		discovered.CandidateTargets = matchTargets(identityForZabbix(host), state.Targets)
+		discovered.SuggestedTarget = suggestedTarget(discovered.CandidateTargets)
+		if discovered.SuggestedTarget == nil {
+			if target, ok := state.TargetsByName[normalizeName(host.Name)]; ok {
+				targetCopy := target
+				discovered.SuggestedTarget = &targetCopy
+			}
 		}
 		if target, ok := state.ImportedByExternalID[host.ID]; ok {
 			targetCopy := target
@@ -296,7 +310,8 @@ func (service *Service) PreviewZabbix(ctx context.Context, input ZabbixPreviewIn
 		Version: inspection.Version, Compatibility: inspection.Compatibility,
 		CompatibilityLabel: inspection.CompatibilityLabel,
 		EncryptedTransport: inspection.EncryptedTransport,
-		Hosts:              hosts, Receipt: receipt, ExpiresAt: expiresAt,
+		Hosts:              hosts, AvailableTargets: availableTargets(state.Targets),
+		Receipt: receipt, ExpiresAt: expiresAt,
 	}, nil
 }
 
@@ -326,9 +341,13 @@ func (service *Service) PreviewUptimeKuma(ctx context.Context, input UptimeKumaP
 			ExternalID: monitor.ID, Name: monitor.Name, Type: monitor.Type,
 			Address: monitor.Address(), Status: monitor.Status,
 		}
-		if target, ok := state.TargetsByName[normalizeName(monitor.Name)]; ok {
-			targetCopy := target
-			discovered.SuggestedTarget = &targetCopy
+		discovered.CandidateTargets = matchTargets(identityForUptimeKuma(monitor), state.Targets)
+		discovered.SuggestedTarget = suggestedTarget(discovered.CandidateTargets)
+		if discovered.SuggestedTarget == nil {
+			if target, ok := state.TargetsByName[normalizeName(monitor.Name)]; ok {
+				targetCopy := target
+				discovered.SuggestedTarget = &targetCopy
+			}
 		}
 		if target, ok := state.ImportedByExternalID[monitor.ID]; ok {
 			targetCopy := target
@@ -352,7 +371,7 @@ func (service *Service) PreviewUptimeKuma(ctx context.Context, input UptimeKumaP
 		Kind: "uptime_kuma", Name: input.Name, Endpoint: inspection.Endpoint,
 		Compatibility: "supported", CompatibilityLabel: "API métriques officielle",
 		EncryptedTransport: inspection.EncryptedTransport, Monitors: monitors,
-		Receipt: receipt, ExpiresAt: expiresAt,
+		AvailableTargets: availableTargets(state.Targets), Receipt: receipt, ExpiresAt: expiresAt,
 	}, nil
 }
 
@@ -376,6 +395,10 @@ func (service *Service) ImportZabbix(ctx context.Context, actorID string, input 
 			return ZabbixImport{}, fmt.Errorf("%w: selected hosts must be unique", ErrInvalidInput)
 		}
 		selection[id] = struct{}{}
+	}
+	assignments, err := validateTargetAssignments(selection, input.TargetAssignments)
+	if err != nil {
+		return ZabbixImport{}, err
 	}
 	plaintext, err := service.secrets.Open(input.Receipt, "zabbix-preview-v1")
 	if err != nil {
@@ -411,7 +434,7 @@ func (service *Service) ImportZabbix(ctx context.Context, actorID string, input 
 		ActorID: actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
 		CredentialSealed: credential, Version: inspection.Version,
 		Compatibility: inspection.Compatibility, EncryptedTransport: inspection.EncryptedTransport,
-		Hosts: selected,
+		Hosts: selected, TargetAssignments: assignments,
 	})
 	if err != nil {
 		return ZabbixImport{}, fmt.Errorf("import Zabbix hosts: %w", err)
@@ -439,6 +462,10 @@ func (service *Service) ImportUptimeKuma(ctx context.Context, actorID string, in
 			return UptimeKumaImport{}, fmt.Errorf("%w: selected monitors must be unique", ErrInvalidInput)
 		}
 		selection[id] = struct{}{}
+	}
+	assignments, err := validateTargetAssignments(selection, input.TargetAssignments)
+	if err != nil {
+		return UptimeKumaImport{}, err
 	}
 	plaintext, err := service.secrets.Open(input.Receipt, "uptime-kuma-preview-v1")
 	if err != nil {
@@ -473,7 +500,7 @@ func (service *Service) ImportUptimeKuma(ctx context.Context, actorID string, in
 	result, err := service.store.ImportUptimeKuma(ctx, PersistUptimeKumaInput{
 		ActorID: actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
 		CredentialSealed: credential, EncryptedTransport: inspection.EncryptedTransport,
-		Monitors: selected,
+		Monitors: selected, TargetAssignments: assignments,
 	})
 	if err != nil {
 		return UptimeKumaImport{}, fmt.Errorf("import Uptime Kuma monitors: %w", err)
@@ -483,4 +510,51 @@ func (service *Service) ImportUptimeKuma(ctx context.Context, actorID string, in
 
 func normalizeName(name string) string {
 	return strings.ToLower(strings.TrimSpace(name))
+}
+
+func availableTargets(identities []TargetIdentity) []TargetReference {
+	seen := make(map[string]struct{}, len(identities))
+	targets := make([]TargetReference, 0, len(identities))
+	for _, identity := range identities {
+		if identity.ID == "" {
+			continue
+		}
+		if _, exists := seen[identity.ID]; exists {
+			continue
+		}
+		seen[identity.ID] = struct{}{}
+		targets = append(targets, identity.TargetReference)
+	}
+	sort.Slice(targets, func(i, j int) bool {
+		if normalizeName(targets[i].Name) != normalizeName(targets[j].Name) {
+			return normalizeName(targets[i].Name) < normalizeName(targets[j].Name)
+		}
+		return targets[i].ID < targets[j].ID
+	})
+	return targets
+}
+
+func validateTargetAssignments(selected map[string]struct{}, assignments map[string]string) (map[string]string, error) {
+	validated := make(map[string]string, len(assignments))
+	for externalID, targetID := range assignments {
+		externalID = strings.TrimSpace(externalID)
+		targetID = strings.TrimSpace(targetID)
+		if _, ok := selected[externalID]; !ok {
+			return nil, fmt.Errorf("%w: a target assignment refers to an unselected object", ErrInvalidInput)
+		}
+		if !validUUID(targetID) {
+			return nil, fmt.Errorf("%w: target assignments must contain valid target identities", ErrInvalidInput)
+		}
+		validated[externalID] = targetID
+	}
+	return validated, nil
+}
+
+func validUUID(value string) bool {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
+		return false
+	}
+	compact := strings.ReplaceAll(value, "-", "")
+	_, err := hex.DecodeString(compact)
+	return err == nil
 }

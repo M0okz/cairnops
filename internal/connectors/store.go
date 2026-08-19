@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -45,6 +46,41 @@ func ensureIntegrationSource(ctx context.Context, tx pgx.Tx, bindingID string) e
 
 type PostgresStore struct {
 	pool *pgxpool.Pool
+}
+
+func addBindingIdentity(identity *TargetIdentity, kind string, encoded []byte) error {
+	if kind == "" || len(encoded) == 0 {
+		return nil
+	}
+	var metadata struct {
+		TechnicalName string `json:"technical_name"`
+		Address       string `json:"address"`
+		URL           string `json:"url"`
+		Hostname      string `json:"hostname"`
+		Interfaces    []struct {
+			Address string `json:"address"`
+		} `json:"interfaces"`
+	}
+	if err := json.Unmarshal(encoded, &metadata); err != nil {
+		return err
+	}
+	if metadata.TechnicalName != "" {
+		identity.Names = append(identity.Names, metadata.TechnicalName)
+		identity.Addresses = append(identity.Addresses, metadata.TechnicalName)
+	}
+	identity.Addresses = append(identity.Addresses, metadata.Address, metadata.URL, metadata.Hostname)
+	for _, item := range metadata.Interfaces {
+		identity.Addresses = append(identity.Addresses, item.Address)
+	}
+	return nil
+}
+
+func selectAssignedTarget(ctx context.Context, tx pgx.Tx, assignedTargetID string, targetID, targetName *string) error {
+	return tx.QueryRow(ctx, `
+		SELECT id::text, name
+		FROM cairnops_targets
+		WHERE id = $1::uuid AND archived_at IS NULL
+	`, assignedTargetID).Scan(targetID, targetName)
 }
 
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
@@ -543,6 +579,59 @@ func (store *PostgresStore) PreviewState(ctx context.Context, kind, endpoint str
 		rows.Close()
 	}
 
+	identityRows, err := store.pool.Query(ctx, `
+		SELECT target.id::text, target.name,
+		       coalesce(binding.external_name, ''), coalesce(connector.kind, ''),
+		       coalesce(binding.metadata, '{}'::jsonb)
+		FROM cairnops_targets target
+		LEFT JOIN cairnops_connector_bindings binding ON binding.target_id = target.id
+		LEFT JOIN cairnops_connectors connector ON connector.id = binding.connector_id
+		WHERE target.archived_at IS NULL
+		ORDER BY lower(target.name), target.id, binding.created_at, binding.id
+	`)
+	if err != nil {
+		return PreviewState{}, fmt.Errorf("list target identities: %w", err)
+	}
+	identities := make(map[string]TargetIdentity)
+	for identityRows.Next() {
+		var targetID, targetName, externalName, connectorKind string
+		var metadata []byte
+		if err := identityRows.Scan(&targetID, &targetName, &externalName, &connectorKind, &metadata); err != nil {
+			identityRows.Close()
+			return PreviewState{}, fmt.Errorf("scan target identity: %w", err)
+		}
+		identity, exists := identities[targetID]
+		if !exists {
+			identity = TargetIdentity{
+				TargetReference: TargetReference{ID: targetID, Name: targetName},
+				Names:           []string{targetName},
+			}
+		}
+		if externalName != "" {
+			identity.Names = append(identity.Names, externalName)
+		}
+		if err := addBindingIdentity(&identity, connectorKind, metadata); err != nil {
+			identityRows.Close()
+			return PreviewState{}, fmt.Errorf("decode identity metadata for target %s: %w", targetID, err)
+		}
+		identities[targetID] = identity
+	}
+	if err := identityRows.Err(); err != nil {
+		identityRows.Close()
+		return PreviewState{}, fmt.Errorf("iterate target identities: %w", err)
+	}
+	identityRows.Close()
+	state.Targets = make([]TargetIdentity, 0, len(identities))
+	for _, identity := range identities {
+		state.Targets = append(state.Targets, identity)
+	}
+	sort.Slice(state.Targets, func(i, j int) bool {
+		if normalizeName(state.Targets[i].Name) != normalizeName(state.Targets[j].Name) {
+			return normalizeName(state.Targets[i].Name) < normalizeName(state.Targets[j].Name)
+		}
+		return state.Targets[i].ID < state.Targets[j].ID
+	})
+
 	rows, err := store.pool.Query(ctx, `
 		SELECT binding.external_id, target.id::text, target.name
 		FROM cairnops_connectors connector
@@ -607,6 +696,7 @@ func (store *PostgresStore) ImportUptimeKuma(ctx context.Context, input PersistU
 	result := UptimeKumaImport{Connector: connector, Targets: make([]ImportedTarget, 0, len(input.Monitors))}
 	for _, monitor := range input.Monitors {
 		var targetID, targetName string
+		assignedTargetID := input.TargetAssignments[monitor.ID]
 		err := tx.QueryRow(ctx, `
 			SELECT target.id::text, target.name
 			FROM cairnops_connector_bindings binding
@@ -614,16 +704,23 @@ func (store *PostgresStore) ImportUptimeKuma(ctx context.Context, input PersistU
 			WHERE binding.connector_id = $1::uuid AND binding.external_id = $2
 		`, connector.ID, monitor.ID).Scan(&targetID, &targetName)
 		disposition := "already_imported"
+		if err == nil && assignedTargetID != "" && assignedTargetID != targetID {
+			return UptimeKumaImport{}, fmt.Errorf("%w: Uptime Kuma monitor %s is already linked to another target", ErrInvalidInput, monitor.ID)
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
-			err = tx.QueryRow(ctx, `
-				SELECT id::text, name
-				FROM cairnops_targets
-				WHERE archived_at IS NULL AND lower(btrim(name)) = lower(btrim($1))
-				ORDER BY created_at, id
-				LIMIT 1
-			`, monitor.Name).Scan(&targetID, &targetName)
 			disposition = "reused"
-			if errors.Is(err, pgx.ErrNoRows) {
+			if assignedTargetID != "" {
+				err = selectAssignedTarget(ctx, tx, assignedTargetID, &targetID, &targetName)
+			} else {
+				err = tx.QueryRow(ctx, `
+					SELECT id::text, name
+					FROM cairnops_targets
+					WHERE archived_at IS NULL AND lower(btrim(name)) = lower(btrim($1))
+					ORDER BY created_at, id
+					LIMIT 1
+				`, monitor.Name).Scan(&targetID, &targetName)
+			}
+			if errors.Is(err, pgx.ErrNoRows) && assignedTargetID == "" {
 				description := fmt.Sprintf("Découvert par le Connecteur %s.", input.Name)
 				err = tx.QueryRow(ctx, `
 					INSERT INTO cairnops_targets (name, description)
@@ -631,6 +728,9 @@ func (store *PostgresStore) ImportUptimeKuma(ctx context.Context, input PersistU
 					RETURNING id::text, name
 				`, monitor.Name, description).Scan(&targetID, &targetName)
 				disposition = "created"
+			}
+			if errors.Is(err, pgx.ErrNoRows) && assignedTargetID != "" {
+				return UptimeKumaImport{}, fmt.Errorf("%w: assigned target does not exist or is archived", ErrInvalidInput)
 			}
 			if err != nil {
 				return UptimeKumaImport{}, fmt.Errorf("resolve target for Uptime Kuma monitor %s: %w", monitor.ID, err)
@@ -712,6 +812,7 @@ func (store *PostgresStore) ImportZabbix(ctx context.Context, input PersistZabbi
 	result := ZabbixImport{Connector: connector, Targets: make([]ImportedTarget, 0, len(input.Hosts))}
 	for _, host := range input.Hosts {
 		var targetID, targetName string
+		assignedTargetID := input.TargetAssignments[host.ID]
 		err := tx.QueryRow(ctx, `
 			SELECT target.id::text, target.name
 			FROM cairnops_connector_bindings binding
@@ -719,16 +820,23 @@ func (store *PostgresStore) ImportZabbix(ctx context.Context, input PersistZabbi
 			WHERE binding.connector_id = $1::uuid AND binding.external_id = $2
 		`, connector.ID, host.ID).Scan(&targetID, &targetName)
 		disposition := "already_imported"
+		if err == nil && assignedTargetID != "" && assignedTargetID != targetID {
+			return ZabbixImport{}, fmt.Errorf("%w: Zabbix host %s is already linked to another target", ErrInvalidInput, host.ID)
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
-			err = tx.QueryRow(ctx, `
-				SELECT id::text, name
-				FROM cairnops_targets
-				WHERE archived_at IS NULL AND lower(btrim(name)) = lower(btrim($1))
-				ORDER BY created_at, id
-				LIMIT 1
-			`, host.Name).Scan(&targetID, &targetName)
 			disposition = "reused"
-			if errors.Is(err, pgx.ErrNoRows) {
+			if assignedTargetID != "" {
+				err = selectAssignedTarget(ctx, tx, assignedTargetID, &targetID, &targetName)
+			} else {
+				err = tx.QueryRow(ctx, `
+					SELECT id::text, name
+					FROM cairnops_targets
+					WHERE archived_at IS NULL AND lower(btrim(name)) = lower(btrim($1))
+					ORDER BY created_at, id
+					LIMIT 1
+				`, host.Name).Scan(&targetID, &targetName)
+			}
+			if errors.Is(err, pgx.ErrNoRows) && assignedTargetID == "" {
 				description := fmt.Sprintf("Découvert par le Connecteur %s.", input.Name)
 				err = tx.QueryRow(ctx, `
 					INSERT INTO cairnops_targets (name, description)
@@ -736,6 +844,9 @@ func (store *PostgresStore) ImportZabbix(ctx context.Context, input PersistZabbi
 					RETURNING id::text, name
 				`, host.Name, description).Scan(&targetID, &targetName)
 				disposition = "created"
+			}
+			if errors.Is(err, pgx.ErrNoRows) && assignedTargetID != "" {
+				return ZabbixImport{}, fmt.Errorf("%w: assigned target does not exist or is archived", ErrInvalidInput)
 			}
 			if err != nil {
 				return ZabbixImport{}, fmt.Errorf("resolve target for Zabbix host %s: %w", host.ID, err)

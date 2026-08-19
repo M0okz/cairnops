@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import { onMount } from 'svelte';
-  import { api, type UptimeKumaImportResult, type UptimeKumaPreview } from '$lib/api';
+  import { api, type UptimeKumaImportResult, type UptimeKumaMonitorPreview, type UptimeKumaPreview } from '$lib/api';
   import { clock } from '$lib/format';
   import { plural, t } from '$lib/i18n.svelte';
 
@@ -20,6 +20,7 @@
   let preview = $state<UptimeKumaPreview | null>(null);
   let imported = $state<UptimeKumaImportResult | null>(null);
   let selected = $state<string[]>([]);
+  let targetAssignments = $state<Record<string, string>>({});
   let query = $state('');
   let busy = $state(false);
   let error = $state('');
@@ -60,6 +61,26 @@
     selected = allSelected ? selected.filter((id) => !visible.includes(id)) : [...new Set([...selected, ...visible])];
   }
 
+  function assignTarget(externalID: string, targetID: string) {
+    targetAssignments = { ...targetAssignments, [externalID]: targetID };
+  }
+
+  function evidenceFor(monitor: UptimeKumaMonitorPreview) {
+    const targetID = targetAssignments[monitor.external_id];
+    const evidence = monitor.candidate_targets?.find((match) => match.target.id === targetID)?.evidence[0];
+    if (!evidence && !targetID && monitor.candidate_targets?.length) {
+      return plural('wizard.possibleMatches', monitor.candidate_targets.length);
+    }
+    if (!evidence) return targetID ? t('wizard.manualChoice') : t('wizard.newTarget');
+    if (evidence.kind === 'same_ip') return t('wizard.sameIP', { value: evidence.value });
+    if (evidence.kind === 'same_hostname') return t('wizard.sameHostname', { value: evidence.value });
+    return t('wizard.sameName', { value: evidence.value });
+  }
+
+  function isCandidate(monitor: UptimeKumaMonitorPreview, targetID: string) {
+    return monitor.candidate_targets?.some((match) => match.target.id === targetID) ?? false;
+  }
+
   function statusLabel(status: number) {
     if (status === 0) return 'DOWN';
     if (status === 1) return 'UP';
@@ -78,6 +99,11 @@
       });
       apiKey = '';
       selected = preview.monitors.filter((monitor) => !monitor.already_imported_to).map((monitor) => monitor.external_id);
+      targetAssignments = Object.fromEntries(
+        preview.monitors
+          .filter((monitor) => !monitor.already_imported_to && monitor.suggested_target)
+          .map((monitor) => [monitor.external_id, monitor.suggested_target?.id ?? ''])
+      );
     } catch (cause) {
       error = cause instanceof Error ? cause.message : t('kuma.verifyFailed');
     } finally {
@@ -92,7 +118,13 @@
     try {
       imported = await api<UptimeKumaImportResult>('/api/v1/connectors/uptime-kuma/import', {
         method: 'POST',
-        body: JSON.stringify({ receipt: preview.receipt, monitor_ids: selected })
+        body: JSON.stringify({
+          receipt: preview.receipt,
+          monitor_ids: selected,
+          target_assignments: Object.fromEntries(
+            selected.filter((id) => targetAssignments[id]).map((id) => [id, targetAssignments[id]])
+          )
+        })
       });
       await onsuccess(imported);
     } catch (cause) {
@@ -105,6 +137,7 @@
   function resetPreview() {
     preview = null;
     selected = [];
+    targetAssignments = {};
     query = '';
     error = '';
     setTimeout(() => addressInput?.focus());
@@ -228,26 +261,35 @@
           {#each filteredMonitors() as monitor (monitor.external_id)}
             {@const locked = Boolean(monitor.already_imported_to)}
             <li class:picked={selected.includes(monitor.external_id)} class:locked>
-              <label>
+              <label class="rack-select">
                 <input type="checkbox" checked={selected.includes(monitor.external_id)}
                   onchange={() => toggleMonitor(monitor.external_id)} disabled={locked} />
                 <span class="rack-name">
                   <strong>{monitor.name}</strong>
                   <small class="faint mono">{monitor.address || statusLabel(monitor.status)}</small>
                 </span>
-                <span class="rack-decision">
-                  {#if locked}
-                    <span class="pill">{t('wizard.alreadyBound')}</span>
-                    <small class="faint">{monitor.already_imported_to?.name}</small>
-                  {:else if monitor.suggested_target}
-                    <span class="pill info">{t('wizard.reuse')}</span>
-                    <small class="faint">{monitor.suggested_target.name}</small>
-                  {:else}
-                    <span class="pill ok">{t('wizard.create')}</span>
-                    <small class="faint">Nouvelle Cible</small>
-                  {/if}
-                </span>
               </label>
+              <span class="rack-decision">
+                {#if locked}
+                  <span class="pill">{t('wizard.alreadyBound')}</span>
+                  <small class="faint">{monitor.already_imported_to?.name}</small>
+                {:else}
+                  <select
+                    aria-label={t('wizard.targetChoice', { name: monitor.name })}
+                    value={targetAssignments[monitor.external_id] ?? ''}
+                    disabled={!selected.includes(monitor.external_id)}
+                    onchange={(event) => assignTarget(monitor.external_id, event.currentTarget.value)}
+                  >
+                    <option value="">{t('wizard.createNewTarget')}</option>
+                    {#each preview.available_targets as target (target.id)}
+                      <option value={target.id}>
+                        {target.name}{isCandidate(monitor, target.id) ? ` — ${t('wizard.candidate')}` : ''}
+                      </option>
+                    {/each}
+                  </select>
+                  <small class="faint">{evidenceFor(monitor)}</small>
+                {/if}
+              </span>
             </li>
           {:else}
             <li class="none faint">{t('kuma.noMonitorMatches')}</li>
@@ -543,6 +585,10 @@
   }
 
   .rack li {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    padding-right: var(--s4);
     border-bottom: 1px solid var(--line-row);
   }
 
@@ -556,6 +602,8 @@
     gap: var(--s4);
     padding: var(--s3) var(--s4);
     cursor: pointer;
+    flex: 1;
+    min-width: 0;
   }
 
   .rack li.picked {
@@ -584,14 +632,52 @@
   }
 
   .rack-decision {
-    flex: none;
+    flex: 0 1 15rem;
+    min-width: 9rem;
     text-align: right;
+  }
+
+  .rack-decision select {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0 var(--s3);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-s);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.6875rem;
+  }
+
+  .rack-decision select:focus-visible {
+    border-color: var(--accent);
+    outline: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    outline-offset: 1px;
   }
 
   .rack-decision small {
     display: block;
     margin-top: 2px;
     font-size: 0.6875rem;
+  }
+
+  @media (max-width: 40rem) {
+    .rack li {
+      flex-wrap: wrap;
+      gap: 0;
+      padding-right: 0;
+    }
+
+    .rack-select {
+      flex-basis: 100%;
+    }
+
+    .rack-decision {
+      flex: 1 1 100%;
+      min-width: 0;
+      padding: 0 var(--s4) var(--s3) calc(var(--s4) + 2rem);
+      text-align: left;
+    }
   }
 
   .none {

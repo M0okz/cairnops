@@ -16,8 +16,10 @@ import (
 type fakeConnectors struct {
 	previewInput     connectors.ZabbixPreviewInput
 	importActor      string
+	importInput      connectors.ZabbixImportInput
 	kumaPreviewInput connectors.UptimeKumaPreviewInput
 	kumaImportActor  string
+	kumaImportInput  connectors.UptimeKumaImportInput
 	suspendedID      string
 	resumedID        string
 	deletedID        string
@@ -46,8 +48,9 @@ func (fake *fakeConnectors) PreviewUptimeKuma(_ context.Context, input connector
 	}, nil
 }
 
-func (fake *fakeConnectors) ImportUptimeKuma(_ context.Context, actorID string, _ connectors.UptimeKumaImportInput) (connectors.UptimeKumaImport, error) {
+func (fake *fakeConnectors) ImportUptimeKuma(_ context.Context, actorID string, input connectors.UptimeKumaImportInput) (connectors.UptimeKumaImport, error) {
 	fake.kumaImportActor = actorID
+	fake.kumaImportInput = input
 	return connectors.UptimeKumaImport{Connector: connectors.Connector{ID: "connector-kuma", Kind: "uptime_kuma"}}, nil
 }
 
@@ -63,8 +66,9 @@ func (fake *fakeConnectors) PreviewZabbix(_ context.Context, input connectors.Za
 	}, nil
 }
 
-func (fake *fakeConnectors) ImportZabbix(_ context.Context, actorID string, _ connectors.ZabbixImportInput) (connectors.ZabbixImport, error) {
+func (fake *fakeConnectors) ImportZabbix(_ context.Context, actorID string, input connectors.ZabbixImportInput) (connectors.ZabbixImport, error) {
 	fake.importActor = actorID
+	fake.importInput = input
 	return connectors.ZabbixImport{Connector: connectors.Connector{ID: "connector-one", Kind: "zabbix"}}, nil
 }
 
@@ -128,14 +132,14 @@ func TestZabbixImportUsesAuthenticatedActor(t *testing.T) {
 	t.Parallel()
 	fake := &fakeConnectors{}
 	server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "administrator"}, Connectors: fake})
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/connectors/zabbix/import", bytes.NewBufferString(`{"receipt":"opaque-preview-receipt","host_ids":["10084"]}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/connectors/zabbix/import", bytes.NewBufferString(`{"receipt":"opaque-preview-receipt","host_ids":["10084"],"target_assignments":{"10084":"12345678-1234-4234-8234-123456789012"}}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
 	response := httptest.NewRecorder()
 
 	server.Handler.ServeHTTP(response, request)
 
-	if response.Code != http.StatusCreated || fake.importActor != "user-id" {
+	if response.Code != http.StatusCreated || fake.importActor != "user-id" || fake.importInput.TargetAssignments["10084"] != "12345678-1234-4234-8234-123456789012" {
 		t.Fatalf("expected authenticated import, status=%d actor=%q body=%s", response.Code, fake.importActor, response.Body.String())
 	}
 }
@@ -154,12 +158,12 @@ func TestUptimeKumaPreviewAndImportRequireAdministrator(t *testing.T) {
 		t.Fatalf("unexpected Kuma preview response status=%d body=%s input=%#v", response.Code, response.Body.String(), fake.kumaPreviewInput)
 	}
 
-	request = httptest.NewRequest(http.MethodPost, "/api/v1/connectors/uptime-kuma/import", bytes.NewBufferString(`{"receipt":"opaque-kuma-preview-receipt","monitor_ids":["12"]}`))
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/connectors/uptime-kuma/import", bytes.NewBufferString(`{"receipt":"opaque-kuma-preview-receipt","monitor_ids":["12"],"target_assignments":{"12":"12345678-1234-4234-8234-123456789012"}}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
 	response = httptest.NewRecorder()
 	server.Handler.ServeHTTP(response, request)
-	if response.Code != http.StatusCreated || fake.kumaImportActor != "user-id" {
+	if response.Code != http.StatusCreated || fake.kumaImportActor != "user-id" || fake.kumaImportInput.TargetAssignments["12"] != "12345678-1234-4234-8234-123456789012" {
 		t.Fatalf("expected authenticated Kuma import, status=%d actor=%q body=%s", response.Code, fake.kumaImportActor, response.Body.String())
 	}
 }
