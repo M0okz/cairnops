@@ -1,0 +1,98 @@
+---
+# yamllint disable rule:line-length
+name: cairnops
+
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:18.4-alpine3.24
+    environment:
+      POSTGRES_DB: cairnops
+      POSTGRES_USER: cairnops
+      POSTGRES_PASSWORD: ${CAIRNOPS_POSTGRES_PASSWORD:?CAIRNOPS_POSTGRES_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cairnops -d cairnops"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - cairnops-postgres:/var/lib/postgresql
+    restart: unless-stopped
+    logging: *default-logging
+
+  server:
+    image: ghcr.io/m0okz/cairnops-server:latest
+    environment:
+      CAIRNOPS_DATABASE_URL: postgres://cairnops:${CAIRNOPS_POSTGRES_PASSWORD:?CAIRNOPS_POSTGRES_PASSWORD must be set}@postgres:5432/cairnops?sslmode=disable
+      CAIRNOPS_BOOTSTRAP_TOKEN: ${CAIRNOPS_BOOTSTRAP_TOKEN:?CAIRNOPS_BOOTSTRAP_TOKEN must be set}
+      CAIRNOPS_HTTP_ADDRESS: :8080
+      CAIRNOPS_PUBLIC_URL: ${CAIRNOPS_PUBLIC_URL:?CAIRNOPS_PUBLIC_URL must be set}
+      CAIRNOPS_WEB_DIR: /app/web
+      CAIRNOPS_MASTER_KEY_FILE: /var/lib/cairnops/master.key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/cairnops", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    ports:
+      - "${CAIRNOPS_HTTP_PORT:-8080}:8080"
+    volumes:
+      - cairnops-secrets:/var/lib/cairnops
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    restart: unless-stopped
+    logging: *default-logging
+
+  worker:
+    image: ghcr.io/m0okz/cairnops-worker:latest
+    environment:
+      CAIRNOPS_DATABASE_URL: postgres://cairnops:${CAIRNOPS_POSTGRES_PASSWORD:?CAIRNOPS_POSTGRES_PASSWORD must be set}@postgres:5432/cairnops?sslmode=disable
+      CAIRNOPS_WORKER_HEALTH_ADDRESS: :8081
+      CAIRNOPS_PUBLIC_URL: ${CAIRNOPS_PUBLIC_URL:?CAIRNOPS_PUBLIC_URL must be set}
+      CAIRNOPS_MASTER_KEY_FILE: /var/lib/cairnops/master.key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/cairnops", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    cap_add:
+      - NET_RAW
+    volumes:
+      - cairnops-secrets:/var/lib/cairnops
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    restart: unless-stopped
+    logging: *default-logging
+
+  watchtower:
+    image: nickfedor/watchtower:1.21.0
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: ${CAIRNOPS_UPDATE_INTERVAL:-300}
+      WATCHTOWER_ROLLING_RESTART: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging: *default-logging
+
+volumes:
+  cairnops-postgres:
+  cairnops-secrets:
