@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
@@ -14,7 +15,13 @@ const (
 	matchNameScore     = 100
 	matchHostnameScore = 80
 	matchIPScore       = 70
+	matchAliasScore    = 60
+	matchSupportScore  = 5
 )
+
+var infrastructureZones = map[string]struct{}{
+	"dmz": {}, "trust": {}, "untrust": {},
+}
 
 // TargetIdentity est l'identité observable d'une Cible. Elle agrège les noms
 // et adresses déjà apportés par ses Sources sans en faire des attributs
@@ -61,12 +68,14 @@ func identityForUptimeKuma(monitor uptimekuma.Monitor) DiscoveredIdentity {
 func matchTargets(discovered DiscoveredIdentity, targets []TargetIdentity) []TargetMatch {
 	discoveredNames := normalizedSet(discovered.Names, normalizeName)
 	discoveredAddresses := normalizedSet(discovered.Addresses, normalizeAddress)
+	discoveredAliases := nameFingerprints(discovered.Names)
 	matches := make([]TargetMatch, 0)
 	for _, candidate := range targets {
-		evidence := make([]MatchEvidence, 0, 3)
+		evidenceByKey := make(map[string]MatchEvidence)
+		evidenceKinds := make(map[string]struct{})
 		score := 0
 		for name := range intersection(discoveredNames, normalizedSet(candidate.Names, normalizeName)) {
-			evidence = append(evidence, MatchEvidence{Kind: "same_name", Value: name})
+			addMatchEvidence(evidenceByKey, evidenceKinds, MatchEvidence{Kind: "same_name", Value: name})
 			if score < matchNameScore {
 				score = matchNameScore
 			}
@@ -76,23 +85,38 @@ func matchTargets(discovered DiscoveredIdentity, targets []TargetIdentity) []Tar
 			if net.ParseIP(address) != nil {
 				kind, addressScore = "same_ip", matchIPScore
 			}
-			evidence = append(evidence, MatchEvidence{Kind: kind, Value: address})
+			addMatchEvidence(evidenceByKey, evidenceKinds, MatchEvidence{Kind: kind, Value: address})
 			if score < addressScore {
 				score = addressScore
+			}
+		}
+		for alias := range matchingAliases(discoveredAliases, nameFingerprints(candidate.Names)) {
+			addMatchEvidence(evidenceByKey, evidenceKinds, MatchEvidence{Kind: "similar_name", Value: alias})
+			if score < matchAliasScore {
+				score = matchAliasScore
 			}
 		}
 		if score == 0 {
 			continue
 		}
+		if len(evidenceKinds) > 1 {
+			score += (len(evidenceKinds) - 1) * matchSupportScore
+		}
+		evidence := make([]MatchEvidence, 0, len(evidenceByKey))
+		for _, item := range evidenceByKey {
+			evidence = append(evidence, item)
+		}
 		sort.Slice(evidence, func(i, j int) bool {
-			if evidence[i].Kind == evidence[j].Kind {
+			if evidencePriority(evidence[i].Kind) == evidencePriority(evidence[j].Kind) {
 				return evidence[i].Value < evidence[j].Value
 			}
-			return evidence[i].Kind < evidence[j].Kind
+			return evidencePriority(evidence[i].Kind) < evidencePriority(evidence[j].Kind)
 		})
-		confidence := "medium"
+		confidence := "low"
 		if score >= matchNameScore {
 			confidence = "high"
+		} else if score >= matchIPScore {
+			confidence = "medium"
 		}
 		matches = append(matches, TargetMatch{
 			Target: candidate.TargetReference, Confidence: confidence,
@@ -111,11 +135,121 @@ func matchTargets(discovered DiscoveredIdentity, targets []TargetIdentity) []Tar
 	return matches
 }
 
-// suggestedTarget ne choisit que si le meilleur score est unique. Une IP
-// partagée par deux Cibles reste visible parmi les candidats mais ne devient
-// jamais une décision implicite.
+func addMatchEvidence(byKey map[string]MatchEvidence, kinds map[string]struct{}, evidence MatchEvidence) {
+	key := evidence.Kind + "\x00" + evidence.Value
+	byKey[key] = evidence
+	kinds[evidence.Kind] = struct{}{}
+}
+
+func evidencePriority(kind string) int {
+	switch kind {
+	case "same_name":
+		return 0
+	case "same_hostname":
+		return 1
+	case "same_ip":
+		return 2
+	case "similar_name":
+		return 3
+	default:
+		return 4
+	}
+}
+
+// nameFingerprint retire uniquement les conventions d'infrastructure que
+// CairnOps sait interpréter sans dictionnaire métier : une zone réseau en tête
+// et un numéro d'instance en queue. Les zones et instances restent conservées
+// pour empêcher qu'un alias rapproche deux objets explicitement différents.
+type nameFingerprint struct {
+	Core     string
+	Zone     string
+	Instance string
+}
+
+func nameFingerprints(values []string) []nameFingerprint {
+	seen := make(map[nameFingerprint]struct{}, len(values))
+	result := make([]nameFingerprint, 0, len(values))
+	for _, value := range values {
+		fingerprint := fingerprintName(value)
+		if fingerprint.Core == "" {
+			continue
+		}
+		if _, exists := seen[fingerprint]; exists {
+			continue
+		}
+		seen[fingerprint] = struct{}{}
+		result = append(result, fingerprint)
+	}
+	return result
+}
+
+func fingerprintName(value string) nameFingerprint {
+	tokens := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(value)), func(char rune) bool {
+		return !unicode.IsLetter(char) && !unicode.IsDigit(char)
+	})
+	if len(tokens) == 0 {
+		return nameFingerprint{}
+	}
+	fingerprint := nameFingerprint{}
+	if len(tokens) > 1 {
+		if _, known := infrastructureZones[tokens[0]]; known {
+			fingerprint.Zone = tokens[0]
+			tokens = tokens[1:]
+		}
+	}
+	if len(tokens) > 1 && isInstanceToken(tokens[len(tokens)-1]) {
+		fingerprint.Instance = strings.TrimLeft(tokens[len(tokens)-1], "0")
+		if fingerprint.Instance == "" {
+			fingerprint.Instance = "0"
+		}
+		tokens = tokens[:len(tokens)-1]
+	}
+	fingerprint.Core = strings.Join(tokens, "")
+	return fingerprint
+}
+
+func isInstanceToken(value string) bool {
+	if value == "" || len(value) > 3 {
+		return false
+	}
+	for _, char := range value {
+		if !unicode.IsDigit(char) {
+			return false
+		}
+	}
+	return true
+}
+
+func matchingAliases(left, right []nameFingerprint) map[string]struct{} {
+	result := make(map[string]struct{})
+	for _, discovered := range left {
+		for _, candidate := range right {
+			if discovered.Core == "" || discovered.Core != candidate.Core {
+				continue
+			}
+			if discovered.Zone != "" && candidate.Zone != "" && discovered.Zone != candidate.Zone {
+				continue
+			}
+			if discovered.Instance != "" && candidate.Instance != "" && discovered.Instance != candidate.Instance {
+				continue
+			}
+			// Un nom déjà strictement identique possède une preuve plus forte et
+			// n'a pas besoin d'une seconde preuve d'alias identique.
+			if discovered.Zone == candidate.Zone && discovered.Instance == candidate.Instance {
+				continue
+			}
+			result[discovered.Core] = struct{}{}
+		}
+	}
+	return result
+}
+
+// suggestedTarget ne choisit que si le meilleur score est unique et repose au
+// moins sur une adresse. Un alias de nom d'infrastructure reste une suggestion
+// à confirmer ; une IP partagée reste visible mais ne devient jamais une
+// décision implicite.
 func suggestedTarget(matches []TargetMatch) *TargetReference {
-	if len(matches) == 0 || (len(matches) > 1 && matches[0].score == matches[1].score) {
+	if len(matches) == 0 || matches[0].score < matchIPScore || (len(matches) > 1 && matches[0].score == matches[1].score) {
 		return nil
 	}
 	target := matches[0].Target

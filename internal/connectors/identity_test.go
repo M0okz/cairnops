@@ -70,3 +70,71 @@ func TestBindingMetadataFeedsCrossConnectorIdentity(t *testing.T) {
 		t.Fatalf("stored connector metadata did not feed matching: %#v", matches)
 	}
 }
+
+func TestInfrastructureNameSuggestsExistingTarget(t *testing.T) {
+	t.Parallel()
+	target := TargetIdentity{
+		TargetReference: TargetReference{ID: "target-bitwarden", Name: "Bitwarden"},
+		Names:           []string{"Bitwarden"},
+	}
+	discovered := DiscoveredIdentity{Names: []string{"dmz-bitwarden-01"}}
+
+	matches := matchTargets(discovered, []TargetIdentity{target})
+
+	if len(matches) != 1 || matches[0].Target.ID != target.ID {
+		t.Fatalf("expected the infrastructure alias to match, got %#v", matches)
+	}
+	if len(matches[0].Evidence) != 1 || matches[0].Evidence[0].Kind != "similar_name" || matches[0].Evidence[0].Value != "bitwarden" {
+		t.Fatalf("expected explainable infrastructure-name evidence, got %#v", matches[0].Evidence)
+	}
+	if matches[0].Confidence != "low" {
+		t.Fatalf("an infrastructure alias must remain a low-confidence suggestion: %#v", matches[0])
+	}
+	if suggestion := suggestedTarget(matches); suggestion != nil {
+		t.Fatalf("a name alias alone must require confirmation: %#v", suggestion)
+	}
+}
+
+func TestInfrastructureNameNormalizesSeparators(t *testing.T) {
+	t.Parallel()
+	target := TargetIdentity{
+		TargetReference: TargetReference{ID: "target-victoria", Name: "Victoria Metrics"},
+		Names:           []string{"Victoria Metrics"},
+	}
+	discovered := DiscoveredIdentity{Names: []string{"trust-victoria-metrics-01"}}
+
+	matches := matchTargets(discovered, []TargetIdentity{target})
+
+	if len(matches) != 1 || matches[0].Evidence[0].Kind != "similar_name" {
+		t.Fatalf("expected spacing and separators to share an alias, got %#v", matches)
+	}
+}
+
+func TestInfrastructureNameKeepsConflictingInstancesApart(t *testing.T) {
+	t.Parallel()
+	discovered := DiscoveredIdentity{Names: []string{"dmz-api-01"}}
+	targets := []TargetIdentity{{
+		TargetReference: TargetReference{ID: "target-api-02", Name: "trust-api-02"},
+		Names:           []string{"trust-api-02"},
+	}}
+
+	if matches := matchTargets(discovered, targets); len(matches) != 0 {
+		t.Fatalf("different explicit instances must not match: %#v", matches)
+	}
+}
+
+func TestSupportingNameEvidenceBreaksSharedIPTie(t *testing.T) {
+	t.Parallel()
+	discovered := DiscoveredIdentity{Names: []string{"dmz-mailcow-01"}, Addresses: []string{"192.0.2.42"}}
+	targets := []TargetIdentity{
+		{TargetReference: TargetReference{ID: "target-proxy", Name: "Reverse proxy"}, Names: []string{"Reverse proxy"}, Addresses: []string{"192.0.2.42"}},
+		{TargetReference: TargetReference{ID: "target-mailcow", Name: "Mailcow"}, Names: []string{"Mailcow"}, Addresses: []string{"192.0.2.42"}},
+	}
+
+	matches := matchTargets(discovered, targets)
+	suggestion := suggestedTarget(matches)
+
+	if suggestion == nil || suggestion.ID != "target-mailcow" {
+		t.Fatalf("the corroborated target should win a shared-IP tie: matches=%#v suggestion=%#v", matches, suggestion)
+	}
+}
