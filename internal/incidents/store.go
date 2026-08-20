@@ -66,6 +66,57 @@ func (store *PostgresStore) list(ctx context.Context, status, targetID string, l
 	return items, nil
 }
 
+// OpenedByDay compte les Incidents ouverts jour par jour sur la fenêtre
+// demandée. Les jours sans Incident figurent avec un zéro : une série creuse
+// dessinerait un passé plus calme qu'il ne fut, en resserrant les jours
+// chargés les uns contre les autres.
+//
+// Les Cibles archivées en sont exclues, comme elles le sont de la Santé :
+// elles ne sont plus supervisées, leur passé n'a pas à peser sur le jour
+// présent.
+func (store *PostgresStore) OpenedByDay(ctx context.Context, days int) ([]OpenedDay, error) {
+	rows, err := store.pool.Query(ctx, `
+		WITH horizon AS (
+			SELECT date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS today
+		),
+		calendar AS (
+			SELECT generate_series(
+				horizon.today - make_interval(days => $1 - 1),
+				horizon.today,
+				interval '1 day'
+			) AS day
+			FROM horizon
+		)
+		SELECT calendar.day,
+		       count(incident.id) FILTER (WHERE target.id IS NOT NULL)::integer
+		FROM calendar
+		LEFT JOIN cairnops_incidents incident
+			ON incident.opened_at >= calendar.day
+			AND incident.opened_at < calendar.day + interval '1 day'
+		LEFT JOIN cairnops_targets target
+			ON target.id = incident.target_id AND target.archived_at IS NULL
+		GROUP BY calendar.day
+		ORDER BY calendar.day
+	`, days)
+	if err != nil {
+		return nil, fmt.Errorf("count incidents by day: %w", err)
+	}
+	defer rows.Close()
+
+	series := make([]OpenedDay, 0, days)
+	for rows.Next() {
+		var day OpenedDay
+		if err := rows.Scan(&day.Day, &day.Opened); err != nil {
+			return nil, fmt.Errorf("scan incident day: %w", err)
+		}
+		series = append(series, day)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate incident days: %w", err)
+	}
+	return series, nil
+}
+
 func (store *PostgresStore) Get(ctx context.Context, incidentID string) (Incident, error) {
 	incident, err := scanIncident(store.pool.QueryRow(ctx, incidentSelect+` WHERE incident.id = $1::uuid`, incidentID))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -658,6 +709,212 @@ func (store *PostgresStore) ReconcileUptimeKuma(ctx context.Context, input Recon
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit Uptime Kuma incident reconciliation: %w", err)
+	}
+	return nil
+}
+
+func (store *PostgresStore) ReconcilePatchMon(ctx context.Context, input ReconcilePatchMonInput) error {
+	observedAt := input.ObservedAt.UTC()
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin PatchMon incident reconciliation: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	seen := make(map[string]struct{}, len(input.Signals))
+	observedBindings := make(map[string]struct{}, len(input.ObservedBindings))
+	for _, bindingID := range input.ObservedBindings {
+		observedBindings[bindingID] = struct{}{}
+	}
+	impacted := make(map[string]struct{})
+	for _, signal := range input.Signals {
+		key := signal.BindingID + "\x00" + signal.ConditionKey
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
+		details, err := json.Marshal(signal.Details)
+		if err != nil {
+			return fmt.Errorf("encode PatchMon signal details: %w", err)
+		}
+
+		var signalID, incidentID string
+		err = tx.QueryRow(ctx, `
+			SELECT id::text, incident_id::text
+			FROM cairnops_incident_signals
+			WHERE origin = 'patchmon' AND connector_id = $1::uuid
+			  AND connector_binding_id = $2::uuid AND external_object_id = $3 AND active
+			FOR UPDATE
+		`, input.ConnectorID, signal.BindingID, signal.ConditionKey).Scan(&signalID, &incidentID)
+		if err == nil {
+			if _, err := tx.Exec(ctx, `
+				UPDATE cairnops_incident_signals
+				SET name = $2, severity = $3, metadata = $4::jsonb,
+				    last_seen_at = $5, updated_at = now()
+				WHERE id = $1::uuid
+			`, signalID, signal.Name, signal.Severity, details, observedAt); err != nil {
+				return fmt.Errorf("refresh PatchMon incident signal: %w", err)
+			}
+			impacted[incidentID] = struct{}{}
+			continue
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("find active PatchMon incident signal: %w", err)
+		}
+
+		var invalidatedSignalID string
+		err = tx.QueryRow(ctx, `
+			SELECT id::text
+			FROM cairnops_incident_signals
+			WHERE origin = 'patchmon' AND connector_id = $1::uuid
+			  AND connector_binding_id = $2::uuid AND external_object_id = $3
+			  AND invalidated_at IS NOT NULL AND rearmed_at IS NULL
+			ORDER BY invalidated_at DESC
+			LIMIT 1
+			FOR UPDATE
+		`, input.ConnectorID, signal.BindingID, signal.ConditionKey).Scan(&invalidatedSignalID)
+		if err == nil {
+			if _, err := tx.Exec(ctx, `
+				UPDATE cairnops_incident_signals
+				SET name = $2, severity = $3, metadata = $4::jsonb,
+				    last_seen_at = $5, updated_at = now()
+				WHERE id = $1::uuid
+			`, invalidatedSignalID, signal.Name, signal.Severity, details, observedAt); err != nil {
+				return fmt.Errorf("refresh invalidated PatchMon signal: %w", err)
+			}
+			continue
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("find invalidated PatchMon signal: %w", err)
+		}
+
+		incidentID, created, err := ensureActiveIncident(
+			ctx, tx, signal.TargetID, signal.NatureKey, signal.NatureLabel, signal.Severity, observedAt,
+		)
+		if errors.Is(err, ErrTargetArchived) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		impacted[incidentID] = struct{}{}
+		if created {
+			if err := insertActivity(ctx, tx, incidentID, "opened", "patchmon", "", "Incident ouvert depuis PatchMon", signal.Details); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO cairnops_incident_signals (
+				incident_id, target_id, origin, connector_id, connector_binding_id,
+				external_event_id, external_object_id, name, active, severity,
+				opened_at, upstream_acknowledged, last_seen_at, metadata
+			) VALUES ($1::uuid, $2::uuid, 'patchmon', $3::uuid, $4::uuid,
+			          $5 || ':' || gen_random_uuid()::text, $5, $6, true, $7,
+			          $8, false, $8, $9::jsonb)
+		`, incidentID, signal.TargetID, input.ConnectorID, signal.BindingID,
+			signal.ConditionKey, signal.Name, signal.Severity, observedAt, details); err != nil {
+			return fmt.Errorf("insert PatchMon incident signal: %w", err)
+		}
+		if err := insertActivity(ctx, tx, incidentID, "signal_added", "patchmon", "", signal.Name, signal.Details); err != nil {
+			return err
+		}
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT id::text, incident_id::text, connector_binding_id::text, name, external_object_id
+		FROM cairnops_incident_signals
+		WHERE connector_id = $1::uuid AND origin = 'patchmon' AND active
+		FOR UPDATE
+	`, input.ConnectorID)
+	if err != nil {
+		return fmt.Errorf("list active PatchMon incident signals: %w", err)
+	}
+	type activePatchMonSignal struct{ id, incidentID, bindingID, name, conditionKey string }
+	active := make([]activePatchMonSignal, 0)
+	for rows.Next() {
+		var signal activePatchMonSignal
+		if err := rows.Scan(&signal.id, &signal.incidentID, &signal.bindingID, &signal.name, &signal.conditionKey); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan active PatchMon incident signal: %w", err)
+		}
+		active = append(active, signal)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate active PatchMon incident signals: %w", err)
+	}
+	rows.Close()
+	for _, signal := range active {
+		if _, observed := observedBindings[signal.bindingID]; !observed {
+			continue
+		}
+		if _, stillActive := seen[signal.bindingID+"\x00"+signal.conditionKey]; stillActive {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE cairnops_incident_signals
+			SET active = false, resolved_at = $2, last_seen_at = $2, updated_at = now()
+			WHERE id = $1::uuid
+		`, signal.id, observedAt); err != nil {
+			return fmt.Errorf("resolve PatchMon incident signal: %w", err)
+		}
+		impacted[signal.incidentID] = struct{}{}
+		if err := insertActivity(ctx, tx, signal.incidentID, "signal_resolved", "patchmon", "", signal.name, map[string]any{"condition": signal.conditionKey}); err != nil {
+			return err
+		}
+	}
+
+	rearmRows, err := tx.Query(ctx, `
+		SELECT id::text, connector_binding_id::text, external_object_id
+		FROM cairnops_incident_signals
+		WHERE connector_id = $1::uuid AND origin = 'patchmon'
+		  AND invalidated_at IS NOT NULL AND rearmed_at IS NULL
+		FOR UPDATE
+	`, input.ConnectorID)
+	if err != nil {
+		return fmt.Errorf("list invalidated PatchMon signals: %w", err)
+	}
+	type invalidatedPatchMonSignal struct{ id, bindingID, conditionKey string }
+	invalidated := make([]invalidatedPatchMonSignal, 0)
+	for rearmRows.Next() {
+		var signal invalidatedPatchMonSignal
+		if err := rearmRows.Scan(&signal.id, &signal.bindingID, &signal.conditionKey); err != nil {
+			rearmRows.Close()
+			return fmt.Errorf("scan invalidated PatchMon signal: %w", err)
+		}
+		invalidated = append(invalidated, signal)
+	}
+	if err := rearmRows.Err(); err != nil {
+		rearmRows.Close()
+		return fmt.Errorf("iterate invalidated PatchMon signals: %w", err)
+	}
+	rearmRows.Close()
+	for _, signal := range invalidated {
+		if _, observed := observedBindings[signal.bindingID]; !observed {
+			continue
+		}
+		if _, stillActive := seen[signal.bindingID+"\x00"+signal.conditionKey]; stillActive {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE cairnops_incident_signals
+			SET rearmed_at = greatest($2, invalidated_at), last_seen_at = $2, updated_at = now()
+			WHERE id = $1::uuid AND rearmed_at IS NULL
+		`, signal.id, observedAt); err != nil {
+			return fmt.Errorf("rearm invalidated PatchMon signal: %w", err)
+		}
+	}
+
+	for incidentID := range impacted {
+		if err := recomputeIncident(ctx, tx, incidentID, observedAt); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit PatchMon incident reconciliation: %w", err)
 	}
 	return nil
 }

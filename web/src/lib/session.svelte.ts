@@ -10,6 +10,7 @@ import {
   api,
   type Connector,
   type Incident,
+  type IncidentDay,
   type Maintenance,
   type InboxEntry,
   type NotificationChannel,
@@ -26,6 +27,11 @@ import { i18n, t } from './i18n.svelte';
 
 export type GateState = 'loading' | 'setup' | 'login' | 'unavailable' | 'app';
 export type RealtimeState = 'connecting' | 'online' | 'offline';
+
+/* La profondeur de la série d'Incidents montrée sous le compte du moment.
+ * Douze jours tiennent dans la largeur d'une cellule sans que chaque jour
+ * devienne un trait illisible. */
+const incidentWindowDays = 12;
 
 export function messageFrom(cause: unknown): string {
   if (cause instanceof APIError) return cause.message;
@@ -53,6 +59,11 @@ class Session {
   incidents = $state<Incident[]>([]);
   incidentHistoryTarget = $state('');
   incidentHistory = $state<Incident[]>([]);
+
+  /* Les Incidents ouverts jour par jour, sur la fenêtre que la Vue d'ensemble
+   * met sous son compte du moment. Le serveur les date et les compte : deux
+   * écrans ouverts racontent le même passé. */
+  incidentDays = $state<IncidentDay[]>([]);
   maintenances = $state<Maintenance[]>([]);
   channels = $state<NotificationChannel[]>([]);
 
@@ -124,11 +135,18 @@ class Session {
    *  Une Divergence de Sources ne crée pas un cinquième État. */
   targetState(target: Target): 'down' | 'degraded' | 'maintenance' | 'unknown' | 'ok' {
     const own = this.incidents.filter((incident) => incident.target_id === target.id);
+    const posture = own.filter((incident) =>
+      incident.nature_key === 'security-patches-required' || incident.nature_key === 'reboot-required'
+    );
+    const operational = own.filter((incident) => !posture.includes(incident));
     if (own.some((incident) => incident.maintenance_active)) return 'maintenance';
-    if (own.some((incident) => incident.effective_severity === 'critical')) return 'down';
-    if (own.some((incident) => incident.effective_severity === 'major')) return 'down';
+    if (operational.some((incident) => incident.effective_severity === 'critical')) return 'down';
+    if (operational.some((incident) => incident.effective_severity === 'major')) return 'down';
+    if (posture.some((incident) => incident.effective_severity === 'critical' || incident.effective_severity === 'major')) return 'degraded';
     if (own.some((incident) => incident.effective_severity === 'warning')) return 'degraded';
     if (own.some((incident) => incident.effective_severity === 'information')) return 'unknown';
+    const externalMeasures = this.measures[target.id]?.sources;
+    if (target.sources.length === 0 && externalMeasures && !externalMeasures.some((source) => source.measures_availability)) return 'unknown';
     if (target.sources.length === 0 && target.external_source_count === 0) return 'unknown';
     return 'ok';
   }
@@ -332,6 +350,7 @@ class Session {
       this.incidents = [];
       this.incidentHistoryTarget = '';
       this.incidentHistory = [];
+      this.incidentDays = [];
       this.maintenances = [];
       this.channels = [];
       this.inbox = [];
@@ -351,6 +370,7 @@ class Session {
     this.#refreshTimer = setInterval(() => {
       void this.loadSystemHealth();
       void this.loadIncidents();
+      void this.loadIncidentDays();
       if (this.incidentHistoryTarget) void this.loadIncidentHistory(this.incidentHistoryTarget);
       void this.loadMaintenances();
       void this.loadNotifications();
@@ -371,6 +391,7 @@ class Session {
       this.loadMeasures(),
       this.loadConnectors(),
       this.loadIncidents(),
+      this.loadIncidentDays(),
       this.loadMaintenances(),
       this.loadNotifications(),
       this.loadInbox(),
@@ -446,6 +467,18 @@ class Session {
     } catch (cause) {
       if (this.#expired(cause)) return;
       this.showNotice(t('session.refreshIncidents', { error: messageFrom(cause) }));
+    }
+  }
+
+  /* Les jours d'Incidents de la Vue d'ensemble. Une fenêtre illisible ne vide
+   * pas la série déjà affichée et ne déclenche pas de notice : elle explique
+   * un chiffre, elle ne le porte pas — l'écran reste juste sans elle. */
+  async loadIncidentDays() {
+    try {
+      const response = await api<{ days: IncidentDay[] }>(`/api/v1/incidents/history?days=${incidentWindowDays}`);
+      this.incidentDays = response.days;
+    } catch (cause) {
+      if (this.#expired(cause)) return;
     }
   }
 
@@ -618,6 +651,7 @@ class Session {
       if (this.#dirty.has('connectors')) void this.loadConnectors();
       if (this.#dirty.has('incidents')) {
         void this.loadIncidents();
+        void this.loadIncidentDays();
         if (this.incidentHistoryTarget) void this.loadIncidentHistory(this.incidentHistoryTarget);
       }
       if (this.#dirty.has('maintenances')) void this.loadMaintenances();

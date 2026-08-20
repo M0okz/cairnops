@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/incidents"
@@ -42,6 +44,8 @@ type IntegrationObservation struct {
 	Outcome             string
 	LatencyMilliseconds *int
 	Reason              string
+	Message             string
+	Details             map[string]any
 }
 
 type RuntimeStore interface {
@@ -218,6 +222,190 @@ type UptimeKumaIncidentReconciler interface {
 
 type UptimeKumaMonitorClient interface {
 	Monitors(context.Context, string, string) ([]uptimekuma.Monitor, error)
+}
+
+type PatchMonIncidentReconciler interface {
+	ReconcilePatchMon(context.Context, incidents.ReconcilePatchMonInput) error
+}
+
+type PatchMonHostClient interface {
+	Hosts(context.Context, string, patchmon.Credentials) ([]patchmon.Host, error)
+}
+
+type PatchMonSynchronizer struct {
+	store        RuntimeStore
+	incidents    PatchMonIncidentReconciler
+	client       PatchMonHostClient
+	secrets      *secretbox.Box
+	owner        string
+	logger       *slog.Logger
+	pollInterval time.Duration
+	lease        time.Duration
+	batchSize    int
+	parallelism  int
+	now          func() time.Time
+}
+
+func NewPatchMonSynchronizer(store RuntimeStore, incidentStore PatchMonIncidentReconciler, client PatchMonHostClient, secrets *secretbox.Box, owner string, logger *slog.Logger) *PatchMonSynchronizer {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &PatchMonSynchronizer{
+		store: store, incidents: incidentStore, client: client, secrets: secrets,
+		owner: owner, logger: logger, pollInterval: 2 * time.Second,
+		lease: time.Minute, batchSize: 8, parallelism: 4, now: time.Now,
+	}
+}
+
+func (synchronizer *PatchMonSynchronizer) Run(ctx context.Context) error {
+	if err := synchronizer.tick(ctx); err != nil {
+		return err
+	}
+	ticker := time.NewTicker(synchronizer.pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			if err := synchronizer.tick(ctx); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (synchronizer *PatchMonSynchronizer) tick(ctx context.Context) error {
+	claimed, err := synchronizer.store.ClaimDueConnector(ctx, "patchmon", synchronizer.owner, synchronizer.batchSize, synchronizer.lease)
+	if err != nil {
+		return fmt.Errorf("claim due PatchMon connectors: %w", err)
+	}
+	semaphore := make(chan struct{}, synchronizer.parallelism)
+	var waitGroup sync.WaitGroup
+	for _, connector := range claimed {
+		connector := connector
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			select {
+			case semaphore <- struct{}{}:
+				defer func() { <-semaphore }()
+			case <-ctx.Done():
+				return
+			}
+			synchronizer.syncOne(ctx, connector)
+		}()
+	}
+	waitGroup.Wait()
+	return nil
+}
+
+func (synchronizer *PatchMonSynchronizer) syncOne(ctx context.Context, connector RuntimeConnector) {
+	failed := func(cause error) {
+		message := strings.TrimSpace(cause.Error())
+		if len(message) > 500 {
+			message = message[:500]
+		}
+		if err := synchronizer.store.FailConnectorSync(ctx, connector.ID, synchronizer.owner, synchronizer.now().UTC(), message); err != nil {
+			synchronizer.logger.Error("record PatchMon synchronization failure", "connector_id", connector.ID, "error", err)
+		}
+		synchronizer.logger.Warn("PatchMon synchronization failed", "connector_id", connector.ID, "error", cause)
+	}
+	credential, err := synchronizer.secrets.Open(connector.CredentialSealed, "connector:patchmon:"+connector.Endpoint)
+	if err != nil {
+		failed(fmt.Errorf("open connector credential: %w", err))
+		return
+	}
+	var credentials patchmon.Credentials
+	if err := json.Unmarshal(credential, &credentials); err != nil {
+		failed(fmt.Errorf("decode connector credential: %w", err))
+		return
+	}
+	hosts, err := synchronizer.client.Hosts(ctx, connector.Endpoint, credentials)
+	if err != nil {
+		failed(err)
+		return
+	}
+	bindingByHost := make(map[string]RuntimeBinding, len(connector.Bindings))
+	for _, binding := range connector.Bindings {
+		bindingByHost[binding.ExternalID] = binding
+	}
+	observedAt := synchronizer.now().UTC()
+	observedBindings := make([]string, 0, len(connector.Bindings))
+	observations := make([]IntegrationObservation, 0, len(connector.Bindings))
+	signals := make([]incidents.PatchMonSignal, 0, len(connector.Bindings)*2)
+	for _, host := range hosts {
+		binding, imported := bindingByHost[host.ID]
+		if !imported {
+			continue
+		}
+		observedBindings = append(observedBindings, binding.ID)
+		details := patchMonDetails(host)
+		observations = append(observations, patchMonObservation(binding.ID, host, details))
+		if host.SecurityUpdatesCount > 0 || host.UpdateState == "security_required" {
+			signals = append(signals, incidents.PatchMonSignal{
+				TargetID: binding.TargetID, BindingID: binding.ID, ExternalHost: host.ID,
+				ConditionKey: "security_updates", NatureKey: "security-patches-required",
+				NatureLabel: "Correctifs de sécurité requis",
+				Name:        fmt.Sprintf("%s · %d correctif(s) de sécurité", host.Name(), host.SecurityUpdatesCount),
+				Severity:    incidents.SeverityMajor, Details: details,
+			})
+		}
+		if host.NeedsReboot {
+			signals = append(signals, incidents.PatchMonSignal{
+				TargetID: binding.TargetID, BindingID: binding.ID, ExternalHost: host.ID,
+				ConditionKey: "reboot_required", NatureKey: "reboot-required",
+				NatureLabel: "Redémarrage requis",
+				Name:        host.Name() + " · redémarrage requis après correctifs",
+				Severity:    incidents.SeverityWarning, Details: details,
+			})
+		}
+	}
+	if err := synchronizer.incidents.ReconcilePatchMon(ctx, incidents.ReconcilePatchMonInput{
+		ConnectorID: connector.ID, ObservedAt: observedAt,
+		ObservedBindings: observedBindings, Signals: signals,
+	}); err != nil {
+		failed(err)
+		return
+	}
+	if err := synchronizer.store.RecordIntegrationObservations(ctx, observedAt, observations); err != nil {
+		synchronizer.logger.Warn("record PatchMon observations", "connector_id", connector.ID, "error", err)
+	}
+	if err := synchronizer.store.CompleteConnectorSync(ctx, connector.ID, synchronizer.owner, observedAt); err != nil {
+		synchronizer.logger.Error("complete PatchMon synchronization", "connector_id", connector.ID, "error", err)
+		return
+	}
+	synchronizer.logger.Info("PatchMon synchronization completed", "connector_id", connector.ID, "hosts", len(hosts))
+}
+
+func patchMonDetails(host patchmon.Host) map[string]any {
+	return map[string]any{
+		"host_id": host.ID, "hostname": host.Hostname, "ip": host.IP,
+		"os_type": host.OSType, "os_version": host.OSVersion,
+		"status":          host.Status,
+		"reporting_state": host.ReportingState, "update_state": host.UpdateState,
+		"updates_count": host.UpdatesCount, "security_updates_count": host.SecurityUpdatesCount,
+		"needs_reboot": host.NeedsReboot,
+	}
+}
+
+func patchMonObservation(bindingID string, host patchmon.Host, details map[string]any) IntegrationObservation {
+	observation := IntegrationObservation{
+		BindingID: bindingID, Outcome: "healthy", Details: details,
+		Message: fmt.Sprintf("%d mise(s) à jour, dont %d de sécurité", host.UpdatesCount, host.SecurityUpdatesCount),
+	}
+	if host.NeedsReboot {
+		observation.Message += " · redémarrage requis"
+	}
+	status := strings.ToLower(strings.TrimSpace(host.Status))
+	if status != "" && status != "active" {
+		observation.Outcome = "unknown"
+		observation.Reason = "patchmon_host_" + status
+	} else if host.SecurityUpdatesCount > 0 || host.NeedsReboot {
+		observation.Outcome = "unhealthy"
+		observation.Reason = "patchmon_attention_required"
+	}
+	return observation
 }
 
 type UptimeKumaSynchronizer struct {

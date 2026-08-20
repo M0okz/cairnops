@@ -96,8 +96,9 @@ export type TargetMeasures = {
 export type SourceMeasures = {
   source_id: string;
   name: string;
-  kind: SourceKind | 'zabbix' | 'uptime_kuma' | 'generic_webhook';
+  kind: SourceKind | 'zabbix' | 'uptime_kuma' | 'patchmon' | 'generic_webhook';
   origin: 'native' | 'integration';
+  measures_availability: boolean;
   latest_outcome?: Outcome;
   latest_observed_at?: string;
   measures: Measure[];
@@ -152,7 +153,7 @@ export type SystemHealth = {
 
 export type Connector = {
   id: string;
-  kind: 'zabbix' | 'uptime_kuma' | 'generic_webhook';
+  kind: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'generic_webhook';
   name: string;
   endpoint: string;
   status: 'connected' | 'degraded' | 'disabled';
@@ -188,7 +189,7 @@ export type ZabbixInterface = {
 export type TargetReference = { id: string; name: string };
 
 export type MatchEvidence = {
-  kind: 'same_name' | 'same_ip' | 'same_hostname' | 'similar_name';
+  kind: 'same_machine_id' | 'same_name' | 'same_ip' | 'same_hostname' | 'similar_name';
   value: string;
 };
 
@@ -260,6 +261,38 @@ export type UptimeKumaPreview = {
 
 export type UptimeKumaImportResult = ConnectorImportResult;
 
+export type PatchMonHostPreview = {
+  external_id: string;
+  name: string;
+  hostname: string;
+  ip?: string;
+  os_type?: string;
+  os_version?: string;
+  reporting_state?: string;
+  update_state?: string;
+  updates_count: number;
+  security_updates_count: number;
+  needs_reboot: boolean;
+  candidate_targets?: TargetMatch[];
+  suggested_target?: TargetReference;
+  already_imported_to?: TargetReference;
+};
+
+export type PatchMonPreview = {
+  kind: 'patchmon';
+  name: string;
+  endpoint: string;
+  compatibility: 'supported';
+  compatibility_label: string;
+  encrypted_transport: boolean;
+  hosts: PatchMonHostPreview[];
+  available_targets: TargetReference[];
+  receipt: string;
+  expires_at: string;
+};
+
+export type PatchMonImportResult = ConnectorImportResult;
+
 export type GenericWebhookCreated = {
   connector: Connector;
   endpoint: string;
@@ -294,7 +327,7 @@ export type IncidentSeverity = 'information' | 'warning' | 'major' | 'critical';
 
 export type IncidentSignal = {
   id: string;
-  origin: 'zabbix' | 'uptime_kuma' | 'webhook' | 'native';
+  origin: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'webhook' | 'native';
   connector_id?: string;
   connector_name?: string;
   external_event_id?: string;
@@ -371,6 +404,14 @@ export type NotificationChannel = {
   last_error?: string;
   created_at: string;
   updated_at: string;
+};
+
+/* Un jour de la fenêtre d'Incidents : combien s'y sont ouverts. Le serveur
+ * rend chaque jour de la fenêtre, y compris ceux restés vides — une série
+ * creuse dessinerait un passé plus calme qu'il ne fut. */
+export type IncidentDay = {
+  day: string;
+  opened: number;
 };
 
 /* Une entrée de la boîte de réception. Elle appartient à une personne : le

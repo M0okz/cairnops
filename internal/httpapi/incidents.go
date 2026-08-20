@@ -16,6 +16,7 @@ type Incidents interface {
 	List(context.Context, string, int) ([]incidents.Incident, error)
 	ListForTarget(context.Context, string, string, int) ([]incidents.Incident, error)
 	Get(context.Context, string) (incidents.Incident, error)
+	OpenedByDay(context.Context, int) ([]incidents.OpenedDay, error)
 	Acknowledge(context.Context, string, string, string) (incidents.Incident, error)
 	InvalidateSignal(context.Context, string, string, string, string, string) (incidents.Incident, error)
 }
@@ -29,7 +30,7 @@ func (handler incidentHandler) list(w http.ResponseWriter, r *http.Request) {
 	limit := 200
 	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
 		parsed, err := strconv.Atoi(rawLimit)
-		if err != nil {
+		if err != nil || parsed < 1 || parsed > 500 {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 500"})
 			return
 		}
@@ -52,6 +53,27 @@ func (handler incidentHandler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"incidents": items})
+}
+
+// history rend le nombre d'Incidents ouverts par jour. La Vue d'ensemble la
+// lit sous son compte du moment : le chiffre dit l'instant, la série dit si
+// cet instant ressemble aux jours qui le précèdent.
+func (handler incidentHandler) history(w http.ResponseWriter, r *http.Request) {
+	days := 12
+	if rawDays := strings.TrimSpace(r.URL.Query().Get("days")); rawDays != "" {
+		parsed, err := strconv.Atoi(rawDays)
+		if err != nil || parsed < 1 || parsed > 90 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "days must be between 1 and 90"})
+			return
+		}
+		days = parsed
+	}
+	series, err := handler.incidents.OpenedByDay(r.Context(), days)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"days": series})
 }
 
 func (handler incidentHandler) get(w http.ResponseWriter, r *http.Request) {

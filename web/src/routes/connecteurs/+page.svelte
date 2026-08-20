@@ -63,6 +63,7 @@
   const contracts = $derived<Record<Connector['kind'], string>>({
     zabbix: t('connectors.contract.zabbix'),
     uptime_kuma: t('connectors.contract.uptimeKuma'),
+    patchmon: t('connectors.contract.patchmon'),
     generic_webhook: t('connectors.contract.genericWebhook')
   });
 
@@ -171,6 +172,8 @@
           <div class="head">
             {#if kindBrands[connector.kind]}
               <BrandMark name={kindBrands[connector.kind]!} size={34} />
+            {:else if connector.kind === 'patchmon'}
+              <span class="key">PM</span>
             {:else}
               <span class="key"><Icon name="webhook" size={16} /></span>
             {/if}

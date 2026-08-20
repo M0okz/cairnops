@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/secretbox"
@@ -147,6 +148,54 @@ type UptimeKumaImport struct {
 	Targets   []ImportedTarget `json:"targets"`
 }
 
+type PatchMonHostPreview struct {
+	ExternalID           string           `json:"external_id"`
+	Name                 string           `json:"name"`
+	Hostname             string           `json:"hostname"`
+	IP                   string           `json:"ip"`
+	OSType               string           `json:"os_type"`
+	OSVersion            string           `json:"os_version"`
+	ReportingState       string           `json:"reporting_state"`
+	UpdateState          string           `json:"update_state"`
+	UpdatesCount         int              `json:"updates_count"`
+	SecurityUpdatesCount int              `json:"security_updates_count"`
+	NeedsReboot          bool             `json:"needs_reboot"`
+	CandidateTargets     []TargetMatch    `json:"candidate_targets,omitempty"`
+	SuggestedTarget      *TargetReference `json:"suggested_target,omitempty"`
+	AlreadyImportedTo    *TargetReference `json:"already_imported_to,omitempty"`
+}
+
+type PatchMonPreviewInput struct {
+	Name        string `json:"name"`
+	Address     string `json:"address"`
+	TokenKey    string `json:"token_key"`
+	TokenSecret string `json:"token_secret"`
+}
+
+type PatchMonPreview struct {
+	Kind               string                `json:"kind"`
+	Name               string                `json:"name"`
+	Endpoint           string                `json:"endpoint"`
+	Compatibility      string                `json:"compatibility"`
+	CompatibilityLabel string                `json:"compatibility_label"`
+	EncryptedTransport bool                  `json:"encrypted_transport"`
+	Hosts              []PatchMonHostPreview `json:"hosts"`
+	AvailableTargets   []TargetReference     `json:"available_targets"`
+	Receipt            string                `json:"receipt"`
+	ExpiresAt          time.Time             `json:"expires_at"`
+}
+
+type PatchMonImportInput struct {
+	Receipt           string            `json:"receipt"`
+	HostIDs           []string          `json:"host_ids"`
+	TargetAssignments map[string]string `json:"target_assignments,omitempty"`
+}
+
+type PatchMonImport struct {
+	Connector Connector        `json:"connector"`
+	Targets   []ImportedTarget `json:"targets"`
+}
+
 type PreviewState struct {
 	TargetsByName        map[string]TargetReference
 	Targets              []TargetIdentity
@@ -175,6 +224,16 @@ type PersistUptimeKumaInput struct {
 	TargetAssignments  map[string]string
 }
 
+type PersistPatchMonInput struct {
+	ActorID            string
+	Name               string
+	Endpoint           string
+	CredentialSealed   string
+	EncryptedTransport bool
+	Hosts              []patchmon.Host
+	TargetAssignments  map[string]string
+}
+
 type Store interface {
 	List(context.Context) ([]Connector, error)
 	SetStatus(context.Context, string, string) (Connector, error)
@@ -182,6 +241,7 @@ type Store interface {
 	PreviewState(context.Context, string, string, []string) (PreviewState, error)
 	ImportZabbix(context.Context, PersistZabbixInput) (ZabbixImport, error)
 	ImportUptimeKuma(context.Context, PersistUptimeKumaInput) (UptimeKumaImport, error)
+	ImportPatchMon(context.Context, PersistPatchMonInput) (PatchMonImport, error)
 }
 
 type ZabbixClient interface {
@@ -192,10 +252,15 @@ type UptimeKumaClient interface {
 	Inspect(context.Context, string, string) (uptimekuma.Inspection, error)
 }
 
+type PatchMonClient interface {
+	Inspect(context.Context, string, patchmon.Credentials) (patchmon.Inspection, error)
+}
+
 type Service struct {
 	store      Store
 	zabbix     ZabbixClient
 	uptimeKuma UptimeKumaClient
+	patchMon   PatchMonClient
 	secrets    *secretbox.Box
 	now        func() time.Time
 }
@@ -214,8 +279,15 @@ type uptimeKumaReceipt struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-func NewService(store Store, zabbixClient ZabbixClient, uptimeKumaClient UptimeKumaClient, secrets *secretbox.Box) *Service {
-	return &Service{store: store, zabbix: zabbixClient, uptimeKuma: uptimeKumaClient, secrets: secrets, now: time.Now}
+type patchMonReceipt struct {
+	Name        string               `json:"name"`
+	Endpoint    string               `json:"endpoint"`
+	Credentials patchmon.Credentials `json:"credentials"`
+	ExpiresAt   time.Time            `json:"expires_at"`
+}
+
+func NewService(store Store, zabbixClient ZabbixClient, uptimeKumaClient UptimeKumaClient, patchMonClient PatchMonClient, secrets *secretbox.Box) *Service {
+	return &Service{store: store, zabbix: zabbixClient, uptimeKuma: uptimeKumaClient, patchMon: patchMonClient, secrets: secrets, now: time.Now}
 }
 
 func (service *Service) List(ctx context.Context) ([]Connector, error) {
@@ -375,6 +447,71 @@ func (service *Service) PreviewUptimeKuma(ctx context.Context, input UptimeKumaP
 	}, nil
 }
 
+func (service *Service) PreviewPatchMon(ctx context.Context, input PatchMonPreviewInput) (PatchMonPreview, error) {
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Name == "" {
+		input.Name = "PatchMon"
+	}
+	if !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) > 160 {
+		return PatchMonPreview{}, fmt.Errorf("%w: connector name must contain between 1 and 160 characters", ErrInvalidInput)
+	}
+	credentials := patchmon.Credentials{Key: input.TokenKey, Secret: input.TokenSecret}
+	inspection, err := service.patchMon.Inspect(ctx, input.Address, credentials)
+	if err != nil {
+		return PatchMonPreview{}, fmt.Errorf("%w: %v", ErrConnection, err)
+	}
+	names := make([]string, 0, len(inspection.Hosts))
+	for _, host := range inspection.Hosts {
+		names = append(names, host.Name())
+	}
+	state, err := service.store.PreviewState(ctx, "patchmon", inspection.Endpoint, names)
+	if err != nil {
+		return PatchMonPreview{}, fmt.Errorf("prepare PatchMon preview: %w", err)
+	}
+	hosts := make([]PatchMonHostPreview, 0, len(inspection.Hosts))
+	for _, host := range inspection.Hosts {
+		discovered := PatchMonHostPreview{
+			ExternalID: host.ID, Name: host.Name(), Hostname: host.Hostname, IP: host.IP,
+			OSType: host.OSType, OSVersion: host.OSVersion,
+			ReportingState: host.ReportingState, UpdateState: host.UpdateState,
+			UpdatesCount: host.UpdatesCount, SecurityUpdatesCount: host.SecurityUpdatesCount,
+			NeedsReboot: host.NeedsReboot,
+		}
+		discovered.CandidateTargets = matchTargets(identityForPatchMon(host), state.Targets)
+		discovered.SuggestedTarget = suggestedTarget(discovered.CandidateTargets)
+		if discovered.SuggestedTarget == nil {
+			if target, ok := state.TargetsByName[normalizeName(host.Name())]; ok {
+				targetCopy := target
+				discovered.SuggestedTarget = &targetCopy
+			}
+		}
+		if target, ok := state.ImportedByExternalID[host.ID]; ok {
+			targetCopy := target
+			discovered.AlreadyImportedTo = &targetCopy
+		}
+		hosts = append(hosts, discovered)
+	}
+	expiresAt := service.now().UTC().Add(previewLifetime)
+	receiptPayload, err := json.Marshal(patchMonReceipt{
+		Name: input.Name, Endpoint: inspection.Endpoint,
+		Credentials: patchmon.Credentials{Key: strings.TrimSpace(input.TokenKey), Secret: strings.TrimSpace(input.TokenSecret)},
+		ExpiresAt:   expiresAt,
+	})
+	if err != nil {
+		return PatchMonPreview{}, fmt.Errorf("encode PatchMon preview: %w", err)
+	}
+	receipt, err := service.secrets.Seal(receiptPayload, "patchmon-preview-v1")
+	if err != nil {
+		return PatchMonPreview{}, fmt.Errorf("seal PatchMon preview: %w", err)
+	}
+	return PatchMonPreview{
+		Kind: "patchmon", Name: input.Name, Endpoint: inspection.Endpoint,
+		Compatibility: "supported", CompatibilityLabel: "API d’intégration en lecture seule",
+		EncryptedTransport: inspection.EncryptedTransport, Hosts: hosts,
+		AvailableTargets: availableTargets(state.Targets), Receipt: receipt, ExpiresAt: expiresAt,
+	}, nil
+}
+
 func (service *Service) ImportZabbix(ctx context.Context, actorID string, input ZabbixImportInput) (ZabbixImport, error) {
 	if strings.TrimSpace(actorID) == "" {
 		return ZabbixImport{}, fmt.Errorf("%w: administrator identity is required", ErrInvalidInput)
@@ -504,6 +641,76 @@ func (service *Service) ImportUptimeKuma(ctx context.Context, actorID string, in
 	})
 	if err != nil {
 		return UptimeKumaImport{}, fmt.Errorf("import Uptime Kuma monitors: %w", err)
+	}
+	return result, nil
+}
+
+func (service *Service) ImportPatchMon(ctx context.Context, actorID string, input PatchMonImportInput) (PatchMonImport, error) {
+	if strings.TrimSpace(actorID) == "" {
+		return PatchMonImport{}, fmt.Errorf("%w: administrator identity is required", ErrInvalidInput)
+	}
+	if len(input.Receipt) < 32 || len(input.Receipt) > 32768 {
+		return PatchMonImport{}, fmt.Errorf("%w: invalid preview receipt", ErrInvalidInput)
+	}
+	if len(input.HostIDs) < 1 || len(input.HostIDs) > 5000 {
+		return PatchMonImport{}, fmt.Errorf("%w: select between 1 and 5000 hosts", ErrInvalidInput)
+	}
+	selection := make(map[string]struct{}, len(input.HostIDs))
+	for _, id := range input.HostIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return PatchMonImport{}, fmt.Errorf("%w: selected host identity must not be empty", ErrInvalidInput)
+		}
+		if _, duplicate := selection[id]; duplicate {
+			return PatchMonImport{}, fmt.Errorf("%w: selected hosts must be unique", ErrInvalidInput)
+		}
+		selection[id] = struct{}{}
+	}
+	assignments, err := validateTargetAssignments(selection, input.TargetAssignments)
+	if err != nil {
+		return PatchMonImport{}, err
+	}
+	plaintext, err := service.secrets.Open(input.Receipt, "patchmon-preview-v1")
+	if err != nil {
+		return PatchMonImport{}, fmt.Errorf("%w: invalid preview receipt", ErrInvalidInput)
+	}
+	var receipt patchMonReceipt
+	if err := json.Unmarshal(plaintext, &receipt); err != nil {
+		return PatchMonImport{}, fmt.Errorf("%w: invalid preview receipt", ErrInvalidInput)
+	}
+	if !service.now().UTC().Before(receipt.ExpiresAt) {
+		return PatchMonImport{}, ErrPreviewExpired
+	}
+	inspection, err := service.patchMon.Inspect(ctx, receipt.Endpoint, receipt.Credentials)
+	if err != nil {
+		return PatchMonImport{}, fmt.Errorf("%w: %v", ErrConnection, err)
+	}
+	selected := make([]patchmon.Host, 0, len(selection))
+	for _, host := range inspection.Hosts {
+		if _, ok := selection[host.ID]; ok {
+			selected = append(selected, host)
+			delete(selection, host.ID)
+		}
+	}
+	if len(selection) != 0 {
+		return PatchMonImport{}, fmt.Errorf("%w: one or more selected hosts are no longer available", ErrInvalidInput)
+	}
+	sort.SliceStable(selected, func(i, j int) bool { return selected[i].ID < selected[j].ID })
+	encodedCredential, err := json.Marshal(receipt.Credentials)
+	if err != nil {
+		return PatchMonImport{}, fmt.Errorf("encode PatchMon credential: %w", err)
+	}
+	credential, err := service.secrets.Seal(encodedCredential, "connector:patchmon:"+inspection.Endpoint)
+	if err != nil {
+		return PatchMonImport{}, fmt.Errorf("seal PatchMon credential: %w", err)
+	}
+	result, err := service.store.ImportPatchMon(ctx, PersistPatchMonInput{
+		ActorID: actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
+		CredentialSealed: credential, EncryptedTransport: inspection.EncryptedTransport,
+		Hosts: selected, TargetAssignments: assignments,
+	})
+	if err != nil {
+		return PatchMonImport{}, fmt.Errorf("import PatchMon hosts: %w", err)
 	}
 	return result, nil
 }

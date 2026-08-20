@@ -151,6 +151,7 @@
     heartbeat: 'Heartbeat',
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
+    patchmon: 'PatchMon',
     generic_webhook: 'Webhook'
   };
 
@@ -158,6 +159,7 @@
     native: 'CairnOps',
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
+    patchmon: 'PatchMon',
     webhook: 'Webhook'
   };
 

@@ -23,6 +23,7 @@
   const origins = $derived<Record<Connector['kind'], string>>({
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
+    patchmon: 'PatchMon',
     generic_webhook: t('suspension.webhookSender')
   });
 

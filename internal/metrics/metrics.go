@@ -38,11 +38,12 @@ type TargetMetrics struct {
 // origine distingue un Contrôle natif d'une Source apportée par une Intégration
 // — la mesure les traite pareillement, l'écran non.
 type SourceMetrics struct {
-	SourceID      string          `json:"source_id"`
-	Name          string          `json:"name"`
-	Kind          string          `json:"kind"`
-	Origin        string          `json:"origin"`
-	LatestOutcome *domain.Outcome `json:"latest_outcome,omitempty"`
+	SourceID             string          `json:"source_id"`
+	Name                 string          `json:"name"`
+	Kind                 string          `json:"kind"`
+	Origin               string          `json:"origin"`
+	MeasuresAvailability bool            `json:"measures_availability"`
+	LatestOutcome        *domain.Outcome `json:"latest_outcome,omitempty"`
 	// LatestObservedAt reste absent tant qu'aucune Observation n'a eu lieu.
 	LatestObservedAt *time.Time       `json:"latest_observed_at,omitempty"`
 	Measures         []domain.Measure `json:"measures"`
@@ -104,7 +105,7 @@ func (store *Store) List(ctx context.Context) ([]TargetMetrics, error) {
 		}
 		metrics[index].Sources = append(metrics[index].Sources, SourceMetrics{
 			SourceID: source.sourceID, Name: source.name,
-			Kind: source.kind, Origin: source.origin,
+			Kind: source.kind, Origin: source.origin, MeasuresAvailability: source.measuresAvailability,
 			LatestOutcome: source.latestOutcome, LatestObservedAt: source.latestObservedAt,
 			Measures: []domain.Measure{source.counters.Measure(domain.WindowDay)},
 		})
@@ -144,11 +145,12 @@ func (store *Store) Target(ctx context.Context, targetID string) (TargetDetail, 
 				detail.Sources = append(detail.Sources, SourceMetrics{
 					SourceID: source.sourceID, Name: source.name,
 					Kind: source.kind, Origin: source.origin,
-					LatestOutcome: source.latestOutcome, LatestObservedAt: source.latestObservedAt,
+					MeasuresAvailability: source.measuresAvailability,
+					LatestOutcome:        source.latestOutcome, LatestObservedAt: source.latestObservedAt,
 				})
 			}
 			detail.Sources[index].Measures = append(detail.Sources[index].Measures, source.counters.Measure(window))
-			if source.latestObservedAt != nil &&
+			if source.measuresAvailability && source.latestObservedAt != nil &&
 				(detail.LatestObservedAt == nil || source.latestObservedAt.After(*detail.LatestObservedAt)) {
 				detail.LatestObservedAt = source.latestObservedAt
 			}

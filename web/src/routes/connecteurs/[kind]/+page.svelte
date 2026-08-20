@@ -10,6 +10,7 @@
   import Topbar from '$lib/components/Topbar.svelte';
   import ZabbixConnector from '$lib/components/ZabbixConnector.svelte';
   import UptimeKumaConnector from '$lib/components/UptimeKumaConnector.svelte';
+  import PatchMonConnector from '$lib/components/PatchMonConnector.svelte';
   import GenericWebhookConnector from '$lib/components/GenericWebhookConnector.svelte';
   import { session } from '$lib/session.svelte';
   import type { ConnectorImportResult } from '$lib/api';
@@ -17,6 +18,7 @@
   const known = {
     zabbix: 'Zabbix',
     'uptime-kuma': 'Uptime Kuma',
+    patchmon: 'PatchMon',
     'generic-webhook': t('connector.genericWebhook')
   } as const;
 
@@ -35,7 +37,9 @@
       plural(
         result.connector.kind === 'uptime_kuma'
           ? 'connectorPage.kumaImported'
-          : 'connectorPage.zabbixImported',
+          : result.connector.kind === 'patchmon'
+            ? 'connectorPage.patchmonImported'
+            : 'connectorPage.zabbixImported',
         result.targets.length
       )
     );
@@ -68,6 +72,8 @@
   <ZabbixConnector onclose={leave} onsuccess={imported} />
 {:else if kind === 'uptime-kuma'}
   <UptimeKumaConnector onclose={leave} onsuccess={imported} />
+{:else if kind === 'patchmon'}
+  <PatchMonConnector onclose={leave} onsuccess={imported} />
 {:else}
   <GenericWebhookConnector
     onclose={leave}

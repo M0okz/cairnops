@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/secretbox"
@@ -24,12 +25,13 @@ func (fake *fakeZabbix) Inspect(context.Context, string, string) (zabbix.Inspect
 }
 
 type fakeStore struct {
-	state         PreviewState
-	persisted     PersistZabbixInput
-	persistedKuma PersistUptimeKumaInput
-	statusID      string
-	status        string
-	deletedID     string
+	state             PreviewState
+	persisted         PersistZabbixInput
+	persistedKuma     PersistUptimeKumaInput
+	persistedPatchMon PersistPatchMonInput
+	statusID          string
+	status            string
+	deletedID         string
 }
 
 func (*fakeStore) List(context.Context) ([]Connector, error) {
@@ -59,10 +61,32 @@ func (fake *fakeStore) ImportUptimeKuma(_ context.Context, input PersistUptimeKu
 	return UptimeKumaImport{Connector: Connector{ID: "connector-kuma", Kind: "uptime_kuma", Name: input.Name, Endpoint: input.Endpoint}, Targets: targets}, nil
 }
 
+func (fake *fakeStore) ImportPatchMon(_ context.Context, input PersistPatchMonInput) (PatchMonImport, error) {
+	fake.persistedPatchMon = input
+	targets := make([]ImportedTarget, 0, len(input.Hosts))
+	for _, host := range input.Hosts {
+		targets = append(targets, ImportedTarget{ExternalID: host.ID, TargetID: "target-" + host.ID, TargetName: host.Name(), Disposition: "created"})
+	}
+	return PatchMonImport{Connector: Connector{ID: "connector-patchmon", Kind: "patchmon", Name: input.Name, Endpoint: input.Endpoint}, Targets: targets}, nil
+}
+
 type fakeUptimeKuma struct {
 	inspection uptimekuma.Inspection
 	err        error
 	calls      int
+}
+
+type fakePatchMon struct {
+	inspection  patchmon.Inspection
+	err         error
+	calls       int
+	credentials patchmon.Credentials
+}
+
+func (fake *fakePatchMon) Inspect(_ context.Context, _ string, credentials patchmon.Credentials) (patchmon.Inspection, error) {
+	fake.calls++
+	fake.credentials = credentials
+	return fake.inspection, fake.err
 }
 
 func (fake *fakeUptimeKuma) Inspect(context.Context, string, string) (uptimekuma.Inspection, error) {
@@ -94,7 +118,7 @@ func TestPreviewAndImportZabbixUseSealedShortLivedReceipt(t *testing.T) {
 		TargetsByName:        map[string]TargetReference{"database": {ID: "target-db", Name: "Database"}},
 		ImportedByExternalID: map[string]TargetReference{},
 	}}
-	service := NewService(store, remote, &fakeUptimeKuma{}, box)
+	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box)
 	service.now = func() time.Time { return time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC) }
 
 	preview, err := service.PreviewZabbix(context.Background(), ZabbixPreviewInput{
@@ -135,7 +159,7 @@ func TestImportRejectsExpiredOrTamperedPreview(t *testing.T) {
 		Compatibility: "supported", Hosts: []zabbix.Host{{ID: "1", Name: "One"}},
 	}}
 	store := &fakeStore{state: PreviewState{TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{}}}
-	service := NewService(store, remote, &fakeUptimeKuma{}, box)
+	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box)
 	now := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 	preview, err := service.PreviewZabbix(context.Background(), ZabbixPreviewInput{Address: "https://zabbix.example.net", APIToken: "token"})
@@ -163,7 +187,7 @@ func TestPreviewAndImportUptimeKumaUseMetricsAPIKeyReceipt(t *testing.T) {
 		Monitors: []uptimekuma.Monitor{{ID: "12", Name: "Database", Type: "tcp", Hostname: "db.internal", Port: "5432", Status: 0}},
 	}}
 	store := &fakeStore{state: PreviewState{TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{}}}
-	service := NewService(store, &fakeZabbix{}, remote, box)
+	service := NewService(store, &fakeZabbix{}, remote, &fakePatchMon{}, box)
 	service.now = func() time.Time { return time.Date(2026, 8, 14, 14, 0, 0, 0, time.UTC) }
 
 	preview, err := service.PreviewUptimeKuma(context.Background(), UptimeKumaPreviewInput{
@@ -193,6 +217,47 @@ func TestPreviewAndImportUptimeKumaUseMetricsAPIKeyReceipt(t *testing.T) {
 	}
 }
 
+func TestPreviewAndImportPatchMonUseReadOnlyScopedReceipt(t *testing.T) {
+	t.Parallel()
+	const targetID = "12345678-1234-4234-8234-123456789012"
+	box, err := secretbox.New(bytes.Repeat([]byte{0x71}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := &fakePatchMon{inspection: patchmon.Inspection{
+		Endpoint: "https://patchmon.example.net/api/v1/api/hosts", EncryptedTransport: true,
+		Hosts: []patchmon.Host{{ID: "host-12", MachineID: "machine-db", FriendlyName: "Database", Hostname: "db.internal", IP: "192.0.2.12", Status: "active", SecurityUpdatesCount: 3}},
+	}}
+	store := &fakeStore{state: PreviewState{
+		Targets:       []TargetIdentity{{TargetReference: TargetReference{ID: targetID, Name: "Database"}, Identifiers: []string{"machine-db"}}},
+		TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{},
+	}}
+	service := NewService(store, &fakeZabbix{}, &fakeUptimeKuma{}, remote, box)
+	service.now = func() time.Time { return time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC) }
+
+	preview, err := service.PreviewPatchMon(context.Background(), PatchMonPreviewInput{
+		Name: "Patch posture", Address: "https://patchmon.example.net", TokenKey: "patchmon_key", TokenSecret: "secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Receipt == "" || preview.Receipt == "secret" || len(preview.Hosts) != 1 || preview.Hosts[0].SuggestedTarget == nil || preview.Hosts[0].SuggestedTarget.ID != targetID {
+		t.Fatalf("unexpected PatchMon preview: %#v", preview)
+	}
+	result, err := service.ImportPatchMon(context.Background(), "administrator-one", PatchMonImportInput{
+		Receipt: preview.Receipt, HostIDs: []string{"host-12"}, TargetAssignments: map[string]string{"host-12": targetID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if remote.calls != 2 || remote.credentials.Secret != "secret" || len(store.persistedPatchMon.Hosts) != 1 || store.persistedPatchMon.CredentialSealed == "secret" {
+		t.Fatalf("expected fresh PatchMon discovery with sealed credentials: calls=%d persisted=%#v", remote.calls, store.persistedPatchMon)
+	}
+	if len(result.Targets) != 1 || result.Targets[0].ExternalID != "host-12" {
+		t.Fatalf("unexpected PatchMon import: %#v", result)
+	}
+}
+
 func TestPreviewSuggestsCrossConnectorTargetWithEvidence(t *testing.T) {
 	t.Parallel()
 	box, err := secretbox.New(bytes.Repeat([]byte{0x73}, 32))
@@ -211,7 +276,7 @@ func TestPreviewSuggestsCrossConnectorTargetWithEvidence(t *testing.T) {
 		Endpoint: "https://zabbix.example.net/api_jsonrpc.php", Version: "7.4.2", Compatibility: "supported",
 		Hosts: []zabbix.Host{{ID: "42", Name: "gw-prod", Interfaces: []zabbix.Interface{{Address: "192.0.2.42", Main: true}}}},
 	}}
-	service := NewService(store, remote, &fakeUptimeKuma{}, box)
+	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box)
 
 	preview, err := service.PreviewZabbix(context.Background(), ZabbixPreviewInput{Address: "https://zabbix.example.net", APIToken: "token"})
 	if err != nil {
@@ -233,7 +298,7 @@ func TestImportRejectsAssignmentForUnselectedObject(t *testing.T) {
 		Hosts: []zabbix.Host{{ID: "1", Name: "One"}, {ID: "2", Name: "Two"}},
 	}}
 	store := &fakeStore{state: PreviewState{TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{}}}
-	service := NewService(store, remote, &fakeUptimeKuma{}, box)
+	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box)
 	preview, err := service.PreviewZabbix(context.Background(), ZabbixPreviewInput{Address: "https://zabbix.example.net", APIToken: "token"})
 	if err != nil {
 		t.Fatal(err)

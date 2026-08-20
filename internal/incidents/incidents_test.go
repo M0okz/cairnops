@@ -10,6 +10,7 @@ type serviceStore struct {
 	plan          AcknowledgementPlan
 	completeState string
 	completeError string
+	openedDays    int
 }
 
 func (*serviceStore) List(context.Context, string, int) ([]Incident, error) { return nil, nil }
@@ -17,6 +18,10 @@ func (*serviceStore) ListForTarget(context.Context, string, string, int) ([]Inci
 	return nil, nil
 }
 func (*serviceStore) Get(context.Context, string) (Incident, error) { return Incident{}, nil }
+func (store *serviceStore) OpenedByDay(_ context.Context, days int) ([]OpenedDay, error) {
+	store.openedDays = days
+	return nil, nil
+}
 func (store *serviceStore) AcknowledgeLocal(context.Context, string, string, string) (AcknowledgementPlan, error) {
 	return store.plan, nil
 }
@@ -33,6 +38,28 @@ func TestSignalInvalidationRequiresAMeaningfulReason(t *testing.T) {
 	service := NewService(&serviceStore{}, nil)
 	if _, err := service.InvalidateSignal(context.Background(), "incident", "signal", "actor", "Gregory", "panne"); !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("expected invalid input, got %v", err)
+	}
+}
+
+func TestIncidentHistoryWindowStaysWithinThePublishedBounds(t *testing.T) {
+	t.Parallel()
+	store := &serviceStore{}
+	service := NewService(store, nil)
+
+	for _, days := range []int{0, 91} {
+		if _, err := service.OpenedByDay(context.Background(), days); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("expected %d days to be rejected, got %v", days, err)
+		}
+	}
+	if store.openedDays != 0 {
+		t.Fatalf("invalid windows must not reach the store, got %d", store.openedDays)
+	}
+
+	if _, err := service.OpenedByDay(context.Background(), 12); err != nil {
+		t.Fatal(err)
+	}
+	if store.openedDays != 12 {
+		t.Fatalf("expected the valid window to reach the store, got %d", store.openedDays)
 	}
 }
 

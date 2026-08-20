@@ -88,8 +88,8 @@ export const today = (value: Date = new Date()) =>
   `${dayf().format(value)} · ${timef().format(value)}`;
 
 /** Durées courtes et lisibles : « 18 min », « 2 h 41 », « 6 j ». */
-export function since(value: string | Date, to: Date = new Date()): string {
-  const seconds = Math.max(0, Math.round((to.getTime() - new Date(value).getTime()) / 1000));
+export function duration(seconds: number): string {
+  seconds = Math.max(0, Math.round(seconds));
   if (seconds < 60) return t('duration.seconds', { count: seconds });
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return t('duration.minutes', { count: minutes });
@@ -100,6 +100,11 @@ export function since(value: string | Date, to: Date = new Date()): string {
       : t('duration.hoursMinutes', { hours, minutes: String(minutes % 60).padStart(2, '0') });
   }
   return t('duration.days', { count: Math.floor(hours / 24) });
+}
+
+/** Le temps écoulé depuis un instant, dit comme une durée. */
+export function since(value: string | Date, to: Date = new Date()): string {
+  return duration((to.getTime() - new Date(value).getTime()) / 1000);
 }
 
 export function until(value: string | Date, from: Date = new Date()): string {

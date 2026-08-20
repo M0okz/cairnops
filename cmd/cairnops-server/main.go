@@ -12,6 +12,7 @@ import (
 
 	"github.com/M0okz/cairnops/internal/config"
 	"github.com/M0okz/cairnops/internal/connectors"
+	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/controlplane"
@@ -66,8 +67,9 @@ func run(logger *slog.Logger) error {
 	connectorStore := connectors.NewPostgresStore(pool)
 	zabbixClient := zabbix.NewClient()
 	uptimeKumaClient := uptimekuma.NewClient()
+	patchMonClient := patchmon.NewClient()
 	incidentStore := incidents.NewPostgresStore(pool)
-	connectorService := connectors.NewService(connectorStore, zabbixClient, uptimeKumaClient, secrets)
+	connectorService := connectors.NewService(connectorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets)
 	webhookService := connectors.NewWebhookService(connectorStore, incidentStore, secrets, cfg.PublicURL)
 	incidentService := incidents.NewService(incidentStore, connectors.NewAcknowledger(connectorStore, zabbixClient, secrets))
 	maintenanceService := maintenance.NewService(maintenance.NewPostgresStore(pool))
@@ -82,6 +84,7 @@ func run(logger *slog.Logger) error {
 	}
 	connectorSync := connectors.NewSynchronizer(connectorStore, incidentStore, zabbixClient, secrets, "server:"+hostname, logger)
 	uptimeKumaSync := connectors.NewUptimeKumaSynchronizer(connectorStore, incidentStore, uptimeKumaClient, secrets, "server:"+hostname, logger)
+	patchMonSync := connectors.NewPatchMonSynchronizer(connectorStore, incidentStore, patchMonClient, secrets, "server:"+hostname, logger)
 
 	server := httpapi.NewServer(httpapi.ServerOptions{
 		Address:        cfg.HTTPAddress,
@@ -103,7 +106,7 @@ func run(logger *slog.Logger) error {
 		SystemHealth:   systemhealth.NewStore(pool),
 	})
 
-	errCh := make(chan error, 3)
+	errCh := make(chan error, 4)
 	go func() {
 		logger.Info("server listening", "address", cfg.HTTPAddress, "version", version.Version)
 		errCh <- server.ListenAndServe()
@@ -115,6 +118,11 @@ func run(logger *slog.Logger) error {
 	}()
 	go func() {
 		if err := uptimeKumaSync.Run(ctx); err != nil {
+			errCh <- err
+		}
+	}()
+	go func() {
+		if err := patchMonSync.Run(ctx); err != nil {
 			errCh <- err
 		}
 	}()

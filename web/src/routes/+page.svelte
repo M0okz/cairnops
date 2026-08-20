@@ -5,11 +5,15 @@
 
   import Topbar from '$lib/components/Topbar.svelte';
   import Spark from '$lib/components/Spark.svelte';
+  import Bars from '$lib/components/Bars.svelte';
+  import Uptime from '$lib/components/Uptime.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
+  import { coverageWindow } from '$lib/overview';
   import { session } from '$lib/session.svelte';
   import {
     activeSignalRatio,
     diverges,
+    duration,
     inWindow,
     lastObserved,
     leadIncident,
@@ -68,6 +72,57 @@
       .filter((value): value is string => Boolean(value))
       .map((value) => new Date(value).getTime());
     return stamps.length > 0 ? new Date(Math.max(...stamps)) : null;
+  });
+
+  /* Les Incidents ouverts jour par jour, sous le compte du moment. La série
+   * vient du serveur : c'est lui qui date les jours, et deux écrans ouverts
+   * racontent donc le même passé. */
+  const openedDays = $derived(session.incidentDays.map((day) => day.opened));
+
+  const openedTotal = $derived(
+    session.incidentDays.length === 0
+      ? null
+      : session.incidentDays.reduce((total, day) => total + day.opened, 0)
+  );
+
+  /* La Couverture heure par heure de toute l'instance, lue sur la Santé qui
+   * la publie déjà. Le chiffre et les barres parlent alors des mêmes heures :
+   * sans quoi l'un démentirait l'autre. */
+  const coverageHours = $derived(
+    coverageWindow(session.system?.hours ?? [], session.system?.checked_at)
+  );
+
+  /* Une heure « aveugle » n'a rien conclu de ce qu'elle attendait. C'est elle
+   * qui explique une Couverture entamée, et elle seule mérite la teinte
+   * d'avertissement : une heure à peine grattée reste une heure vue. */
+  const blindHours = $derived(
+    (session.system?.hours ?? []).filter(
+      (hour) => hour.expected_observations > 0 && hour.conclusive_observations === 0
+    ).length
+  );
+
+  /* Les emplacements du micro-graphe de la dernière preuve : une Cible qui
+   * a déjà conclu vaut un emplacement. Rien n'y est dessiné — la fraîcheur est
+   * un état, pas une histoire — mais la forme dit sur combien de Cibles le
+   * chiffre se fonde. */
+  const evidenceSlots = $derived(
+    session.targets.filter((target) => lastObserved(target, session.measuresFor(target.id))).length
+  );
+
+  /* L'intervalle médian entre deux Observations attendues, toutes Sources
+   * actives confondues. La médiane plutôt que la moyenne : une seule Source
+   * lente à l'heure ne doit pas déplacer la cadence que lisent les autres. */
+  const medianInterval = $derived.by(() => {
+    const intervals = session.targets
+      .flatMap((target) => target.sources)
+      .filter((source) => source.enabled && source.kind !== 'heartbeat')
+      .map((source) => source.interval_seconds)
+      .sort((left, right) => left - right);
+    if (intervals.length === 0) return null;
+    const middle = Math.floor(intervals.length / 2);
+    return intervals.length % 2 === 0
+      ? (intervals[middle - 1] + intervals[middle]) / 2
+      : intervals[middle];
   });
 
   const verdict = $derived.by(() => {
@@ -144,28 +199,81 @@
     <p>{t('overview.lead')} <span class="faint">{today(now)}</span></p>
   </div>
 
-  <div class="banner {verdict.tone}">
-    <i class="dot {verdict.tone} big"></i>
-    <div class="banner-copy">
-      <strong class={verdict.tone}>{verdict.title}</strong>
+  <div class="banner {verdict.tone} verdict">
+    <div class="verdict-copy">
+      <strong class={verdict.tone}><i class="dot {verdict.tone}"></i>{verdict.title}</strong>
       <p>{verdict.say}</p>
+      <a class="more" href="/incidents">{t('overview.allIncidents')} →</a>
     </div>
-    <div class="figures banner-figures">
-      <div class="fig">
-        <span>{t('nav.incidents')}</span>
-        <b class={session.actionable.length > 0 ? verdict.tone : ''}><Odometer value={session.actionable.length} /></b>
+
+    <div class="verdict-cells">
+      <div class="cell">
+        <span class="cell-title">{t('overview.fig.open')}</span>
+        <b class={session.actionable.length > 0 ? verdict.tone : ''}>
+          <Odometer value={session.actionable.length} />
+        </b>
+        <span class="graph dim">
+          {#if openedDays.length > 0}
+            <Bars values={openedDays} />
+          {:else}
+            <Bars mode="rule" />
+          {/if}
+        </span>
+        <small class="incident-summary">
+          <span class={session.unacknowledged.length > 0 ? 'crit' : 'faint'}>
+            <span class="metric-number">{session.unacknowledged.length}</span>
+            {plural('overview.fig.unacknowledgedCount', session.unacknowledged.length)}
+          </span>
+          <span class="faint" aria-hidden="true">·</span>
+          <span class="faint">
+            {#if openedTotal === null}
+              {t('overview.fig.openUnread')}
+            {:else}
+              <span class="metric-number">{openedTotal}</span>
+              {plural('overview.fig.openedLabel', openedTotal)}
+              <span class="metric-number">{openedDays.length}</span>
+              {plural('overview.fig.daysLabel', openedDays.length)}
+            {/if}
+          </span>
+        </small>
       </div>
-      <div class="fig">
-        <span>{t('overview.fig.unacknowledged')}</span>
-        <b><Odometer value={session.unacknowledged.length} /></b>
+
+      <div class="cell">
+        <span class="cell-title">{t('overview.fig.coverage')}</span>
+        <b class:dim={coverage === null}><Odometer value={ratio(coverage)} /></b>
+        <span class="graph">
+          {#if coverageHours.length > 0}
+            <Uptime values={coverageHours} />
+          {:else}
+            <Bars mode="rule" />
+          {/if}
+        </span>
+        <small class={blindHours > 0 ? "warn" : "faint"}>
+          {coverage === null
+            ? t('overview.fig.coverageUnread')
+            : blindHours > 0
+              ? plural('overview.fig.blindHours', blindHours)
+              : t('overview.fig.everyHourCovered')}
+        </small>
       </div>
-      <div class="fig">
-        <span>{t('overview.fig.coverage')}</span>
-        <b><Odometer value={ratio(coverage)} /></b>
-      </div>
-      <div class="fig">
-        <span>{t('overview.fig.lastEvidence')}</span>
-        <b><Odometer value={freshest ? since(freshest, now) : t('common.none')} /></b>
+
+      <div class="cell">
+        <span class="cell-title">{t('overview.fig.lastEvidence')}</span>
+        <b class:dim={freshest === null}>
+          <Odometer value={freshest ? since(freshest, now) : t('common.none')} />
+        </b>
+        <span class="graph dim">
+          {#if evidenceSlots > 0}
+            <Bars mode="slots" slots={evidenceSlots} />
+          {:else}
+            <Bars mode="rule" />
+          {/if}
+        </span>
+        <small class="faint">
+          {medianInterval === null
+            ? t('overview.fig.noCadence')
+            : t('overview.fig.medianInterval', { duration: duration(medianInterval) })}
+        </small>
       </div>
     </div>
   </div>
@@ -344,42 +452,104 @@
     font-size: 0.8125rem;
   }
 
-  .banner {
+  /* Le verdict et ses cellules chiffrées. Le verdict garde le lavis de son
+     ton ; les cellules reviennent à la surface neutre, parce qu'un chiffre
+     n'est pas un verdict — la Couverture ne devient pas rassurante du seul
+     fait que rien ne brûle. */
+  .banner.verdict {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    align-items: stretch;
+    gap: 0;
     margin-bottom: var(--s5);
-    padding: 1rem 1.125rem;
+    padding: 0;
+    overflow: hidden;
   }
 
-  .dot.big {
-    width: 0.5rem;
-    height: 0.5rem;
-    margin-top: 0.375rem;
-  }
-
-  .banner-copy {
-    flex: 1;
+  .verdict-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s2);
+    padding: var(--s4) var(--s5);
     min-width: 0;
   }
 
-  .banner-copy strong {
-    display: block;
+  .verdict-copy strong {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
     font-size: 0.9375rem;
     font-weight: 600;
   }
 
-  .banner-copy p {
-    margin-top: 0.3125rem;
+  .verdict-copy p {
     color: var(--muted);
     font-size: 0.8125rem;
   }
 
-  .banner-figures {
-    gap: var(--s6);
-    padding-left: var(--s6);
-    border-left: 1px solid var(--line-strong);
+  .verdict-copy .more {
+    margin: var(--s1) 0 0;
   }
 
-  .banner-figures .fig b {
-    font-size: 1.0625rem;
+  /* Les cellules reposent sur la surface : le lavis du verdict s'arrête au
+     filet, et les micro-graphes gardent leurs propres teintes. */
+  .verdict-cells {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    background: var(--surface);
+    border-left: 1px solid var(--line-strong);
+    /* Le ton du verdict colore son propre bloc, pas les chiffres : une
+       Couverture entamée ne devient pas verte parce que rien ne brûle. Chaque
+       cellule reprend donc la teinte quand elle a elle-même quelque chose à
+       signaler. */
+    color: var(--ink);
+  }
+
+  .cell {
+    display: grid;
+    align-content: start;
+    gap: var(--s3);
+    padding: var(--s4);
+    border-left: 1px solid var(--line);
+    min-width: 0;
+  }
+
+  .cell:first-child {
+    border-left: 0;
+  }
+
+  .cell-title {
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  .cell b {
+    font-family: var(--font-num);
+    font-variant-numeric: tabular-nums;
+    font-size: 1.375rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .cell small {
+    font-size: 0.6875rem;
+  }
+
+  .incident-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2);
+  }
+
+  .metric-number {
+    font-family: var(--font-num);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .graph {
+    display: block;
+    color: var(--dim);
   }
 
   /* Une bande ne porte que son espace bas. L'espace haut appartient au bloc
@@ -577,14 +747,31 @@
       grid-template-columns: minmax(0, 1fr);
     }
 
-    .banner {
-      flex-wrap: wrap;
+    /* Sous cette largeur, les cellules passent sous le verdict : le filet
+       vertical qui les en séparait redevient horizontal. */
+    .banner.verdict {
+      grid-template-columns: minmax(0, 1fr);
     }
 
-    .banner-figures {
-      padding-left: 0;
+    .verdict-cells {
       border-left: 0;
-      gap: var(--s5);
+      border-top: 1px solid var(--line-strong);
+    }
+  }
+
+  /* Trois cellules ne tiennent plus en ligne sur un téléphone : elles
+     s'empilent, et leurs filets suivent. */
+  @media (max-width: 48rem) {
+    .verdict-cells {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cell {
+      border-left: 0;
+    }
+
+    .cell:not(:first-child) {
+      border-top: 1px solid var(--line);
     }
   }
 </style>

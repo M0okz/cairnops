@@ -19,16 +19,16 @@ import (
 // produit distant, et la Source disparaît avec la liaison. C'est cette Source
 // qui portera les Observations dont se déduisent Disponibilité, Couverture et
 // latence — sans elle, une Cible importée resterait à jamais sans mesure.
-func ensureIntegrationSource(ctx context.Context, tx pgx.Tx, bindingID string) error {
+func ensureIntegrationSource(ctx context.Context, tx pgx.Tx, bindingID string, measuresAvailability bool) error {
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO cairnops_signal_sources (
 			target_id, name, kind, origin, connector_binding_id, enabled,
-			interval_seconds, timeout_milliseconds, config
+			interval_seconds, timeout_milliseconds, config, measures_availability
 		)
 		SELECT binding.target_id,
 		       left(coalesce(nullif(btrim(binding.external_name), ''), 'Source importée'), 160),
 		       connector.kind, 'integration', binding.id, connector.status <> 'disabled',
-		       connector.sync_interval_seconds, 1000, '{}'::jsonb
+		       connector.sync_interval_seconds, 1000, '{}'::jsonb, $2
 		FROM cairnops_connector_bindings binding
 		JOIN cairnops_connectors connector ON connector.id = binding.connector_id
 		WHERE binding.id = $1::uuid
@@ -37,8 +37,9 @@ func ensureIntegrationSource(ctx context.Context, tx pgx.Tx, bindingID string) e
 			target_id = excluded.target_id,
 			name = excluded.name,
 			interval_seconds = excluded.interval_seconds,
+			measures_availability = excluded.measures_availability,
 			updated_at = now()
-	`, bindingID); err != nil {
+	`, bindingID, measuresAvailability); err != nil {
 		return fmt.Errorf("ensure integration signal source: %w", err)
 	}
 	return nil
@@ -57,6 +58,7 @@ func addBindingIdentity(identity *TargetIdentity, kind string, encoded []byte) e
 		Address       string `json:"address"`
 		URL           string `json:"url"`
 		Hostname      string `json:"hostname"`
+		MachineID     string `json:"machine_id"`
 		Interfaces    []struct {
 			Address string `json:"address"`
 		} `json:"interfaces"`
@@ -69,6 +71,7 @@ func addBindingIdentity(identity *TargetIdentity, kind string, encoded []byte) e
 		identity.Addresses = append(identity.Addresses, metadata.TechnicalName)
 	}
 	identity.Addresses = append(identity.Addresses, metadata.Address, metadata.URL, metadata.Hostname)
+	identity.Identifiers = append(identity.Identifiers, metadata.MachineID)
 	for _, item := range metadata.Interfaces {
 		identity.Addresses = append(identity.Addresses, item.Address)
 	}
@@ -467,7 +470,7 @@ func (store *PostgresStore) ApproveWebhookIdentity(ctx context.Context, actorID,
 	if err != nil {
 		return WebhookApproval{}, fmt.Errorf("bind approved webhook identity: %w", err)
 	}
-	if err := ensureIntegrationSource(ctx, tx, bindingID); err != nil {
+	if err := ensureIntegrationSource(ctx, tx, bindingID, true); err != nil {
 		return WebhookApproval{}, err
 	}
 
@@ -756,7 +759,7 @@ func (store *PostgresStore) ImportUptimeKuma(ctx context.Context, input PersistU
 			`, connector.ID, targetID, monitor.ID, monitor.Name, metadata).Scan(&bindingID); err != nil {
 				return UptimeKumaImport{}, fmt.Errorf("bind Uptime Kuma monitor %s: %w", monitor.ID, err)
 			}
-			if err := ensureIntegrationSource(ctx, tx, bindingID); err != nil {
+			if err := ensureIntegrationSource(ctx, tx, bindingID, true); err != nil {
 				return UptimeKumaImport{}, err
 			}
 		} else if err != nil {
@@ -769,6 +772,120 @@ func (store *PostgresStore) ImportUptimeKuma(ctx context.Context, input PersistU
 	result.Connector.BindingCount += countNewBindings(result.Targets)
 	if err := tx.Commit(ctx); err != nil {
 		return UptimeKumaImport{}, fmt.Errorf("commit Uptime Kuma import: %w", err)
+	}
+	return result, nil
+}
+
+func (store *PostgresStore) ImportPatchMon(ctx context.Context, input PersistPatchMonInput) (PatchMonImport, error) {
+	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return PatchMonImport{}, fmt.Errorf("begin PatchMon import: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	connector, err := scanConnector(tx.QueryRow(ctx, `
+		INSERT INTO cairnops_connectors (
+			kind, name, endpoint, credential_sealed, status,
+			remote_version, compatibility, encrypted_transport,
+			last_checked_at, last_error, created_by, sync_interval_seconds
+		) VALUES ('patchmon', $1, $2, $3, 'connected', '', 'supported', $4, now(), '', $5::uuid, 300)
+		ON CONFLICT (kind, (lower(endpoint))) DO UPDATE SET
+			name = EXCLUDED.name,
+			credential_sealed = EXCLUDED.credential_sealed,
+			status = 'connected',
+			compatibility = 'supported',
+			encrypted_transport = EXCLUDED.encrypted_transport,
+			last_checked_at = now(),
+			last_error = '',
+			next_sync_at = now(),
+			lease_owner = NULL,
+			lease_until = NULL,
+			updated_at = now()
+		RETURNING id::text, kind, name, endpoint, status, remote_version,
+		          compatibility, encrypted_transport,
+		          (SELECT count(*)::integer FROM cairnops_connector_bindings WHERE connector_id = cairnops_connectors.id), 0,
+		          last_checked_at, last_error, created_at, updated_at
+	`, input.Name, input.Endpoint, input.CredentialSealed, input.EncryptedTransport, input.ActorID))
+	if err != nil {
+		return PatchMonImport{}, fmt.Errorf("save PatchMon connector: %w", err)
+	}
+
+	result := PatchMonImport{Connector: connector, Targets: make([]ImportedTarget, 0, len(input.Hosts))}
+	for _, host := range input.Hosts {
+		var targetID, targetName string
+		assignedTargetID := input.TargetAssignments[host.ID]
+		err := tx.QueryRow(ctx, `
+			SELECT target.id::text, target.name
+			FROM cairnops_connector_bindings binding
+			JOIN cairnops_targets target ON target.id = binding.target_id
+			WHERE binding.connector_id = $1::uuid AND binding.external_id = $2
+		`, connector.ID, host.ID).Scan(&targetID, &targetName)
+		disposition := "already_imported"
+		if err == nil && assignedTargetID != "" && assignedTargetID != targetID {
+			return PatchMonImport{}, fmt.Errorf("%w: PatchMon host %s is already linked to another target", ErrInvalidInput, host.ID)
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			disposition = "reused"
+			if assignedTargetID != "" {
+				err = selectAssignedTarget(ctx, tx, assignedTargetID, &targetID, &targetName)
+			} else {
+				err = tx.QueryRow(ctx, `
+					SELECT id::text, name
+					FROM cairnops_targets
+					WHERE archived_at IS NULL AND lower(btrim(name)) = lower(btrim($1))
+					ORDER BY created_at, id
+					LIMIT 1
+				`, host.Name()).Scan(&targetID, &targetName)
+			}
+			if errors.Is(err, pgx.ErrNoRows) && assignedTargetID == "" {
+				description := fmt.Sprintf("Découvert par le Connecteur %s.", input.Name)
+				err = tx.QueryRow(ctx, `
+					INSERT INTO cairnops_targets (name, description)
+					VALUES ($1, $2)
+					RETURNING id::text, name
+				`, host.Name(), description).Scan(&targetID, &targetName)
+				disposition = "created"
+			}
+			if errors.Is(err, pgx.ErrNoRows) && assignedTargetID != "" {
+				return PatchMonImport{}, fmt.Errorf("%w: assigned target does not exist or is archived", ErrInvalidInput)
+			}
+			if err != nil {
+				return PatchMonImport{}, fmt.Errorf("resolve target for PatchMon host %s: %w", host.ID, err)
+			}
+			metadata, err := json.Marshal(map[string]any{
+				"machine_id": host.MachineID, "hostname": host.Hostname, "address": host.IP,
+				"os_type": host.OSType, "os_version": host.OSVersion, "host_groups": host.HostGroups,
+			})
+			if err != nil {
+				return PatchMonImport{}, fmt.Errorf("encode PatchMon host %s metadata: %w", host.ID, err)
+			}
+			var bindingID string
+			if err := tx.QueryRow(ctx, `
+				INSERT INTO cairnops_connector_bindings (
+					connector_id, target_id, external_id, external_name, metadata
+				) VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb)
+				ON CONFLICT (connector_id, external_id) DO UPDATE SET
+					target_id = EXCLUDED.target_id,
+					external_name = EXCLUDED.external_name,
+					metadata = EXCLUDED.metadata,
+					updated_at = now()
+				RETURNING id::text
+			`, connector.ID, targetID, host.ID, host.Name(), metadata).Scan(&bindingID); err != nil {
+				return PatchMonImport{}, fmt.Errorf("bind PatchMon host %s: %w", host.ID, err)
+			}
+			if err := ensureIntegrationSource(ctx, tx, bindingID, false); err != nil {
+				return PatchMonImport{}, err
+			}
+		} else if err != nil {
+			return PatchMonImport{}, fmt.Errorf("find existing PatchMon host %s: %w", host.ID, err)
+		}
+		result.Targets = append(result.Targets, ImportedTarget{
+			ExternalID: host.ID, TargetID: targetID, TargetName: targetName, Disposition: disposition,
+		})
+	}
+	result.Connector.BindingCount += countNewBindings(result.Targets)
+	if err := tx.Commit(ctx); err != nil {
+		return PatchMonImport{}, fmt.Errorf("commit PatchMon import: %w", err)
 	}
 	return result, nil
 }
@@ -872,7 +989,7 @@ func (store *PostgresStore) ImportZabbix(ctx context.Context, input PersistZabbi
 			`, connector.ID, targetID, host.ID, host.Name, metadata).Scan(&bindingID); err != nil {
 				return ZabbixImport{}, fmt.Errorf("bind Zabbix host %s: %w", host.ID, err)
 			}
-			if err := ensureIntegrationSource(ctx, tx, bindingID); err != nil {
+			if err := ensureIntegrationSource(ctx, tx, bindingID, true); err != nil {
 				return ZabbixImport{}, err
 			}
 		} else if err != nil {
@@ -988,12 +1105,20 @@ func (store *PostgresStore) RecordIntegrationObservations(ctx context.Context, o
 		if observation.LatencyMilliseconds != nil {
 			latency = max(0, *observation.LatencyMilliseconds)
 		}
+		details := observation.Details
+		if details == nil {
+			details = map[string]any{}
+		}
+		encodedDetails, err := json.Marshal(details)
+		if err != nil {
+			return fmt.Errorf("encode integration observation details: %w", err)
+		}
 		batch.Queue(`
 			WITH observed AS (
 				INSERT INTO cairnops_observations (
-					source_id, target_id, observed_at, outcome, latency_milliseconds, reason
+					source_id, target_id, observed_at, outcome, latency_milliseconds, reason, message, details
 				)
-				SELECT source.id, source.target_id, $2::timestamptz, $3, $4, $5
+				SELECT source.id, source.target_id, $2::timestamptz, $3, $4, $5, $6, $7::jsonb
 				FROM cairnops_signal_sources source
 				WHERE source.connector_binding_id = $1::uuid AND source.enabled
 				RETURNING source_id
@@ -1007,7 +1132,8 @@ func (store *PostgresStore) RecordIntegrationObservations(ctx context.Context, o
 			    updated_at = now()
 			FROM observed
 			WHERE cairnops_signal_sources.id = observed.source_id
-		`, observation.BindingID, observedAt.UTC(), observation.Outcome, latency, observation.Reason)
+		`, observation.BindingID, observedAt.UTC(), observation.Outcome, latency,
+			observation.Reason, observation.Message, encodedDetails)
 	}
 	results := store.pool.SendBatch(ctx, batch)
 	defer results.Close()

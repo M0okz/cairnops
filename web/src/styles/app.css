@@ -72,6 +72,7 @@
   --source-cairnops: #e08c4a;
   --source-zabbix: #e34a3f;
   --source-uptime-kuma: #5cdd8b;
+  --source-patchmon: #60a5fa;
   --source-webhook: #a78bfa;
 
   /* Typographie */
@@ -150,6 +151,7 @@
   --source-cairnops: #af5d1d;
   --source-zabbix: #c52f25;
   --source-uptime-kuma: #16834c;
+  --source-patchmon: #2563eb;
   --source-webhook: #7650bd;
 
   --shadow: 0 12px 32px rgba(54, 48, 36, 0.1);

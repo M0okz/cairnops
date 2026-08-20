@@ -3,10 +3,12 @@ package connectors
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/incidents"
@@ -50,8 +52,9 @@ func (client problemClient) Problems(context.Context, string, string, []string) 
 }
 
 type incidentReconciler struct {
-	input     incidents.ReconcileZabbixInput
-	kumaInput incidents.ReconcileUptimeKumaInput
+	input         incidents.ReconcileZabbixInput
+	kumaInput     incidents.ReconcileUptimeKumaInput
+	patchMonInput incidents.ReconcilePatchMonInput
 }
 
 func (reconciler *incidentReconciler) ReconcileZabbix(_ context.Context, input incidents.ReconcileZabbixInput) error {
@@ -62,6 +65,50 @@ func (reconciler *incidentReconciler) ReconcileZabbix(_ context.Context, input i
 func (reconciler *incidentReconciler) ReconcileUptimeKuma(_ context.Context, input incidents.ReconcileUptimeKumaInput) error {
 	reconciler.kumaInput = input
 	return nil
+}
+
+func (reconciler *incidentReconciler) ReconcilePatchMon(_ context.Context, input incidents.ReconcilePatchMonInput) error {
+	reconciler.patchMonInput = input
+	return nil
+}
+
+type patchMonHostClient struct {
+	hosts []patchmon.Host
+	err   error
+}
+
+func (client patchMonHostClient) Hosts(context.Context, string, patchmon.Credentials) ([]patchmon.Host, error) {
+	return client.hosts, client.err
+}
+
+func TestPatchMonSynchronizerProjectsPostureWithoutAvailabilitySemantics(t *testing.T) {
+	t.Parallel()
+	box, _ := secretbox.New(bytes.Repeat([]byte{0x79}, 32))
+	credential, _ := json.Marshal(patchmon.Credentials{Key: "patchmon_key", Secret: "secret"})
+	sealed, _ := box.Seal(credential, "connector:patchmon:https://patchmon.example.net/api/v1/api/hosts")
+	store := &runtimeStore{connectors: []RuntimeConnector{{
+		ID: "connector-patchmon", Endpoint: "https://patchmon.example.net/api/v1/api/hosts", CredentialSealed: sealed,
+		Bindings: []RuntimeBinding{{ID: "binding-host", TargetID: "target-host", ExternalID: "host-1"}},
+	}}}
+	reconciler := &incidentReconciler{}
+	synchronizer := NewPatchMonSynchronizer(store, reconciler, patchMonHostClient{hosts: []patchmon.Host{{
+		ID: "host-1", FriendlyName: "Web", ReportingState: "reporting", UpdateState: "security_required",
+		UpdatesCount: 8, SecurityUpdatesCount: 2, NeedsReboot: true,
+	}}}, box, "server-one", nil)
+	synchronizer.now = func() time.Time { return time.Date(2026, 8, 20, 10, 0, 0, 0, time.UTC) }
+
+	if err := synchronizer.tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if store.claimedKind != "patchmon" || !store.completed || store.failed != "" {
+		t.Fatalf("unexpected PatchMon synchronization: %#v", store)
+	}
+	if len(reconciler.patchMonInput.Signals) != 2 || len(reconciler.patchMonInput.ObservedBindings) != 1 {
+		t.Fatalf("expected security and reboot posture signals: %#v", reconciler.patchMonInput)
+	}
+	if len(store.observations) != 1 || store.observations[0].Outcome != "unhealthy" || store.observations[0].LatencyMilliseconds != nil {
+		t.Fatalf("unexpected posture observation: %#v", store.observations)
+	}
 }
 
 func TestSynchronizerProjectsProblemsThroughImportedBindings(t *testing.T) {

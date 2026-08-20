@@ -102,6 +102,8 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("POST /api/v1/connectors/zabbix/import", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.importZabbix)))))
 		mux.Handle("POST /api/v1/connectors/uptime-kuma/preview", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.previewUptimeKuma)))))
 		mux.Handle("POST /api/v1/connectors/uptime-kuma/import", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.importUptimeKuma)))))
+		mux.Handle("POST /api/v1/connectors/patchmon/preview", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.previewPatchMon)))))
+		mux.Handle("POST /api/v1/connectors/patchmon/import", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.importPatchMon)))))
 		mux.Handle("POST /api/v1/connectors/{connectorID}/suspension", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.suspend)))))
 		mux.Handle("DELETE /api/v1/connectors/{connectorID}/suspension", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.resume)))))
 		mux.Handle("DELETE /api/v1/connectors/{connectorID}", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.remove)))))
@@ -118,6 +120,7 @@ func NewServer(options ServerOptions) *http.Server {
 	if options.Incidents != nil && options.Identity != nil {
 		handler := incidentHandler{incidents: options.Incidents, logger: logger}
 		mux.Handle("GET /api/v1/incidents", identityHTTP.requireSession(http.HandlerFunc(handler.list)))
+		mux.Handle("GET /api/v1/incidents/history", identityHTTP.requireSession(http.HandlerFunc(handler.history)))
 		mux.Handle("GET /api/v1/incidents/{incidentID}", identityHTTP.requireSession(http.HandlerFunc(handler.get)))
 		mux.Handle("POST /api/v1/incidents/{incidentID}/acknowledgement", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireAnyRole([]string{"administrator", "operator"}, http.HandlerFunc(handler.acknowledge)))))
 		mux.Handle("POST /api/v1/incidents/{incidentID}/signals/{signalID}/invalidation", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireAnyRole([]string{"administrator", "operator"}, http.HandlerFunc(handler.invalidateSignal)))))

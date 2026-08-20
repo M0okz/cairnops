@@ -14,15 +14,29 @@ import (
 )
 
 type fakeConnectors struct {
-	previewInput     connectors.ZabbixPreviewInput
-	importActor      string
-	importInput      connectors.ZabbixImportInput
-	kumaPreviewInput connectors.UptimeKumaPreviewInput
-	kumaImportActor  string
-	kumaImportInput  connectors.UptimeKumaImportInput
-	suspendedID      string
-	resumedID        string
-	deletedID        string
+	previewInput         connectors.ZabbixPreviewInput
+	importActor          string
+	importInput          connectors.ZabbixImportInput
+	kumaPreviewInput     connectors.UptimeKumaPreviewInput
+	kumaImportActor      string
+	kumaImportInput      connectors.UptimeKumaImportInput
+	patchMonPreviewInput connectors.PatchMonPreviewInput
+	patchMonImportActor  string
+	patchMonImportInput  connectors.PatchMonImportInput
+	suspendedID          string
+	resumedID            string
+	deletedID            string
+}
+
+func (fake *fakeConnectors) PreviewPatchMon(_ context.Context, input connectors.PatchMonPreviewInput) (connectors.PatchMonPreview, error) {
+	fake.patchMonPreviewInput = input
+	return connectors.PatchMonPreview{Kind: "patchmon", Name: input.Name, Endpoint: "https://patchmon.example.net/api/v1/api/hosts"}, nil
+}
+
+func (fake *fakeConnectors) ImportPatchMon(_ context.Context, actorID string, input connectors.PatchMonImportInput) (connectors.PatchMonImport, error) {
+	fake.patchMonImportActor = actorID
+	fake.patchMonImportInput = input
+	return connectors.PatchMonImport{Connector: connectors.Connector{ID: "connector-patchmon", Kind: "patchmon"}}, nil
 }
 
 func (fake *fakeConnectors) Suspend(_ context.Context, connectorID string) (connectors.Connector, error) {
@@ -165,6 +179,29 @@ func TestUptimeKumaPreviewAndImportRequireAdministrator(t *testing.T) {
 	server.Handler.ServeHTTP(response, request)
 	if response.Code != http.StatusCreated || fake.kumaImportActor != "user-id" || fake.kumaImportInput.TargetAssignments["12"] != "12345678-1234-4234-8234-123456789012" {
 		t.Fatalf("expected authenticated Kuma import, status=%d actor=%q body=%s", response.Code, fake.kumaImportActor, response.Body.String())
+	}
+}
+
+func TestPatchMonPreviewAndImportKeepCredentialsOutOfResponses(t *testing.T) {
+	t.Parallel()
+	fake := &fakeConnectors{}
+	server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "administrator"}, Connectors: fake})
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/connectors/patchmon/preview", bytes.NewBufferString(`{"name":"Patch posture","address":"https://patchmon.example.net","token_key":"patchmon_key","token_secret":"secret"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || fake.patchMonPreviewInput.TokenSecret != "secret" || bytes.Contains(response.Body.Bytes(), []byte("secret")) {
+		t.Fatalf("unexpected PatchMon preview status=%d body=%s input=%#v", response.Code, response.Body.String(), fake.patchMonPreviewInput)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/connectors/patchmon/import", bytes.NewBufferString(`{"receipt":"opaque-patchmon-receipt-with-enough-characters","host_ids":["host-12"],"target_assignments":{"host-12":"12345678-1234-4234-8234-123456789012"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response = httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || fake.patchMonImportActor != "user-id" || fake.patchMonImportInput.TargetAssignments["host-12"] == "" {
+		t.Fatalf("unexpected PatchMon import status=%d actor=%q body=%s", response.Code, fake.patchMonImportActor, response.Body.String())
 	}
 }
 

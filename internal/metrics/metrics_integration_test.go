@@ -188,6 +188,62 @@ func TestListKeepsTargetsWithoutObservations(t *testing.T) {
 	}
 }
 
+// Une Source de posture conserve ses Observations et son état propre, sans
+// fabriquer une preuve de disponibilité au niveau de la Cible ou de l'instance.
+func TestPostureSourceStaysOutsideAvailability(t *testing.T) {
+	ctx, pool := openTestDatabase(t)
+	targetID := createTarget(t, ctx, pool)
+	var connectorID, bindingID, sourceID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_connectors (
+			kind, name, endpoint, credential_sealed, status, compatibility, encrypted_transport
+		) VALUES ('patchmon', 'Patch posture', 'https://patchmon.example.net/api/v1/api/hosts',
+		          repeat('x', 32), 'connected', 'supported', true)
+		RETURNING id::text
+	`).Scan(&connectorID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_connector_bindings (connector_id, target_id, external_id, external_name)
+		VALUES ($1::uuid, $2::uuid, 'host-1', 'Serveur web')
+		RETURNING id::text
+	`, connectorID, targetID).Scan(&bindingID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_signal_sources (
+			target_id, name, kind, origin, connector_binding_id, interval_seconds,
+			timeout_milliseconds, config, measures_availability, created_at
+		) VALUES ($1::uuid, 'Serveur web', 'patchmon', 'integration', $2::uuid,
+		          300, 5000, '{}'::jsonb, false, now() - interval '3 hours')
+		RETURNING id::text
+	`, targetID, bindingID).Scan(&sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO cairnops_observations (
+			source_id, target_id, observed_at, outcome, latency_milliseconds, reason
+		) VALUES ($1::uuid, $2::uuid, now(), 'unhealthy', 0, 'patchmon_attention_required')
+	`, sourceID, targetID); err != nil {
+		t.Fatal(err)
+	}
+
+	measured := findTarget(t, mustList(t, ctx, NewStore(pool)), targetID)
+	if measured.Measures[0].Availability != nil || measured.Measures[0].Coverage != nil || len(measured.Trend) != 0 {
+		t.Fatalf("PatchMon posture leaked into target availability: %#v", measured)
+	}
+	if len(measured.Sources) != 1 || measured.Sources[0].MeasuresAvailability || measured.Sources[0].LatestOutcome == nil || *measured.Sources[0].LatestOutcome != domain.OutcomeUnhealthy {
+		t.Fatalf("posture detail was not preserved: %#v", measured.Sources)
+	}
+	hours, err := NewStore(pool).InstanceHours(ctx, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hours) != 0 {
+		t.Fatalf("PatchMon posture leaked into instance activity: %#v", hours)
+	}
+}
+
 func TestTargetRejectsUnknownIdentifier(t *testing.T) {
 	ctx, pool := openTestDatabase(t)
 	if _, err := NewStore(pool).Target(ctx, "00000000-0000-4000-8000-000000000000"); err == nil {

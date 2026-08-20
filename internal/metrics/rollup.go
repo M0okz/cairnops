@@ -179,7 +179,8 @@ LEFT JOIN LATERAL (
 	  AND observation.observed_at >= slot.hour
 	  AND observation.observed_at < slot.hour + interval '1 hour'
 ) counted ON true
-WHERE source.enabled AND source.created_at < slot.hour + interval '1 hour'
+WHERE source.enabled AND source.measures_availability
+  AND source.created_at < slot.hour + interval '1 hour'
 ON CONFLICT (source_id, hour) DO UPDATE SET
 	healthy = excluded.healthy,
 	unhealthy = excluded.unhealthy,

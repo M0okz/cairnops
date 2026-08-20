@@ -1,0 +1,36 @@
+// @ts-nocheck -- exécuté directement par Node, hors du typage navigateur Svelte.
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import type { InstanceHour } from './api.ts';
+import { coverageWindow } from './overview.ts';
+
+const hour = (
+  at: string,
+  expected: number,
+  conclusive: number
+): InstanceHour => ({
+  hour: at,
+  expected_observations: expected,
+  conclusive_observations: conclusive,
+  healthy_observations: conclusive,
+  average_latency_milliseconds: null
+});
+
+test('keeps missing and unmeasured hours neutral in the coverage window', () => {
+  const values = coverageWindow(
+    [
+      hour('2026-08-20T12:00:00Z', 10, 5),
+      hour('2026-08-20T13:00:00Z', 0, 0),
+      hour('2026-08-20T14:00:00Z', 10, 12)
+    ],
+    '2026-08-20T14:37:00Z',
+    4
+  );
+
+  assert.deepEqual(values, [null, 0.5, null, 1]);
+});
+
+test('does not fabricate a window without a server timestamp', () => {
+  assert.deepEqual(coverageWindow([], undefined), []);
+});

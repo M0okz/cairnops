@@ -149,13 +149,13 @@ components:
           items: { $ref: '#/components/schemas/SourceMeasures' }
     SourceMeasures:
       type: object
-      required: [source_id, name, kind, origin, measures]
+      required: [source_id, name, kind, origin, measures_availability, measures]
       properties:
         source_id: { type: string, format: uuid }
         name: { type: string }
         kind:
           type: string
-          enum: [http, tcp, dns, icmp, heartbeat, zabbix, uptime_kuma, generic_webhook]
+          enum: [http, tcp, dns, icmp, heartbeat, zabbix, uptime_kuma, patchmon, generic_webhook]
         origin:
           type: string
           enum: [native, integration]
@@ -163,6 +163,12 @@ components:
             Un Contrôle natif est exécuté par le worker ; une Source
             d'Intégration est alimentée par la synchronisation de son
             Connecteur. Les deux se mesurent de la même façon.
+        measures_availability:
+          type: boolean
+          description: >-
+            Faux pour une Source de posture telle que PatchMon : ses Observations
+            restent consultables mais n'entrent ni dans la Disponibilité, ni dans
+            la Couverture, ni dans le SLA.
         latest_outcome:
           type: string
           enum: [healthy, unhealthy, unknown]
@@ -298,7 +304,7 @@ components:
       required: [id, kind, name, endpoint, status, remote_version, compatibility, encrypted_transport, binding_count, quarantine_count, last_checked_at, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [zabbix, uptime_kuma, generic_webhook] }
+        kind: { type: string, enum: [zabbix, uptime_kuma, patchmon, generic_webhook] }
         name: { type: string, minLength: 1, maxLength: 160 }
         endpoint: { type: string, format: uri, maxLength: 2048 }
         status: { type: string, enum: [connected, degraded, disabled] }
@@ -316,7 +322,7 @@ components:
       required: [id, kind, name, bindings, quarantined, resolved_incidents]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [zabbix, uptime_kuma, generic_webhook] }
+        kind: { type: string, enum: [zabbix, uptime_kuma, patchmon, generic_webhook] }
         name: { type: string }
         bindings: { type: integer, minimum: 0, description: Sources externes déliées. Les Cibles correspondantes sont conservées. }
         quarantined: { type: integer, minimum: 0, description: Identités en quarantaine emportées sans décision. }
@@ -326,7 +332,7 @@ components:
       required: [id, origin, name, active, severity, opened_at, upstream_acknowledged]
       properties:
         id: { type: string, format: uuid }
-        origin: { type: string, enum: [native, zabbix, uptime_kuma, webhook] }
+        origin: { type: string, enum: [native, zabbix, uptime_kuma, patchmon, webhook] }
         connector_id: { type: string, format: uuid }
         connector_name: { type: string }
         external_event_id: { type: string }
@@ -440,7 +446,7 @@ components:
       type: object
       required: [kind, value]
       properties:
-        kind: { type: string, enum: [same_name, same_ip, same_hostname, similar_name] }
+        kind: { type: string, enum: [same_machine_id, same_name, same_ip, same_hostname, similar_name] }
         value: { type: string }
     TargetMatch:
       type: object
@@ -543,6 +549,62 @@ components:
           description: Reçu opaque chiffré, valable quinze minutes et requis par la confirmation d'import.
         expires_at: { type: string, format: date-time }
     UptimeKumaImport:
+      type: object
+      required: [connector, targets]
+      properties:
+        connector: { $ref: '#/components/schemas/Connector' }
+        targets:
+          type: array
+          items:
+            type: object
+            required: [external_id, target_id, target_name, disposition]
+            properties:
+              external_id: { type: string }
+              target_id: { type: string, format: uuid }
+              target_name: { type: string }
+              disposition: { type: string, enum: [created, reused, already_imported] }
+    PatchMonHostPreview:
+      type: object
+      required: [external_id, name, hostname, updates_count, security_updates_count, needs_reboot]
+      properties:
+        external_id: { type: string }
+        name: { type: string }
+        hostname: { type: string }
+        ip: { type: string }
+        os_type: { type: string }
+        os_version: { type: string }
+        reporting_state: { type: string }
+        update_state: { type: string }
+        updates_count: { type: integer, minimum: 0 }
+        security_updates_count: { type: integer, minimum: 0 }
+        needs_reboot: { type: boolean }
+        candidate_targets:
+          type: array
+          items: { $ref: '#/components/schemas/TargetMatch' }
+        suggested_target: { $ref: '#/components/schemas/TargetReference' }
+        already_imported_to: { $ref: '#/components/schemas/TargetReference' }
+    PatchMonPreview:
+      type: object
+      required: [kind, name, endpoint, compatibility, compatibility_label, encrypted_transport, hosts, available_targets, receipt, expires_at]
+      properties:
+        kind: { type: string, const: patchmon }
+        name: { type: string }
+        endpoint: { type: string, format: uri }
+        compatibility: { type: string, const: supported }
+        compatibility_label: { type: string }
+        encrypted_transport: { type: boolean }
+        hosts:
+          type: array
+          items: { $ref: '#/components/schemas/PatchMonHostPreview' }
+        available_targets:
+          type: array
+          items: { $ref: '#/components/schemas/TargetReference' }
+        receipt:
+          type: string
+          writeOnly: true
+          description: Reçu opaque chiffré, valable quinze minutes et requis par la confirmation d'import.
+        expires_at: { type: string, format: date-time }
+    PatchMonImport:
       type: object
       required: [connector, targets]
       properties:
@@ -810,6 +872,73 @@ paths:
         '403': { description: Rôle Administrateur requis }
         '410': { description: Aperçu expiré }
         '422': { description: La revalidation Uptime Kuma a échoué }
+  /api/v1/connectors/patchmon/preview:
+    post:
+      operationId: previewPatchMonConnector
+      description: >-
+        Vérifie TLS et les identifiants de l'Integration API, lit la posture des
+        hôtes puis propose des rapprochements explicables sans importer.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address, token_key, token_secret]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160, default: PatchMon }
+                address: { type: string, format: uri, maxLength: 2048 }
+                token_key: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+                token_secret: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+      responses:
+        '200':
+          description: Aperçu temporaire des hôtes et de leur posture
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatchMonPreview' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '422': { description: Integration API inaccessible, invalide ou identifiants refusés }
+  /api/v1/connectors/patchmon/import:
+    post:
+      operationId: importPatchMonConnector
+      description: >-
+        Revalide l'aperçu, scelle les identifiants et importe les hôtes choisis.
+        La synchronisation est strictement en lecture : elle ne déploie aucun
+        correctif et ne redémarre aucun hôte.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receipt, host_ids]
+              properties:
+                receipt: { type: string, writeOnly: true }
+                host_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 5000
+                  uniqueItems: true
+                  items: { type: string }
+                target_assignments:
+                  type: object
+                  description: Affectations explicites des identifiants PatchMon vers des Cibles actives.
+                  additionalProperties: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Connecteur enregistré et Cibles créées, réutilisées ou déjà liées
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatchMonImport' }
+        '400': { description: Sélection ou reçu invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '410': { description: Aperçu expiré }
+        '422': { description: La revalidation PatchMon a échoué }
   /api/v1/connectors/{connectorID}/suspension:
     post:
       operationId: suspendConnector
@@ -1018,6 +1147,37 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/Incident' }
         '400': { description: Filtre invalide }
+        '401': { description: Authentification requise }
+  /api/v1/incidents/history:
+    get:
+      operationId: listIncidentHistory
+      description: >-
+        Nombre d'Incidents ouverts par jour, du plus ancien au plus récent.
+        Chaque jour de la fenêtre est rendu, y compris ceux restés vides. Les
+        Cibles archivées en sont exclues, comme elles le sont de la Santé.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: query
+          name: days
+          schema: { type: integer, minimum: 1, maximum: 90, default: 12 }
+      responses:
+        '200':
+          description: Jours de la fenêtre et Incidents ouverts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [days]
+                properties:
+                  days:
+                    type: array
+                    items:
+                      type: object
+                      required: [day, opened]
+                      properties:
+                        day: { type: string, format: date-time }
+                        opened: { type: integer, minimum: 0 }
+        '400': { description: Fenêtre invalide }
         '401': { description: Authentification requise }
   /api/v1/incidents/{incidentID}:
     get:

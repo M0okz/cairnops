@@ -112,6 +112,25 @@ type ReconcileUptimeKumaInput struct {
 	Signals     []UptimeKumaSignal
 }
 
+type PatchMonSignal struct {
+	TargetID     string
+	BindingID    string
+	ExternalHost string
+	ConditionKey string
+	NatureKey    string
+	NatureLabel  string
+	Name         string
+	Severity     Severity
+	Details      map[string]any
+}
+
+type ReconcilePatchMonInput struct {
+	ConnectorID      string
+	ObservedAt       time.Time
+	ObservedBindings []string
+	Signals          []PatchMonSignal
+}
+
 type WebhookSignal struct {
 	ConnectorID      string
 	BindingID        string
@@ -137,10 +156,19 @@ type AcknowledgementPlan struct {
 	Targets  []AcknowledgementTarget
 }
 
+// OpenedDay porte le nombre d'Incidents ouverts un jour donné. Le jour est daté en
+// UTC, comme les agrégats horaires : c'est l'instance qui découpe le temps,
+// pas le client qui la lit.
+type OpenedDay struct {
+	Day    time.Time `json:"day"`
+	Opened int       `json:"opened"`
+}
+
 type Store interface {
 	List(context.Context, string, int) ([]Incident, error)
 	ListForTarget(context.Context, string, string, int) ([]Incident, error)
 	Get(context.Context, string) (Incident, error)
+	OpenedByDay(context.Context, int) ([]OpenedDay, error)
 	AcknowledgeLocal(context.Context, string, string, string) (AcknowledgementPlan, error)
 	CompleteAcknowledgement(context.Context, string, string, string) (Incident, error)
 	InvalidateSignal(context.Context, string, string, string, string, string) (Incident, error)
@@ -191,6 +219,17 @@ func validateListInput(status string, limit int) (string, error) {
 
 func (service *Service) Get(ctx context.Context, incidentID string) (Incident, error) {
 	return service.store.Get(ctx, incidentID)
+}
+
+// OpenedByDay rend le nombre d'Incidents ouverts par jour sur la fenêtre
+// demandée, du plus ancien au plus récent. La Vue d'ensemble s'en sert pour
+// situer le compte du moment dans les jours qui le précèdent : un zéro se lit
+// autrement selon qu'il succède au calme ou à une semaine agitée.
+func (service *Service) OpenedByDay(ctx context.Context, days int) ([]OpenedDay, error) {
+	if days < 1 || days > 90 {
+		return nil, fmt.Errorf("%w: days must be between 1 and 90", ErrInvalidInput)
+	}
+	return service.store.OpenedByDay(ctx, days)
 }
 
 func (service *Service) InvalidateSignal(ctx context.Context, incidentID, signalID, actorID, actorName, reason string) (Incident, error) {

@@ -45,7 +45,7 @@ buckets AS (
 		WHERE observation.source_id = source.id
 		  AND observation.observed_at >= horizon.current_hour
 	) running ON true
-	WHERE source.enabled
+	WHERE source.enabled AND source.measures_availability
 )
 `
 
@@ -104,7 +104,8 @@ func (store *Store) hourlyByTarget(ctx context.Context, window domain.Window, ta
 		       coalesce(max(bucket.latency_maximum_milliseconds), 0)::integer,
 		       max(source.last_observed_at)
 		FROM cairnops_targets target
-		LEFT JOIN cairnops_signal_sources source ON source.target_id = target.id
+		LEFT JOIN cairnops_signal_sources source
+			ON source.target_id = target.id AND source.measures_availability
 		LEFT JOIN buckets bucket ON bucket.source_id = source.id
 		WHERE target.archived_at IS NULL
 		  AND ($2::uuid IS NULL OR target.id = $2::uuid)
@@ -154,20 +155,22 @@ func (store *Store) hourlyByTarget(ctx context.Context, window domain.Window, ta
 }
 
 type sourceCounters struct {
-	targetID         string
-	sourceID         string
-	name             string
-	kind             string
-	origin           string
-	latestOutcome    *domain.Outcome
-	latestObservedAt *time.Time
-	counters         domain.Counters
+	targetID             string
+	sourceID             string
+	name                 string
+	kind                 string
+	origin               string
+	measuresAvailability bool
+	latestOutcome        *domain.Outcome
+	latestObservedAt     *time.Time
+	counters             domain.Counters
 }
 
 // bySource rend la part de chaque Source d'une Cible sur la fenêtre.
 func (store *Store) bySource(ctx context.Context, window domain.Window, targetID string) ([]sourceCounters, error) {
 	rows, err := store.pool.Query(ctx, bucketsCTE+`
 		SELECT source.target_id::text, source.id::text, source.name, source.kind, source.origin,
+		       source.measures_availability,
 		       latest.outcome, latest.observed_at,
 		       coalesce(sum(bucket.healthy), 0)::integer,
 		       coalesce(sum(bucket.unhealthy), 0)::integer,
@@ -187,7 +190,8 @@ func (store *Store) bySource(ctx context.Context, window domain.Window, targetID
 			LIMIT 1
 		) latest ON true
 		WHERE ($2::uuid IS NULL OR source.target_id = $2::uuid)
-		GROUP BY source.target_id, source.id, source.name, source.kind, source.origin, latest.outcome, latest.observed_at
+		GROUP BY source.target_id, source.id, source.name, source.kind, source.origin,
+		         source.measures_availability, latest.outcome, latest.observed_at
 		ORDER BY source.target_id, source.origin, lower(source.name), source.id
 	`, window.Hours(), nullableUUID(targetID))
 	if err != nil {
@@ -200,6 +204,7 @@ func (store *Store) bySource(ctx context.Context, window domain.Window, targetID
 		var source sourceCounters
 		if err := rows.Scan(
 			&source.targetID, &source.sourceID, &source.name, &source.kind, &source.origin,
+			&source.measuresAvailability,
 			&source.latestOutcome, &source.latestObservedAt,
 			&source.counters.Healthy, &source.counters.Unhealthy,
 			&source.counters.Unknown, &source.counters.Expected, &source.counters.LatencySumMilliseconds,

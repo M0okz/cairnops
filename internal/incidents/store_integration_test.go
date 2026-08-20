@@ -21,6 +21,56 @@ func activeIncidents(t *testing.T, ctx context.Context, store *PostgresStore) []
 	return incidents
 }
 
+func TestOpenedByDayKeepsDaysContainingOnlyArchivedTargets(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+
+	var today time.Time
+	if err := pool.QueryRow(ctx, `
+		SELECT date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+	`).Scan(&today); err != nil {
+		t.Fatal(err)
+	}
+
+	var activeTargetID, archivedTargetID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_targets (name) VALUES ('Daily active target') RETURNING id::text
+	`).Scan(&activeTargetID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_targets (name, archived_at)
+		VALUES ('Daily archived target', now()) RETURNING id::text
+	`).Scan(&archivedTargetID); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO cairnops_incidents (
+			target_id, nature_key, nature_label, status,
+			source_severity, effective_severity, opened_at
+		) VALUES
+			($1::uuid, 'daily:active', 'Active target incident', 'active', 'warning', 'warning', $3),
+			($2::uuid, 'daily:archived', 'Archived target incident', 'active', 'warning', 'warning', $3 - interval '1 day')
+	`, activeTargetID, archivedTargetID, today.Add(12*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	series, err := NewPostgresStore(pool).OpenedByDay(ctx, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(series) != 3 {
+		t.Fatalf("expected every calendar day, got %#v", series)
+	}
+	if series[1].Opened != 0 {
+		t.Fatalf("an archived-only day must remain present with zero, got %#v", series[1])
+	}
+	if series[2].Opened != 1 {
+		t.Fatalf("expected today's active target incident, got %#v", series[2])
+	}
+}
+
 func TestPostgresZabbixIncidentLifecycleAndAcknowledgement(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)

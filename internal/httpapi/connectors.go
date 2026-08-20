@@ -22,6 +22,8 @@ type Connectors interface {
 	ImportZabbix(context.Context, string, connectors.ZabbixImportInput) (connectors.ZabbixImport, error)
 	PreviewUptimeKuma(context.Context, connectors.UptimeKumaPreviewInput) (connectors.UptimeKumaPreview, error)
 	ImportUptimeKuma(context.Context, string, connectors.UptimeKumaImportInput) (connectors.UptimeKumaImport, error)
+	PreviewPatchMon(context.Context, connectors.PatchMonPreviewInput) (connectors.PatchMonPreview, error)
+	ImportPatchMon(context.Context, string, connectors.PatchMonImportInput) (connectors.PatchMonImport, error)
 }
 
 type connectorHandler struct {
@@ -55,6 +57,39 @@ func (handler connectorHandler) importUptimeKuma(w http.ResponseWriter, r *http.
 		return
 	}
 	result, err := handler.connectors.ImportUptimeKuma(r.Context(), principal.ID, input)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (handler connectorHandler) previewPatchMon(w http.ResponseWriter, r *http.Request) {
+	var input connectors.PatchMonPreviewInput
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	preview, err := handler.connectors.PreviewPatchMon(r.Context(), input)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func (handler connectorHandler) importPatchMon(w http.ResponseWriter, r *http.Request) {
+	principal, ok := r.Context().Value(principalContextKey{}).(identitymodel.Principal)
+	if !ok {
+		unauthorizedSession(w)
+		return
+	}
+	var input connectors.PatchMonImportInput
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	result, err := handler.connectors.ImportPatchMon(r.Context(), principal.ID, input)
 	if err != nil {
 		handler.writeError(w, err)
 		return

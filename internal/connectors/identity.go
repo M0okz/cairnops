@@ -7,16 +7,18 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 )
 
 const (
-	matchNameScore     = 100
-	matchHostnameScore = 80
-	matchIPScore       = 70
-	matchAliasScore    = 60
-	matchSupportScore  = 5
+	matchNameScore      = 100
+	matchMachineIDScore = 120
+	matchHostnameScore  = 80
+	matchIPScore        = 70
+	matchAliasScore     = 60
+	matchSupportScore   = 5
 )
 
 var infrastructureZones = map[string]struct{}{
@@ -29,13 +31,15 @@ var infrastructureZones = map[string]struct{}{
 // silencieusement deux Cibles.
 type TargetIdentity struct {
 	TargetReference
-	Names     []string
-	Addresses []string
+	Names       []string
+	Addresses   []string
+	Identifiers []string
 }
 
 type DiscoveredIdentity struct {
-	Names     []string
-	Addresses []string
+	Names       []string
+	Addresses   []string
+	Identifiers []string
 }
 
 type MatchEvidence struct {
@@ -65,15 +69,30 @@ func identityForUptimeKuma(monitor uptimekuma.Monitor) DiscoveredIdentity {
 	}
 }
 
+func identityForPatchMon(host patchmon.Host) DiscoveredIdentity {
+	return DiscoveredIdentity{
+		Names:       []string{host.Name(), host.FriendlyName, host.Hostname},
+		Addresses:   []string{host.IP, host.Hostname},
+		Identifiers: []string{host.MachineID},
+	}
+}
+
 func matchTargets(discovered DiscoveredIdentity, targets []TargetIdentity) []TargetMatch {
 	discoveredNames := normalizedSet(discovered.Names, normalizeName)
 	discoveredAddresses := normalizedSet(discovered.Addresses, normalizeAddress)
 	discoveredAliases := nameFingerprints(discovered.Names)
+	discoveredIdentifiers := normalizedSet(discovered.Identifiers, normalizeIdentifier)
 	matches := make([]TargetMatch, 0)
 	for _, candidate := range targets {
 		evidenceByKey := make(map[string]MatchEvidence)
 		evidenceKinds := make(map[string]struct{})
 		score := 0
+		for identifier := range intersection(discoveredIdentifiers, normalizedSet(candidate.Identifiers, normalizeIdentifier)) {
+			addMatchEvidence(evidenceByKey, evidenceKinds, MatchEvidence{Kind: "same_machine_id", Value: identifier})
+			if score < matchMachineIDScore {
+				score = matchMachineIDScore
+			}
+		}
 		for name := range intersection(discoveredNames, normalizedSet(candidate.Names, normalizeName)) {
 			addMatchEvidence(evidenceByKey, evidenceKinds, MatchEvidence{Kind: "same_name", Value: name})
 			if score < matchNameScore {
@@ -143,17 +162,23 @@ func addMatchEvidence(byKey map[string]MatchEvidence, kinds map[string]struct{},
 
 func evidencePriority(kind string) int {
 	switch kind {
-	case "same_name":
+	case "same_machine_id":
 		return 0
-	case "same_hostname":
+	case "same_name":
 		return 1
-	case "same_ip":
+	case "same_hostname":
 		return 2
-	case "similar_name":
+	case "same_ip":
 		return 3
-	default:
+	case "similar_name":
 		return 4
+	default:
+		return 5
 	}
+}
+
+func normalizeIdentifier(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 // nameFingerprint retire uniquement les conventions d'infrastructure que

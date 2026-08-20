@@ -3,7 +3,7 @@
    * mesures. Le texte accessible reste entier ; le découpage en rouleaux est
    * uniquement visuel et n'est refait que lorsque la valeur change. */
 
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
 
   let { value }: { value: string | number } = $props();
 
@@ -11,6 +11,8 @@
   let previous = $state(initial);
   let current = $state(initial);
   let revision = $state(0);
+  let settled = $state(true);
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
 
   type Cell =
     | { kind: 'literal'; value: string; key: string }
@@ -49,7 +51,7 @@
       const oldIndex = oldDigits.length - fromRight - 1;
       const to = Number(character);
       const from = oldIndex >= 0 ? Number(oldDigits[oldIndex]) : 0;
-      const frames = framesBetween(from, to, descending);
+      const frames = settled ? [to] : framesBetween(from, to, descending);
       digitIndex += 1;
 
       return {
@@ -68,6 +70,16 @@
     previous = current;
     current = next;
     revision += 1;
+    settled = false;
+    if (settleTimer) clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      settled = true;
+      previous = current;
+    }, 560);
+  });
+
+  onDestroy(() => {
+    if (settleTimer) clearTimeout(settleTimer);
   });
 </script>
 
@@ -91,22 +103,32 @@
 </span>
 
 <style>
-  .odometer,
+  .odometer {
+    display: inline-block;
+    height: 1em;
+    overflow: hidden;
+    line-height: 1;
+    vertical-align: -0.08em;
+    white-space: nowrap;
+  }
+
   .wheels {
     display: inline-flex;
-    align-items: baseline;
+    align-items: flex-start;
+    height: 1em;
+    overflow: hidden;
+    line-height: 1;
     white-space: nowrap;
   }
 
   .wheel {
     display: inline-block;
+    flex: none;
     width: 1ch;
     height: 1em;
     overflow: hidden;
     line-height: 1;
-    vertical-align: -0.08em;
     font-variant-numeric: tabular-nums;
-    contain: paint;
   }
 
   .track,

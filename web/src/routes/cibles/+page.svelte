@@ -36,6 +36,7 @@
     heartbeat: 'Heartbeat',
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
+    patchmon: 'PatchMon',
     generic_webhook: 'Webhook'
   };
 
@@ -94,6 +95,7 @@
           name: source.name,
           kind: source.kind,
           origin: 'native' as const,
+          measures_availability: true,
           latest_outcome: source.latest_outcome,
           latest_observed_at: source.last_observed_at,
           measures: []
@@ -400,6 +402,7 @@
   .source-dot.cairnops { background: var(--source-cairnops) }
   .source-dot.zabbix { background: var(--source-zabbix) }
   .source-dot.uptime_kuma { background: var(--source-uptime-kuma) }
+  .source-dot.patchmon { background: var(--source-patchmon) }
   .source-dot.generic_webhook { background: var(--source-webhook) }
   .source-dot.pending { background: var(--dim) }
 

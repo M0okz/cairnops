@@ -12,7 +12,7 @@
    * ferme `style-src-attr`, donc aucune géométrie ne peut passer par un
    * attribut style. */
 
-  let { values, slots = 24 }: { values: number[]; slots?: number } = $props();
+  let { values, slots = 24 }: { values: Array<number | null>; slots?: number } = $props();
 
   const slot = 12;
   const bar = 8.5;
@@ -38,7 +38,7 @@
     return 'crit';
   }
 
-  const measured = $derived(values.filter((value) => value !== null).length);
+  const measured = $derived(values.filter((value): value is number => value !== null).length);
 
   const label = $derived(
     measured === 0
