@@ -9,11 +9,14 @@ minutes et ne redéploie que les deux conteneurs portant son label explicite.
 
 Chaque push sur `main` qui passe les contrôles publie :
 
-- `ghcr.io/m0okz/cairnops-server:<sha>` et `:latest` ;
-- `ghcr.io/m0okz/cairnops-worker:<sha>` et `:latest`.
+- `ghcr.io/m0okz/cairnops-server:<version>`, `:<sha>` et `:latest` ;
+- `ghcr.io/m0okz/cairnops-worker:<version>`, `:<sha>` et `:latest`.
 
-Le tag SHA reste disponible pour un retour arrière manuel. Le déploiement
-automatique suit `latest`.
+La version suit le format `<majeure>.<mineure>.<build>`. La série
+`majeure.mineure` est conservée dans le fichier `VERSION` ; GitHub Actions
+ajoute son numéro de build, croissant, à chaque publication. Le tag SHA reste
+disponible pour un retour arrière manuel et le déploiement automatique suit
+`latest`.
 
 ## Première publication GHCR
 
