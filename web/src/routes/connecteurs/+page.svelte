@@ -71,7 +71,8 @@
    * n'est le produit de personne et garde le trait maison. */
   const kindBrands: Partial<Record<Connector['kind'], BrandName>> = {
     zabbix: 'zabbix',
-    uptime_kuma: 'uptime_kuma'
+    uptime_kuma: 'uptime_kuma',
+    patchmon: 'patchmon'
   };
 
   const statusLabels = $derived<Record<Connector['status'], { label: string; tone: string }>>({
@@ -172,8 +173,6 @@
           <div class="head">
             {#if kindBrands[connector.kind]}
               <BrandMark name={kindBrands[connector.kind]!} size={34} />
-            {:else if connector.kind === 'patchmon'}
-              <span class="key">PM</span>
             {:else}
               <span class="key"><Icon name="webhook" size={16} /></span>
             {/if}

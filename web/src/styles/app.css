@@ -909,7 +909,10 @@ a.trow:hover .caret {
   line-height: 1.1;
 }
 
-.fig span {
+/* Seul le libellé direct reçoit cette marge. Les composants numériques
+ * imbriqués utilisent eux-mêmes des span pour leurs rouleaux : les viser ici
+ * décale chaque étage et finit par rogner entièrement leurs chiffres. */
+.fig > span {
   display: block;
   margin-top: 0.1875rem;
   color: var(--faint);

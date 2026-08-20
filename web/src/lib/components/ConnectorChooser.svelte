@@ -31,8 +31,7 @@
     {
       kind: 'patchmon' as const,
       icon: null,
-      brand: null,
-      badge: 'PM',
+      brand: 'patchmon' as BrandName,
       name: 'PatchMon',
       note: t('chooser.patchmon'),
       access: t('chooser.readApiToken')
@@ -41,7 +40,6 @@
       kind: 'generic_webhook' as const,
       icon: 'webhook' as IconName,
       brand: null,
-      badge: null,
       name: t('connector.genericWebhook'),
       note: t('chooser.genericWebhook'),
       access: t('chooser.generatedSecret')
@@ -75,8 +73,6 @@
               <BrandMark name={choice.brand} size={38} />
             {:else if choice.icon}
               <span class="key"><Icon name={choice.icon} size={17} /></span>
-            {:else if 'badge' in choice && choice.badge}
-              <span class="key">{choice.badge}</span>
             {/if}
             <span class="copy">
               <strong>{choice.name}</strong>
