@@ -124,7 +124,7 @@ components:
         expected_observations: { type: integer, minimum: 0 }
     TargetMeasures:
       type: object
-      required: [target_id, measures, trend, latency_trend]
+      required: [target_id, measures, trend, latency_trend, sources]
       properties:
         target_id: { type: string, format: uuid }
         measures:
@@ -143,6 +143,10 @@ components:
             Observation saine, du plus ancien au plus récent. Même règle que la
             tendance de Disponibilité : une heure muette ne produit pas de point.
           items: { type: number, format: double, minimum: 0 }
+        sources:
+          type: array
+          description: Mesures par Source sur la seule fenêtre de 24 heures.
+          items: { $ref: '#/components/schemas/SourceMeasures' }
     SourceMeasures:
       type: object
       required: [source_id, name, kind, origin, measures]
@@ -159,6 +163,10 @@ components:
             Un Contrôle natif est exécuté par le worker ; une Source
             d'Intégration est alimentée par la synchronisation de son
             Connecteur. Les deux se mesurent de la même façon.
+        latest_outcome:
+          type: string
+          enum: [healthy, unhealthy, unknown]
+        latest_observed_at: { type: string, format: date-time }
         measures:
           type: array
           items: { $ref: '#/components/schemas/Measure' }
@@ -990,6 +998,10 @@ paths:
         - in: query
           name: status
           schema: { type: string, enum: [active, resolved, all], default: active }
+        - in: query
+          name: target_id
+          description: Limite la projection à l'historique d'une Cible.
+          schema: { type: string, format: uuid }
         - in: query
           name: limit
           schema: { type: integer, minimum: 1, maximum: 500, default: 200 }

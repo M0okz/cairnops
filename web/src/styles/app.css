@@ -67,6 +67,13 @@
   --info-bg: #1e3a5f;
   --info-line: #1f5183;
 
+  /* Identité des Sources — jamais un verdict. Leur teinte reste stable même
+   * quand la Cible change d'état, pour reconnaître la provenance d'un regard. */
+  --source-cairnops: #e08c4a;
+  --source-zabbix: #e34a3f;
+  --source-uptime-kuma: #5cdd8b;
+  --source-webhook: #a78bfa;
+
   /* Typographie */
   --font: system-ui, -apple-system, 'Segoe UI', 'IBM Plex Sans', sans-serif;
   --font-num: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -139,6 +146,11 @@
   --info: #2b6cb0;
   --info-bg: #eaf1f8;
   --info-line: #cfe0f0;
+
+  --source-cairnops: #af5d1d;
+  --source-zabbix: #c52f25;
+  --source-uptime-kuma: #16834c;
+  --source-webhook: #7650bd;
 
   --shadow: 0 12px 32px rgba(54, 48, 36, 0.1);
 

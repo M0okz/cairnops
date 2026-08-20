@@ -36,6 +36,9 @@ func TestMetricsListCarriesTheDayWindow(t *testing.T) {
 		TargetID: "4f2a1c58-6f1f-4a1c-9a41-9d2f0b1c8e77",
 		Measures: []domain.Measure{{Window: domain.WindowDay, Availability: &availability, ConclusiveObservations: 200}},
 		Trend:    []float64{1, 0.5},
+		Sources: []metrics.SourceMetrics{{
+			SourceID: "9a1d0f28-6d3b-4f52-8f0e-2c1a5d7b3e94", Name: "Hôte Zabbix", Kind: "zabbix",
+		}},
 	}}}
 	server := NewServer(ServerOptions{Identity: &fakeIdentity{}, Metrics: fake})
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/metrics/targets", nil)
@@ -49,6 +52,9 @@ func TestMetricsListCarriesTheDayWindow(t *testing.T) {
 	body := response.Body.String()
 	if !strings.Contains(body, `"window":"24h"`) || !strings.Contains(body, `"availability":0.995`) {
 		t.Fatalf("unexpected measures: %s", body)
+	}
+	if !strings.Contains(body, `"name":"Hôte Zabbix"`) || !strings.Contains(body, `"kind":"zabbix"`) {
+		t.Fatalf("the list must carry its source identities: %s", body)
 	}
 	// Une mesure absente reste explicitement nulle : le client ne doit jamais
 	// avoir à distinguer « zéro » de « rien à dire ».

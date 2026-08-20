@@ -5,6 +5,7 @@
    * pour qu'aucun ne réclame d'aller dans le conteneur. */
 
   import Topbar from '$lib/components/Topbar.svelte';
+  import Odometer from '$lib/components/Odometer.svelte';
   import Icon from '$lib/components/Icon.svelte';
   import AccountCreation from '$lib/components/AccountCreation.svelte';
   import AccountDeactivation from '$lib/components/AccountDeactivation.svelte';
@@ -497,7 +498,7 @@
             <span class="num faint">
               {user.last_seen_at ? since(user.last_seen_at, now) : t('settings.neverSeen')}
             </span>
-            <span class="num faint">{user.active_sessions}</span>
+            <span class="num faint"><Odometer value={user.active_sessions} /></span>
 
             <span class="actions">
               {#if self}

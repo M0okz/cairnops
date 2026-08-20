@@ -6,6 +6,7 @@
   import { goto } from '$app/navigation';
   import Topbar from '$lib/components/Topbar.svelte';
   import Spark from '$lib/components/Spark.svelte';
+  import Odometer from '$lib/components/Odometer.svelte';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
   import ConnectorChooser from '$lib/components/ConnectorChooser.svelte';
   import { session } from '$lib/session.svelte';
@@ -23,7 +24,7 @@
     type TargetState
   } from '$lib/format';
   import { i18n, plural, t } from '$lib/i18n.svelte';
-  import type { Measure, Outcome, Target } from '$lib/api';
+  import type { Measure, Outcome, SourceMeasures, Target } from '$lib/api';
 
   /* Les Contrôles natifs portent le nom de leur protocole : il ne se traduit
    * pas, et « Heartbeat » est le mot des Écrans dans les deux langues. */
@@ -32,7 +33,10 @@
     tcp: 'TCP',
     dns: 'DNS',
     icmp: 'ICMP',
-    heartbeat: 'Heartbeat'
+    heartbeat: 'Heartbeat',
+    zabbix: 'Zabbix',
+    uptime_kuma: 'Uptime Kuma',
+    generic_webhook: 'Webhook'
   };
 
   const outcomeTones: Record<Outcome, string> = {
@@ -40,6 +44,21 @@
     unhealthy: 'crit',
     unknown: 'idle'
   };
+
+  function sourceIdentity(source: Pick<SourceMeasures, 'kind' | 'origin'>): string {
+    return source.origin === 'native' ? 'cairnops' : source.kind;
+  }
+
+  function sourceLabel(source: Pick<SourceMeasures, 'kind' | 'origin'>): string {
+    const kind = kindLabels[source.kind] ?? source.kind;
+    return source.origin === 'native' ? `CairnOps · ${kind}` : kind;
+  }
+
+  function outcomeLabel(outcome: Outcome | undefined): string {
+    if (outcome === 'healthy') return t('state.ok');
+    if (outcome === 'unhealthy') return t('target.failing');
+    return t('state.unknown');
+  }
 
   /* Réduire la liste affichée, pas chercher dans l'instance : ce champ vit
    * avec les autres filtres, sous le titre. La recherche globale, elle, est
@@ -58,6 +77,7 @@
     trend: number[];
     divergent: boolean;
     sourceCount: number;
+    sources: SourceMeasures[];
   };
 
   const rows = $derived.by<Row[]>(() => {
@@ -66,6 +86,18 @@
     return session.targets
       .map((target) => {
         const measured = session.measuresFor(target.id);
+        /* Avant la première réponse de métriques, les Contrôles natifs restent
+         * identifiables. Les Sources d'Intégration arrivent avec cette réponse,
+         * qui porte aussi leurs mesures et évite tout appel par ligne. */
+        const sources = measured?.sources ?? target.sources.map((source) => ({
+          source_id: source.id,
+          name: source.name,
+          kind: source.kind,
+          origin: 'native' as const,
+          latest_outcome: source.latest_outcome,
+          latest_observed_at: source.last_observed_at,
+          measures: []
+        }));
         return {
           target,
           state: session.targetState(target),
@@ -73,7 +105,8 @@
           measure: inWindow(measured, '24h'),
           trend: measured?.latency_trend ?? [],
           divergent: session.hasDivergence(target),
-          sourceCount: target.sources.length + target.external_source_count
+          sourceCount: target.sources.length + target.external_source_count,
+          sources
         };
       })
       .filter((row) => {
@@ -130,13 +163,13 @@
   <div class="filters">
     <div class="segments" role="group" aria-label={t('targets.scope')}>
       <button type="button" aria-pressed={scope === 'all'} onclick={() => (scope = 'all')}>
-        {t('targets.scope.all')} <b>{session.targets.length}</b>
+        {t('targets.scope.all')} <b><Odometer value={session.targets.length} /></b>
       </button>
       <button type="button" aria-pressed={scope === 'problems'} onclick={() => (scope = 'problems')}>
-        {t('targets.scope.problems')} <b>{problemCount}</b>
+        {t('targets.scope.problems')} <b><Odometer value={problemCount} /></b>
       </button>
       <button type="button" aria-pressed={scope === 'maintenance'} onclick={() => (scope = 'maintenance')}>
-        {t('nav.maintenance')} <b>{maintenanceCount}</b>
+        {t('nav.maintenance')} <b><Odometer value={maintenanceCount} /></b>
       </button>
     </div>
     <button class="btn sm" type="button" aria-pressed={divergentOnly} onclick={() => (divergentOnly = !divergentOnly)}>
@@ -186,57 +219,83 @@
           class:dim={row.measure.average_latency_milliseconds === null}
           title={t('targets.latencyTitle')}
         >
-          {latency(row.measure.average_latency_milliseconds)}
+          <Odometer value={latency(row.measure.average_latency_milliseconds)} />
         </span>
 
         <!-- Une Disponibilité ne vaut que ce que vaut sa Couverture : les deux
              se lisent ensemble, jamais l'une sans l'autre. -->
         <span class="num hide-sm stacked" class:dim={row.measure.availability === null}>
-          {ratio(row.measure.availability)}
+          <Odometer value={ratio(row.measure.availability)} />
           <small class="faint" title={t('targets.coverageTitle')}>
-            {ratio(row.measure.coverage)}
+            <Odometer value={ratio(row.measure.coverage)} />
           </small>
         </span>
 
-        <!-- Une pastille par Source, à la couleur de l'État de la Cible : le
-             nombre se lit d'un coup d'œil, la colonne reste muette au-delà de
-             cinq Sources plutôt que de déborder. -->
+        <!-- Une pastille par Source, à la couleur stable de sa provenance :
+             rouge Zabbix, vert Uptime Kuma, violet Webhook, cuivre CairnOps.
+             L'État garde ainsi ses propres couleurs sémantiques. -->
         <span class="hide-sm sources">
           {#if row.sourceCount === 0}
             <span class="dim">{t('common.none')}</span>
           {:else}
-            {#each { length: Math.min(row.sourceCount, 5) } as _, dot (dot)}
-              <i class="dot {stateTones[row.state]}"></i>
+            {#each row.sources.slice(0, 5) as source (source.source_id)}
+              <i
+                class="dot source-dot {sourceIdentity(source)}"
+                title={sourceLabel(source)}
+                aria-hidden="true"
+              ></i>
+            {/each}
+            {#each { length: Math.max(0, Math.min(row.sourceCount, 5) - row.sources.length) } as _, dot (dot)}
+              <i class="dot source-dot pending" aria-hidden="true"></i>
             {/each}
             {#if row.sourceCount > 5}<small class="faint">+{row.sourceCount - 5}</small>{/if}
           {/if}
           {#if row.divergent}<span class="crit" title={t('overview.divergence')}>≠</span>{/if}
 
-          <!-- Le détail au survol : la colonne dit combien, l'infobulle dit
-               lesquelles. Elle remonte au-dessus de la ligne pour les
-               dernières lignes, que la dalle rogne par le bas. -->
+          <!-- Le détail au survol nomme la provenance et donne les preuves
+               opérationnelles de chaque Source sur la même fenêtre de 24 h. -->
           <span class="tip" class:up={rows.length > 3 && index >= rows.length - 2} role="tooltip">
-            <b>{plural('palette.sources', row.sourceCount)}</b>
-            {#each row.target.sources.slice(0, 4) as source (source.id)}
-              <span class="tip-row">
-                <i class="dot {outcomeTones[source.latest_outcome ?? 'unknown']}"></i>
-                <span class="tip-name">{source.name}</span>
-                <small class="faint">{kindLabels[source.kind] ?? source.kind}</small>
-                <small class="faint tip-age">
-                  {source.last_observed_at ? since(source.last_observed_at) : t('common.none')}
-                </small>
-              </span>
-            {/each}
-            {#if row.target.sources.length > 4}
-              <small class="faint">{plural('targets.moreChecks', row.target.sources.length - 4)}</small>
-            {/if}
-            {#if row.target.external_source_count > 0}
-              <span class="tip-row">
-                <i class="dot info"></i>
-                <span class="tip-name">
-                  {plural('targets.integrationSources', row.target.external_source_count)}
+            <span class="tip-head">
+              <b><Odometer value={plural('palette.sources', row.sourceCount)} /></b>
+              <small class="faint">{t('targets.sourceWindow')}</small>
+            </span>
+            {#each row.sources.slice(0, 4) as source (source.source_id)}
+              {@const measured = inWindow(source, '24h')}
+              <span class="tip-source">
+                <span class="tip-source-head">
+                  <i class="dot source-dot {sourceIdentity(source)}" aria-hidden="true"></i>
+                  <span class="tip-name">{source.name}</span>
+                  <small class="faint">{sourceLabel(source)}</small>
+                  <small class="source-outcome {outcomeTones[source.latest_outcome ?? 'unknown']}">
+                    {outcomeLabel(source.latest_outcome)}
+                  </small>
+                </span>
+                <span class="tip-metrics">
+                  <span>
+                    <small>{t('targets.sourceLastObservation')}</small>
+                    <b><Odometer value={source.latest_observed_at ? since(source.latest_observed_at) : t('common.none')} /></b>
+                  </span>
+                  <span>
+                    <small>{t('targets.sourceAvailability')}</small>
+                    <b class:dim={measured.availability === null}><Odometer value={ratio(measured.availability)} /></b>
+                  </span>
+                  <span>
+                    <small>{t('targets.sourceCoverage')}</small>
+                    <b class:dim={measured.coverage === null}><Odometer value={ratio(measured.coverage)} /></b>
+                  </span>
+                  <span>
+                    <small>{t('targets.sourceLatency')}</small>
+                    <b class:dim={measured.average_latency_milliseconds === null}>
+                      <Odometer value={latency(measured.average_latency_milliseconds)} />
+                    </b>
+                  </span>
                 </span>
               </span>
+            {/each}
+            {#if row.sources.length > 4}
+              <small class="faint">{plural('targets.moreChecks', row.sources.length - 4)}</small>
+            {:else if row.sources.length < row.sourceCount}
+              <small class="faint">{t('targets.loadingMeasures')}</small>
             {/if}
             {#if row.divergent}
               <small class="crit">{t('targets.divergenceHint')}</small>
@@ -338,15 +397,21 @@
     font-size: 0.6875rem;
   }
 
+  .source-dot.cairnops { background: var(--source-cairnops) }
+  .source-dot.zabbix { background: var(--source-zabbix) }
+  .source-dot.uptime_kuma { background: var(--source-uptime-kuma) }
+  .source-dot.generic_webhook { background: var(--source-webhook) }
+  .source-dot.pending { background: var(--dim) }
+
   .tip {
     position: absolute;
     right: 0;
     top: calc(100% + 0.5rem);
     z-index: 5;
     display: grid;
-    gap: 0.25rem;
-    width: 17rem;
-    padding: 0.5rem 0.625rem;
+    gap: 0.5rem;
+    width: 27rem;
+    padding: 0.625rem;
     border: 1px solid var(--line-strong);
     border-radius: var(--r-m);
     background: var(--surface);
@@ -374,11 +439,26 @@
     font-weight: 600;
   }
 
-  .tip-row {
+  .tip-head,
+  .tip-source-head {
     display: flex;
     align-items: center;
     gap: 0.375rem;
-    color: var(--muted);
+  }
+
+  .tip-head {
+    justify-content: space-between;
+  }
+
+  .tip-source {
+    display: grid;
+    gap: 0.375rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .tip-source-head {
+    min-width: 0;
   }
 
   .tip-name {
@@ -388,9 +468,37 @@
     color: var(--ink);
   }
 
-  .tip-age {
+  .source-outcome {
     margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .tip-metrics {
+    display: grid;
+    grid-template-columns: 1.25fr repeat(3, 1fr);
+    gap: 0.5rem;
+    padding-left: 0.75rem;
+  }
+
+  .tip-metrics > span {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .tip-metrics small {
+    overflow: hidden;
+    color: var(--faint);
+    font-size: 0.625rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tip-metrics b {
+    font-family: var(--font-num);
+    font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .trend {

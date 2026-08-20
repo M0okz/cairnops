@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
+  import Odometer from './Odometer.svelte';
   import { api, type Maintenance, type Target } from '$lib/api';
 
   let {
@@ -116,7 +117,7 @@
         <fieldset class="targets">
           <legend>
             {t('workshop.neutralisedTargets')}
-            <span class="faint num">{selectedTargets.length} / {targets.length}</span>
+            <span class="faint num"><Odometer value={`${selectedTargets.length} / ${targets.length}`} /></span>
           </legend>
           <div class="chips">
             {#each targets as target (target.id)}

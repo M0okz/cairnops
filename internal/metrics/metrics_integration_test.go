@@ -84,6 +84,12 @@ func TestRollupAndWindowsMeasureTheSameObservations(t *testing.T) {
 	if measured.LatencyTrend[0] != 100 || measured.LatencyTrend[1] != 200 || measured.LatencyTrend[2] != 300 {
 		t.Fatalf("unexpected latency trend: %v", measured.LatencyTrend)
 	}
+	if len(measured.Sources) != 1 || measured.Sources[0].SourceID != sourceID {
+		t.Fatalf("the list must identify each source: %#v", measured.Sources)
+	}
+	if len(measured.Sources[0].Measures) != 1 || measured.Sources[0].Measures[0].Window != domain.WindowDay {
+		t.Fatalf("a listed source must carry only its day measure: %#v", measured.Sources[0].Measures)
+	}
 
 	detail, err := store.Target(ctx, targetID)
 	if err != nil {

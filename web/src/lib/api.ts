@@ -90,6 +90,7 @@ export type TargetMeasures = {
   trend: number[];
   latency_trend: number[];
   latest_observed_at?: string;
+  sources: SourceMeasures[];
 };
 
 export type SourceMeasures = {

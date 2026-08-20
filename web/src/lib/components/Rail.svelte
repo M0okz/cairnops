@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import Icon, { type IconName } from './Icon.svelte';
+  import Odometer from './Odometer.svelte';
   import { session } from '$lib/session.svelte';
   import { i18n, locales, t } from '$lib/i18n.svelte';
 
@@ -130,7 +131,7 @@
         {#if item.dot}
           <i class="dot {item.dot}"></i>
         {:else if item.count !== undefined}
-          <b class="num" class:hot={item.hot}>{item.count}</b>
+          <b class="num" class:hot={item.hot}><Odometer value={item.count} /></b>
         {/if}
       </a>
     {/each}

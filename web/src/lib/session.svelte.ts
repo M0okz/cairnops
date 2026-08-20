@@ -51,6 +51,8 @@ class Session {
   targets = $state<Target[]>([]);
   connectors = $state<Connector[]>([]);
   incidents = $state<Incident[]>([]);
+  incidentHistoryTarget = $state('');
+  incidentHistory = $state<Incident[]>([]);
   maintenances = $state<Maintenance[]>([]);
   channels = $state<NotificationChannel[]>([]);
 
@@ -142,6 +144,10 @@ class Session {
 
   incidentsFor(targetId: string) {
     return this.incidents.filter((incident) => incident.target_id === targetId);
+  }
+
+  incidentHistoryFor(targetId: string) {
+    return this.incidentHistoryTarget === targetId ? this.incidentHistory : [];
   }
 
   showNotice(message: string) {
@@ -324,6 +330,8 @@ class Session {
       this.measureDetails = {};
       this.connectors = [];
       this.incidents = [];
+      this.incidentHistoryTarget = '';
+      this.incidentHistory = [];
       this.maintenances = [];
       this.channels = [];
       this.inbox = [];
@@ -343,6 +351,7 @@ class Session {
     this.#refreshTimer = setInterval(() => {
       void this.loadSystemHealth();
       void this.loadIncidents();
+      if (this.incidentHistoryTarget) void this.loadIncidentHistory(this.incidentHistoryTarget);
       void this.loadMaintenances();
       void this.loadNotifications();
       void this.loadInbox();
@@ -417,6 +426,23 @@ class Session {
     try {
       const response = await api<{ incidents: Incident[] }>('/api/v1/incidents?status=active&limit=200');
       this.incidents = response.incidents;
+    } catch (cause) {
+      if (this.#expired(cause)) return;
+      this.showNotice(t('session.refreshIncidents', { error: messageFrom(cause) }));
+    }
+  }
+
+  async loadIncidentHistory(targetId: string) {
+    if (this.incidentHistoryTarget !== targetId) {
+      this.incidentHistoryTarget = targetId;
+      this.incidentHistory = [];
+    }
+    try {
+      const response = await api<{ incidents: Incident[] }>(
+        `/api/v1/incidents?status=all&target_id=${encodeURIComponent(targetId)}&limit=500`
+      );
+      /* Une navigation peut finir son ancienne requête après la nouvelle. */
+      if (this.incidentHistoryTarget === targetId) this.incidentHistory = response.incidents;
     } catch (cause) {
       if (this.#expired(cause)) return;
       this.showNotice(t('session.refreshIncidents', { error: messageFrom(cause) }));
@@ -590,7 +616,10 @@ class Session {
       if (this.#dirty.has('health')) void this.loadSystemHealth();
       if (this.#dirty.has('targets')) void this.loadTargets();
       if (this.#dirty.has('connectors')) void this.loadConnectors();
-      if (this.#dirty.has('incidents')) void this.loadIncidents();
+      if (this.#dirty.has('incidents')) {
+        void this.loadIncidents();
+        if (this.incidentHistoryTarget) void this.loadIncidentHistory(this.incidentHistoryTarget);
+      }
       if (this.#dirty.has('maintenances')) void this.loadMaintenances();
       if (this.#dirty.has('notifications')) {
         void this.loadNotifications();
@@ -626,11 +655,11 @@ class Session {
 
   async invalidate(incidentId: string, signalId: string, reason: string) {
     try {
-      await api<Incident>(`/api/v1/incidents/${incidentId}/signals/${signalId}/invalidation`, {
+      const invalidated = await api<Incident>(`/api/v1/incidents/${incidentId}/signals/${signalId}/invalidation`, {
         method: 'POST',
         body: JSON.stringify({ reason })
       });
-      await this.loadIncidents();
+      await Promise.all([this.loadIncidents(), this.loadIncidentHistory(invalidated.target_id)]);
       this.showNotice(t('session.invalidated'));
       return true;
     } catch (cause) {

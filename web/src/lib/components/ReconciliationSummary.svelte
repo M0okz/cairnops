@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ReconciliationCounts } from '$lib/reconciliation';
   import { t } from '$lib/i18n.svelte';
+  import Odometer from './Odometer.svelte';
 
   let { counts }: { counts: ReconciliationCounts } = $props();
 </script>
@@ -13,15 +14,15 @@
   <dl>
     <div>
       <dt>{t('wizard.existingTargets')}</dt>
-      <dd>{counts.reused}</dd>
+      <dd><Odometer value={counts.reused} /></dd>
     </div>
     <div>
       <dt>{t('wizard.newTargets')}</dt>
-      <dd>{counts.created}</dd>
+      <dd><Odometer value={counts.created} /></dd>
     </div>
     <div class:warn={counts.review > 0}>
       <dt>{t('wizard.toConfirm')}</dt>
-      <dd>{counts.review}</dd>
+      <dd><Odometer value={counts.review} /></dd>
     </div>
   </dl>
 </section>

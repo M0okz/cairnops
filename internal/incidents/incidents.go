@@ -139,6 +139,7 @@ type AcknowledgementPlan struct {
 
 type Store interface {
 	List(context.Context, string, int) ([]Incident, error)
+	ListForTarget(context.Context, string, string, int) ([]Incident, error)
 	Get(context.Context, string) (Incident, error)
 	AcknowledgeLocal(context.Context, string, string, string) (AcknowledgementPlan, error)
 	CompleteAcknowledgement(context.Context, string, string, string) (Incident, error)
@@ -159,17 +160,33 @@ func NewService(store Store, acknowledger ExternalAcknowledger) *Service {
 }
 
 func (service *Service) List(ctx context.Context, status string, limit int) ([]Incident, error) {
+	status, err := validateListInput(status, limit)
+	if err != nil {
+		return nil, err
+	}
+	return service.store.List(ctx, status, limit)
+}
+
+func (service *Service) ListForTarget(ctx context.Context, status, targetID string, limit int) ([]Incident, error) {
+	status, err := validateListInput(status, limit)
+	if err != nil {
+		return nil, err
+	}
+	return service.store.ListForTarget(ctx, status, targetID, limit)
+}
+
+func validateListInput(status string, limit int) (string, error) {
 	status = strings.TrimSpace(status)
 	if status == "" {
 		status = "active"
 	}
 	if status != "active" && status != "resolved" && status != "all" {
-		return nil, fmt.Errorf("%w: status must be active, resolved, or all", ErrInvalidInput)
+		return "", fmt.Errorf("%w: status must be active, resolved, or all", ErrInvalidInput)
 	}
 	if limit < 1 || limit > 500 {
-		return nil, fmt.Errorf("%w: limit must be between 1 and 500", ErrInvalidInput)
+		return "", fmt.Errorf("%w: limit must be between 1 and 500", ErrInvalidInput)
 	}
-	return service.store.List(ctx, status, limit)
+	return status, nil
 }
 
 func (service *Service) Get(ctx context.Context, incidentID string) (Incident, error) {

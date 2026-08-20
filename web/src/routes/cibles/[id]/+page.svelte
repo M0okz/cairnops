@@ -8,7 +8,9 @@
   import Topbar from '$lib/components/Topbar.svelte';
   import Spark from '$lib/components/Spark.svelte';
   import Uptime from '$lib/components/Uptime.svelte';
+  import Odometer from '$lib/components/Odometer.svelte';
   import MaintenanceWorkshop from '$lib/components/MaintenanceWorkshop.svelte';
+  import { incidentTimelineForTarget } from '$lib/incident-timeline';
   import { session } from '$lib/session.svelte';
   import {
     diverges,
@@ -46,6 +48,7 @@
 
   const target = $derived(session.targets.find((item) => item.id === page.params.id) ?? null);
   const incidents = $derived(target ? session.incidentsFor(target.id) : []);
+  const incidentHistory = $derived(target ? session.incidentHistoryFor(target.id) : []);
   const lead = $derived(leadIncident(incidents));
   const healthState = $derived(target ? session.targetState(target) : 'unknown');
 
@@ -61,7 +64,10 @@
    * s'en charge ensuite. */
   $effect(() => {
     const targetId = page.params.id;
-    if (targetId) void session.loadMeasureDetail(targetId);
+    if (targetId) {
+      void session.loadMeasureDetail(targetId);
+      void session.loadIncidentHistory(targetId);
+    }
   });
 
   function sourceMeasure(sourceId: string) {
@@ -172,9 +178,7 @@
   const divergent = $derived(incidents.some(diverges));
 
   const journal = $derived(
-    incidents
-      .flatMap((incident) => incident.activity.map((entry) => ({ incident, entry })))
-      .sort((a, b) => new Date(b.entry.occurred_at).getTime() - new Date(a.entry.occurred_at).getTime())
+    target ? incidentTimelineForTarget(incidents, incidentHistory, target.id) : []
   );
 
   /* La Vue tient sur les 24 heures : c'est la fenêtre qui décrit l'instant.
@@ -337,24 +341,24 @@
         <div class="card kpi">
           <span>{t('incidents.column.duration')}</span>
           <b class={lead ? severityTone(lead.effective_severity) : ''}>
-            {lead ? since(lead.opened_at, now) : t('common.none')}
+            <Odometer value={lead ? since(lead.opened_at, now) : t('common.none')} />
           </b>
         </div>
         <div class="card kpi">
           <span>{t('target.failingSourcesLabel')}</span>
-          <b class={failingCount > 0 ? 'crit' : ''}>{failingCount}/{liveCount || 0}</b>
+          <b class={failingCount > 0 ? 'crit' : ''}><Odometer value={`${failingCount}/${liveCount || 0}`} /></b>
         </div>
         <div class="card kpi">
           <span>{t('target.availability24h')}</span>
-          <b class:dim={day.availability === null}>{ratio(day.availability)}</b>
+          <b class:dim={day.availability === null}><Odometer value={ratio(day.availability)} /></b>
         </div>
         <div class="card kpi">
           <span>{t('overview.fig.coverage')}</span>
-          <b class:dim={day.coverage === null}>{ratio(day.coverage)}</b>
+          <b class:dim={day.coverage === null}><Odometer value={ratio(day.coverage)} /></b>
         </div>
         <div class="card kpi">
           <span>{t('target.lastObservation')}</span>
-          <b>{lastObservedAt ? since(lastObservedAt, now) : t('common.none')}</b>
+          <b><Odometer value={lastObservedAt ? since(lastObservedAt, now) : t('common.none')} /></b>
         </div>
       </div>
 
@@ -394,7 +398,7 @@
                       : t('target.verdict.recovered')}
                 </span>
 
-                <span class="num hide-sm">{since(proof.signal.opened_at, now)}</span>
+                <span class="num hide-sm"><Odometer value={since(proof.signal.opened_at, now)} /></span>
 
                 <span class="muted hide-sm">
                   {proof.signal.connector_name ?? originLabels[proof.signal.origin]}
@@ -404,6 +408,7 @@
                   <button
                     class="btn sm"
                     type="button"
+                    title={t('target.invalidateHint')}
                     disabled={invalidating === proof.signal.id}
                     onclick={() => {
                       invalidationFor = { incidentId: proof.incident.id, signal: proof.signal };
@@ -486,7 +491,7 @@
                     {t(`target.window.${entry.value}`)}
                   </span>
                   <b class="num" class:dim={entry.measure.availability === null}>
-                    {ratio(entry.measure.availability)}
+                    <Odometer value={ratio(entry.measure.availability)} />
                   </b>
                 </div>
                 {#if entry.value === '24h'}
@@ -601,15 +606,15 @@
             </span>
             <span class="pill">{kindLabels[source.kind] ?? source.kind}</span>
             <span class="hide-sm">{outcomeLabels[source.latest_outcome ?? 'unknown']}</span>
-            <span class="num hide-sm" class:dim={measured.availability === null}>{ratio(measured.availability)}</span>
-            <span class="num hide-sm" class:dim={measured.coverage === null}>{ratio(measured.coverage)}</span>
+            <span class="num hide-sm" class:dim={measured.availability === null}><Odometer value={ratio(measured.availability)} /></span>
+            <span class="num hide-sm" class:dim={measured.coverage === null}><Odometer value={ratio(measured.coverage)} /></span>
             <span class="num hide-sm" class:dim={measured.average_latency_milliseconds === null}>
-              {latency(measured.average_latency_milliseconds)}
+              <Odometer value={latency(measured.average_latency_milliseconds)} />
             </span>
             <span class="num hide-sm">
-              {source.last_observed_at
+              <Odometer value={source.last_observed_at
                 ? t('overview.ago', { duration: since(source.last_observed_at, now) })
-                : t('common.none')}
+                : t('common.none')} />
             </span>
           </div>
         {/each}
@@ -625,15 +630,15 @@
             </span>
             <span class="pill info">{kindLabels[source.kind] ?? source.kind}</span>
             <span class="hide-sm">{outcomeLabels[source.latest_outcome ?? 'unknown']}</span>
-            <span class="num hide-sm" class:dim={measured.availability === null}>{ratio(measured.availability)}</span>
-            <span class="num hide-sm" class:dim={measured.coverage === null}>{ratio(measured.coverage)}</span>
+            <span class="num hide-sm" class:dim={measured.availability === null}><Odometer value={ratio(measured.availability)} /></span>
+            <span class="num hide-sm" class:dim={measured.coverage === null}><Odometer value={ratio(measured.coverage)} /></span>
             <span class="num hide-sm" class:dim={measured.average_latency_milliseconds === null}>
-              {latency(measured.average_latency_milliseconds)}
+              <Odometer value={latency(measured.average_latency_milliseconds)} />
             </span>
             <span class="num hide-sm">
-              {source.latest_observed_at
+              <Odometer value={source.latest_observed_at
                 ? t('overview.ago', { duration: since(source.latest_observed_at, now) })
-                : t('common.none')}
+                : t('common.none')} />
             </span>
           </div>
         {/each}
@@ -1068,7 +1073,9 @@
     font-size: 0.75rem;
   }
 
-  .cols-proof  { --cols: minmax(0, 1.4fr) 7.5rem 5.625rem 8.125rem auto }
+  /* L'en-tête et les lignes sont des grilles indépendantes : une largeur
+     stable pour l'action empêche le bouton de décaler les autres colonnes. */
+  .cols-proof  { --cols: minmax(0, 1.4fr) 7.5rem 5.625rem 8.125rem 5.5rem }
   .cols-source { --cols: minmax(0, 1.4fr) 6rem 7.5rem 5.25rem 5.25rem 5.75rem 8.125rem }
   .cols-check  { --cols: minmax(0, 1.4fr) 7.5rem 5.25rem 5.25rem 8.75rem 5.25rem auto }
 

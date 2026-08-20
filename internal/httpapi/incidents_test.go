@@ -14,10 +14,15 @@ type fakeIncidents struct {
 	ackActor         string
 	invalidateActor  string
 	invalidateReason string
+	listedTarget     string
 }
 
 func (*fakeIncidents) List(context.Context, string, int) ([]incidents.Incident, error) {
 	return []incidents.Incident{{ID: "10000000-0000-0000-0000-000000000001", Status: "active"}}, nil
+}
+func (fake *fakeIncidents) ListForTarget(_ context.Context, _ string, targetID string, _ int) ([]incidents.Incident, error) {
+	fake.listedTarget = targetID
+	return []incidents.Incident{{ID: "10000000-0000-0000-0000-000000000001", TargetID: targetID, Status: "resolved"}}, nil
 }
 func (*fakeIncidents) Get(context.Context, string) (incidents.Incident, error) {
 	return incidents.Incident{ID: "10000000-0000-0000-0000-000000000001"}, nil
@@ -90,5 +95,21 @@ func TestSignalInvalidationRejectsObserver(t *testing.T) {
 
 	if response.Code != http.StatusForbidden || fake.invalidateActor != "" {
 		t.Fatalf("observer reached signal invalidation, status=%d actor=%q", response.Code, fake.invalidateActor)
+	}
+}
+
+func TestIncidentListCanBeScopedToATargetHistory(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIncidents{}
+	server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "observer"}, Incidents: fake})
+	targetID := "30000000-0000-0000-0000-000000000003"
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/incidents?status=all&target_id="+targetID+"&limit=500", nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || fake.listedTarget != targetID {
+		t.Fatalf("expected target-scoped incident history, status=%d target=%q body=%s", response.Code, fake.listedTarget, response.Body.String())
 	}
 }

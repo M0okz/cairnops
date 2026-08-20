@@ -5,6 +5,7 @@
 
   import Topbar from '$lib/components/Topbar.svelte';
   import Spark from '$lib/components/Spark.svelte';
+  import Odometer from '$lib/components/Odometer.svelte';
   import { session } from '$lib/session.svelte';
   import {
     activeSignalRatio,
@@ -152,26 +153,26 @@
     <div class="figures banner-figures">
       <div class="fig">
         <span>{t('nav.incidents')}</span>
-        <b class={session.actionable.length > 0 ? verdict.tone : ''}>{session.actionable.length}</b>
+        <b class={session.actionable.length > 0 ? verdict.tone : ''}><Odometer value={session.actionable.length} /></b>
       </div>
       <div class="fig">
         <span>{t('overview.fig.unacknowledged')}</span>
-        <b>{session.unacknowledged.length}</b>
+        <b><Odometer value={session.unacknowledged.length} /></b>
       </div>
       <div class="fig">
         <span>{t('overview.fig.coverage')}</span>
-        <b>{ratio(coverage)}</b>
+        <b><Odometer value={ratio(coverage)} /></b>
       </div>
       <div class="fig">
         <span>{t('overview.fig.lastEvidence')}</span>
-        <b>{freshest ? since(freshest, now) : t('common.none')}</b>
+        <b><Odometer value={freshest ? since(freshest, now) : t('common.none')} /></b>
       </div>
     </div>
   </div>
 
   <div class="band">
     <h2>{t('overview.toTreat')}</h2>
-    {#if session.actionable.length > 0}<span class="tally">{session.actionable.length}</span>{/if}
+    {#if session.actionable.length > 0}<span class="tally"><Odometer value={session.actionable.length} /></span>{/if}
     <a class="more" href="/incidents">{t('overview.allIncidents')} →</a>
   </div>
 
@@ -200,10 +201,10 @@
           {/if}
         </span>
 
-        <span class="num hide-sm">{since(incident.opened_at, now)}</span>
+        <span class="num hide-sm"><Odometer value={since(incident.opened_at, now)} /></span>
 
         <span class="num hide-sm sources">
-          {activeSignalRatio(incident)}
+          <Odometer value={activeSignalRatio(incident)} />
           {#if diverges(incident)}<span class="crit" title={t('overview.divergence')}>≠</span>{/if}
         </span>
 
@@ -252,18 +253,16 @@
 
             <span class="{stateTones[row.state]} state">
               {stateLabel(row.state)}
-              <small class="faint">
-                {row.lastObservedAt
-                  ? t('overview.ago', { duration: since(row.lastObservedAt, now) })
-                  : t('overview.noEvidence')}
-              </small>
+              <small class="faint"><Odometer value={row.lastObservedAt
+                ? t('overview.ago', { duration: since(row.lastObservedAt, now) })
+                : t('overview.noEvidence')} /></small>
             </span>
 
             <span class="hide-sm trend {stateTones[row.state]}"><Spark values={row.trend} /></span>
 
             <span class="num hide-sm" class:dim={row.measure.availability === null}>
-              {ratio(row.measure.availability)}
-              <small class="faint" title={t('overview.fig.coverage')}>{ratio(row.measure.coverage)}</small>
+              <Odometer value={ratio(row.measure.availability)} />
+              <small class="faint" title={t('overview.fig.coverage')}><Odometer value={ratio(row.measure.coverage)} /></small>
             </span>
 
             <span class="caret" aria-hidden="true">›</span>

@@ -7,6 +7,7 @@
   import Icon, { type IconName } from '$lib/components/Icon.svelte';
   import BrandMark, { type BrandName } from '$lib/components/BrandMark.svelte';
   import Bars from '$lib/components/Bars.svelte';
+  import Odometer from '$lib/components/Odometer.svelte';
   import { session } from '$lib/session.svelte';
   import { latency, percent, since, stamp } from '$lib/format';
   import { plural, t } from '$lib/i18n.svelte';
@@ -130,7 +131,7 @@
            micro-graphe couvre exactement la fenêtre annoncée par le titre. -->
       <div class="cell">
         <span class="cell-title">{t('overview.fig.coverage')}</span>
-        <b class:dim={coverage === null}>{coverage === null ? t('common.none') : percent(coverage)}</b>
+        <b class:dim={coverage === null}><Odometer value={coverage === null ? t('common.none') : percent(coverage)} /></b>
         <span class="graph {coverageTone}">
           {#if coverageBars.length > 0}
             <Bars values={coverageBars} />
@@ -150,7 +151,7 @@
 
       <div class="cell">
         <span class="cell-title">{t('health.activeChecks')}</span>
-        <b>{activeSources}</b>
+        <b><Odometer value={activeSources} /></b>
         <!-- Un effectif n'a pas d'histoire horaire : les emplacements restent
              vides plutôt que de tracer une ligne inventée. -->
         <span class="graph"><Bars mode="slots" /></span>
@@ -161,7 +162,7 @@
 
       <div class="cell">
         <span class="cell-title">{t('health.overdue')}</span>
-        <b class={overdue > 0 ? 'warn' : ''}>{overdue}</b>
+        <b class={overdue > 0 ? 'warn' : ''}><Odometer value={overdue} /></b>
         <span class="graph {overdue > 0 ? 'warn' : 'faint'}"><Bars mode="rule" /></span>
         <small class="faint">
           {overdue > 0 ? t('health.overdueHint') : t('health.onCadence')}
@@ -171,7 +172,7 @@
       <div class="cell">
         <span class="cell-title">{t('health.databaseLatency')}</span>
         <b class:dim={database === null}>
-          {database === null ? t('common.none') : latency(Math.round(database.latency_milliseconds))}
+          <Odometer value={database === null ? t('common.none') : latency(Math.round(database.latency_milliseconds))} />
         </b>
         <span class="graph muted">
           {#if database && database.samples.length > 1}

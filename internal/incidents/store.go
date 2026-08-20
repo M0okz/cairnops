@@ -21,14 +21,27 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 }
 
 func (store *PostgresStore) List(ctx context.Context, status string, limit int) ([]Incident, error) {
+	return store.list(ctx, status, "", limit)
+}
+
+func (store *PostgresStore) ListForTarget(ctx context.Context, status, targetID string, limit int) ([]Incident, error) {
+	return store.list(ctx, status, targetID, limit)
+}
+
+func (store *PostgresStore) list(ctx context.Context, status, targetID string, limit int) ([]Incident, error) {
+	var filteredTargetID any
+	if targetID != "" {
+		filteredTargetID = targetID
+	}
 	rows, err := store.pool.Query(ctx, incidentSelect+`
 		WHERE ($1 = 'all' OR incident.status = $1)
+		  AND ($3::uuid IS NULL OR incident.target_id = $3::uuid)
 		ORDER BY
 			CASE incident.status WHEN 'active' THEN 0 ELSE 1 END,
 			CASE incident.effective_severity WHEN 'critical' THEN 0 WHEN 'major' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END,
 			incident.opened_at DESC, incident.id
 		LIMIT $2
-	`, status, limit)
+	`, status, limit, filteredTargetID)
 	if err != nil {
 		return nil, fmt.Errorf("list incidents: %w", err)
 	}

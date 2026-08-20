@@ -154,6 +154,7 @@ func (store *Store) hourlyByTarget(ctx context.Context, window domain.Window, ta
 }
 
 type sourceCounters struct {
+	targetID         string
 	sourceID         string
 	name             string
 	kind             string
@@ -166,7 +167,7 @@ type sourceCounters struct {
 // bySource rend la part de chaque Source d'une Cible sur la fenêtre.
 func (store *Store) bySource(ctx context.Context, window domain.Window, targetID string) ([]sourceCounters, error) {
 	rows, err := store.pool.Query(ctx, bucketsCTE+`
-		SELECT source.id::text, source.name, source.kind, source.origin,
+		SELECT source.target_id::text, source.id::text, source.name, source.kind, source.origin,
 		       latest.outcome, latest.observed_at,
 		       coalesce(sum(bucket.healthy), 0)::integer,
 		       coalesce(sum(bucket.unhealthy), 0)::integer,
@@ -176,6 +177,7 @@ func (store *Store) bySource(ctx context.Context, window domain.Window, targetID
 		       coalesce(sum(bucket.latency_count), 0)::integer,
 		       coalesce(max(bucket.latency_maximum_milliseconds), 0)::integer
 		FROM cairnops_signal_sources source
+		JOIN cairnops_targets target ON target.id = source.target_id AND target.archived_at IS NULL
 		LEFT JOIN buckets bucket ON bucket.source_id = source.id
 		LEFT JOIN LATERAL (
 			SELECT observation.outcome, observation.observed_at
@@ -184,10 +186,10 @@ func (store *Store) bySource(ctx context.Context, window domain.Window, targetID
 			ORDER BY observation.observed_at DESC, observation.id DESC
 			LIMIT 1
 		) latest ON true
-		WHERE source.target_id = $2::uuid
-		GROUP BY source.id, source.name, source.kind, source.origin, latest.outcome, latest.observed_at
-		ORDER BY source.origin, lower(source.name), source.id
-	`, window.Hours(), targetID)
+		WHERE ($2::uuid IS NULL OR source.target_id = $2::uuid)
+		GROUP BY source.target_id, source.id, source.name, source.kind, source.origin, latest.outcome, latest.observed_at
+		ORDER BY source.target_id, source.origin, lower(source.name), source.id
+	`, window.Hours(), nullableUUID(targetID))
 	if err != nil {
 		return nil, fmt.Errorf("read source measures: %w", err)
 	}
@@ -197,7 +199,7 @@ func (store *Store) bySource(ctx context.Context, window domain.Window, targetID
 	for rows.Next() {
 		var source sourceCounters
 		if err := rows.Scan(
-			&source.sourceID, &source.name, &source.kind, &source.origin,
+			&source.targetID, &source.sourceID, &source.name, &source.kind, &source.origin,
 			&source.latestOutcome, &source.latestObservedAt,
 			&source.counters.Healthy, &source.counters.Unhealthy,
 			&source.counters.Unknown, &source.counters.Expected, &source.counters.LatencySumMilliseconds,

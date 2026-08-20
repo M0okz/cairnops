@@ -247,6 +247,16 @@ func TestPostgresUptimeKumaDownRecoveryAndNewFailure(t *testing.T) {
 	if invalidated.Status != "resolved" || invalidated.Signals[0].InvalidatedAt == nil || invalidated.Signals[0].InvalidationReason == "" {
 		t.Fatalf("motivated invalidation was not preserved: %#v", invalidated)
 	}
+	history, err := store.ListForTarget(ctx, "all", targetID, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 2 || history[0].ID != secondIncidentID {
+		t.Fatalf("target history lost an incident resolved by invalidation: %#v", history)
+	}
+	if history[0].Signals[0].InvalidatedAt == nil || history[0].Activity[0].Kind != "resolved" || history[0].Activity[1].Kind != "invalidated" {
+		t.Fatalf("target history lost the invalidation journal: %#v", history[0])
+	}
 	if _, err := store.InvalidateSignal(ctx, secondIncidentID, secondSignalID, actorID, "Kuma Operator", "Une deuxième tentative doit échouer"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("expected conflict for an inactive signal, got %v", err)
 	}

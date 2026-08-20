@@ -28,6 +28,10 @@ type TargetMetrics struct {
 	// LatestObservedAt est la fraîcheur de la Cible, toutes Sources confondues
 	// — une Cible n'ayant que des Sources d'Intégration en a une, elle aussi.
 	LatestObservedAt *time.Time `json:"latest_observed_at,omitempty"`
+	// Sources ouvre juste la fenêtre de 24 heures dont la liste a besoin. Cela
+	// permet d'identifier leur provenance et de rendre une infobulle utile sans
+	// déclencher une requête de détail pour chaque ligne.
+	Sources []SourceMetrics `json:"sources"`
 }
 
 // SourceMetrics détaille ce qu'une Source a établi sur chaque fenêtre. Son
@@ -74,13 +78,35 @@ func (store *Store) List(ctx context.Context) ([]TargetMetrics, error) {
 	}
 
 	metrics := make([]TargetMetrics, 0, len(hourly))
+	indexes := make(map[string]int, len(hourly))
 	for _, target := range hourly {
+		indexes[target.targetID] = len(metrics)
 		metrics = append(metrics, TargetMetrics{
 			TargetID:         target.targetID,
 			Measures:         []domain.Measure{target.total.Measure(domain.WindowDay)},
 			Trend:            target.trend(),
 			LatencyTrend:     target.latencyTrend(),
 			LatestObservedAt: target.latestObservedAt,
+			Sources:          []SourceMetrics{},
+		})
+	}
+
+	// Une deuxième lecture couvre toutes les Sources de toutes les Cibles. La
+	// liste conserve ainsi un coût constant au lieu d'appeler Target par ligne.
+	perSource, err := store.bySource(ctx, domain.WindowDay, "")
+	if err != nil {
+		return nil, err
+	}
+	for _, source := range perSource {
+		index, known := indexes[source.targetID]
+		if !known {
+			continue
+		}
+		metrics[index].Sources = append(metrics[index].Sources, SourceMetrics{
+			SourceID: source.sourceID, Name: source.name,
+			Kind: source.kind, Origin: source.origin,
+			LatestOutcome: source.latestOutcome, LatestObservedAt: source.latestObservedAt,
+			Measures: []domain.Measure{source.counters.Measure(domain.WindowDay)},
 		})
 	}
 	return metrics, nil

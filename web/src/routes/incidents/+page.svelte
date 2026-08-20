@@ -4,6 +4,7 @@
    * projection partagée ne retient que les actifs. */
 
   import Topbar from '$lib/components/Topbar.svelte';
+  import Odometer from '$lib/components/Odometer.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Incident } from '$lib/api';
   import {
@@ -92,13 +93,13 @@
   <div class="filters">
     <div class="segments" role="group" aria-label={t('targets.scope')}>
       <button type="button" aria-pressed={scope === 'active'} onclick={() => (scope = 'active')}>
-        {t('incidents.scope.active')} <b>{session.actionable.length}</b>
+        {t('incidents.scope.active')} <b><Odometer value={session.actionable.length} /></b>
       </button>
       <button type="button" aria-pressed={scope === 'unacknowledged'} onclick={() => (scope = 'unacknowledged')}>
-        {t('incidents.scope.unacknowledged')} <b>{session.unacknowledged.length}</b>
+        {t('incidents.scope.unacknowledged')} <b><Odometer value={session.unacknowledged.length} /></b>
       </button>
       <button type="button" aria-pressed={scope === 'resolved'} onclick={() => (scope = 'resolved')}>
-        {t('incidents.scope.resolved')} <b>{resolved.length}</b>
+        {t('incidents.scope.resolved')} <b><Odometer value={resolved.length} /></b>
       </button>
     </div>
     <span class="note">
@@ -151,13 +152,13 @@
         </span>
 
         <span class="num hide-sm">
-          {incident.resolved_at
+          <Odometer value={incident.resolved_at
             ? since(incident.opened_at, new Date(incident.resolved_at))
-            : since(incident.opened_at, now)}
+            : since(incident.opened_at, now)} />
         </span>
 
         <span class="num hide-sm sources">
-          {activeSignalRatio(incident)}
+          <Odometer value={activeSignalRatio(incident)} />
           {#if diverges(incident)}<span class="crit" title={t('overview.divergence')}>≠</span>{/if}
         </span>
 

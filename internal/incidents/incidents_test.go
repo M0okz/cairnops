@@ -13,7 +13,10 @@ type serviceStore struct {
 }
 
 func (*serviceStore) List(context.Context, string, int) ([]Incident, error) { return nil, nil }
-func (*serviceStore) Get(context.Context, string) (Incident, error)         { return Incident{}, nil }
+func (*serviceStore) ListForTarget(context.Context, string, string, int) ([]Incident, error) {
+	return nil, nil
+}
+func (*serviceStore) Get(context.Context, string) (Incident, error) { return Incident{}, nil }
 func (store *serviceStore) AcknowledgeLocal(context.Context, string, string, string) (AcknowledgementPlan, error) {
 	return store.plan, nil
 }

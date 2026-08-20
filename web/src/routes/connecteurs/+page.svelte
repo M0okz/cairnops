@@ -11,6 +11,7 @@
   import ConnectorRemoval from '$lib/components/ConnectorRemoval.svelte';
   import ConnectorSuspension from '$lib/components/ConnectorSuspension.svelte';
   import MattermostConnector from '$lib/components/MattermostConnector.svelte';
+  import Odometer from '$lib/components/Odometer.svelte';
   import { goto } from '$app/navigation';
   import { session } from '$lib/session.svelte';
   import { since } from '$lib/format';
@@ -181,13 +182,13 @@
           </div>
 
           <div class="figures">
-            <div class="fig"><b>{connector.binding_count}</b><span>Sources</span></div>
+            <div class="fig"><b><Odometer value={connector.binding_count} /></b><span>Sources</span></div>
             <div class="fig">
-              <b class={connector.quarantine_count > 0 ? 'warn' : ''}>{connector.quarantine_count}</b>
+              <b class={connector.quarantine_count > 0 ? 'warn' : ''}><Odometer value={connector.quarantine_count} /></b>
               <span>En quarantaine</span>
             </div>
             <div class="fig">
-              <b>{connector.last_checked_at ? since(connector.last_checked_at, now) : '—'}</b>
+              <b><Odometer value={connector.last_checked_at ? since(connector.last_checked_at, now) : '—'} /></b>
               <span>Signal</span>
             </div>
           </div>
@@ -252,12 +253,12 @@
 
           <div class="figures">
             <div class="fig">
-              <b>{channel.severities.length}</b>
+              <b><Odometer value={channel.severities.length} /></b>
               <span>{t('mattermost.routedSeverities')}</span>
             </div>
             <div class="fig">
               <b class={channel.last_error ? 'warn' : ''}>
-                {channel.last_checked_at ? since(channel.last_checked_at, now) : t('common.none')}
+                <Odometer value={channel.last_checked_at ? since(channel.last_checked_at, now) : t('common.none')} />
               </b>
               <span>{t('connectors.lastCheck')}</span>
             </div>
@@ -319,8 +320,8 @@
       {#each rows as row (row.id)}
         <div class="trow">
           <span class="mono identity">{row.external_identity}</span>
-          <span class="num">{row.occurrences}</span>
-          <span class="num hide-sm">{t('overview.ago', { duration: since(row.last_seen_at, now) })}</span>
+          <span class="num"><Odometer value={row.occurrences} /></span>
+          <span class="num hide-sm"><Odometer value={t('overview.ago', { duration: since(row.last_seen_at, now) })} /></span>
           <span class="faint payload hide-sm" title={row.summary}>{row.summary}</span>
           {#if isAdministrator}
             <button class="btn sm attach" type="button" onclick={() => (quarantineFor = connector)}>

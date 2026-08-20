@@ -5,6 +5,7 @@
 
   import Topbar from '$lib/components/Topbar.svelte';
   import MaintenanceWorkshop from '$lib/components/MaintenanceWorkshop.svelte';
+  import Odometer from '$lib/components/Odometer.svelte';
   import { session } from '$lib/session.svelte';
   import { since, stamp, until } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
@@ -90,10 +91,10 @@
   <div class="filters">
     <div class="segments" role="group" aria-label={t('targets.scope')}>
       <button type="button" aria-pressed={scope === 'planned'} onclick={() => (scope = 'planned')}>
-        {t('maintenance.scope.planned')} <b>{planned.length}</b>
+        {t('maintenance.scope.planned')} <b><Odometer value={planned.length} /></b>
       </button>
       <button type="button" aria-pressed={scope === 'past'} onclick={() => (scope = 'past')}>
-        {t('maintenance.scope.past')} <b>{past.length}</b>
+        {t('maintenance.scope.past')} <b><Odometer value={past.length} /></b>
       </button>
     </div>
     <span class="note">{t('maintenance.timezone', { zone })}</span>
@@ -125,7 +126,7 @@
 
         <span class="num hide-sm">{stamp(item.starts_at)} → {stamp(item.ends_at)}</span>
 
-        <span class="num hide-sm">{duration(item)}</span>
+        <span class="num hide-sm"><Odometer value={duration(item)} /></span>
 
         <span class="muted hide-sm targets">
           {item.targets.length > 0

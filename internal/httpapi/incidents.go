@@ -14,6 +14,7 @@ import (
 
 type Incidents interface {
 	List(context.Context, string, int) ([]incidents.Incident, error)
+	ListForTarget(context.Context, string, string, int) ([]incidents.Incident, error)
 	Get(context.Context, string) (incidents.Incident, error)
 	Acknowledge(context.Context, string, string, string) (incidents.Incident, error)
 	InvalidateSignal(context.Context, string, string, string, string, string) (incidents.Incident, error)
@@ -34,7 +35,18 @@ func (handler incidentHandler) list(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
-	items, err := handler.incidents.List(r.Context(), r.URL.Query().Get("status"), limit)
+	targetID := strings.TrimSpace(r.URL.Query().Get("target_id"))
+	if targetID != "" && !validUUID(targetID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		return
+	}
+	var items []incidents.Incident
+	var err error
+	if targetID == "" {
+		items, err = handler.incidents.List(r.Context(), r.URL.Query().Get("status"), limit)
+	} else {
+		items, err = handler.incidents.ListForTarget(r.Context(), r.URL.Query().Get("status"), targetID, limit)
+	}
 	if err != nil {
 		handler.writeError(w, err)
 		return
