@@ -408,7 +408,7 @@
 
                 {#if !dead && session.user?.role !== 'observer'}
                   <button
-                    class="btn sm"
+                    class="btn sm proof-action"
                     type="button"
                     title={t('target.invalidateHint')}
                     disabled={invalidating === proof.signal.id}
@@ -1080,6 +1080,10 @@
   .cols-proof  { --cols: minmax(0, 1.4fr) 7.5rem 5.625rem 8.125rem 5.5rem }
   .cols-source { --cols: minmax(0, 1.4fr) 6rem 7.5rem 5.25rem 5.25rem 5.75rem 8.125rem }
   .cols-check  { --cols: minmax(0, 1.4fr) 7.5rem 5.25rem 5.25rem 8.75rem 5.25rem auto }
+
+  .proof-action {
+    justify-self: end;
+  }
 
   .row-actions {
     display: flex;
