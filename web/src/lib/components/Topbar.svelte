@@ -66,6 +66,18 @@
   </nav>
 
   <div class="topbar-right">
+    {#if session.availableVersion}
+      <button
+        class="btn sm primary update-cta"
+        type="button"
+        title={t('topbar.updateAvailableVersion', { version: session.availableVersion })}
+        aria-label={t('topbar.updateAvailableVersion', { version: session.availableVersion })}
+        onclick={() => session.reloadForUpdate()}
+      >
+        <span>{t('topbar.updateAction')}</span>
+        <small>{session.availableVersion}</small>
+      </button>
+    {/if}
     <button class="search" type="button" onclick={() => palette.show()}>
       <Icon name="search" size={13} />
       <span>{t('common.search')}</span>

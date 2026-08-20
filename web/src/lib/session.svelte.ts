@@ -24,6 +24,7 @@ import {
   type User
 } from './api';
 import { i18n, t } from './i18n.svelte';
+import { absorbObservedVersion } from './version-state';
 
 export type GateState = 'loading' | 'setup' | 'login' | 'unavailable' | 'app';
 export type RealtimeState = 'connecting' | 'online' | 'offline';
@@ -42,7 +43,11 @@ export function messageFrom(cause: unknown): string {
 class Session {
   gate = $state<GateState>('loading');
   health = $state<'checking' | 'ready' | 'unavailable'>('checking');
+  /* La version affichée est celle de cet écran. Une autre version détectée sur
+   * l'instance se dit à part, pour laisser l'utilisateur choisir le moment où
+   * il recharge. */
   version = $state('dev');
+  availableVersion = $state('');
   user = $state<User | null>(null);
 
   /* Le nom que porte cette instance. Il est lu avant toute session, parce que
@@ -103,7 +108,12 @@ class Session {
   #projectionTimer: ReturnType<typeof setTimeout> | undefined;
   #reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   #refreshTimer: ReturnType<typeof setInterval> | undefined;
+  #versionTimer: ReturnType<typeof setInterval> | undefined;
   #dirty = new Set<string>();
+  #versionKnown = false;
+  #visibilityProbe = () => {
+    if (document.visibilityState === 'visible' && this.gate === 'app') void this.checkVersion();
+  };
 
   /* ── Projections dérivées, lues par le rail et les écrans ─────────────── */
 
@@ -208,25 +218,56 @@ class Session {
     i18n.boot();
     this.lightTheme = localStorage.getItem('cairnops-theme') === 'light';
     this.applyTheme();
+    document.addEventListener('visibilitychange', this.#visibilityProbe);
     await Promise.all([this.loadInfrastructure(), this.loadIdentity()]);
   }
 
   async loadInfrastructure() {
     try {
       const [ready, version] = await Promise.all([
-        fetch('/api/v1/health/ready'),
-        fetch('/api/v1/version')
+        fetch('/api/v1/health/ready', { cache: 'no-store' }),
+        fetch('/api/v1/version', { cache: 'no-store' })
       ]);
       this.health = ready.ok ? 'ready' : 'unavailable';
       if (version.ok) {
         const info: { version?: string } = await version.json();
-        /* Une version vide vaut absente : `??` la laisserait passer et le rail
-         * afficherait un « v » orphelin. */
-        this.version = info.version || this.version;
+        this.#observeVersion(info.version);
       }
     } catch {
       this.health = 'unavailable';
     }
+  }
+
+  #observeVersion(observedVersion?: string) {
+    const next = absorbObservedVersion(
+      {
+        currentVersion: this.version,
+        currentKnown: this.#versionKnown,
+        availableVersion: this.availableVersion
+      },
+      observedVersion
+    );
+    this.version = next.currentVersion;
+    this.availableVersion = next.availableVersion;
+    this.#versionKnown = next.currentKnown;
+  }
+
+  /* Une nouvelle version ne s'impose pas silencieusement : l'écran la repère
+   * et propose un rechargement explicite. */
+  async checkVersion() {
+    try {
+      const response = await fetch('/api/v1/version', { cache: 'no-store' });
+      if (!response.ok) return;
+      const info: { version?: string } = await response.json();
+      this.#observeVersion(info.version);
+    } catch {
+      // Un déploiement en cours peut couper brièvement la lecture de version.
+    }
+  }
+
+  reloadForUpdate() {
+    if (!this.availableVersion) return;
+    location.reload();
   }
 
   async loadIdentity() {
@@ -366,6 +407,7 @@ class Session {
     await this.refreshAll();
     if (this.gate !== 'app' || !this.user) return;
     this.startRealtime();
+    void this.checkVersion();
     if (this.#refreshTimer) clearInterval(this.#refreshTimer);
     this.#refreshTimer = setInterval(() => {
       void this.loadSystemHealth();
@@ -383,6 +425,8 @@ class Session {
         void this.loadMeasureDetail(targetId);
       }
     }, 15000);
+    if (this.#versionTimer) clearInterval(this.#versionTimer);
+    this.#versionTimer = setInterval(() => void this.checkVersion(), 60000);
   }
 
   async refreshAll() {
@@ -629,6 +673,8 @@ class Session {
     this.#reconnectTimer = undefined;
     if (this.#refreshTimer) clearInterval(this.#refreshTimer);
     this.#refreshTimer = undefined;
+    if (this.#versionTimer) clearInterval(this.#versionTimer);
+    this.#versionTimer = undefined;
     const socket = this.#socket;
     this.#socket = null;
     if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, 'session closed');
@@ -665,6 +711,7 @@ class Session {
 
   teardown() {
     this.stopRealtime();
+    document.removeEventListener('visibilitychange', this.#visibilityProbe);
     if (this.#noticeTimer) clearTimeout(this.#noticeTimer);
     if (this.#projectionTimer) clearTimeout(this.#projectionTimer);
   }

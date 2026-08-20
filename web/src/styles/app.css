@@ -495,6 +495,17 @@ td.num,
   gap: var(--s3);
 }
 
+.update-cta {
+  flex: none;
+}
+
+.update-cta small {
+  font-family: var(--font-num);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  opacity: 0.82;
+}
+
 /* Le déclencheur de la Palette a l'allure d'un champ sans en être un : ce qu'on
  * y tape n'atterrit jamais ici, la frappe se fait dans la Palette elle-même. Un
  * vrai champ promettrait un filtre local que la barre supérieure ne rend pas. */
@@ -1397,6 +1408,10 @@ a.trow:hover .caret {
 
   .search {
     width: 9rem;
+  }
+
+  .update-cta small {
+    display: none;
   }
 }
 

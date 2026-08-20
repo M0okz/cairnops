@@ -68,6 +68,8 @@ export const fr = {
   'rail.language': 'Langue',
   'rail.logout': 'Fermer la session',
   'topbar.breadcrumb': "Fil d'Ariane",
+  'topbar.updateAction': 'Mettre à jour',
+  'topbar.updateAvailableVersion': 'Version {version} disponible',
 
   /* ── Palette ─────────────────────────────────────────────────────────── */
   'palette.title': 'Recherche globale',
