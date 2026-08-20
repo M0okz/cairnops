@@ -88,7 +88,17 @@
 </div>
 
 <style>
+  .decision {
+    display: grid;
+    grid-template-areas: 'proof choice';
+    grid-template-columns: minmax(10rem, 1fr) minmax(14rem, 18rem);
+    align-items: center;
+    gap: var(--s4);
+    min-width: 0;
+  }
+
   .decision select {
+    grid-area: choice;
     width: 100%;
     min-height: 2.75rem;
     padding: 0 var(--s3);
@@ -112,11 +122,11 @@
   }
 
   .proof {
+    grid-area: proof;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: var(--s2);
-    margin-top: 0.25rem;
     min-width: 0;
   }
 
@@ -136,8 +146,12 @@
   }
 
   @media (max-width: 40rem) {
-    .proof {
-      justify-content: flex-start;
+    .decision {
+      grid-template-areas:
+        'choice'
+        'proof';
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.25rem;
     }
   }
 </style>

@@ -261,7 +261,7 @@
                   <small class="faint mono">{connection?.address || t('zabbix.noInterface')}</small>
                 </span>
               </label>
-              <span class="rack-decision">
+              <div class="rack-decision">
                 {#if locked}
                   <span class="pill">{t('wizard.alreadyBound')}</span>
                   <small class="faint">{host.already_imported_to?.name}</small>
@@ -275,7 +275,7 @@
                     onselect={(targetID) => assignTarget(host.external_id, targetID)}
                   />
                 {/if}
-              </span>
+              </div>
             </li>
           {:else}
             <li class="none faint">{t('zabbix.noHostMatches')}</li>
@@ -619,10 +619,13 @@
     font-size: 0.6875rem;
   }
 
+  .rack-select {
+    flex: 0 1 17rem;
+  }
+
   .rack-decision {
-    flex: 0 1 15rem;
-    min-width: 9rem;
-    text-align: right;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   @media (max-width: 40rem) {
