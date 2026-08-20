@@ -573,7 +573,8 @@
   }
 
   .rack li {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr);
     align-items: center;
     gap: var(--s3);
     padding-right: var(--s4);
@@ -610,17 +611,23 @@
 
   .rack-name strong {
     display: block;
+    overflow: hidden;
     font-size: 0.75rem;
     font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .rack-name small {
     display: block;
+    overflow: hidden;
     font-size: 0.6875rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .rack-select {
-    flex: 0 1 17rem;
+    min-width: 0;
   }
 
   .rack-decision {
@@ -630,17 +637,12 @@
 
   @media (max-width: 40rem) {
     .rack li {
-      flex-wrap: wrap;
+      grid-template-columns: minmax(0, 1fr);
       gap: 0;
       padding-right: 0;
     }
 
-    .rack-select {
-      flex-basis: 100%;
-    }
-
     .rack-decision {
-      flex: 1 1 100%;
       min-width: 0;
       padding: 0 var(--s4) var(--s3) calc(var(--s4) + 2rem);
       text-align: left;
