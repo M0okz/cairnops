@@ -1,9 +1,16 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import ReconciliationSummary from './ReconciliationSummary.svelte';
+  import TargetDecision from './TargetDecision.svelte';
   import { onMount } from 'svelte';
   import { api, type UptimeKumaImportResult, type UptimeKumaMonitorPreview, type UptimeKumaPreview } from '$lib/api';
   import { clock } from '$lib/format';
   import { plural, t } from '$lib/i18n.svelte';
+  import {
+    prepareTargetAssignments,
+    reconciliationCounts,
+    resolvedTargetAssignments
+  } from '$lib/reconciliation';
 
   let {
     onclose,
@@ -24,6 +31,7 @@
   let query = $state('');
   let busy = $state(false);
   let error = $state('');
+  let reconciliation = $derived(reconciliationCounts(selected, targetAssignments));
 
   onMount(() => addressInput?.focus());
 
@@ -65,22 +73,6 @@
     targetAssignments = { ...targetAssignments, [externalID]: targetID };
   }
 
-  function evidenceFor(monitor: UptimeKumaMonitorPreview) {
-    const targetID = targetAssignments[monitor.external_id];
-    const evidence = monitor.candidate_targets?.find((match) => match.target.id === targetID)?.evidence[0];
-    if (!evidence && !targetID && monitor.candidate_targets?.length) {
-      return plural('wizard.possibleMatches', monitor.candidate_targets.length);
-    }
-    if (!evidence) return targetID ? t('wizard.manualChoice') : t('wizard.newTarget');
-    if (evidence.kind === 'same_ip') return t('wizard.sameIP', { value: evidence.value });
-    if (evidence.kind === 'same_hostname') return t('wizard.sameHostname', { value: evidence.value });
-    return t('wizard.sameName', { value: evidence.value });
-  }
-
-  function isCandidate(monitor: UptimeKumaMonitorPreview, targetID: string) {
-    return monitor.candidate_targets?.some((match) => match.target.id === targetID) ?? false;
-  }
-
   function statusLabel(status: number) {
     if (status === 0) return 'DOWN';
     if (status === 1) return 'UP';
@@ -99,11 +91,7 @@
       });
       apiKey = '';
       selected = preview.monitors.filter((monitor) => !monitor.already_imported_to).map((monitor) => monitor.external_id);
-      targetAssignments = Object.fromEntries(
-        preview.monitors
-          .filter((monitor) => !monitor.already_imported_to && monitor.suggested_target)
-          .map((monitor) => [monitor.external_id, monitor.suggested_target?.id ?? ''])
-      );
+      targetAssignments = prepareTargetAssignments(preview.monitors);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : t('kuma.verifyFailed');
     } finally {
@@ -113,6 +101,10 @@
 
   async function importMonitors() {
     if (!preview || selected.length === 0) return;
+    if (reconciliation.review > 0) {
+      error = plural('wizard.resolveBeforeImport', reconciliation.review);
+      return;
+    }
     busy = true;
     error = '';
     try {
@@ -121,9 +113,7 @@
         body: JSON.stringify({
           receipt: preview.receipt,
           monitor_ids: selected,
-          target_assignments: Object.fromEntries(
-            selected.filter((id) => targetAssignments[id]).map((id) => [id, targetAssignments[id]])
-          )
+          target_assignments: resolvedTargetAssignments(selected, targetAssignments)
         })
       });
       await onsuccess(imported);
@@ -239,6 +229,8 @@
           <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
         </div>
 
+        <ReconciliationSummary counts={reconciliation} />
+
         <div class="listbar">
           <div class="field search">
             <label class="sr-only" for="monitor-filter">Filtrer les moniteurs</label>
@@ -274,20 +266,14 @@
                   <span class="pill">{t('wizard.alreadyBound')}</span>
                   <small class="faint">{monitor.already_imported_to?.name}</small>
                 {:else}
-                  <select
-                    aria-label={t('wizard.targetChoice', { name: monitor.name })}
+                  <TargetDecision
+                    name={monitor.name}
                     value={targetAssignments[monitor.external_id] ?? ''}
+                    candidates={monitor.candidate_targets}
+                    availableTargets={preview.available_targets}
                     disabled={!selected.includes(monitor.external_id)}
-                    onchange={(event) => assignTarget(monitor.external_id, event.currentTarget.value)}
-                  >
-                    <option value="">{t('wizard.createNewTarget')}</option>
-                    {#each preview.available_targets as target (target.id)}
-                      <option value={target.id}>
-                        {target.name}{isCandidate(monitor, target.id) ? ` — ${t('wizard.candidate')}` : ''}
-                      </option>
-                    {/each}
-                  </select>
-                  <small class="faint">{evidenceFor(monitor)}</small>
+                    onselect={(targetID) => assignTarget(monitor.external_id, targetID)}
+                  />
                 {/if}
               </span>
             </li>
@@ -301,12 +287,14 @@
 
       <footer>
         <span class="faint note">{t('wizard.matchesNote')}</span>
-        <button class="btn primary" type="button" onclick={importMonitors} disabled={busy || selected.length === 0}>
+        <button class="btn primary" type="button" onclick={importMonitors} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
           {busy
             ? t('wizard.importing')
             : selected.length === 0
               ? t('kuma.noMonitorChosen')
-              : plural('kuma.importMonitors', selected.length)}
+              : reconciliation.review > 0
+                ? plural('wizard.confirmChoices', reconciliation.review)
+                : plural('kuma.importMonitors', selected.length)}
         </button>
       </footer>
     {:else}
@@ -635,30 +623,6 @@
     flex: 0 1 15rem;
     min-width: 9rem;
     text-align: right;
-  }
-
-  .rack-decision select {
-    width: 100%;
-    min-height: 2.75rem;
-    padding: 0 var(--s3);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-s);
-    background: var(--surface);
-    color: var(--ink);
-    font: inherit;
-    font-size: 0.6875rem;
-  }
-
-  .rack-decision select:focus-visible {
-    border-color: var(--accent);
-    outline: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
-    outline-offset: 1px;
-  }
-
-  .rack-decision small {
-    display: block;
-    margin-top: 2px;
-    font-size: 0.6875rem;
   }
 
   @media (max-width: 40rem) {

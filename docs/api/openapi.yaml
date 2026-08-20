@@ -432,14 +432,14 @@ components:
       type: object
       required: [kind, value]
       properties:
-        kind: { type: string, enum: [same_name, same_ip, same_hostname] }
+        kind: { type: string, enum: [same_name, same_ip, same_hostname, similar_name] }
         value: { type: string }
     TargetMatch:
       type: object
       required: [target, confidence, evidence]
       properties:
         target: { $ref: '#/components/schemas/TargetReference' }
-        confidence: { type: string, enum: [high, medium] }
+        confidence: { type: string, enum: [high, medium, low] }
         evidence:
           type: array
           minItems: 1

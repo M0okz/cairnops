@@ -187,13 +187,13 @@ export type ZabbixInterface = {
 export type TargetReference = { id: string; name: string };
 
 export type MatchEvidence = {
-  kind: 'same_name' | 'same_ip' | 'same_hostname';
+  kind: 'same_name' | 'same_ip' | 'same_hostname' | 'similar_name';
   value: string;
 };
 
 export type TargetMatch = {
   target: TargetReference;
-  confidence: 'high' | 'medium';
+  confidence: 'high' | 'medium' | 'low';
   evidence: MatchEvidence[];
 };
 
