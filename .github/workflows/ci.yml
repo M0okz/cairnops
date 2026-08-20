@@ -50,6 +50,9 @@ jobs:
       - name: Vet Go packages
         run: go vet ./...
 
+      - name: Check the build version
+        run: sh scripts/build-version.sh 42 | grep -Eq '^[0-9]+\.[0-9]+\.42$'
+
   images:
     name: Build ${{ matrix.target }} image
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -78,9 +81,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Capture build timestamp
+      - name: Capture build metadata
         id: build
         run: |
+          echo "version=$(sh scripts/build-version.sh "$GITHUB_RUN_NUMBER")" >> "$GITHUB_OUTPUT"
           echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
 
       - name: Build and publish ${{ matrix.target }}
@@ -91,14 +95,16 @@ jobs:
           target: ${{ matrix.target }}
           push: true
           tags: |
+            ghcr.io/m0okz/cairnops-${{ matrix.target }}:${{ steps.build.outputs.version }}
             ghcr.io/m0okz/cairnops-${{ matrix.target }}:${{ github.sha }}
             ghcr.io/m0okz/cairnops-${{ matrix.target }}:latest
           labels: |
             org.opencontainers.image.source=https://github.com/M0okz/cairnops
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.build.outputs.version }}
             org.opencontainers.image.created=${{ steps.build.outputs.date }}
           build-args: |
-            VERSION=${{ github.sha }}
+            VERSION=${{ steps.build.outputs.version }}
             COMMIT=${{ github.sha }}
             BUILD_DATE=${{ steps.build.outputs.date }}
           cache-from: type=gha,scope=${{ matrix.target }}
