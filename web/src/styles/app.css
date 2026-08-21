@@ -1416,6 +1416,53 @@ a.trow:hover .caret {
 }
 
 @media (max-width: 48rem) {
+  /* Le rail devient un en-tête sur deux lignes : identité et compte en haut,
+   * routes dans un ruban dessous. Les réunir sur une seule ligne écrasait le
+   * contenu et cachait systématiquement la route active sur un téléphone. */
+  .rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    overflow: visible;
+  }
+
+  .rail-brand {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .rail nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: 100%;
+    padding-top: var(--s3);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .rail nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .rail nav a {
+    flex: none;
+  }
+
+  .rail nav .rule {
+    width: 1px;
+    height: 1.25rem;
+    flex: none;
+    margin: auto var(--s2);
+  }
+
+  .rail-foot {
+    grid-column: 2;
+    grid-row: 1;
+    margin-left: 0;
+  }
+
   .page {
     padding: var(--s5) var(--s4) var(--s6);
   }

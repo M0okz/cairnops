@@ -831,4 +831,43 @@
   input.mono {
     font-family: var(--font-num);
   }
+
+  @media (max-width: 48rem) {
+    .band-row {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: var(--s1);
+    }
+
+    .row {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
+      gap: var(--s3);
+    }
+
+    .row > .means,
+    .row > .act {
+      grid-column: 1;
+      justify-self: start;
+    }
+
+    .rename {
+      width: 100%;
+    }
+
+    .rename input {
+      width: 0;
+      flex: 1;
+    }
+
+    .submit {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: var(--s3);
+    }
+
+    .notes {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
 </style>

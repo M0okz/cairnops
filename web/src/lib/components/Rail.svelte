@@ -15,6 +15,21 @@
 
   let menuOpen = $state(false);
   let anchor = $state<HTMLDivElement | null>(null);
+  let navigation = $state<HTMLElement | null>(null);
+
+  /* Sur une fenêtre étroite, la navigation devient un ruban horizontal. La
+   * route active revient au centre à chaque changement plutôt que de rester
+   * cachée à l'autre bout du ruban. */
+  $effect(() => {
+    page.url.pathname;
+    if (!window.matchMedia('(max-width: 48rem)').matches) return;
+    const frame = requestAnimationFrame(() => {
+      navigation
+        ?.querySelector<HTMLElement>('[aria-current="page"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    });
+    return () => cancelAnimationFrame(frame);
+  });
 
   /* Le menu se referme sur Échap et sur tout clic à l'extérieur. */
   $effect(() => {
@@ -122,7 +137,7 @@
     <span class="version">v{session.version}</span>
   </div>
 
-  <nav>
+  <nav bind:this={navigation}>
     {#each items as item (item.href)}
       {#if item.apart}<span class="rule" role="separator"></span>{/if}
       <a href={item.href} aria-current={current(item.href) ? 'page' : undefined}>
