@@ -78,7 +78,7 @@
         <small>{session.availableVersion}</small>
       </button>
     {/if}
-    <button class="search" type="button" onclick={() => palette.show()}>
+    <button class="search" type="button" aria-label={t('common.search')} onclick={() => palette.show()}>
       <Icon name="search" size={13} />
       <span>{t('common.search')}</span>
       <kbd>⌘K</kbd>
