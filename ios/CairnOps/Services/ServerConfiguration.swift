@@ -19,7 +19,6 @@ struct ServerConfiguration: Codable, Equatable, Sendable {
     }
 
     var baseURLString = ""
-    var username = ""
 
     func validated() throws -> ServerConfiguration {
         let trimmedBaseURL = baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -37,9 +36,13 @@ struct ServerConfiguration: Codable, Equatable, Sendable {
         }
         guard let scheme = components.scheme?.lowercased(),
               scheme == "https" || scheme == "http",
-              components.host != nil else {
+              let host = components.host,
+              !host.isEmpty,
+              components.user == nil,
+              components.password == nil else {
             throw ConfigurationError.invalidBaseURL
         }
+        components.scheme = scheme
 
         components.query = nil
         components.fragment = nil
@@ -55,10 +58,7 @@ struct ServerConfiguration: Codable, Equatable, Sendable {
             throw ConfigurationError.invalidBaseURL
         }
 
-        return ServerConfiguration(
-            baseURLString: normalizedURL.absoluteString,
-            username: username.trimmingCharacters(in: .whitespacesAndNewlines)
-        )
+        return ServerConfiguration(baseURLString: normalizedURL.absoluteString)
     }
 
     func resolvedBaseURL() throws -> URL {

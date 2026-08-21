@@ -10,9 +10,14 @@ actor SnapshotStore {
 
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
+    private let customFileURL: URL?
 
     private var pendingSnapshot: AppSnapshot?
     private var flushTask: Task<Void, Never>?
+
+    init(fileURL: URL? = nil) {
+        customFileURL = fileURL
+    }
 
     func load() -> AppSnapshot? {
         let fileURL = snapshotFileURL()
@@ -73,7 +78,10 @@ actor SnapshotStore {
     }
 
     private func snapshotFileURL() -> URL {
-        URL.applicationSupportDirectory
+        if let customFileURL {
+            return customFileURL
+        }
+        return URL.applicationSupportDirectory
             .appending(path: "CairnOps")
             .appending(path: "snapshot.json")
     }

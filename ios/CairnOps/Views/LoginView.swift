@@ -7,19 +7,21 @@ struct LoginView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("CairnOps sur iPhone")
                         .font(.system(size: 28, weight: .semibold, design: .default))
-                    Text("Une projection mobile native du parcours incident V1 : vue d'ensemble, cibles, incidents, sante et actions immediates.")
+                    Text("Associez cet appareil depuis votre session Web, sans saisir votre mot de passe dans l’application.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                 }
 
-                InstanceLoginForm(
-                    title: "Connexion directe a l'instance",
-                    subtitle: "Le client mobile parle directement a votre instance CairnOps et reste en lecture seule hors ligne."
-                )
+                DevicePairingPanel()
             }
             .padding(AppTheme.screenPadding)
             .padding(.top, 24)
         }
         .background(AppBackdrop())
     }
+}
+
+#Preview {
+    LoginView()
+        .environment(AppModel())
 }

@@ -1,8 +1,16 @@
 import Foundation
 
 struct ServerConfigurationStore {
-    private let defaults = UserDefaults.standard
-    private let storageKey = "cairnops.mobile.configuration"
+    private let defaults: UserDefaults
+    private let storageKey: String
+
+    init(
+        defaults: UserDefaults = .standard,
+        storageKey: String = "cairnops.mobile.configuration"
+    ) {
+        self.defaults = defaults
+        self.storageKey = storageKey
+    }
 
     func load() -> ServerConfiguration {
         guard let data = defaults.data(forKey: storageKey),

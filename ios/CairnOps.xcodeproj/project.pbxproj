@@ -16,6 +16,16 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A1000000000000000000001B /* Exceptions for "CairnOps" folder in "CairnOps" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A1000000000000000000000A /* CairnOps */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileReference section */
 		A10000000000000000000005 /* CairnOps.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CairnOps.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000000E /* CairnOpsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CairnOpsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -24,6 +34,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A10000000000000000000006 /* CairnOps */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A1000000000000000000001B /* Exceptions for "CairnOps" folder in "CairnOps" target */,
+			);
 			path = CairnOps;
 			sourceTree = "<group>";
 		};
@@ -327,6 +340,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CairnOps/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = CairnOps;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -358,6 +372,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CairnOps/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = CairnOps;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

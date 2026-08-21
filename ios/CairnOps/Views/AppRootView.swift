@@ -24,6 +24,12 @@ struct AppRootView: View {
         .task {
             await model.bootstrap()
         }
+        .task(id: model.pairingTaskIdentity) {
+            guard model.pairingTaskIdentity != nil else {
+                return
+            }
+            await model.runPairingAttempt()
+        }
         // `realtimeIdentity` devient nil hors du premier plan : SwiftUI annule
         // alors la tache et ferme la socket au lieu de la laisser vivre.
         .task(id: model.realtimeIdentity) {
@@ -31,6 +37,9 @@ struct AppRootView: View {
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             model.setScenePhaseActive(phase == .active)
+        }
+        .onOpenURL { url in
+            model.acceptPairingURL(url)
         }
     }
 }

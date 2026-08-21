@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 @MainActor
 @Observable
@@ -14,6 +15,22 @@ final class AppModel {
         case neutral
         case caution
         case danger
+    }
+
+    enum PairingState: Equatable {
+        case idle
+        case claiming(instance: String)
+        case awaitingConfirmation(instance: String)
+        case finalizing(instance: String)
+        case failed(message: String)
+    }
+
+    private enum PairingFlowError: LocalizedError {
+        case incompleteCredential
+
+        var errorDescription: String? {
+            "L’instance a confirmé l’appareil sans remettre une identité complète. Relancez un nouvel appairage."
+        }
     }
 
     /// Portions de la projection qu'un evenement temps reel invalide.
@@ -37,8 +54,6 @@ final class AppModel {
     private static let maximumReconnectDelay = Duration.seconds(60)
 
     var serverURLText = ""
-    var usernameText = ""
-    var passwordText = ""
 
     var user: User?
     var instanceName = ""
@@ -47,16 +62,26 @@ final class AppModel {
 
     var isBootstrapping = true
     var isRefreshing = false
-    var isAuthenticating = false
     var realtimeState: RealtimeState = .offline
 
     var statusMessage: String?
     var bannerTone: BannerTone = .neutral
     var loginError: String?
+    var pairingState: PairingState = .idle
+    var pairingTaskIdentity: UUID?
+    var canRetryPairing = false
+    var hasDeviceIdentity = false
 
-    @ObservationIgnored private let configurationStore = ServerConfigurationStore()
-    @ObservationIgnored private let snapshotStore = SnapshotStore()
+    @ObservationIgnored private let configurationStore: ServerConfigurationStore
+    @ObservationIgnored private let credentialStore: DeviceCredentialStore
+    @ObservationIgnored private let snapshotStore: SnapshotStore
+    @ObservationIgnored private let apiFactory: (ServerConfiguration, String?) -> CairnOpsAPI
+    @ObservationIgnored private let pairingPollInterval: Duration
     @ObservationIgnored private var api: CairnOpsAPI?
+    @ObservationIgnored private var pendingPairing: PendingDevicePairing?
+    @ObservationIgnored private var recoveredIdentity: DeviceIdentity?
+    @ObservationIgnored private var activePairingAttemptID: UUID?
+    @ObservationIgnored private var deferredPairingLink: String?
 
     /// Passe a `false` des que la scene quitte le premier plan. La boucle temps
     /// reel s'arrete alors au lieu de maintenir une socket et des requetes
@@ -75,8 +100,33 @@ final class AppModel {
         var fetchVersion: (() async throws -> String)?
     }
 
+    init(
+        configurationStore: ServerConfigurationStore = ServerConfigurationStore(),
+        credentialStore: DeviceCredentialStore = DeviceCredentialStore(),
+        snapshotStore: SnapshotStore = SnapshotStore(),
+        pairingPollInterval: Duration = .seconds(2),
+        apiFactory: @escaping (ServerConfiguration, String?) -> CairnOpsAPI = {
+            CairnOpsAPI(configuration: $0, deviceToken: $1)
+        }
+    ) {
+        self.configurationStore = configurationStore
+        self.credentialStore = credentialStore
+        self.snapshotStore = snapshotStore
+        self.pairingPollInterval = pairingPollInterval
+        self.apiFactory = apiFactory
+    }
+
     var instanceLabel: String {
         instanceName.isEmpty ? "CairnOps" : instanceName
+    }
+
+    var isPairingInFlight: Bool {
+        switch pairingState {
+        case .claiming, .awaitingConfirmation, .finalizing:
+            true
+        case .idle, .failed:
+            false
+        }
     }
 
     var showsShell: Bool {
@@ -107,98 +157,337 @@ final class AppModel {
         guard isBootstrapping else {
             return
         }
+        defer {
+            isBootstrapping = false
+            if let link = deferredPairingLink {
+                deferredPairingLink = nil
+                acceptPairingLink(link)
+            }
+        }
 
         let storedConfiguration = configurationStore.load()
         serverURLText = storedConfiguration.baseURLString
-        usernameText = storedConfiguration.username
+
+        let credentialState: DeviceCredentialState
+        do {
+            credentialState = try credentialStore.load()
+            hasDeviceIdentity = credentialState.identity != nil
+        } catch {
+            try? credentialStore.clear()
+            hasDeviceIdentity = false
+            snapshot = AppSnapshot()
+            await snapshotStore.clear()
+            loginError = userFacingMessage(from: error)
+            pairingState = .failed(message: loginError ?? "L’identité locale est invalide.")
+            canRetryPairing = false
+            return
+        }
+
+        let credentialBaseURL = credentialState.identity?.serverBaseURL
+            ?? credentialState.pendingPairing?.serverBaseURL
+            ?? storedConfiguration.baseURLString
 
         if let storedSnapshot = await snapshotStore.load(),
-           storedSnapshot.serverBaseURL == storedConfiguration.baseURLString {
+           storedSnapshot.serverBaseURL == credentialBaseURL {
             snapshot = storedSnapshot
             instanceName = instanceName.isEmpty ? "CairnOps" : instanceName
         }
 
-        guard !storedConfiguration.baseURLString.isEmpty else {
-            isBootstrapping = false
+        if let pending = credentialState.pendingPairing {
+            pendingPairing = pending
+            hasDeviceIdentity = false
+            serverURLText = pending.serverBaseURL
+            configurationStore.save(ServerConfiguration(baseURLString: pending.serverBaseURL))
+            pairingState = .claiming(instance: pairingInstanceLabel(pending.serverBaseURL))
+            canRetryPairing = true
+            showPairingBanner("Association de cet iPhone en cours. Confirmez-la depuis votre session Web.")
+            pairingTaskIdentity = UUID()
+            return
+        }
+
+        guard let identity = credentialState.identity else {
+            // Un lien profond peut arriver pendant la lecture asynchrone du
+            // cache. On relit alors Keychain avant de conclure qu’il n’y a rien
+            // à reprendre.
+            if let pending = try? credentialStore.load().pendingPairing {
+                pendingPairing = pending
+                hasDeviceIdentity = false
+                serverURLText = pending.serverBaseURL
+                configurationStore.save(ServerConfiguration(baseURLString: pending.serverBaseURL))
+                pairingState = .claiming(instance: pairingInstanceLabel(pending.serverBaseURL))
+                canRetryPairing = true
+                showPairingBanner("Association de cet iPhone en cours. Confirmez-la depuis votre session Web.")
+                pairingTaskIdentity = UUID()
+                return
+            }
+
+            // Les anciennes versions ouvraient une session par mot de passe et
+            // cookie. Une app sans identité d’appareil doit désormais repasser
+            // par la confirmation Web, sans réutiliser silencieusement ce cookie.
+            if let configuration = try? storedConfiguration.validated() {
+                CairnOpsAPI(configuration: configuration).clearCookies()
+            }
+            if snapshot.hasProjection {
+                statusMessage = "Dernier état connu affiché. Associez cet iPhone pour reprendre les actions."
+                bannerTone = .caution
+            }
             return
         }
 
         do {
-            let configuration = try storedConfiguration.validated()
-            prepareAPI(with: configuration)
-
-            let setupStatus = try await currentAPI().getSetupStatus()
-            instanceName = setupStatus.name
-            serverVersion = (try? await currentAPI().getVersion()) ?? serverVersion
-
-            let currentUser = try await currentAPI().getCurrentSession()
-            user = currentUser
-            bannerTone = .neutral
-            statusMessage = nil
-            await refreshProjection()
+            try await activateDeviceIdentity(identity)
         } catch is CancellationError {
             realtimeState = .offline
         } catch let error as CairnOpsAPIError where error.statusCode == 401 {
-            user = nil
-            realtimeState = .offline
-            if snapshot.hasProjection {
-                statusMessage = "Dernier etat connu affiche. Reconnectez-vous pour reprendre les actions."
-                bannerTone = .caution
-            }
+            await discardSessionData(keepConfiguration: true)
+            loginError = "Cette identité d’appareil a été révoquée. Associez de nouveau cet iPhone."
+            pairingState = .failed(message: loginError ?? "Identité révoquée.")
+            canRetryPairing = false
         } catch {
             realtimeState = .offline
             if snapshot.hasProjection {
-                statusMessage = "Instance momentanement indisponible. Dernier etat connu affiche."
+                statusMessage = "Instance momentanément indisponible. Dernier état connu affiché."
                 bannerTone = .caution
+                pairingState = .failed(
+                    message: "Connexion à l’instance indisponible. L’identité de cet iPhone reste enregistrée."
+                )
+                canRetryPairing = true
             } else {
                 loginError = userFacingMessage(from: error)
+                pairingState = .failed(message: loginError ?? "Connexion impossible.")
+                canRetryPairing = true
                 bannerTone = .danger
             }
         }
 
-        isBootstrapping = false
     }
 
-    func login() async {
-        guard !isAuthenticating else {
+    func acceptPairingURL(_ url: URL) {
+        acceptPairingLink(url.absoluteString)
+    }
+
+    func acceptPairingLink(_ rawValue: String) {
+        guard !isBootstrapping else {
+            deferredPairingLink = rawValue
+            return
+        }
+        guard user == nil else {
+            statusMessage = "Déconnectez cet appareil avant d’en associer un autre."
+            bannerTone = .caution
+            return
+        }
+        // Un second lien ne doit pas annuler une lecture de `/result` en vol :
+        // le jeton d’appareil est retiré du serveur dès cette réponse. L’écran
+        // courant permet d’annuler explicitement avant de scanner à nouveau.
+        guard !isPairingInFlight, !canRetryPairing else {
             return
         }
 
-        isAuthenticating = true
+        do {
+            let link = try DevicePairingLink(string: rawValue)
+            let pending = PendingDevicePairing.make(
+                from: link,
+                deviceName: UIDevice.current.name,
+                appVersion: Self.appVersionLabel,
+                locale: Locale.current.language.languageCode?.identifier ?? "fr"
+            )
+            try credentialStore.save(pendingPairing: pending)
+
+            let configuration = ServerConfiguration(baseURLString: pending.serverBaseURL)
+            configurationStore.save(configuration)
+            pendingPairing = pending
+            recoveredIdentity = nil
+            hasDeviceIdentity = false
+            serverURLText = pending.serverBaseURL
+            loginError = nil
+            pairingState = .claiming(instance: pairingInstanceLabel(pending.serverBaseURL))
+            canRetryPairing = true
+            showPairingBanner("Association de cet iPhone en cours. Confirmez-la depuis votre session Web.")
+            pairingTaskIdentity = UUID()
+        } catch {
+            loginError = userFacingMessage(from: error)
+            pairingState = .failed(message: loginError ?? "Invitation invalide.")
+            canRetryPairing = false
+            bannerTone = .danger
+        }
+    }
+
+    func retryPairing() {
+        do {
+            let credentials = try credentialStore.load()
+            guard credentials.pendingPairing != nil
+                    || credentials.identity != nil
+                    || recoveredIdentity != nil else {
+                pairingState = .idle
+                return
+            }
+            if let pending = credentials.pendingPairing {
+                pendingPairing = pending
+                pairingState = .claiming(instance: pairingInstanceLabel(pending.serverBaseURL))
+            } else {
+                let baseURL = credentials.identity?.serverBaseURL
+                    ?? recoveredIdentity?.serverBaseURL
+                    ?? serverURLText
+                pairingState = .finalizing(instance: pairingInstanceLabel(baseURL))
+            }
+            loginError = nil
+            canRetryPairing = true
+            showPairingBanner("Nouvelle tentative d’association en cours.")
+            pairingTaskIdentity = UUID()
+        } catch {
+            let message = userFacingMessage(from: error)
+            pairingState = .failed(message: message)
+        }
+    }
+
+    func cancelPairing() {
+        try? credentialStore.clear()
+        pendingPairing = nil
+        recoveredIdentity = nil
+        hasDeviceIdentity = false
+        pairingTaskIdentity = nil
+        pairingState = .idle
+        canRetryPairing = false
         loginError = nil
+        api = nil
+        if snapshot.hasProjection {
+            statusMessage = "Dernier état connu affiché. Associez cet iPhone pour reprendre les actions."
+            bannerTone = .caution
+        }
+    }
+
+    func runPairingAttempt() async {
+        guard let attemptID = pairingTaskIdentity,
+              user == nil,
+              !isBootstrapping,
+              isSceneActive else {
+            return
+        }
+
+        activePairingAttemptID = attemptID
+        defer {
+            if activePairingAttemptID == attemptID {
+                activePairingAttemptID = nil
+            }
+        }
 
         do {
+            if let recoveredIdentity {
+                try credentialStore.save(identity: recoveredIdentity)
+                hasDeviceIdentity = true
+                self.recoveredIdentity = nil
+                try await activateDeviceIdentity(
+                    recoveredIdentity,
+                    pairingAttemptID: attemptID
+                )
+                pairingState = .idle
+                canRetryPairing = false
+                return
+            }
+
+            let storedCredentials = try credentialStore.load()
+            if let identity = storedCredentials.identity {
+                hasDeviceIdentity = true
+                try await activateDeviceIdentity(
+                    identity,
+                    pairingAttemptID: attemptID
+                )
+                pairingState = .idle
+                canRetryPairing = false
+                return
+            }
+
+            guard let pending = storedCredentials.pendingPairing ?? pendingPairing else {
+                pairingState = .idle
+                return
+            }
+            pendingPairing = pending
+
             let configuration = try ServerConfiguration(
-                baseURLString: serverURLText,
-                username: usernameText
+                baseURLString: pending.serverBaseURL
             ).validated()
-            prepareAPI(with: configuration)
+            prepareAPI(with: configuration, deviceToken: nil)
 
             let setupStatus = try await currentAPI().getSetupStatus()
+            try ensureCurrentPairingAttempt(attemptID)
             guard setupStatus.initialized else {
                 throw ServerConfiguration.ConfigurationError.notInitialized
             }
-
             instanceName = setupStatus.name
-            _ = try await currentAPI().login(
-                username: configuration.username,
-                password: passwordText
-            )
-            user = try await currentAPI().getCurrentSession()
-            passwordText = ""
-            serverVersion = (try? await currentAPI().getVersion()) ?? serverVersion
-            configurationStore.save(configuration)
-            statusMessage = nil
-            bannerTone = .neutral
-            await refreshProjection()
-        } catch is CancellationError {
-            loginError = nil
-        } catch {
-            loginError = userFacingMessage(from: error)
-            bannerTone = .danger
-        }
 
-        isAuthenticating = false
+            let instance = pairingInstanceLabel(pending.serverBaseURL)
+            pairingState = .claiming(instance: instance)
+            try await waitUntilPairingCanContactServer(attemptID)
+            let claim = CairnOpsAPI.DevicePairingClaim(
+                name: pending.deviceName,
+                platform: "ios",
+                appVersion: pending.appVersion,
+                locale: pending.locale,
+                notificationContent: pending.notificationContent,
+                encryptionPublicKey: try pending.encryptionPublicKey(),
+                pushRecipient: pending.pushRecipient
+            )
+
+            do {
+                _ = try await currentAPI().claimDevicePairing(
+                    pairingToken: pending.pairingToken,
+                    claim: claim
+                )
+            } catch let error as CairnOpsAPIError where error.statusCode == 409 {
+                // Une réponse perdue après le POST laisse le serveur déjà
+                // revendiqué. Le même secret peut alors reprendre sur /result.
+            }
+            try ensureCurrentPairingAttempt(attemptID)
+
+            pairingState = .awaitingConfirmation(instance: instance)
+            showPairingBanner("Confirmation de cet iPhone attendue depuis votre session Web.")
+            while !Task.isCancelled {
+                try await waitUntilPairingCanContactServer(attemptID)
+                let result = try await currentAPI().getDevicePairingResult(
+                    pairingToken: pending.pairingToken
+                )
+                try ensureCurrentPairingAttempt(attemptID)
+                if result.status == .confirmed {
+                    guard let deviceID = result.deviceID,
+                          !deviceID.isEmpty,
+                          let deviceToken = result.deviceToken,
+                          !deviceToken.isEmpty else {
+                        throw PairingFlowError.incompleteCredential
+                    }
+
+                    let identity = DeviceIdentity(
+                        serverBaseURL: pending.serverBaseURL,
+                        deviceID: deviceID,
+                        deviceToken: deviceToken,
+                        encryptionPrivateKey: pending.encryptionPrivateKey,
+                        pushRecipient: pending.pushRecipient
+                    )
+                    recoveredIdentity = identity
+                    hasDeviceIdentity = true
+                    try credentialStore.save(identity: identity)
+                    recoveredIdentity = nil
+                    pendingPairing = nil
+                    pairingState = .finalizing(instance: instance)
+                    showPairingBanner("Identité enregistrée. Synchronisation de la projection en cours.")
+                    try await activateDeviceIdentity(
+                        identity,
+                        pairingAttemptID: attemptID
+                    )
+                    pairingState = .idle
+                    canRetryPairing = false
+                    return
+                }
+
+                try await Task.sleep(for: pairingPollInterval)
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            guard pairingTaskIdentity == attemptID, !Task.isCancelled else {
+                return
+            }
+            await handlePairingFailure(error)
+        }
     }
 
     func refresh() async {
@@ -225,6 +514,8 @@ final class AppModel {
             reconnectAttempt = 0
             if user != nil {
                 Task { await self.refreshProjection() }
+            } else if isPairingInFlight, activePairingAttemptID == nil {
+                pairingTaskIdentity = UUID()
             }
         } else {
             cancelCoalescing()
@@ -251,7 +542,9 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as CairnOpsAPIError where error.statusCode == 401 {
-            await invalidateSession(message: "La session a expire. Reconnectez-vous pour continuer.")
+            await invalidateSession(
+                message: "L’identité de cet appareil a été révoquée. Associez de nouveau cet iPhone."
+            )
         } catch {
             statusMessage = userFacingMessage(from: error)
             bannerTone = .danger
@@ -259,6 +552,12 @@ final class AppModel {
     }
 
     func logout() async {
+        if let recoveredIdentity,
+           let configuration = try? ServerConfiguration(
+               baseURLString: recoveredIdentity.serverBaseURL
+           ).validated() {
+            prepareAPI(with: configuration, deviceToken: recoveredIdentity.deviceToken)
+        }
         do {
             try await currentAPI().logout()
         } catch is CancellationError {
@@ -426,7 +725,9 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as CairnOpsAPIError where error.statusCode == 401 {
-            await invalidateSession(message: "La session a expire pendant la synchronisation.")
+            await invalidateSession(
+                message: "L’identité de cet appareil a été révoquée pendant la synchronisation."
+            )
         } catch {
             statusMessage = "Synchronisation partielle ratee. Une nouvelle tentative suivra."
             bannerTone = .caution
@@ -494,7 +795,9 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch let error as CairnOpsAPIError where error.statusCode == 401 {
-            await invalidateSession(message: "La session a expire. Reconnectez-vous pour continuer.")
+            await invalidateSession(
+                message: "L’identité de cet appareil a été révoquée. Associez de nouveau cet iPhone."
+            )
         } catch {
             statusMessage = snapshot.hasProjection
                 ? "Lecture impossible pour le moment. Le dernier etat connu reste visible."
@@ -503,10 +806,131 @@ final class AppModel {
         }
     }
 
-    private func prepareAPI(with configuration: ServerConfiguration) {
+    private static var appVersionLabel: String {
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "0.1.0"
+        let build = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+
+    private func activateDeviceIdentity(
+        _ identity: DeviceIdentity,
+        pairingAttemptID: UUID? = nil
+    ) async throws {
+        let configuration = try ServerConfiguration(
+            baseURLString: identity.serverBaseURL
+        ).validated()
+        prepareAPI(with: configuration, deviceToken: identity.deviceToken)
+
+        let setupStatus = try await currentAPI().getSetupStatus()
+        try ensureCurrentPairingAttempt(pairingAttemptID)
+        guard setupStatus.initialized else {
+            throw ServerConfiguration.ConfigurationError.notInitialized
+        }
+
+        let authenticatedUser = try await currentAPI().getCurrentSession()
+        try ensureCurrentPairingAttempt(pairingAttemptID)
+        let version = try? await currentAPI().getVersion()
+        try ensureCurrentPairingAttempt(pairingAttemptID)
+
+        instanceName = setupStatus.name
+        user = authenticatedUser
+        serverVersion = version ?? serverVersion
+        configurationStore.save(configuration)
+        loginError = nil
+        statusMessage = nil
+        bannerTone = .neutral
+        await refreshProjection()
+    }
+
+    private func ensureCurrentPairingAttempt(_ expectedID: UUID?) throws {
+        guard let expectedID else {
+            return
+        }
+        guard !Task.isCancelled, pairingTaskIdentity == expectedID else {
+            throw CancellationError()
+        }
+    }
+
+    /// N’entame pas une nouvelle requête de résultat en arrière-plan, mais ne
+    /// coupe jamais une requête déjà partie : une réponse confirmée contient un
+    /// secret à usage unique qu’il faut enregistrer même si la scène se ferme.
+    private func waitUntilPairingCanContactServer(_ attemptID: UUID) async throws {
+        while !isSceneActive {
+            try ensureCurrentPairingAttempt(attemptID)
+            try await Task.sleep(for: .seconds(1))
+        }
+        try ensureCurrentPairingAttempt(attemptID)
+    }
+
+    private func handlePairingFailure(_ error: Error) async {
+        let terminalFailure: Bool
+        if let apiError = error as? CairnOpsAPIError {
+            terminalFailure = [400, 401, 404, 409, 410].contains(apiError.statusCode)
+        } else {
+            terminalFailure = error is PairingFlowError
+                || error is ServerConfiguration.ConfigurationError
+        }
+
+        if terminalFailure {
+            try? credentialStore.clear()
+            pendingPairing = nil
+            recoveredIdentity = nil
+            hasDeviceIdentity = false
+        }
+        canRetryPairing = !terminalFailure
+
+        let message: String
+        if let apiError = error as? CairnOpsAPIError {
+            message = switch apiError.statusCode {
+            case 400:
+                "L’instance a refusé l’identité de cet iPhone. Relancez un nouvel appairage."
+            case 401, 404:
+                "Cette invitation d’appairage n’est plus valide. Générez un nouveau QR code sur le Web."
+            case 409:
+                "Cet appairage a été annulé. Générez un nouveau QR code sur le Web."
+            case 410:
+                "Cette invitation a expiré. Générez un nouveau QR code sur le Web."
+            default:
+                userFacingMessage(from: apiError)
+            }
+        } else {
+            message = userFacingMessage(from: error)
+        }
+
+        loginError = message
+        pairingState = .failed(message: message)
+        bannerTone = .danger
+        statusMessage = snapshot.hasProjection ? message : nil
+        realtimeState = .offline
+    }
+
+    private func showPairingBanner(_ message: String) {
+        guard snapshot.hasProjection else {
+            statusMessage = nil
+            return
+        }
+        statusMessage = message
+        bannerTone = .caution
+    }
+
+    private func pairingInstanceLabel(_ baseURL: String) -> String {
+        guard let url = URL(string: baseURL), let host = url.host() else {
+            return baseURL
+        }
+        let path = url.path == "/" ? "" : url.path
+        return host + path
+    }
+
+    private func prepareAPI(
+        with configuration: ServerConfiguration,
+        deviceToken: String?
+    ) {
         serverURLText = configuration.baseURLString
-        usernameText = configuration.username
-        api = CairnOpsAPI(configuration: configuration)
+        api = apiFactory(configuration, deviceToken)
     }
 
     private func currentAPI() throws -> CairnOpsAPI {
@@ -568,8 +992,14 @@ final class AppModel {
         cancelCoalescing()
         reconnectAttempt = 0
         api?.clearCookies()
+        try? credentialStore.clear()
+        pendingPairing = nil
+        recoveredIdentity = nil
+        hasDeviceIdentity = false
+        pairingTaskIdentity = nil
+        pairingState = .idle
+        canRetryPairing = false
         user = nil
-        passwordText = ""
         realtimeState = .offline
         snapshot = AppSnapshot()
         await snapshotStore.clear()
@@ -577,16 +1007,10 @@ final class AppModel {
         if keepConfiguration {
             let stored = configurationStore.load()
             serverURLText = stored.baseURLString
-            usernameText = stored.username
-            if let configuration = try? stored.validated() {
-                prepareAPI(with: configuration)
-            } else {
-                api = nil
-            }
+            api = nil
         } else {
             configurationStore.clear()
             serverURLText = ""
-            usernameText = ""
             api = nil
         }
     }
@@ -629,9 +1053,8 @@ final class AppModel {
 #if DEBUG
 extension AppModel {
     @MainActor
-    func debugInstallAPI(_ api: CairnOpsAPI, serverURL: String = "https://example.test", username: String = "ops") {
+    func debugInstallAPI(_ api: CairnOpsAPI, serverURL: String = "https://example.test") {
         serverURLText = serverURL
-        usernameText = username
         self.api = api
     }
 

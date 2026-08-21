@@ -39,9 +39,11 @@ né de sa mise en service : un Administrateur ouvre des comptes Opérateur et
 Observateur, change un rôle et retire un accès, sans jamais effacer un compte ni
 laisser l'instance sans Administrateur actif. Le backend mobile sait désormais
 associer et révoquer chaque appareil, chiffrer sa projection Push et la remettre
-au Relais officiel avec reprise par appareil. Les applications mobiles et
-l'exploitation publique du Relais restent à construire avant toute version
-destinée à la production.
+au Relais officiel avec reprise par appareil. Le compagnon iOS sait scanner ou
+recevoir le lien d'appairage, attendre la confirmation Web, conserver son
+identité dans Keychain et authentifier durablement REST et WebSocket. Le
+compagnon Android, l'inscription APNs au Relais et l'exploitation publique de ce
+dernier restent à construire avant toute version destinée à la production.
 
 ## Ce que vise la V1
 

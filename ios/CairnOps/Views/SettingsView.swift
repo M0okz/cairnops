@@ -8,7 +8,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
                 ScreenHeader(
                     title: "Réglages",
-                    subtitle: "Instance, session et cache local"
+                    subtitle: "Instance, appareil et cache local"
                 )
 
                 Panel {
@@ -51,7 +51,7 @@ struct SettingsView: View {
                 if let user = model.user {
                     Panel {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text("Session")
+                            Text("Appareil associé")
                                 .font(AppTheme.sectionTitleFont)
 
                             HStack(spacing: 12) {
@@ -63,26 +63,14 @@ struct SettingsView: View {
                                 actionButton(title: "Actualiser", systemImage: "arrow.clockwise", tone: AppTheme.accent) {
                                     await model.refresh()
                                 }
-                                actionButton(title: "Fermer", systemImage: "rectangle.portrait.and.arrow.right", tone: AppTheme.warning) {
+                                actionButton(title: "Dissocier", systemImage: "iphone.slash", tone: AppTheme.warning) {
                                     await model.logout()
                                 }
                             }
                         }
                     }
                 } else {
-                    Panel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Session")
-                                .font(AppTheme.sectionTitleFont)
-                            Text("Mode hors ligne ou session absente.")
-                                .foregroundStyle(.secondary)
-
-                            InstanceLoginForm(
-                                title: "Rétablir la session",
-                                subtitle: "Le cache local reste consultable, mais aucune mutation n’est envoyée tant que l’instance n’est pas rejointe."
-                            )
-                        }
-                    }
+                    DevicePairingPanel()
 
                     if model.snapshot.hasProjection {
                         Panel {

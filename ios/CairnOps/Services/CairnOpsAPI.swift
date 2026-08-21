@@ -1,5 +1,15 @@
 import Foundation
 
+protocol CairnOpsHTTPTransport: Sendable {
+    func perform(_ request: URLRequest) async throws -> (Data, URLResponse)
+}
+
+extension URLSession: CairnOpsHTTPTransport {
+    func perform(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        try await data(for: request)
+    }
+}
+
 struct CairnOpsAPIError: LocalizedError, Equatable {
     let statusCode: Int
     let message: String
@@ -8,19 +18,47 @@ struct CairnOpsAPIError: LocalizedError, Equatable {
 }
 
 struct CairnOpsAPI {
+    enum DevicePairingStatus: String, Decodable, Equatable, Sendable {
+        case awaitingScan = "awaiting_scan"
+        case awaitingConfirmation = "awaiting_confirmation"
+        case confirmed
+    }
+
+    struct DevicePairingClaim: Encodable, Equatable, Sendable {
+        let name: String
+        let platform: String
+        let appVersion: String
+        let locale: String
+        let notificationContent: String
+        let encryptionPublicKey: String
+        let pushRecipient: String
+
+        private enum CodingKeys: String, CodingKey {
+            case name
+            case platform
+            case appVersion = "app_version"
+            case locale
+            case notificationContent = "notification_content"
+            case encryptionPublicKey = "encryption_public_key"
+            case pushRecipient = "push_recipient"
+        }
+    }
+
+    struct DevicePairingResult: Decodable, Equatable, Sendable {
+        let status: DevicePairingStatus
+        let deviceID: String?
+        let deviceToken: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case status
+            case deviceID = "device_id"
+            case deviceToken = "device_token"
+        }
+    }
+
     struct SetupStatus: Decodable {
         let initialized: Bool
         let name: String
-    }
-
-    struct AuthenticatedSession: Decodable {
-        let user: User
-        let expiresAt: String
-
-        private enum CodingKeys: String, CodingKey {
-            case user
-            case expiresAt = "expires_at"
-        }
     }
 
     struct InboxPayload: Decodable {
@@ -61,25 +99,32 @@ struct CairnOpsAPI {
 
     private let configuration: ServerConfiguration
     private let session: URLSession
+    private let transport: any CairnOpsHTTPTransport
     private let cookieStorage: HTTPCookieStorage
+    private let deviceToken: String?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
     init(
         configuration: ServerConfiguration,
-        session: URLSession = CairnOpsAPI.makeSession(),
+        deviceToken: String? = nil,
+        session: URLSession? = nil,
+        transport: (any CairnOpsHTTPTransport)? = nil,
         cookieStorage: HTTPCookieStorage = .shared
     ) {
+        let resolvedSession = session ?? CairnOpsAPI.makeSession(acceptsCookies: deviceToken == nil)
         self.configuration = configuration
-        self.session = session
+        self.deviceToken = deviceToken
+        self.session = resolvedSession
+        self.transport = transport ?? resolvedSession
         self.cookieStorage = cookieStorage
     }
 
-    static func makeSession() -> URLSession {
+    static func makeSession(acceptsCookies: Bool = true) -> URLSession {
         let configuration = URLSessionConfiguration.default
-        configuration.httpShouldSetCookies = true
-        configuration.httpCookieAcceptPolicy = .always
-        configuration.httpCookieStorage = .shared
+        configuration.httpShouldSetCookies = acceptsCookies
+        configuration.httpCookieAcceptPolicy = acceptsCookies ? .always : .never
+        configuration.httpCookieStorage = acceptsCookies ? .shared : nil
         configuration.waitsForConnectivity = true
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 60
@@ -100,19 +145,27 @@ struct CairnOpsAPI {
         return payload.user
     }
 
-    func login(username: String, password: String) async throws -> AuthenticatedSession {
+    func logout() async throws {
+        try await requestVoid(path: "api/v1/session", method: "DELETE")
+    }
+
+    func claimDevicePairing(
+        pairingToken: String,
+        claim: DevicePairingClaim
+    ) async throws -> DevicePairingResult {
         try await request(
-            path: "api/v1/session",
+            path: "api/v1/device-pairings/claim",
             method: "POST",
-            body: try encoder.encode([
-                "username": username,
-                "password": password,
-            ])
+            body: try encoder.encode(claim),
+            bearerToken: pairingToken
         )
     }
 
-    func logout() async throws {
-        try await requestVoid(path: "api/v1/session", method: "DELETE")
+    func getDevicePairingResult(pairingToken: String) async throws -> DevicePairingResult {
+        try await request(
+            path: "api/v1/device-pairings/result",
+            bearerToken: pairingToken
+        )
     }
 
     func fetchTargets() async throws -> [Target] {
@@ -164,19 +217,33 @@ struct CairnOpsAPI {
     }
 
     func makeRealtimeTask(after version: Int64?) throws -> URLSessionWebSocketTask {
-        let url = try configuration.eventsURL(after: version)
-        var request = URLRequest(url: url)
+        try session.webSocketTask(with: makeRealtimeRequest(after: version))
+    }
+
+    func makeRealtimeRequest(after version: Int64?) throws -> URLRequest {
+        let eventsURL = try configuration.eventsURL(after: version)
+        guard var components = URLComponents(url: eventsURL, resolvingAgainstBaseURL: false) else {
+            throw ServerConfiguration.ConfigurationError.invalidBaseURL
+        }
+        components.scheme = components.scheme == "https" ? "wss" : "ws"
+        guard let webSocketURL = components.url else {
+            throw ServerConfiguration.ConfigurationError.invalidBaseURL
+        }
+
+        var request = URLRequest(url: webSocketURL)
         request.timeoutInterval = 60
 
-        if let baseURL = try? configuration.resolvedBaseURL(),
-           let cookies = cookieStorage.cookies(for: baseURL),
-           !cookies.isEmpty {
+        if let deviceToken {
+            request.setValue("Bearer \(deviceToken)", forHTTPHeaderField: "Authorization")
+        } else if let baseURL = try? configuration.resolvedBaseURL(),
+                  let cookies = cookieStorage.cookies(for: baseURL),
+                  !cookies.isEmpty {
             HTTPCookie.requestHeaderFields(with: cookies).forEach { header, value in
                 request.setValue(value, forHTTPHeaderField: header)
             }
         }
 
-        return session.webSocketTask(with: request)
+        return request
     }
 
     func receiveRealtimeMessage(from task: URLSessionWebSocketTask) async throws -> RealtimeMessage {
@@ -208,28 +275,49 @@ struct CairnOpsAPI {
     private func request<T: Decodable>(
         path: String,
         method: String = "GET",
-        body: Data? = nil
+        body: Data? = nil,
+        bearerToken: String? = nil
     ) async throws -> T {
-        let request = try makeRequest(path: path, method: method, body: body)
-        let (data, response) = try await session.data(for: request)
+        let request = try makeRequest(
+            path: path,
+            method: method,
+            body: body,
+            bearerToken: bearerToken
+        )
+        let (data, response) = try await transport.perform(request)
         return try decodeResponse(data: data, response: response)
     }
 
     private func requestVoid(
         path: String,
         method: String = "GET",
-        body: Data? = nil
+        body: Data? = nil,
+        bearerToken: String? = nil
     ) async throws {
-        let request = try makeRequest(path: path, method: method, body: body)
-        let (data, response) = try await session.data(for: request)
+        let request = try makeRequest(
+            path: path,
+            method: method,
+            body: body,
+            bearerToken: bearerToken
+        )
+        let (data, response) = try await transport.perform(request)
         let _: EmptyResponse = try decodeResponse(data: data, response: response)
     }
 
-    private func makeRequest(path: String, method: String, body: Data?) throws -> URLRequest {
+    private func makeRequest(
+        path: String,
+        method: String,
+        body: Data?,
+        bearerToken: String?
+    ) throws -> URLRequest {
         let baseURL = try configuration.resolvedBaseURL()
         var request = URLRequest(url: baseURL.appending(path: path))
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        if let bearerToken = bearerToken ?? deviceToken {
+            request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
+        }
 
         if let body {
             request.httpBody = body
