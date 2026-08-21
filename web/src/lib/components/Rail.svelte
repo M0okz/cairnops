@@ -24,9 +24,18 @@
     page.url.pathname;
     if (!window.matchMedia('(max-width: 48rem)').matches) return;
     const frame = requestAnimationFrame(() => {
-      navigation
-        ?.querySelector<HTMLElement>('[aria-current="page"]')
-        ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+      const current = navigation?.querySelector<HTMLElement>('[aria-current="page"]');
+      if (!navigation || !current) return;
+      const navigationBox = navigation.getBoundingClientRect();
+      const currentBox = current.getBoundingClientRect();
+      navigation.scrollTo({
+        left:
+          navigation.scrollLeft +
+          currentBox.left -
+          navigationBox.left -
+          (navigationBox.width - currentBox.width) / 2,
+        behavior: 'auto'
+      });
     });
     return () => cancelAnimationFrame(frame);
   });
