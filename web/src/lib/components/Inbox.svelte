@@ -246,4 +246,14 @@
   .empty .faint {
     font-size: 0.6875rem;
   }
+
+  @media (max-width: 48rem) {
+    /* Le panneau s'aligne sur la fenêtre, au-delà de l'avatar et de la
+       gouttière de la barre, au lieu de déborder à gauche de l'écran. */
+    .panel {
+      right: calc(-1.625rem - var(--s3) - var(--s5));
+      width: calc(100vw - var(--s4) - var(--s4));
+      max-width: none;
+    }
+  }
 </style>
