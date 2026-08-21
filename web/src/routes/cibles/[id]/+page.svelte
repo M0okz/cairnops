@@ -1255,6 +1255,31 @@
   }
 
   @media (max-width: 48rem) {
+    .tabs {
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+      scrollbar-width: none;
+    }
+
+    .tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tabs button {
+      flex: none;
+    }
+
+    .banner {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+    }
+
+    .banner .btn {
+      grid-column: 2;
+      justify-self: start;
+    }
+
     .kpis {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
