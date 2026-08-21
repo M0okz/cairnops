@@ -19,6 +19,21 @@ components:
       in: cookie
       name: cairnops_session
       description: Session HttpOnly révocable. Sous HTTPS, le serveur utilise le préfixe de sécurité __Host-.
+    DeviceBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: CairnOps device token
+      description: >
+        Identité propre à un appareil, remise une seule fois après confirmation
+        Web et révocable sans fermer les autres appareils ni sessions Web.
+    PairingBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: CairnOps pairing token
+      description: >
+        Code de 256 bits à usage unique et valable dix minutes. Il autorise
+        seulement la revendication mobile et la lecture du résultat du même
+        appairage.
     WebhookBearer:
       type: http
       scheme: bearer
@@ -68,6 +83,98 @@ components:
       properties:
         user: { $ref: '#/components/schemas/User' }
         expires_at: { type: string, format: date-time }
+    Device:
+      type: object
+      required:
+        [id, user_id, user_display_name, name, platform, app_version, locale,
+         notification_content, push_enabled, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        user_display_name: { type: string }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        platform: { type: string, enum: [ios, android] }
+        app_version: { type: string, maxLength: 64 }
+        locale: { type: string, enum: [fr, en] }
+        notification_content: { type: string, enum: [complete, discreet, masked] }
+        push_enabled:
+          type: boolean
+          description: Faux après expiration du destinataire ; une rotation le réactive.
+        last_seen_at: { type: string, format: date-time, nullable: true }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DevicePairing:
+      type: object
+      required: [id, status, expires_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [awaiting_scan, awaiting_confirmation, confirmed, credential_consumed, expired, cancelled]
+        expires_at: { type: string, format: date-time }
+        claimed_name: { type: string, maxLength: 100 }
+        claimed_platform: { type: string, enum: [ios, android] }
+        claimed_at: { type: string, format: date-time }
+        confirmed_at: { type: string, format: date-time }
+        device_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+    DevicePairingInvitation:
+      type: object
+      required: [pairing, instance_url, token, qr_payload]
+      properties:
+        pairing: { $ref: '#/components/schemas/DevicePairing' }
+        instance_url: { type: string, format: uri }
+        token:
+          type: string
+          description: Secret de l'appairage affiché uniquement dans cette réponse.
+        qr_payload:
+          type: string
+          description: URI cairnops://pair contenant l'URL manuelle et le secret temporaire.
+    DevicePairingClaim:
+      type: object
+      required: [name, platform, encryption_public_key, push_recipient]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        platform: { type: string, enum: [ios, android] }
+        app_version: { type: string, maxLength: 64 }
+        locale: { type: string, enum: [fr, en], default: fr }
+        notification_content:
+          type: string
+          enum: [complete, discreet, masked]
+          default: complete
+        encryption_public_key:
+          type: string
+          description: Clé publique X25519 de 32 octets encodée en base64url sans remplissage.
+        push_recipient:
+          type: string
+          minLength: 16
+          maxLength: 1024
+          description: Destinataire opaque délivré à l'application par le Relais Push.
+    DevicePairingResult:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [awaiting_scan, awaiting_confirmation, confirmed] }
+        device_id: { type: string, format: uuid }
+        device_token:
+          type: string
+          description: Secret Bearer remis une seule fois après la confirmation Web.
+    DeviceUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        app_version: { type: string, maxLength: 64 }
+        locale: { type: string, enum: [fr, en] }
+        notification_content: { type: string, enum: [complete, discreet, masked] }
+        encryption_public_key:
+          type: string
+          description: Nouvelle clé publique X25519 en base64url sans remplissage.
+        push_recipient:
+          type: string
+          minLength: 16
+          maxLength: 1024
+          description: Nouveau destinataire opaque après rotation par APNs ou FCM.
     Target:
       type: object
       required: [id, name, description, created_at, external_source_count, sources]
@@ -253,10 +360,11 @@ components:
       type: object
       required: [name, status, instances]
       properties:
-        name: { type: string, enum: [server, worker, postgresql] }
+        name: { type: string, enum: [server, worker, postgresql, push] }
         status: { type: string, enum: [operational, stale, unavailable] }
         instances: { type: integer, minimum: 0 }
         last_seen_at: { type: string, format: date-time }
+        detail: { type: string }
     SystemHealth:
       type: object
       required: [status, checked_at, components, database, hours]
@@ -678,8 +786,8 @@ components:
         version: { type: integer, format: int64, minimum: 0 }
         kind:
           type: string
-          enum: [target.changed, source.changed, observation.created, component.heartbeat, connector.changed, incident.changed, maintenance.changed]
-        entity_type: { type: string, enum: [target, source, component, connector, incident, maintenance] }
+          enum: [target.changed, source.changed, observation.created, component.heartbeat, connector.changed, incident.changed, maintenance.changed, notification.changed, device.changed]
+        entity_type: { type: string, enum: [target, source, component, connector, incident, maintenance, notification, device] }
         entity_id: { type: string }
         occurred_at: { type: string, format: date-time }
     Error:
@@ -702,7 +810,7 @@ paths:
   /api/v1/system/health:
     get:
       operationId: getSystemHealth
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       responses:
         '200':
           description: Projection de santé du serveur, des workers et de PostgreSQL
@@ -711,6 +819,188 @@ paths:
               schema: { $ref: '#/components/schemas/SystemHealth' }
         '401': { description: Authentification requise }
         '503': { description: Projection de santé indisponible }
+  /api/v1/device-pairings:
+    post:
+      operationId: createDevicePairing
+      description: >-
+        Crée depuis le navigateur une invitation personnelle valable dix minutes.
+        Le secret et l'URI du QR ne sont rendus qu'une fois et ne sont jamais
+        persistés en clair.
+      security: [{ SessionCookie: [] }]
+      responses:
+        '201':
+          description: Invitation prête à être scannée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DevicePairingInvitation' }
+        '401': { description: Session Web requise }
+        '403': { description: Origine Web non autorisée }
+  /api/v1/device-pairings/claim:
+    post:
+      operationId: claimDevicePairing
+      description: >-
+        Revendique l'invitation depuis l'application mobile. Cette étape ne crée
+        encore aucune identité : le navigateur doit montrer l'appareil puis le
+        confirmer explicitement.
+      security: [{ PairingBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DevicePairingClaim' }
+      responses:
+        '202':
+          description: Revendication en attente de confirmation Web
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DevicePairingResult' }
+        '400': { description: Identité mobile invalide }
+        '401': { description: Code d'appairage requis }
+        '404': { description: Code inconnu }
+        '409': { description: Code déjà revendiqué ou annulé }
+        '410': { description: Code expiré }
+  /api/v1/device-pairings/result:
+    get:
+      operationId: getDevicePairingResult
+      description: >-
+        Permet au mobile d'attendre la confirmation. Le jeton d'appareil est
+        retiré de son stockage scellé dès cette réponse et ne peut jamais être
+        demandé une seconde fois.
+      security: [{ PairingBearer: [] }]
+      responses:
+        '200':
+          description: État courant, éventuellement accompagné du jeton remis une fois
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DevicePairingResult' }
+        '401': { description: Code d'appairage requis }
+        '404': { description: Code inconnu }
+        '409': { description: Appairage annulé }
+        '410': { description: Code expiré ou jeton déjà retiré }
+  /api/v1/device-pairings/{pairingID}:
+    get:
+      operationId: getDevicePairing
+      description: Relit dans le navigateur l'étape et l'identité mobile revendiquée.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: pairingID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Appairage appartenant à la personne connectée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DevicePairing' }
+        '400': { description: Identifiant invalide }
+        '401': { description: Session Web requise }
+        '404': { description: Appairage absent }
+    delete:
+      operationId: cancelDevicePairing
+      description: Annule une invitation qui n'a pas encore été confirmée.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: pairingID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Invitation annulée }
+        '400': { description: Identifiant invalide }
+        '401': { description: Session Web requise }
+        '403': { description: Origine Web non autorisée }
+        '404': { description: Appairage absent ou déjà confirmé }
+  /api/v1/device-pairings/{pairingID}/confirmation:
+    post:
+      operationId: confirmDevicePairing
+      description: >-
+        Confirme dans le navigateur l'appareil qui a revendiqué l'invitation et
+        crée son identité révocable. Le jeton reste scellé jusqu'à son unique
+        retrait par le mobile.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: pairingID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Identité d'appareil créée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DevicePairing' }
+        '400': { description: Identifiant invalide }
+        '401': { description: Session Web requise }
+        '403': { description: Origine Web non autorisée }
+        '404': { description: Appairage absent }
+        '409': { description: Scan absent, appairage annulé ou déjà confirmé }
+        '410': { description: Appairage expiré }
+  /api/v1/devices:
+    get:
+      operationId: listDevices
+      description: >-
+        Liste ses propres appareils ; un Administrateur voit ceux de tout
+        l'Espace opérationnel. Aucun jeton, destinataire Push ni clé n'est rendu.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      responses:
+        '200':
+          description: Appareils actifs et révoqués
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [devices]
+                properties:
+                  devices:
+                    type: array
+                    items: { $ref: '#/components/schemas/Device' }
+        '401': { description: Authentification requise }
+  /api/v1/devices/{deviceID}:
+    patch:
+      operationId: updateDevice
+      description: >-
+        Renomme un appareil, change sa préférence de contenu ou fait tourner sa
+        clé et son destinataire opaque après un changement APNs ou FCM.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      parameters:
+        - in: path
+          name: deviceID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeviceUpdate' }
+      responses:
+        '200':
+          description: Appareil mis à jour
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Device' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Origine Web non autorisée }
+        '404': { description: Appareil absent }
+        '409': { description: Appareil déjà révoqué }
+    delete:
+      operationId: revokeDevice
+      description: >-
+        Révoque immédiatement cette seule identité et annule ses livraisons Push
+        encore en attente, sans toucher aux autres appareils ni sessions Web.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      parameters:
+        - in: path
+          name: deviceID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Appareil révoqué }
+        '400': { description: Identifiant invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Origine Web non autorisée }
+        '404': { description: Appareil absent ou déjà révoqué }
   /api/v1/events:
     get:
       operationId: connectEventStream
@@ -719,7 +1009,7 @@ paths:
         version courante. Avec after, les événements postérieurs sont rejoués dans l'ordre,
         puis diffusés au fil de leur enregistrement. Ce canal signale les changements ; les
         lectures et commandes restent dans l'API REST.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: query
           name: after
@@ -736,7 +1026,7 @@ paths:
   /api/v1/connectors:
     get:
       operationId: listConnectors
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       responses:
         '200':
           description: Connecteurs persistés sans leurs secrets
@@ -754,7 +1044,7 @@ paths:
     post:
       operationId: previewZabbixConnector
       description: Vérifie TLS, la version API et la portée du jeton, puis propose des rapprochements explicables par nom, IP ou nom DNS sans importer.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -780,7 +1070,7 @@ paths:
     post:
       operationId: importZabbixConnector
       description: Revalide l'aperçu, scelle le jeton et importe uniquement les hôtes explicitement sélectionnés.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -815,7 +1105,7 @@ paths:
     post:
       operationId: previewUptimeKumaConnector
       description: Vérifie TLS, la clé API et la métrique monitor_status, puis propose des rapprochements explicables par nom, IP ou nom DNS sans importer.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -841,7 +1131,7 @@ paths:
     post:
       operationId: importUptimeKumaConnector
       description: Revalide l'aperçu, scelle la clé API et importe uniquement les moniteurs explicitement sélectionnés.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -878,7 +1168,7 @@ paths:
       description: >-
         Vérifie TLS et les identifiants de l'Integration API, lit la posture des
         hôtes puis propose des rapprochements explicables sans importer.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -908,7 +1198,7 @@ paths:
         Revalide l'aperçu, scelle les identifiants et importe les hôtes choisis.
         La synchronisation est strictement en lecture : elle ne déploie aucun
         correctif et ne redémarre aucun hôte.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -945,7 +1235,7 @@ paths:
       description: >-
         Arrête la lecture sans rien effacer : liaisons, quarantaine et Incidents ouverts
         restent en place, et un webhook générique suspendu refuse ses appels entrants.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: connectorID
@@ -964,7 +1254,7 @@ paths:
     delete:
       operationId: resumeConnector
       description: Replace le Connecteur dans le cycle et le rend dû immédiatement ; son état réel est confirmé au premier cycle.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: connectorID
@@ -987,7 +1277,7 @@ paths:
         Retire le Connecteur, ses liaisons, sa quarantaine et les preuves qu'il a produites.
         Les Cibles sont conservées ; les Incidents qui ne gardaient aucune autre preuve sont
         clos et le journal l'explique. Aucune écriture n'est faite chez l'outil d'origine.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: connectorID
@@ -1007,7 +1297,7 @@ paths:
     post:
       operationId: createGenericWebhookConnector
       description: Génère un point d'entrée non devinable et un secret Bearer affiché une seule fois.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -1062,7 +1352,7 @@ paths:
   /api/v1/connectors/{connectorID}/quarantine:
     get:
       operationId: listWebhookQuarantine
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: connectorID
@@ -1086,7 +1376,7 @@ paths:
     post:
       operationId: approveWebhookIdentity
       description: Lie durablement l'identité à une Cible puis rejoue ses derniers états retenus de façon idempotente.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: connectorID
@@ -1122,7 +1412,7 @@ paths:
     get:
       operationId: listIncidents
       description: Retourne la projection ordonnée des Incidents et leurs preuves. Les Incidents actifs non acquittés sont prioritaires.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: query
           name: status
@@ -1155,7 +1445,7 @@ paths:
         Nombre d'Incidents ouverts par jour, du plus ancien au plus récent.
         Chaque jour de la fenêtre est rendu, y compris ceux restés vides. Les
         Cibles archivées en sont exclues, comme elles le sont de la Santé.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: query
           name: days
@@ -1182,7 +1472,7 @@ paths:
   /api/v1/incidents/{incidentID}:
     get:
       operationId: getIncident
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: incidentID
@@ -1204,7 +1494,7 @@ paths:
         Enregistre d'abord l'acquittement dans CairnOps, puis le propage aux
         Sources compatibles. Une panne distante laisse l'Incident acquitté avec
         un statut de synchronisation failed afin de permettre une reprise sûre.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: incidentID
@@ -1228,7 +1518,7 @@ paths:
         Écarte une preuve active sans la supprimer. La décision motivée est
         ajoutée au Journal ; une Source à état réutilisable doit ensuite montrer
         un rétablissement avant qu'un nouveau cycle identique puisse ouvrir un Incident.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: incidentID
@@ -1262,7 +1552,7 @@ paths:
   /api/v1/maintenances:
     get:
       operationId: listMaintenances
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: query
           name: limit
@@ -1283,7 +1573,7 @@ paths:
     post:
       operationId: createMaintenance
       description: Crée une fenêtre immédiate ou planifiée sur une ou plusieurs Cibles.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -1314,7 +1604,7 @@ paths:
   /api/v1/maintenances/{maintenanceID}/cancellation:
     post:
       operationId: cancelMaintenance
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: maintenanceID
@@ -1335,7 +1625,7 @@ paths:
     get:
       operationId: listNotificationChannels
       description: Liste les sorties de notification sans jamais révéler leurs secrets.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       responses:
         '200':
           description: Canaux configurés
@@ -1354,7 +1644,7 @@ paths:
     post:
       operationId: createMattermostNotificationChannel
       description: Vérifie le webhook HTTPS par un message de contrôle, puis chiffre son URL complète avant persistance.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -1480,7 +1770,7 @@ paths:
         '401': { description: Identifiants invalides }
     get:
       operationId: getSession
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       responses:
         '200':
           description: Utilisateur de la Session courante
@@ -1494,7 +1784,7 @@ paths:
         '401': { description: Authentification requise }
     delete:
       operationId: deleteSession
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       responses:
         '204': { description: Session révoquée et cookie supprimé }
         '401': { description: Authentification requise }
@@ -1506,7 +1796,7 @@ paths:
         Vérifie le mot de passe actuel, puis révoque toutes les sessions du compte.
         La session porteuse est immédiatement rouverte afin de ne pas éjecter
         l'opérateur après un geste réussi.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -1536,7 +1826,7 @@ paths:
       description: >
         Réservé aux Administrateurs. Aucune empreinte de mot de passe n'est
         retournée. Les comptes actifs viennent en premier, puis les désactivés.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       responses:
         '200':
           description: Comptes de l'instance
@@ -1557,7 +1847,7 @@ paths:
         Réservé aux Administrateurs. CairnOps n'envoie pas de courrier en V1 :
         l'Administrateur choisit le premier mot de passe et le transmet hors de
         CairnOps. L'identifiant est normalisé en minuscules et ne changera plus.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -1594,7 +1884,7 @@ paths:
         sessions ouvertes du compte visé, car un rôle décide de ce qui est permis
         à chaque requête. Un Administrateur ne change pas son propre rôle, et
         l'instance refuse de perdre son dernier Administrateur actif.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: userID
@@ -1636,7 +1926,7 @@ paths:
         empreinte de mot de passe, ni son identifiant, qui reste pris. Un
         Administrateur ne se désactive pas lui-même, et l'instance refuse de
         perdre son dernier Administrateur actif.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: userID
@@ -1661,7 +1951,7 @@ paths:
       description: >
         Réservé aux Administrateurs. Le compte retrouve son accès avec le mot de
         passe qu'il avait, inchangé depuis la désactivation.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: userID
@@ -1686,7 +1976,7 @@ paths:
       description: >
         Réservé aux Administrateurs. Ne demande pas l'ancien mot de passe et
         révoque les sessions ouvertes du compte visé.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: userID
@@ -1723,7 +2013,7 @@ paths:
         porte sur toute la boîte, pas seulement sur la page rendue. Ouverte à
         tous les rôles : ce ne sont pas des Canaux à administrer, ce sont des
         nouvelles reçues.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       responses:
         '200':
           description: Boîte de réception
@@ -1746,7 +2036,7 @@ paths:
         Sans corps, ou avec une liste vide, toute la boîte est lue. Le geste ne
         concerne jamais que son auteur, et n'efface rien : une entrée lue reste
         dans la boîte avec sa date.
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: false
         content:
@@ -1803,7 +2093,7 @@ paths:
   /api/v1/targets:
     get:
       operationId: listTargets
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       responses:
         '200':
           description: Cibles actives et Sources associées
@@ -1819,7 +2109,7 @@ paths:
         '401': { description: Authentification requise }
     post:
       operationId: createTarget
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
         content:
@@ -1841,7 +2131,7 @@ paths:
   /api/v1/targets/{targetID}:
     patch:
       operationId: updateTarget
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       description: >-
         Corrige le nom et la description d'une Cible. Son identité, son
         historique et ses Sources ne bougent pas.
@@ -1872,7 +2162,7 @@ paths:
         '404': { description: Cible absente ou archivée }
     delete:
       operationId: archiveTarget
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       description: >-
         Archive une Cible sans effacer son passé. Ses Incidents actifs sont
         résolus, ses Contrôles cessent d'être dus et aucun signal ne la rouvre.
@@ -1890,7 +2180,7 @@ paths:
   /api/v1/targets/{targetID}/restoration:
     post:
       operationId: restoreTarget
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       description: >-
         Remet une Cible archivée en service. Aucun Incident n'est rouvert :
         il y faudra une preuve fraîche.
@@ -1911,7 +2201,7 @@ paths:
   /api/v1/sources/{sourceID}:
     patch:
       operationId: updateSource
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       description: >-
         Modifie un Contrôle natif. Un champ absent reste inchangé, ce qui permet
         de suspendre une sonde sans réémettre sa configuration. Une Source
@@ -1953,7 +2243,7 @@ paths:
         '409': { description: Source appartenant à une Intégration }
     delete:
       operationId: deleteSource
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       description: >-
         Retire un Contrôle natif et les Observations qu'il portait : une preuve
         sans Source qui la porte ne s'interprète plus.
@@ -1972,7 +2262,7 @@ paths:
   /api/v1/targets/{targetID}/sources:
     post:
       operationId: createSource
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: targetID
@@ -2025,7 +2315,7 @@ paths:
   /api/v1/metrics/targets:
     get:
       operationId: listTargetMeasures
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       description: >-
         Mesures sur 24 heures de toutes les Cibles actives, tendance comprise.
         Une liste de Cibles ne coûte donc qu'une requête, quelle que soit sa
@@ -2047,7 +2337,7 @@ paths:
   /api/v1/targets/{targetID}/metrics:
     get:
       operationId: getTargetMeasures
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       description: >-
         Les trois fenêtres d'une Cible et la part de chacune de ses Sources,
         Contrôles natifs comme Sources apportées par une Intégration.
@@ -2068,7 +2358,7 @@ paths:
   /api/v1/targets/{targetID}/observations:
     get:
       operationId: listTargetObservations
-      security: [{ SessionCookie: [] }]
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
           name: targetID

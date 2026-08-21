@@ -31,6 +31,7 @@ type ServerOptions struct {
 	Incidents      Incidents
 	Maintenances   Maintenances
 	Notifications  Notifications
+	Devices        DeviceManager
 	Events         EventStream
 	SystemHealth   SystemHealth
 }
@@ -55,7 +56,10 @@ func NewServer(options ServerOptions) *http.Server {
 	})
 	var identityHTTP identityHandler
 	if options.Identity != nil {
-		identityHTTP = identityHandler{identity: options.Identity, security: newSessionSecurity(options.PublicURL), logger: logger}
+		identityHTTP = identityHandler{
+			identity: options.Identity, devices: options.Devices,
+			security: newSessionSecurity(options.PublicURL), logger: logger,
+		}
 		bootstrap := newAuthenticator(options.BootstrapToken)
 		mux.HandleFunc("GET /api/v1/setup/status", identityHTTP.setupStatus)
 		mux.Handle("POST /api/v1/setup", identityHTTP.requireSameOrigin(bootstrap.require(http.HandlerFunc(identityHTTP.initialize))))
@@ -76,6 +80,20 @@ func NewServer(options ServerOptions) *http.Server {
 		// ne peut en ouvrir. Le Jeton d'amorçage tient lieu de preuve, comme
 		// pour la mise en service.
 		mux.Handle("POST /api/v1/recovery", identityHTTP.requireSameOrigin(bootstrap.require(http.HandlerFunc(identityHTTP.recoverPassword))))
+	}
+	if options.Devices != nil && options.Identity != nil {
+		handler := deviceHandler{devices: options.Devices, logger: logger}
+		// Le scan et la récupération du résultat prouvent la possession du code
+		// court. La création et la confirmation restent des gestes du navigateur.
+		mux.HandleFunc("POST /api/v1/device-pairings/claim", handler.claimPairing)
+		mux.HandleFunc("GET /api/v1/device-pairings/result", handler.pairingResult)
+		mux.Handle("POST /api/v1/device-pairings", identityHTTP.requireSameOrigin(identityHTTP.requireBrowserSession(http.HandlerFunc(handler.createPairing))))
+		mux.Handle("GET /api/v1/device-pairings/{pairingID}", identityHTTP.requireBrowserSession(http.HandlerFunc(handler.getPairing)))
+		mux.Handle("POST /api/v1/device-pairings/{pairingID}/confirmation", identityHTTP.requireSameOrigin(identityHTTP.requireBrowserSession(http.HandlerFunc(handler.confirmPairing))))
+		mux.Handle("DELETE /api/v1/device-pairings/{pairingID}", identityHTTP.requireSameOrigin(identityHTTP.requireBrowserSession(http.HandlerFunc(handler.cancelPairing))))
+		mux.Handle("GET /api/v1/devices", identityHTTP.requireSession(http.HandlerFunc(handler.list)))
+		mux.Handle("PATCH /api/v1/devices/{deviceID}", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(handler.update))))
+		mux.Handle("DELETE /api/v1/devices/{deviceID}", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(handler.revoke))))
 	}
 	if options.ControlPlane != nil && options.Identity != nil {
 		handler := controlPlaneHandler{controlPlane: options.ControlPlane, logger: logger}

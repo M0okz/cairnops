@@ -1,0 +1,146 @@
+import SwiftUI
+
+struct HealthView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Group {
+            if let health = model.snapshot.systemHealth {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
+                        ScreenHeader(
+                            title: "Santé",
+                            subtitle: "Capacité de supervision de l’instance"
+                        ) {
+                            refreshButton
+                        }
+
+                        Panel {
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack {
+                                    Text("État global")
+                                        .font(AppTheme.sectionTitleFont)
+                                    Spacer()
+                                    StatusPill(
+                                        text: health.status == "operational" ? "Opérationnelle" : "Dégradée",
+                                        color: health.status == "operational" ? AppTheme.ok : AppTheme.warning,
+                                        systemImage: health.status == "operational" ? "heart.text.square.fill" : "waveform.path.ecg"
+                                    )
+                                }
+                                Text("Projection évaluée \(TimestampParser.relativeString(from: health.checkedAt)).")
+                                    .foregroundStyle(.secondary)
+
+                                HStack(spacing: 12) {
+                                    MetricTile(
+                                        title: "Observations 24 h",
+                                        value: "\(conclusiveObservations24h)",
+                                        subtitle: expectedObservations24h == 0 ? "Aucune attendue" : "\(expectedObservations24h) attendues",
+                                        tone: AppTheme.info
+                                    )
+                                    MetricTile(
+                                        title: "Latence max",
+                                        value: "\(health.database.maximumLatencyMilliseconds.formatted(.number.precision(.fractionLength(1)))) ms",
+                                        subtitle: "Base de données",
+                                        tone: AppTheme.warning
+                                    )
+                                }
+                            }
+                        }
+
+                        Panel {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text("Composants")
+                                    .font(AppTheme.sectionTitleFont)
+
+                                ForEach(health.components) { component in
+                                    ComponentHealthRow(
+                                        title: componentLabel(component.name),
+                                        statusText: componentStatusText(component.status),
+                                        statusColor: component.status == "operational" ? AppTheme.ok : AppTheme.warning,
+                                        statusSymbol: component.status == "operational" ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                                        detail: component.instances == 1 ? "1 instance" : "\(component.instances) instances"
+                                    )
+                                }
+                            }
+                        }
+
+                        Panel {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text("PostgreSQL")
+                                    .font(AppTheme.sectionTitleFont)
+
+                                HStack(spacing: 12) {
+                                    MetricTile(
+                                        title: "Latence courante",
+                                        value: "\(health.database.latencyMilliseconds.formatted(.number.precision(.fractionLength(1)))) ms",
+                                        subtitle: "Mesurée \(TimestampParser.relativeString(from: health.database.measuredSince))",
+                                        tone: AppTheme.ok
+                                    )
+                                    MetricTile(
+                                        title: "Maximum observé",
+                                        value: "\(health.database.maximumLatencyMilliseconds.formatted(.number.precision(.fractionLength(1)))) ms",
+                                        subtitle: "Depuis la dernière fenêtre",
+                                        tone: AppTheme.warning
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    .padding(AppTheme.screenPadding)
+                    .padding(.bottom, AppTheme.bottomScrollInset)
+                }
+            } else {
+                ContentUnavailableView(
+                    "Projection sante indisponible",
+                    systemImage: "waveform.path.ecg",
+                    description: Text("Le serveur n'a pas renvoye de vue sante exploitable pour le moment.")
+                )
+            }
+        }
+        .background(AppBackdrop())
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var expectedObservations24h: Int {
+        model.snapshot.systemHealth?.hours.reduce(0) { $0 + $1.expectedObservations } ?? 0
+    }
+
+    private var conclusiveObservations24h: Int {
+        model.snapshot.systemHealth?.hours.reduce(0) { $0 + $1.conclusiveObservations } ?? 0
+    }
+
+    private var refreshButton: some View {
+        AsyncButton {
+            await model.refresh()
+        } label: {
+            RefreshGlyph()
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(AppTheme.accent)
+        .accessibilityLabel("Actualiser la santé")
+    }
+
+    private func componentLabel(_ value: String) -> String {
+        switch value {
+        case "server":
+            "Serveur"
+        case "worker":
+            "Worker"
+        case "postgresql":
+            "PostgreSQL"
+        default:
+            value.capitalized
+        }
+    }
+
+    private func componentStatusText(_ value: String) -> String {
+        switch value {
+        case "operational":
+            "Opérationnel"
+        case "stale":
+            "En retard"
+        default:
+            "Indisponible"
+        }
+    }
+}

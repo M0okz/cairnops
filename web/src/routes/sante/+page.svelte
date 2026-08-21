@@ -22,7 +22,8 @@
   const labels = $derived<Record<string, { name: string; note: string }>>({
     server: { name: t('component.server'), note: t('health.serverNote') },
     worker: { name: t('component.worker'), note: t('health.workerNote') },
-    postgresql: { name: 'PostgreSQL', note: t('component.postgresqlNote') }
+    postgresql: { name: 'PostgreSQL', note: t('component.postgresqlNote') },
+    push: { name: t('component.push'), note: t('component.pushNote') }
   });
 
   /* Chaque composant porte le geste qu'il fait : le serveur répond, le worker
@@ -31,7 +32,8 @@
   const componentIcons: Record<string, IconName> = {
     server: 'server',
     worker: 'worker',
-    postgresql: 'database'
+    postgresql: 'database',
+    push: 'bell'
   };
 
   /* Les Connecteurs reprennent la marque montrée sur leur propre écran : un
@@ -201,7 +203,7 @@
           <span class="key"><Icon name={componentIcons[component.name] ?? 'health'} size={16} /></span>
           <span class="comp-id">
             <strong>{labels[component.name]?.name ?? component.name}</strong>
-            <small class="faint">{labels[component.name]?.note ?? ''}</small>
+            <small class="faint">{component.detail || labels[component.name]?.note || ''}</small>
           </span>
           <span class="faint num hide-sm">
             {plural('health.instances', component.instances)}

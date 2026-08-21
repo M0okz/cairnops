@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: CairnOps Push Relay API
+  version: 1.0.0
+  description: >-
+    Contrat minimal entre une instance CairnOps et le Relais Push officiel. Le
+    destinataire est une capacité opaque délivrée au compagnon mobile par le
+    relais ; l'enveloppe est chiffrée pour la clé de cet appareil. Le relais ne
+    reçoit aucune URL d'instance, identité de compte, Cible ni donnée d'Incident
+    en clair.
+servers:
+  - url: https://push.cairnops.example
+paths:
+  /v1/health:
+    get:
+      operationId: getPushRelayHealth
+      responses:
+        '204': { description: Relais prêt à accepter des livraisons }
+        '503': { description: APNs, FCM ou stockage du relais indisponible }
+  /v1/deliveries:
+    post:
+      operationId: createPushDelivery
+      description: >-
+        Accepte une livraison pour un destinataire opaque. Le relais doit
+        appliquer une limitation de débit par destinataire et ne jamais écrire
+        le destinataire ni le corps complet dans ses journaux.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushDelivery' }
+      responses:
+        '202': { description: Livraison acceptée par le relais }
+        '400': { description: Enveloppe ou métadonnées invalides }
+        '404': { description: Destinataire opaque inconnu }
+        '410': { description: Destinataire expiré ou révoqué }
+        '429': { description: Limite de débit atteinte }
+        '503': { description: Fournisseur mobile temporairement indisponible }
+components:
+  schemas:
+    PushDelivery:
+      type: object
+      additionalProperties: false
+      required: [recipient, envelope, collapse_key, priority, expires_at]
+      properties:
+        recipient:
+          type: string
+          minLength: 16
+          maxLength: 1024
+          description: Capacité opaque sans signification opérationnelle pour le relais.
+        envelope: { $ref: '#/components/schemas/EncryptedEnvelope' }
+        collapse_key:
+          type: string
+          description: Empreinte opaque et stable de l'Incident, jamais son identifiant brut.
+        priority: { type: string, enum: [normal, high] }
+        expires_at: { type: string, format: date-time }
+    EncryptedEnvelope:
+      type: object
+      additionalProperties: false
+      required: [version, ephemeral_public_key, nonce, ciphertext]
+      properties:
+        version: { type: integer, enum: [1] }
+        ephemeral_public_key:
+          type: string
+          description: Clé publique X25519 éphémère, 32 octets en base64url sans remplissage.
+        nonce:
+          type: string
+          description: Nonce XChaCha20-Poly1305, 24 octets en base64url sans remplissage.
+        ciphertext:
+          type: string
+          description: JSON chiffré et authentifié, encodé en base64url sans remplissage.

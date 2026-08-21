@@ -17,6 +17,7 @@ import (
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/controlplane"
 	"github.com/M0okz/cairnops/internal/database"
+	"github.com/M0okz/cairnops/internal/devices"
 	"github.com/M0okz/cairnops/internal/httpapi"
 	"github.com/M0okz/cairnops/internal/identity"
 	"github.com/M0okz/cairnops/internal/incidents"
@@ -78,6 +79,7 @@ func run(logger *slog.Logger) error {
 		notifications.NewMattermostClient(&http.Client{Timeout: 10 * time.Second}),
 		secrets,
 	)
+	deviceStore := devices.NewStore(pool, secrets, cfg.PublicURL)
 	hostname, _ := os.Hostname()
 	if hostname == "" {
 		hostname = "local"
@@ -102,6 +104,7 @@ func run(logger *slog.Logger) error {
 		Incidents:      incidentService,
 		Maintenances:   maintenanceService,
 		Notifications:  notificationService,
+		Devices:        deviceStore,
 		Events:         realtime.NewStore(pool),
 		SystemHealth:   systemhealth.NewStore(pool),
 	})

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/devices"
 	identitymodel "github.com/M0okz/cairnops/internal/identity"
 )
 
@@ -33,6 +34,7 @@ type Identity interface {
 
 type identityHandler struct {
 	identity Identity
+	devices  DeviceManager
 	security sessionSecurity
 	logger   *slog.Logger
 }
@@ -44,6 +46,8 @@ type sessionSecurity struct {
 }
 
 type principalContextKey struct{}
+
+type deviceContextKey struct{}
 
 func newSessionSecurity(publicURL string) sessionSecurity {
 	if publicURL == "" {
@@ -147,6 +151,12 @@ func (handler identityHandler) logout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if deviceID, ok := r.Context().Value(deviceContextKey{}).(string); ok && deviceID != "" && handler.devices != nil {
+		if err := handler.devices.RevokeSelf(r.Context(), deviceID); err != nil && !errors.Is(err, devices.ErrNotFound) {
+			handler.internalError(w, "revoke current device", err)
+			return
+		}
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name: handler.security.cookieName, Value: "", Path: "/", MaxAge: -1,
 		HttpOnly: true, Secure: handler.security.secure, SameSite: http.SameSiteStrictMode,
@@ -157,6 +167,41 @@ func (handler identityHandler) logout(w http.ResponseWriter, r *http.Request) {
 func (handler identityHandler) requireSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(handler.security.cookieName)
+		if err == nil {
+			principal, authErr := handler.identity.Authenticate(r.Context(), cookie.Value)
+			if authErr != nil {
+				if !errors.Is(authErr, identitymodel.ErrInvalidSession) {
+					handler.logger.Error("authenticate session", "error", authErr)
+				}
+				unauthorizedSession(w)
+				return
+			}
+			ctx := context.WithValue(r.Context(), principalContextKey{}, principal)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		if handler.devices != nil {
+			if token, ok := pairingBearer(r); ok {
+				authenticated, authErr := handler.devices.Authenticate(r.Context(), token)
+				if authErr == nil {
+					ctx := context.WithValue(r.Context(), principalContextKey{}, authenticated.Principal)
+					ctx = context.WithValue(ctx, deviceContextKey{}, authenticated.DeviceID)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+				if !errors.Is(authErr, devices.ErrInvalidDevice) {
+					handler.logger.Error("authenticate device", "error", authErr)
+				}
+			}
+		}
+		unauthorizedSession(w)
+	})
+}
+
+func (handler identityHandler) requireBrowserSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie(handler.security.cookieName)
 		if err != nil {
 			unauthorizedSession(w)
 			return
@@ -164,7 +209,7 @@ func (handler identityHandler) requireSession(next http.Handler) http.Handler {
 		principal, err := handler.identity.Authenticate(r.Context(), cookie.Value)
 		if err != nil {
 			if !errors.Is(err, identitymodel.ErrInvalidSession) {
-				handler.logger.Error("authenticate session", "error", err)
+				handler.logger.Error("authenticate browser session", "error", err)
 			}
 			unauthorizedSession(w)
 			return

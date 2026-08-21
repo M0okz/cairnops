@@ -12,6 +12,8 @@ import (
 
 const workerFreshness = 45 * time.Second
 
+const pushFreshness = 2 * time.Minute
+
 // Profondeur de la série horaire rendue avec la Santé : la même fenêtre que
 // les mesures, pour qu'un chiffre et son micro-graphe parlent des mêmes heures.
 const instanceHours = 24
@@ -34,6 +36,7 @@ type Component struct {
 	Status     ComponentStatus `json:"status"`
 	Instances  int             `json:"instances"`
 	LastSeenAt *time.Time      `json:"last_seen_at,omitempty"`
+	Detail     string          `json:"detail,omitempty"`
 }
 
 // Database porte ce que le serveur sait du temps de réponse de PostgreSQL :
@@ -120,8 +123,12 @@ func (store *Store) Snapshot(ctx context.Context) (Snapshot, error) {
 
 	checkedAt := time.Now().UTC()
 	worker := workerComponent(activeWorkers, lastWorkerSeen)
+	push, err := store.pushComponent(ctx, checkedAt)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	overall := "operational"
-	if worker.Status != StatusOperational {
+	if worker.Status != StatusOperational || push.Status != StatusOperational {
 		overall = "degraded"
 	}
 
@@ -139,10 +146,44 @@ func (store *Store) Snapshot(ctx context.Context) (Snapshot, error) {
 			{Name: "server", Status: StatusOperational, Instances: 1},
 			worker,
 			{Name: "postgresql", Status: StatusOperational, Instances: 1},
+			push,
 		},
 		Database: database,
 		Hours:    hours,
 	}, nil
+}
+
+func (store *Store) pushComponent(ctx context.Context, checkedAt time.Time) (Component, error) {
+	var configured bool
+	var status string
+	var lastCheckedAt *time.Time
+	var lastError string
+	if err := store.pool.QueryRow(ctx, `
+		SELECT configured, status, last_checked_at, last_error
+		FROM cairnops_push_relay_status
+		WHERE singleton = true
+	`).Scan(&configured, &status, &lastCheckedAt, &lastError); err != nil {
+		return Component{}, fmt.Errorf("read push relay health: %w", err)
+	}
+	return summarizePush(configured, status, lastCheckedAt, lastError, checkedAt), nil
+}
+
+func summarizePush(configured bool, status string, lastCheckedAt *time.Time, lastError string, checkedAt time.Time) Component {
+	component := Component{Name: "push", Status: StatusUnavailable, LastSeenAt: lastCheckedAt, Detail: lastError}
+	if !configured {
+		if component.Detail == "" {
+			component.Detail = "push relay is not configured"
+		}
+		return component
+	}
+	component.Instances = 1
+	if status == "operational" {
+		component.Status = StatusOperational
+		if lastCheckedAt == nil || checkedAt.Sub(lastCheckedAt.UTC()) > pushFreshness {
+			component.Status = StatusStale
+		}
+	}
+	return component
 }
 
 // round garde deux décimales : sous la milliseconde, la précision affichée

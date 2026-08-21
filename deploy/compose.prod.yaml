@@ -58,6 +58,7 @@ services:
       CAIRNOPS_WORKER_HEALTH_ADDRESS: :8081
       CAIRNOPS_PUBLIC_URL: ${CAIRNOPS_PUBLIC_URL:?CAIRNOPS_PUBLIC_URL must be set}
       CAIRNOPS_MASTER_KEY_FILE: /var/lib/cairnops/master.key
+      CAIRNOPS_PUSH_RELAY_URL: ${CAIRNOPS_PUSH_RELAY_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -12,21 +12,21 @@ import (
 )
 
 type Worker struct {
-	pool                   *pgxpool.Pool
-	instanceID             string
-	logger                 *slog.Logger
-	interval               time.Duration
-	scheduler              *monitoring.Scheduler
-	rollup                 *metrics.Rollup
-	notificationDispatcher interface{ Run(context.Context) error }
+	pool       *pgxpool.Pool
+	instanceID string
+	logger     *slog.Logger
+	interval   time.Duration
+	scheduler  *monitoring.Scheduler
+	rollup     *metrics.Rollup
+	runners    []interface{ Run(context.Context) error }
 }
 
-func New(pool *pgxpool.Pool, instanceID string, logger *slog.Logger, notificationDispatcher interface{ Run(context.Context) error }) *Worker {
+func New(pool *pgxpool.Pool, instanceID string, logger *slog.Logger, runners ...interface{ Run(context.Context) error }) *Worker {
 	store := monitoring.NewPostgresStore(pool)
 	return &Worker{
 		pool: pool, instanceID: instanceID, logger: logger, interval: 15 * time.Second,
 		scheduler: monitoring.NewScheduler(store, checks.NewRegistry(), instanceID, logger),
-		rollup:    metrics.NewRollup(pool, logger), notificationDispatcher: notificationDispatcher,
+		rollup:    metrics.NewRollup(pool, logger), runners: runners,
 	}
 }
 
@@ -36,12 +36,14 @@ func (w *Worker) Run(ctx context.Context) error {
 	}
 	w.logger.Info("worker started", "instance_id", w.instanceID)
 
-	errors := make(chan error, 4)
+	errors := make(chan error, 3+len(w.runners))
 	go func() { errors <- w.heartbeatLoop(ctx) }()
 	go func() { errors <- w.scheduler.Run(ctx) }()
 	go func() { errors <- w.rollup.Run(ctx) }()
-	if w.notificationDispatcher != nil {
-		go func() { errors <- w.notificationDispatcher.Run(ctx) }()
+	for _, runner := range w.runners {
+		if runner != nil {
+			go func(runner interface{ Run(context.Context) error }) { errors <- runner.Run(ctx) }(runner)
+		}
 	}
 
 	select {

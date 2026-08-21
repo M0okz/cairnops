@@ -330,6 +330,22 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 	// Un seul signalement pour toute la volée : les sessions ouvertes relisent
 	// leur propre boîte, et une entrée par personne en émettrait autant.
 	if result.RowsAffected() > 0 {
+		// Le Push reprend exactement les destinataires de la boîte intégrée, mais
+		// possède une reprise par appareil. Le relais ne recevra ensuite que son
+		// identifiant opaque et une enveloppe chiffrée.
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO cairnops_push_outbox (device_id, inbox_id)
+			SELECT device.id, inbox.id
+			FROM cairnops_notification_inbox inbox
+			JOIN cairnops_devices device ON device.user_id = inbox.user_id
+			JOIN cairnops_users users ON users.id = device.user_id
+			WHERE inbox.incident_id = $1::uuid AND inbox.event_kind = $2
+			  AND device.revoked_at IS NULL AND device.push_disabled_at IS NULL
+			  AND users.deactivated_at IS NULL
+			ON CONFLICT (device_id, inbox_id) DO NOTHING
+		`, delivery.IncidentID, delivery.EventKind); err != nil {
+			return 0, fmt.Errorf("schedule device push notifications: %w", err)
+		}
 		if _, err := tx.Exec(ctx, `
 			SELECT cairnops_append_event('notification.changed', 'notification', $1)
 		`, delivery.ChannelID); err != nil {

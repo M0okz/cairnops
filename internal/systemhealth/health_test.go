@@ -28,6 +28,39 @@ func TestWorkerComponentStatus(t *testing.T) {
 	}
 }
 
+func TestPushFreshnessIsLongerThanWorkerHeartbeat(t *testing.T) {
+	t.Parallel()
+	if pushFreshness <= workerFreshness {
+		t.Fatal("the external relay probe must tolerate more delay than an internal worker heartbeat")
+	}
+}
+
+func TestPushComponentStatus(t *testing.T) {
+	t.Parallel()
+	checkedAt := time.Now().UTC()
+	fresh := checkedAt.Add(-pushFreshness / 2)
+	stale := checkedAt.Add(-pushFreshness * 2)
+	for name, test := range map[string]struct {
+		configured bool
+		status     string
+		lastSeen   *time.Time
+		want       ComponentStatus
+	}{
+		"operational":  {configured: true, status: "operational", lastSeen: &fresh, want: StatusOperational},
+		"stale":        {configured: true, status: "operational", lastSeen: &stale, want: StatusStale},
+		"failed":       {configured: true, status: "unavailable", lastSeen: &fresh, want: StatusUnavailable},
+		"unconfigured": {want: StatusUnavailable},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			component := summarizePush(test.configured, test.status, test.lastSeen, "", checkedAt)
+			if component.Status != test.want {
+				t.Fatalf("expected %q, got %q", test.want, component.Status)
+			}
+		})
+	}
+}
+
 // La fenêtre de latence garde les dernières mesures, jamais davantage, et son
 // maximum est celui de ce qu'elle garde encore — une pointe sortie de la
 // fenêtre ne hante pas la page indéfiniment.

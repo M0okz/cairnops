@@ -25,6 +25,7 @@ type Worker struct {
 	InstanceID    string
 	PublicURL     string
 	MasterKeyFile string
+	PushRelayURL  string
 }
 
 func LoadServer() (Server, error) {
@@ -62,6 +63,7 @@ func LoadWorker() (Worker, error) {
 		InstanceID:    instanceID,
 		PublicURL:     envOr("CAIRNOPS_PUBLIC_URL", "http://localhost:8080"),
 		MasterKeyFile: envOr("CAIRNOPS_MASTER_KEY_FILE", "/var/lib/cairnops/master.key"),
+		PushRelayURL:  envOr("CAIRNOPS_PUSH_RELAY_URL", ""),
 	}
 	if err := validateAddress(cfg.HealthAddress); err != nil {
 		return Worker{}, fmt.Errorf("CAIRNOPS_WORKER_HEALTH_ADDRESS: %w", err)
@@ -75,7 +77,23 @@ func LoadWorker() (Worker, error) {
 	if cfg.MasterKeyFile == "" {
 		return Worker{}, fmt.Errorf("CAIRNOPS_MASTER_KEY_FILE must not be empty")
 	}
+	if cfg.PushRelayURL != "" {
+		if err := validatePushRelayURL(cfg.PushRelayURL); err != nil {
+			return Worker{}, fmt.Errorf("CAIRNOPS_PUSH_RELAY_URL: %w", err)
+		}
+	}
 	return cfg, nil
+}
+
+func validatePushRelayURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return fmt.Errorf("must be an absolute HTTPS URL")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("must not contain credentials, a query or a fragment")
+	}
+	return nil
 }
 
 func workerInstanceID() (string, error) {

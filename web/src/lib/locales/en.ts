@@ -157,9 +157,11 @@ export const en: Record<MessageKey, string> = {
   /* ── Instance components ─────────────────────────────────────────────── */
   'component.server': 'Server',
   'component.worker': 'Worker',
+  'component.push': 'Mobile Push',
   'component.serverNote': 'API & live signalling',
   'component.workerNote': 'Running the Checks',
   'component.postgresqlNote': 'Source of truth',
+  'component.pushNote': 'Encrypted iOS & Android relay',
   'component.status.operational': 'Operational',
   'component.status.stale': 'Stale signal',
   'component.status.unavailable': 'Unavailable',

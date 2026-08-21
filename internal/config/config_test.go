@@ -74,6 +74,26 @@ func TestLoadWorkerFromEnvironment(t *testing.T) {
 	}
 }
 
+func TestLoadWorkerAcceptsHTTPSPushRelay(t *testing.T) {
+	t.Setenv("CAIRNOPS_INSTANCE_ID", "worker-push")
+	t.Setenv("CAIRNOPS_PUSH_RELAY_URL", "https://push.cairnops.example")
+	cfg, err := LoadWorker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PushRelayURL != "https://push.cairnops.example" {
+		t.Fatalf("unexpected push relay URL: %s", cfg.PushRelayURL)
+	}
+}
+
+func TestLoadWorkerRejectsUnencryptedPushRelay(t *testing.T) {
+	t.Setenv("CAIRNOPS_INSTANCE_ID", "worker-push")
+	t.Setenv("CAIRNOPS_PUSH_RELAY_URL", "http://push.cairnops.example")
+	if _, err := LoadWorker(); err == nil {
+		t.Fatal("an unencrypted Push Relay URL was accepted")
+	}
+}
+
 func TestLoadWorkerRejectsExplicitEmptyInstanceID(t *testing.T) {
 	t.Setenv("CAIRNOPS_INSTANCE_ID", "")
 

@@ -156,9 +156,11 @@ export const fr = {
   /* ── Composants de l'instance ────────────────────────────────────────── */
   'component.server': 'Serveur',
   'component.worker': 'Worker',
+  'component.push': 'Push mobile',
   'component.serverNote': 'API & signalement',
   'component.workerNote': 'Exécution des Contrôles',
   'component.postgresqlNote': 'Source de vérité',
+  'component.pushNote': 'Relais chiffré iOS & Android',
   'component.status.operational': 'Opérationnel',
   'component.status.stale': 'Signal ancien',
   'component.status.unavailable': 'Indisponible',

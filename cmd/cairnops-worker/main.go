@@ -14,6 +14,7 @@ import (
 	"github.com/M0okz/cairnops/internal/database"
 	"github.com/M0okz/cairnops/internal/httpapi"
 	"github.com/M0okz/cairnops/internal/notifications"
+	"github.com/M0okz/cairnops/internal/push"
 	"github.com/M0okz/cairnops/internal/secretbox"
 	"github.com/M0okz/cairnops/internal/worker"
 )
@@ -67,7 +68,15 @@ func run(logger *slog.Logger) error {
 			notifications.NewMattermostClient(&http.Client{Timeout: 10 * time.Second}),
 			secrets, cfg.InstanceID, cfg.PublicURL,
 		)
-		errCh <- worker.New(pool, cfg.InstanceID, logger, notificationDispatcher).Run(ctx)
+		var relay push.Relay
+		if cfg.PushRelayURL != "" {
+			relay = push.NewRelayClient(cfg.PushRelayURL, &http.Client{Timeout: 10 * time.Second})
+		}
+		pushDispatcher := push.NewDispatcher(
+			push.NewPostgresStore(pool), relay, secrets,
+			cfg.InstanceID, cfg.PublicURL, logger,
+		)
+		errCh <- worker.New(pool, cfg.InstanceID, logger, notificationDispatcher, pushDispatcher).Run(ctx)
 	}()
 
 	select {

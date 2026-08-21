@@ -37,8 +37,11 @@ dans les listes, puis sur 7 et 30 jours dans le détail, à partir d'agrégats
 horaires consolidés par le worker. Une instance ne vit plus avec le seul compte
 né de sa mise en service : un Administrateur ouvre des comptes Opérateur et
 Observateur, change un rôle et retire un accès, sans jamais effacer un compte ni
-laisser l'instance sans Administrateur actif. Le Relais Push et les applications mobiles
-restent à construire avant toute version destinée à la production.
+laisser l'instance sans Administrateur actif. Le backend mobile sait désormais
+associer et révoquer chaque appareil, chiffrer sa projection Push et la remettre
+au Relais officiel avec reprise par appareil. Les applications mobiles et
+l'exploitation publique du Relais restent à construire avant toute version
+destinée à la production.
 
 ## Ce que vise la V1
 
@@ -64,6 +67,7 @@ Le périmètre complet et ses limites sont décrits dans
 | Synchronisation | API REST et signalement WebSocket |
 | Déploiement | Docker Compose multi-conteneurs |
 | Mobile | Applications natives iOS et Android |
+| Push | Enveloppes X25519 + XChaCha20-Poly1305 vers un destinataire de relais opaque |
 | Licence | GNU AGPL v3.0 |
 
 Le serveur reste la source de vérité. Les interfaces projettent le même état et
@@ -75,6 +79,8 @@ ne concluent jamais qu'une cible va bien faute de preuve récente.
 - [Périmètre fonctionnel de la V1](docs/V1-SCOPE.md)
 - [Direction de design](docs/DESIGN-DIRECTION.md)
 - [Décisions d'architecture](docs/adr/)
+- [Contrat du Relais Push](docs/api/push-relay.yaml)
+- [Format de chiffrement Push](docs/api/push-encryption.md)
 
 La référence visuelle est la maquette « CairnOps — Écrans » : huit écrans en
 sombre et en clair, dont la traduction en jetons vit dans
@@ -97,11 +103,18 @@ PostgreSQL fourni par défaut est réservé au développement local : remplacez-
 dans `.env` avant toute exposition réseau et définissez `CAIRNOPS_PUBLIC_URL`
 avec l'origine HTTPS réellement utilisée.
 
+Le worker active la livraison mobile lorsque `CAIRNOPS_PUSH_RELAY_URL` contient
+l'origine HTTPS du Relais officiel. Sans cette variable, les identités mobiles
+restent utilisables mais le composant Push apparaît indisponible dans la Santé.
+
 Endpoints utiles :
 
 - `GET /api/v1/health/live` : processus serveur actif ;
 - `GET /api/v1/health/ready` : serveur prêt et PostgreSQL joignable ;
-- `GET /api/v1/system/health` : état authentifié du serveur, des workers et de PostgreSQL ;
+- `GET /api/v1/system/health` : état authentifié du serveur, des workers, de PostgreSQL et du Push ;
+- `POST /api/v1/device-pairings` : invitation Web à usage unique pour associer un appareil ;
+- `POST /api/v1/device-pairings/claim` : revendication mobile avant confirmation Web ;
+- `GET /api/v1/devices` : appareils individuels actifs ou révoqués, sans leurs secrets ;
 - `GET /api/v1/events` : WebSocket authentifié avec reprise par version ;
 - `GET /api/v1/connectors` : Connecteurs persistés sans leurs secrets ;
 - `POST /api/v1/connectors/zabbix/preview` : vérification et aperçu Zabbix ;

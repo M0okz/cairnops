@@ -117,10 +117,11 @@ export type TargetMeasureDetail = {
 export type ComponentStatus = 'operational' | 'stale' | 'unavailable';
 
 export type SystemComponent = {
-  name: 'server' | 'worker' | 'postgresql';
+  name: 'server' | 'worker' | 'postgresql' | 'push';
   status: ComponentStatus;
   instances: number;
   last_seen_at?: string;
+  detail?: string;
 };
 
 /* Temps de réponse de PostgreSQL, mesuré à chaque lecture de la Santé. Les
