@@ -544,6 +544,10 @@
   }
 
   @media (max-width: 48rem) {
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
     .sas {
       --cols: minmax(0, 1fr) 4rem auto;
     }
