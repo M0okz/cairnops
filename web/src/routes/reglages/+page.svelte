@@ -9,6 +9,7 @@
   import Icon from '$lib/components/Icon.svelte';
   import AccountCreation from '$lib/components/AccountCreation.svelte';
   import AccountDeactivation from '$lib/components/AccountDeactivation.svelte';
+  import DeviceManagement from '$lib/components/DeviceManagement.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Account, type Role } from '$lib/api';
   import { i18n, locales, plural, t } from '$lib/i18n.svelte';
@@ -438,6 +439,8 @@
       </div>
     </form>
   </div>
+
+  <DeviceManagement />
 
   {#if isAdministrator}
     <div class="band-row">

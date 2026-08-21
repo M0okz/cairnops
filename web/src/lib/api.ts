@@ -20,6 +20,52 @@ export type Account = User & {
   last_seen_at: string | null;
 };
 
+export type DevicePlatform = 'ios' | 'android';
+export type DeviceNotificationContent = 'complete' | 'discreet' | 'masked';
+
+export type Device = {
+  id: string;
+  user_id: string;
+  user_display_name: string;
+  name: string;
+  platform: DevicePlatform;
+  app_version: string;
+  locale: 'fr' | 'en';
+  notification_content: DeviceNotificationContent;
+  push_enabled: boolean;
+  last_seen_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DevicePairingStatus =
+  | 'awaiting_scan'
+  | 'awaiting_confirmation'
+  | 'confirmed'
+  | 'credential_consumed'
+  | 'expired'
+  | 'cancelled';
+
+export type DevicePairing = {
+  id: string;
+  status: DevicePairingStatus;
+  expires_at: string;
+  claimed_name?: string;
+  claimed_platform?: DevicePlatform;
+  claimed_at?: string;
+  confirmed_at?: string;
+  device_id?: string;
+  created_at: string;
+};
+
+export type DevicePairingInvitation = {
+  pairing: DevicePairing;
+  instance_url: string;
+  token: string;
+  qr_payload: string;
+};
+
 export type SourceKind = 'http' | 'tcp' | 'dns' | 'icmp' | 'heartbeat';
 export type Outcome = 'healthy' | 'unhealthy' | 'unknown';
 
