@@ -6,17 +6,23 @@ import Foundation
 /// chose au lancement suivant, pas a garantir une durabilite transactionnelle.
 /// La sauvegarde est donc groupee et n'interrompt jamais l'interface.
 actor SnapshotStore {
-    private static let writeDebounce = Duration.seconds(2)
+    private static let defaultWriteInterval = Duration.seconds(10)
 
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
     private let customFileURL: URL?
+    private let writeInterval: Duration
 
     private var pendingSnapshot: AppSnapshot?
     private var flushTask: Task<Void, Never>?
+    private var flushGeneration = 0
 
-    init(fileURL: URL? = nil) {
+    init(
+        fileURL: URL? = nil,
+        writeInterval: Duration = SnapshotStore.defaultWriteInterval
+    ) {
         customFileURL = fileURL
+        self.writeInterval = writeInterval
     }
 
     func load() -> AppSnapshot? {
@@ -36,29 +42,30 @@ actor SnapshotStore {
             return
         }
 
-        flushTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.writeDebounce)
-            await self?.flush()
+        let generation = flushGeneration
+        flushTask = Task { [weak self, writeInterval] in
+            do {
+                try await Task.sleep(for: writeInterval)
+            } catch {
+                return
+            }
+            await self?.flush(ifCurrentGeneration: generation)
         }
     }
 
     /// Force l'ecriture immediate, par exemple avant une mise en veille.
     func flushNow() {
-        flushTask?.cancel()
-        flushTask = nil
+        cancelScheduledFlush()
         flush()
     }
 
     func clear() {
-        flushTask?.cancel()
-        flushTask = nil
+        cancelScheduledFlush()
         pendingSnapshot = nil
         try? FileManager.default.removeItem(at: snapshotFileURL())
     }
 
     private func flush() {
-        flushTask = nil
-
         guard let snapshot = pendingSnapshot else {
             return
         }
@@ -75,6 +82,20 @@ actor SnapshotStore {
             // Le cache local est opportuniste : une erreur d'ecriture ne doit
             // pas bloquer la projection live.
         }
+    }
+
+    private func flush(ifCurrentGeneration generation: Int) {
+        guard generation == flushGeneration else {
+            return
+        }
+        flushTask = nil
+        flush()
+    }
+
+    private func cancelScheduledFlush() {
+        flushGeneration &+= 1
+        flushTask?.cancel()
+        flushTask = nil
     }
 
     private func snapshotFileURL() -> URL {

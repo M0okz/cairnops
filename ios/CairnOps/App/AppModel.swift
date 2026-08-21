@@ -5,7 +5,7 @@ import UIKit
 @MainActor
 @Observable
 final class AppModel {
-    enum RealtimeState {
+    enum RealtimeState: Equatable {
         case offline
         case connecting
         case online
@@ -38,12 +38,38 @@ final class AppModel {
     /// Un evenement ne rend pas tout obsolete : un battement de coeur ne touche
     /// que la sante, une notification que la boite de reception. On ne recharge
     /// donc que ce qui a change au lieu des quatre appels systematiques.
-    private struct SyncScope: OptionSet {
+    private struct SyncScope: OptionSet, Sendable {
         let rawValue: Int
 
-        static let health = SyncScope(rawValue: 1 << 0)
-        static let inbox = SyncScope(rawValue: 1 << 1)
-        static let projection = SyncScope(rawValue: 1 << 2)
+        static let targets = SyncScope(rawValue: 1 << 0)
+        static let incidents = SyncScope(rawValue: 1 << 1)
+        static let measures = SyncScope(rawValue: 1 << 2)
+        static let inbox = SyncScope(rawValue: 1 << 3)
+        static let health = SyncScope(rawValue: 1 << 4)
+        static let version = SyncScope(rawValue: 1 << 5)
+
+        static let projection: SyncScope = [.targets, .incidents, .measures, .inbox]
+        static let fullRefresh: SyncScope = [.projection, .health, .version]
+    }
+
+    private struct SyncBatch {
+        let scopes: SyncScope
+        let realtimeVersion: Int64?
+        let completions: [CheckedContinuation<Bool, Never>]
+
+        var hasWork: Bool {
+            !scopes.isEmpty || realtimeVersion != nil
+        }
+    }
+
+    private struct SyncPayload {
+        let projection: CairnOpsAPI.OperationalProjection?
+        let targets: [Target]?
+        let incidents: [Incident]?
+        let measures: [TargetMeasures]?
+        let inbox: CairnOpsAPI.InboxPayload?
+        let health: SystemHealth?
+        let version: String?
     }
 
     /// Fenetre de regroupement des evenements temps reel. Une rafale de
@@ -52,6 +78,10 @@ final class AppModel {
 
     private static let minimumReconnectDelay = Duration.seconds(2)
     private static let maximumReconnectDelay = Duration.seconds(60)
+    private static let stableConnectionResetThreshold = Duration.seconds(30)
+    private static let minimumSyncRetryDelay = Duration.seconds(1)
+    private static let maximumSyncRetryDelay = Duration.seconds(30)
+    private static let realtimeReconnectMessage = "Flux temps réel interrompu. Nouvelle tentative en cours."
 
     var serverURLText = ""
 
@@ -86,15 +116,27 @@ final class AppModel {
     /// Passe a `false` des que la scene quitte le premier plan. La boucle temps
     /// reel s'arrete alors au lieu de maintenir une socket et des requetes
     /// pendant que l'app est en arriere-plan.
-    @ObservationIgnored private var isSceneActive = true
+    private var isSceneActive = true
 
+    @ObservationIgnored private var realtimeCursor: Int64?
     @ObservationIgnored private var pendingScopes: SyncScope = []
-    @ObservationIgnored private var coalescingTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingRealtimeVersion: Int64?
+    @ObservationIgnored private var pendingSyncCompletions: [CheckedContinuation<Bool, Never>] = []
+    @ObservationIgnored private var synchronizationTask: Task<Void, Never>?
+    @ObservationIgnored private var synchronizationGeneration = 0
+    @ObservationIgnored private var synchronizationIsWaiting = false
+    @ObservationIgnored private var synchronizationIsFetching = false
+    @ObservationIgnored private var syncRetryAttempt = 0
+    @ObservationIgnored private var activeRealtimeTask: URLSessionWebSocketTask?
+    @ObservationIgnored private var realtimeLoopGeneration = 0
     @ObservationIgnored private var reconnectAttempt = 0
     @ObservationIgnored private var debugHooks = DebugHooks()
 
     private struct DebugHooks {
         var fetchProjection: (() async throws -> CairnOpsAPI.OperationalProjection)?
+        var fetchTargets: (() async throws -> [Target])?
+        var fetchIncidents: (() async throws -> [Incident])?
+        var fetchMeasures: (() async throws -> [TargetMeasures])?
         var fetchInbox: (() async throws -> CairnOpsAPI.InboxPayload)?
         var fetchHealth: (() async throws -> SystemHealth?)?
         var fetchVersion: (() async throws -> String)?
@@ -175,6 +217,7 @@ final class AppModel {
         } catch {
             try? credentialStore.clear()
             hasDeviceIdentity = false
+            realtimeCursor = nil
             snapshot = AppSnapshot()
             await snapshotStore.clear()
             loginError = userFacingMessage(from: error)
@@ -190,6 +233,7 @@ final class AppModel {
         if let storedSnapshot = await snapshotStore.load(),
            storedSnapshot.serverBaseURL == credentialBaseURL {
             snapshot = storedSnapshot
+            realtimeCursor = storedSnapshot.realtimeVersion
             instanceName = instanceName.isEmpty ? "CairnOps" : instanceName
         }
 
@@ -509,16 +553,19 @@ final class AppModel {
         isSceneActive = isActive
 
         if isActive {
-            // La projection a pu diverger pendant la mise en veille : on la
-            // resynchronise au retour, la socket sera relancee par la `task`.
             reconnectAttempt = 0
             if user != nil {
-                Task { await self.refreshProjection() }
+                // La projection a pu diverger pendant la mise en veille. Elle
+                // rejoint la file serialisee ; la reprise WebSocket la complete
+                // sans pouvoir lancer une seconde synchronisation en parallele.
+                queueSynchronization(scopes: .fullRefresh, immediate: true)
             } else if isPairingInFlight, activePairingAttemptID == nil {
                 pairingTaskIdentity = UUID()
             }
         } else {
-            cancelCoalescing()
+            realtimeLoopGeneration &+= 1
+            stopRealtimeTransport()
+            cancelSynchronization()
             realtimeState = .offline
             // L'ecriture du cache est differee : on la force avant la mise en
             // veille pour ne pas perdre le dernier etat connu.
@@ -536,7 +583,7 @@ final class AppModel {
             let updatedIncident = try await currentAPI().acknowledgeIncident(id: incidentID)
             upsert(incident: updatedIncident)
             snapshot.lastRefreshAt = Date.now.ISO8601Format()
-            await snapshotStore.save(snapshot)
+            await saveSnapshot()
             statusMessage = "Incident acquitté."
             bannerTone = .neutral
         } catch is CancellationError {
@@ -572,6 +619,7 @@ final class AppModel {
     }
 
     func clearOfflineSnapshot() async {
+        realtimeCursor = nil
         snapshot = AppSnapshot()
         await snapshotStore.clear()
         statusMessage = nil
@@ -583,32 +631,42 @@ final class AppModel {
             return
         }
 
+        realtimeLoopGeneration &+= 1
+        let loopGeneration = realtimeLoopGeneration
+        let clock = ContinuousClock()
+
         defer {
-            cancelCoalescing()
-            realtimeState = .offline
+            if realtimeLoopGeneration == loopGeneration {
+                stopRealtimeTransport()
+                cancelSynchronization()
+                realtimeState = .offline
+            }
         }
 
         realtimeState = .connecting
 
-        while !Task.isCancelled, user != nil, isSceneActive {
+        while !Task.isCancelled,
+              user != nil,
+              isSceneActive,
+              realtimeLoopGeneration == loopGeneration {
+            let connectionStartedAt = clock.now
             do {
-                let socket = try currentAPI().makeRealtimeTask(after: snapshot.realtimeVersion)
+                let socket = try currentAPI().makeRealtimeTask(after: realtimeCursor)
+                activeRealtimeTask = socket
                 socket.resume()
-                defer { socket.cancel(with: .goingAway, reason: nil) }
+                defer {
+                    socket.cancel(with: .goingAway, reason: nil)
+                    if activeRealtimeTask === socket {
+                        activeRealtimeTask = nil
+                    }
+                }
 
-                while !Task.isCancelled, user != nil, isSceneActive {
+                while !Task.isCancelled,
+                      user != nil,
+                      isSceneActive,
+                      realtimeLoopGeneration == loopGeneration {
                     let message = try await currentAPI().receiveRealtimeMessage(from: socket)
-
-                    // Une trame recue prouve que le lien est sain : on remet le
-                    // compteur de reconnexion a zero.
-                    reconnectAttempt = 0
-                    realtimeState = .online
-                    snapshot.realtimeVersion = message.version
-
-                    // On enregistre la portee a rafraichir et on repart lire la
-                    // trame suivante. L'ancienne version attendait ici quatre
-                    // requetes HTTP, ce qui laissait la socket s'accumuler.
-                    scheduleSync(for: message)
+                    handleRealtimeMessage(message)
                 }
             } catch is CancellationError {
                 return
@@ -618,15 +676,22 @@ final class AppModel {
             } catch {
                 realtimeState = .offline
 
-                guard !Task.isCancelled, user != nil, isSceneActive else {
+                guard !Task.isCancelled,
+                      user != nil,
+                      isSceneActive,
+                      realtimeLoopGeneration == loopGeneration else {
                     return
                 }
 
-                statusMessage = "Flux temps reel interrompu. Nouvelle tentative en cours."
+                statusMessage = Self.realtimeReconnectMessage
                 bannerTone = .caution
 
-                // Backoff exponentiel : une instance injoignable etait
-                // auparavant sollicitee toutes les trois secondes sans fin.
+                // Une simple trame `ready` ne suffit pas a declarer une socket
+                // stable : une connexion qui s'ouvre puis se ferme aussitot doit
+                // continuer son backoff au lieu de repartir de deux secondes.
+                if connectionStartedAt.duration(to: clock.now) >= Self.stableConnectionResetThreshold {
+                    reconnectAttempt = 0
+                }
                 let delay = reconnectDelay()
                 reconnectAttempt += 1
 
@@ -649,7 +714,9 @@ final class AppModel {
 
     // MARK: - Synchronisation
 
-    private func reconnectDelay() -> Duration {
+    private func reconnectDelay(
+        jitterFraction: Double = Double.random(in: 0...0.3)
+    ) -> Duration {
         let exponent = min(reconnectAttempt, 5)
         let multiplier = 1 << exponent
         let seconds = Self.minimumReconnectDelay.components.seconds * Int64(multiplier)
@@ -657,153 +724,412 @@ final class AppModel {
 
         // Un peu de dispersion evite que plusieurs appareils se reconnectent
         // exactement au meme instant apres une coupure serveur.
-        let jitter = Double.random(in: 0...0.3) * Double(capped)
+        let jitter = min(max(jitterFraction, 0), 0.3) * Double(capped)
         return .seconds(Double(capped) + jitter)
     }
 
-    private func scheduleSync(for message: RealtimeMessage) {
-        guard message.type == "event" else {
+    private func syncRetryDelay() -> Duration {
+        let exponent = min(syncRetryAttempt, 5)
+        let multiplier = 1 << exponent
+        let seconds = Self.minimumSyncRetryDelay.components.seconds * Int64(multiplier)
+        let capped = min(seconds, Self.maximumSyncRetryDelay.components.seconds)
+        let jitter = Double.random(in: 0...0.2) * Double(capped)
+        return .seconds(Double(capped) + jitter)
+    }
+
+    private func handleRealtimeMessage(_ message: RealtimeMessage) {
+        guard message.version >= 0,
+              message.type == "ready" || message.type == "event" else {
             return
         }
 
-        let scope: SyncScope = switch message.kind {
-        case "component.heartbeat":
-            .health
+        if realtimeState != .online {
+            realtimeState = .online
+            if statusMessage == Self.realtimeReconnectMessage {
+                statusMessage = nil
+                bannerTone = .neutral
+            }
+        }
+
+        let scopes: SyncScope
+        if message.type == "ready" {
+            // Sans curseur, le serveur se place directement a sa version la
+            // plus recente. Une projection est donc necessaire avant de pouvoir
+            // valider cette version. Lors d'une reprise, les evenements manques
+            // sont rejoues et aucune lecture complete n'est necessaire ici.
+            scopes = realtimeCursor == nil ? .projection : []
+        } else {
+            scopes = syncScope(for: message.kind)
+        }
+
+        queueSynchronization(scopes: scopes, realtimeVersion: message.version)
+    }
+
+    private func syncScope(for kind: String?) -> SyncScope {
+        switch kind {
+        case "target.changed":
+            [.targets, .incidents, .measures]
+        case "source.changed", "observation.created":
+            [.targets, .measures]
+        case "connector.changed", "incident.changed", "maintenance.changed":
+            .incidents
         case "notification.changed":
             .inbox
+        case "component.heartbeat":
+            .health
+        case "device.changed":
+            []
         default:
             .projection
         }
+    }
 
-        pendingScopes.insert(scope)
+    private func scheduleSync(for message: RealtimeMessage) {
+        handleRealtimeMessage(message)
+    }
 
-        guard coalescingTask == nil else {
+    private func queueSynchronization(
+        scopes: SyncScope,
+        realtimeVersion: Int64? = nil,
+        completion: CheckedContinuation<Bool, Never>? = nil,
+        immediate: Bool = false
+    ) {
+        guard user != nil, isSceneActive else {
+            completion?.resume(returning: false)
             return
         }
 
-        coalescingTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.realtimeCoalescingWindow)
-            guard !Task.isCancelled else {
+        pendingScopes.formUnion(scopes)
+        let latestKnownVersion = max(pendingRealtimeVersion ?? -1, realtimeCursor ?? -1)
+        if let realtimeVersion,
+           realtimeVersion > latestKnownVersion {
+            pendingRealtimeVersion = realtimeVersion
+        }
+        if let completion {
+            pendingSyncCompletions.append(completion)
+        }
+
+        guard hasPendingSynchronization else {
+            let completions = pendingSyncCompletions
+            pendingSyncCompletions = []
+            resume(completions, success: true)
+            return
+        }
+
+        if synchronizationTask == nil {
+            startSynchronization(after: immediate ? .zero : Self.realtimeCoalescingWindow)
+        } else if immediate {
+            expediteWaitingSynchronization()
+        }
+    }
+
+    private var hasPendingSynchronization: Bool {
+        !pendingScopes.isEmpty || pendingRealtimeVersion != nil
+    }
+
+    private func startSynchronization(after delay: Duration) {
+        guard synchronizationTask == nil,
+              hasPendingSynchronization,
+              user != nil,
+              isSceneActive else {
+            return
+        }
+
+        let generation = synchronizationGeneration
+        synchronizationIsWaiting = delay > .zero
+        synchronizationTask = Task { [weak self] in
+            await self?.runSynchronizationDrain(
+                generation: generation,
+                initialDelay: delay
+            )
+        }
+    }
+
+    private func expediteWaitingSynchronization() {
+        guard synchronizationTask != nil, synchronizationIsWaiting else {
+            return
+        }
+
+        synchronizationGeneration &+= 1
+        synchronizationTask?.cancel()
+        synchronizationTask = nil
+        synchronizationIsWaiting = false
+        startSynchronization(after: .zero)
+    }
+
+    private func runSynchronizationDrain(
+        generation: Int,
+        initialDelay: Duration
+    ) async {
+        defer { finishSynchronization(generation: generation) }
+
+        var delay = initialDelay
+
+        while !Task.isCancelled,
+              generation == synchronizationGeneration,
+              user != nil,
+              isSceneActive {
+            if delay > .zero {
+                synchronizationIsWaiting = true
+                do {
+                    try await Task.sleep(for: delay)
+                } catch {
+                    return
+                }
+                synchronizationIsWaiting = false
+            }
+
+            guard !Task.isCancelled,
+                  generation == synchronizationGeneration,
+                  user != nil,
+                  isSceneActive else {
                 return
             }
-            await self?.flushPendingScopes()
+
+            let batch = takePendingSynchronization()
+            guard batch.hasWork else {
+                return
+            }
+
+            synchronizationIsFetching = true
+            do {
+                let payload = try await loadSyncPayload(for: batch.scopes)
+                guard !Task.isCancelled,
+                      generation == synchronizationGeneration,
+                      user != nil,
+                      isSceneActive else {
+                    throw CancellationError()
+                }
+
+                applySyncPayload(payload, for: batch)
+                await saveSnapshot()
+                synchronizationIsFetching = false
+                syncRetryAttempt = 0
+                resume(batch.completions, success: true)
+
+                if !batch.scopes.isEmpty {
+                    statusMessage = nil
+                    bannerTone = .neutral
+                }
+
+                guard hasPendingSynchronization else {
+                    return
+                }
+                delay = pendingSyncCompletions.isEmpty ? Self.realtimeCoalescingWindow : .zero
+            } catch is CancellationError {
+                synchronizationIsFetching = false
+                resume(batch.completions, success: false)
+                return
+            } catch let error as CairnOpsAPIError where error.statusCode == 401 {
+                synchronizationIsFetching = false
+                resume(batch.completions, success: false)
+                guard !Task.isCancelled,
+                      generation == synchronizationGeneration,
+                      user != nil,
+                      isSceneActive else {
+                    return
+                }
+                await invalidateSession(
+                    message: "L’identité de cet appareil a été révoquée pendant la synchronisation."
+                )
+                return
+            } catch {
+                synchronizationIsFetching = false
+                guard !Task.isCancelled,
+                      generation == synchronizationGeneration,
+                      user != nil,
+                      isSceneActive else {
+                    resume(batch.completions, success: false)
+                    return
+                }
+                restore(batch)
+                resume(batch.completions, success: false)
+
+                statusMessage = batch.completions.isEmpty
+                    ? "Synchronisation partielle ratée. Une nouvelle tentative suivra."
+                    : (snapshot.hasProjection
+                        ? "Lecture impossible pour le moment. Le dernier état connu reste visible."
+                        : userFacingMessage(from: error))
+                bannerTone = snapshot.hasProjection ? .caution : .danger
+
+                delay = syncRetryDelay()
+                syncRetryAttempt += 1
+            }
         }
     }
 
-    private func flushPendingScopes() async {
-        coalescingTask = nil
-
-        let scopes = pendingScopes
+    private func takePendingSynchronization() -> SyncBatch {
+        let batch = SyncBatch(
+            scopes: pendingScopes,
+            realtimeVersion: pendingRealtimeVersion,
+            completions: pendingSyncCompletions
+        )
         pendingScopes = []
+        pendingRealtimeVersion = nil
+        pendingSyncCompletions = []
+        return batch
+    }
 
-        guard !scopes.isEmpty, user != nil, isSceneActive else {
-            return
-        }
-
-        do {
-            // Une resynchronisation complete couvre deja la boite de reception :
-            // inutile de la demander deux fois dans la meme fenetre.
-            if scopes.contains(.projection) {
-                let projection = try await loadOperationalProjection()
-                applyProjection(projection)
-            } else if scopes.contains(.inbox) {
-                let inbox = try await loadInbox()
-                snapshot.inbox = inbox.entries
-                snapshot.unreadCount = inbox.unread
-            }
-
-            if scopes.contains(.health) {
-                snapshot.systemHealth = try await loadSystemHealth()
-            }
-
-            snapshot.lastRefreshAt = Date.now.ISO8601Format()
-            await snapshotStore.save(snapshot)
-
-            if bannerTone != .danger {
-                statusMessage = nil
-            }
-        } catch is CancellationError {
-            return
-        } catch let error as CairnOpsAPIError where error.statusCode == 401 {
-            await invalidateSession(
-                message: "L’identité de cet appareil a été révoquée pendant la synchronisation."
-            )
-        } catch {
-            statusMessage = "Synchronisation partielle ratee. Une nouvelle tentative suivra."
-            bannerTone = .caution
+    private func restore(_ batch: SyncBatch) {
+        pendingScopes.formUnion(batch.scopes)
+        let latestKnownVersion = max(pendingRealtimeVersion ?? -1, realtimeCursor ?? -1)
+        if let version = batch.realtimeVersion,
+           version > latestKnownVersion {
+            pendingRealtimeVersion = version
         }
     }
 
-    private func cancelCoalescing() {
-        coalescingTask?.cancel()
-        coalescingTask = nil
-        pendingScopes = []
-    }
+    private func loadSyncPayload(for scopes: SyncScope) async throws -> SyncPayload {
+        let loadsProjection = scopes.contains(.projection)
 
-    private func applyProjection(_ projection: CairnOpsAPI.OperationalProjection) {
-        var measures: [String: TargetMeasures] = [:]
-        measures.reserveCapacity(projection.measures.count)
-        for entry in projection.measures {
-            measures[entry.targetID] = entry
-        }
+        async let projection = loadOperationalProjection(ifRequested: loadsProjection)
+        async let targets = loadTargets(ifRequested: !loadsProjection && scopes.contains(.targets))
+        async let incidents = loadIncidents(ifRequested: !loadsProjection && scopes.contains(.incidents))
+        async let measures = loadMeasures(ifRequested: !loadsProjection && scopes.contains(.measures))
+        async let inbox = loadInbox(ifRequested: !loadsProjection && scopes.contains(.inbox))
+        async let health = loadSystemHealth(ifRequested: scopes.contains(.health))
+        async let version = loadVersion(ifRequested: scopes.contains(.version))
 
-        // Une seule mutation groupee : l'index derive n'est reconstruit qu'une
-        // fois, et SwiftUI n'observe qu'une invalidation au lieu de cinq.
-        snapshot.applyProjection(
-            targets: projection.targets,
-            incidents: projection.incidents,
+        return try await SyncPayload(
+            projection: projection,
+            targets: targets,
+            incidents: incidents,
             measures: measures,
-            inbox: projection.inbox.entries,
-            unreadCount: projection.inbox.unread
+            inbox: inbox,
+            health: health,
+            version: version
         )
     }
 
+    private func applySyncPayload(_ payload: SyncPayload, for batch: SyncBatch) {
+        var nextSnapshot = snapshot
+        var rebuildsDerivedProjection = false
+        var publishesSnapshot = false
+
+        nextSnapshot.serverBaseURL = serverURLText
+
+        if let projection = payload.projection {
+            nextSnapshot.targets = projection.targets
+            nextSnapshot.incidents = projection.incidents
+            nextSnapshot.measures = measuresByTarget(projection.measures)
+            nextSnapshot.inbox = projection.inbox.entries
+            nextSnapshot.unreadCount = projection.inbox.unread
+            rebuildsDerivedProjection = true
+            publishesSnapshot = true
+        } else {
+            if let targets = payload.targets {
+                nextSnapshot.targets = targets
+                rebuildsDerivedProjection = true
+                publishesSnapshot = true
+            }
+            if let incidents = payload.incidents {
+                nextSnapshot.incidents = incidents
+                rebuildsDerivedProjection = true
+                publishesSnapshot = true
+            }
+            if let measures = payload.measures {
+                nextSnapshot.measures = measuresByTarget(measures)
+                rebuildsDerivedProjection = true
+                publishesSnapshot = true
+            }
+            if let inbox = payload.inbox {
+                nextSnapshot.inbox = inbox.entries
+                nextSnapshot.unreadCount = inbox.unread
+                publishesSnapshot = true
+            }
+        }
+
+        if batch.scopes.contains(.health) {
+            nextSnapshot.systemHealth = payload.health
+            publishesSnapshot = true
+        }
+
+        if let version = payload.version {
+            serverVersion = version
+        }
+
+        if let version = batch.realtimeVersion {
+            realtimeCursor = max(realtimeCursor ?? version, version)
+        }
+        nextSnapshot.realtimeVersion = realtimeCursor
+
+        if rebuildsDerivedProjection {
+            nextSnapshot.rebuildDerived()
+        }
+        if publishesSnapshot {
+            nextSnapshot.lastRefreshAt = Date.now.ISO8601Format()
+            snapshot = nextSnapshot
+        }
+    }
+
+    private func measuresByTarget(_ entries: [TargetMeasures]) -> [String: TargetMeasures] {
+        var measures: [String: TargetMeasures] = [:]
+        measures.reserveCapacity(entries.count)
+        for entry in entries {
+            measures[entry.targetID] = entry
+        }
+        return measures
+    }
+
+    private func finishSynchronization(generation: Int) {
+        guard synchronizationGeneration == generation else {
+            return
+        }
+
+        synchronizationTask = nil
+        synchronizationIsWaiting = false
+        synchronizationIsFetching = false
+
+        if hasPendingSynchronization, user != nil, isSceneActive {
+            let delay = pendingSyncCompletions.isEmpty ? Self.realtimeCoalescingWindow : .zero
+            startSynchronization(after: delay)
+        }
+    }
+
+    private func cancelSynchronization() {
+        synchronizationTask?.cancel()
+        pendingScopes = []
+        pendingRealtimeVersion = nil
+        syncRetryAttempt = 0
+
+        let completions = pendingSyncCompletions
+        pendingSyncCompletions = []
+        resume(completions, success: false)
+
+        if synchronizationTask == nil {
+            synchronizationIsWaiting = false
+            synchronizationIsFetching = false
+        }
+    }
+
+    private func resume(
+        _ completions: [CheckedContinuation<Bool, Never>],
+        success: Bool
+    ) {
+        for completion in completions {
+            completion.resume(returning: success)
+        }
+    }
+
+    private func stopRealtimeTransport() {
+        activeRealtimeTask?.cancel(with: .goingAway, reason: nil)
+        activeRealtimeTask = nil
+    }
+
     private func refreshProjection() async {
-        guard !isRefreshing else {
+        guard !isRefreshing, user != nil, isSceneActive else {
             return
         }
 
         isRefreshing = true
-        defer { isRefreshing = false }
-
-        do {
-            // Les trois lectures sont independantes : on les mene de front au
-            // lieu de les enchainer.
-            async let projectionTask = loadOperationalProjection()
-            async let healthTask = loadSystemHealth()
-            async let versionTask = loadVersion()
-
-            let projection = try await projectionTask
-            let health = try await healthTask
-            let version = try? await versionTask
-
-            snapshot.serverBaseURL = serverURLText
-            applyProjection(projection)
-            snapshot.systemHealth = health
-            snapshot.lastRefreshAt = Date.now.ISO8601Format()
-            serverVersion = version ?? serverVersion
-
-            await snapshotStore.save(snapshot)
-
-            if isOfflineSnapshot {
-                statusMessage = "Connexion retablie."
-                bannerTone = .neutral
-            } else {
-                statusMessage = nil
-                bannerTone = .neutral
-            }
-        } catch is CancellationError {
-            return
-        } catch let error as CairnOpsAPIError where error.statusCode == 401 {
-            await invalidateSession(
-                message: "L’identité de cet appareil a été révoquée. Associez de nouveau cet iPhone."
+        _ = await withCheckedContinuation { completion in
+            queueSynchronization(
+                scopes: .fullRefresh,
+                completion: completion,
+                immediate: true
             )
-        } catch {
-            statusMessage = snapshot.hasProjection
-                ? "Lecture impossible pour le moment. Le dernier etat connu reste visible."
-                : userFacingMessage(from: error)
-            bannerTone = snapshot.hasProjection ? .caution : .danger
         }
+        isRefreshing = false
     }
 
     private static var appVersionLabel: String {
@@ -948,12 +1274,72 @@ final class AppModel {
         return try await currentAPI().fetchOperationalProjection()
     }
 
+    private func loadOperationalProjection(
+        ifRequested isRequested: Bool
+    ) async throws -> CairnOpsAPI.OperationalProjection? {
+        guard isRequested else {
+            return nil
+        }
+        return try await loadOperationalProjection()
+    }
+
+    private func loadTargets() async throws -> [Target] {
+        if let hook = debugHooks.fetchTargets {
+            return try await hook()
+        }
+        return try await currentAPI().fetchTargets()
+    }
+
+    private func loadTargets(ifRequested isRequested: Bool) async throws -> [Target]? {
+        guard isRequested else {
+            return nil
+        }
+        return try await loadTargets()
+    }
+
+    private func loadIncidents() async throws -> [Incident] {
+        if let hook = debugHooks.fetchIncidents {
+            return try await hook()
+        }
+        return try await currentAPI().fetchIncidents()
+    }
+
+    private func loadIncidents(ifRequested isRequested: Bool) async throws -> [Incident]? {
+        guard isRequested else {
+            return nil
+        }
+        return try await loadIncidents()
+    }
+
+    private func loadMeasures() async throws -> [TargetMeasures] {
+        if let hook = debugHooks.fetchMeasures {
+            return try await hook()
+        }
+        return try await currentAPI().fetchTargetMeasures()
+    }
+
+    private func loadMeasures(ifRequested isRequested: Bool) async throws -> [TargetMeasures]? {
+        guard isRequested else {
+            return nil
+        }
+        return try await loadMeasures()
+    }
+
     private func loadInbox() async throws -> CairnOpsAPI.InboxPayload {
         if let hook = debugHooks.fetchInbox {
             return try await hook()
         }
 
         return try await currentAPI().fetchInbox()
+    }
+
+    private func loadInbox(
+        ifRequested isRequested: Bool
+    ) async throws -> CairnOpsAPI.InboxPayload? {
+        guard isRequested else {
+            return nil
+        }
+        return try await loadInbox()
     }
 
     private func loadSystemHealth() async throws -> SystemHealth? {
@@ -964,12 +1350,32 @@ final class AppModel {
         return try await currentAPI().fetchSystemHealth()
     }
 
+    private func loadSystemHealth(ifRequested isRequested: Bool) async throws -> SystemHealth? {
+        guard isRequested else {
+            return nil
+        }
+        return try await loadSystemHealth()
+    }
+
     private func loadVersion() async throws -> String {
         if let hook = debugHooks.fetchVersion {
             return try await hook()
         }
 
         return try await currentAPI().getVersion()
+    }
+
+    private func loadVersion(ifRequested isRequested: Bool) async -> String? {
+        guard isRequested else {
+            return nil
+        }
+        return try? await loadVersion()
+    }
+
+    private func saveSnapshot() async {
+        var persistedSnapshot = snapshot
+        persistedSnapshot.realtimeVersion = realtimeCursor
+        await snapshotStore.save(persistedSnapshot)
     }
 
     private func upsert(incident: Incident) {
@@ -989,7 +1395,9 @@ final class AppModel {
     }
 
     private func discardSessionData(keepConfiguration: Bool) async {
-        cancelCoalescing()
+        realtimeLoopGeneration &+= 1
+        stopRealtimeTransport()
+        cancelSynchronization()
         reconnectAttempt = 0
         api?.clearCookies()
         try? credentialStore.clear()
@@ -1001,6 +1409,7 @@ final class AppModel {
         canRetryPairing = false
         user = nil
         realtimeState = .offline
+        realtimeCursor = nil
         snapshot = AppSnapshot()
         await snapshotStore.clear()
 
@@ -1061,12 +1470,18 @@ extension AppModel {
     @MainActor
     func debugInstallSyncHooks(
         projection: (() async throws -> CairnOpsAPI.OperationalProjection)? = nil,
+        targets: (() async throws -> [Target])? = nil,
+        incidents: (() async throws -> [Incident])? = nil,
+        measures: (() async throws -> [TargetMeasures])? = nil,
         inbox: (() async throws -> CairnOpsAPI.InboxPayload)? = nil,
         health: (() async throws -> SystemHealth?)? = nil,
         version: (() async throws -> String)? = nil
     ) {
         debugHooks = DebugHooks(
             fetchProjection: projection,
+            fetchTargets: targets,
+            fetchIncidents: incidents,
+            fetchMeasures: measures,
             fetchInbox: inbox,
             fetchHealth: health,
             fetchVersion: version
@@ -1083,7 +1498,7 @@ extension AppModel {
         scheduleSync(
             for: RealtimeMessage(
                 type: "event",
-                version: snapshot.realtimeVersion ?? 0,
+                version: realtimeCursor ?? 0,
                 kind: kind,
                 entityType: nil,
                 entityID: nil,
@@ -1093,8 +1508,52 @@ extension AppModel {
     }
 
     @MainActor
+    func debugReceiveRealtimeMessage(type: String, kind: String?, version: Int64) {
+        scheduleSync(
+            for: RealtimeMessage(
+                type: type,
+                version: version,
+                kind: kind,
+                entityType: nil,
+                entityID: nil,
+                occurredAt: nil
+            )
+        )
+    }
+
+    @MainActor
+    func debugSetReconnectAttempt(_ attempt: Int) {
+        reconnectAttempt = attempt
+    }
+
+    @MainActor
+    var debugReconnectAttempt: Int {
+        reconnectAttempt
+    }
+
+    @MainActor
+    var debugReconnectDelayWithoutJitter: Duration {
+        reconnectDelay(jitterFraction: 0)
+    }
+
+    @MainActor
+    var debugRealtimeCursor: Int64? {
+        realtimeCursor
+    }
+
+    @MainActor
     func debugFlushPendingRealtimeScopes() async {
-        await flushPendingScopes()
+        guard hasPendingSynchronization, !synchronizationIsFetching else {
+            return
+        }
+
+        _ = await withCheckedContinuation { completion in
+            queueSynchronization(
+                scopes: [],
+                completion: completion,
+                immediate: true
+            )
+        }
     }
 }
 #endif
