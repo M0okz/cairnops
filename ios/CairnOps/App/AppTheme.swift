@@ -16,15 +16,19 @@ enum AppTheme {
     static let sectionSpacing = 14.0
     static let cardSpacing = 10.0
     static let cardCorner = 16.0
-    static let bottomScrollInset = 96.0
+    // `TabView` reserve deja la zone sure de sa barre flottante. Un grand
+    // remplissage manuel ajoutait une longue zone morte en fin de defilement.
+    static let bottomScrollInset = 24.0
     static let headerSpacing = 20.0
-    static let pageTitleFont = Font.system(size: 22, weight: .semibold, design: .default)
-    static let detailTitleFont = Font.system(size: 21, weight: .semibold, design: .default)
-    static let heroTitleFont = Font.system(size: 19, weight: .semibold, design: .default)
-    static let sectionTitleFont = Font.system(size: 18, weight: .semibold, design: .default)
-    static let cardTitleFont = Font.system(size: 17, weight: .semibold, design: .default)
-    static let tileValueFont = Font.system(size: 17, weight: .semibold, design: .default)
-    static let rowTitleFont = Font.system(size: 16, weight: .semibold, design: .default)
+    // Les styles semantiques suivent Dynamic Type, contrairement aux tailles
+    // fixes qui faisaient se chevaucher les cartes aux grandes tailles de texte.
+    static let pageTitleFont = Font.title2.weight(.semibold)
+    static let detailTitleFont = Font.title3.weight(.semibold)
+    static let heroTitleFont = Font.title3.weight(.semibold)
+    static let sectionTitleFont = Font.headline
+    static let cardTitleFont = Font.headline
+    static let tileValueFont = Font.headline
+    static let rowTitleFont = Font.body.weight(.semibold)
 
     static func severityColor(_ severity: IncidentSeverity) -> Color {
         switch severity {

@@ -10,14 +10,16 @@ struct TargetDetailView: View {
             if let target = model.target(withID: targetID) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                        DetailHeader(
-                            title: "Cible",
-                            subtitle: target.sourceOriginSummary
-                        )
-
                         Panel {
                             VStack(alignment: .leading, spacing: 14) {
-                                HStack(alignment: .top) {
+                                // Un seul calcul de sante au lieu de plusieurs
+                                // appels identiques pendant le rendu.
+                                let health = model.snapshot.health(for: target)
+                                ResponsiveStatusHeader(
+                                    text: AppTheme.targetHealthLabel(health),
+                                    color: AppTheme.targetHealthColor(health),
+                                    systemImage: AppTheme.targetHealthSymbol(health)
+                                ) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(target.name)
                                             .font(AppTheme.cardTitleFont)
@@ -27,20 +29,9 @@ struct TargetDetailView: View {
                                                 .foregroundStyle(.secondary)
                                         }
                                     }
-
-                                    Spacer(minLength: 12)
-
-                                    // Un seul calcul de sante au lieu de trois
-                                    // appels identiques.
-                                    let health = model.snapshot.health(for: target)
-                                    StatusPill(
-                                        text: AppTheme.targetHealthLabel(health),
-                                        color: AppTheme.targetHealthColor(health),
-                                        systemImage: AppTheme.targetHealthSymbol(health)
-                                    )
                                 }
 
-                                HStack(spacing: 12) {
+                                MetricGrid {
                                     MetricTile(
                                         title: "Dernière observation",
                                         value: TimestampParser.relativeString(from: measures?.latestObservedAt),
@@ -53,9 +44,6 @@ struct TargetDetailView: View {
                                         value: "\(target.totalSourceCount)",
                                         subtitle: target.totalSourceCount == 1 ? "source active" : "sources actives"
                                     )
-                                }
-
-                                HStack(spacing: 12) {
                                     MetricTile(
                                         title: "Disponibilité 24 h",
                                         value: measures?.last24Hours?.availabilityDisplayValue ?? "Non mesurée",
@@ -103,7 +91,7 @@ struct TargetDetailView: View {
                             }
                         }
 
-                        let incidents = model.snapshot.incidents.filter { $0.targetID == target.id }
+                        let incidents = model.snapshot.incidents(forTargetID: target.id)
                         Panel {
                             VStack(alignment: .leading, spacing: 14) {
                                 Text("Incidents")
@@ -114,7 +102,7 @@ struct TargetDetailView: View {
                                         .font(.subheadline)
                                         .foregroundStyle(AppTheme.ok)
                                 } else {
-                                    ForEach(Array(incidents.enumerated()), id: \.element.id) { index, incident in
+                                    ForEach(incidents) { incident in
                                         NavigationLink {
                                             IncidentDetailView(incidentID: incident.id)
                                         } label: {
@@ -122,7 +110,7 @@ struct TargetDetailView: View {
                                         }
                                         .buttonStyle(.plain)
 
-                                        if index != incidents.indices.last {
+                                        if incident.id != incidents.last?.id {
                                             Divider()
                                         }
                                     }
@@ -133,7 +121,6 @@ struct TargetDetailView: View {
                     .padding(AppTheme.screenPadding)
                     .padding(.bottom, AppTheme.bottomScrollInset)
                 }
-                .toolbar(.hidden, for: .navigationBar)
             } else {
                 ContentUnavailableView("Cible introuvable", systemImage: "questionmark.circle")
             }
@@ -141,6 +128,11 @@ struct TargetDetailView: View {
         // Un seul fond pour l'ecran : il etait auparavant pose deux fois, ce qui
         // doublait le cout de composition a chaque image.
         .background(AppBackdrop())
+        .navigationTitle("Cible")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await model.refresh()
+        }
     }
 
     private var measures: TargetMeasures? {

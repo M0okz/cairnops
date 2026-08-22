@@ -8,29 +8,20 @@ struct HealthView: View {
             if let health = model.snapshot.systemHealth {
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                        ScreenHeader(
-                            title: "Santé",
-                            subtitle: "Capacité de supervision de l’instance"
-                        ) {
-                            refreshButton
-                        }
-
                         Panel {
                             VStack(alignment: .leading, spacing: 14) {
-                                HStack {
+                                ResponsiveStatusHeader(
+                                    text: health.status == "operational" ? "Opérationnelle" : "Dégradée",
+                                    color: health.status == "operational" ? AppTheme.ok : AppTheme.warning,
+                                    systemImage: health.status == "operational" ? "heart.text.square.fill" : "waveform.path.ecg"
+                                ) {
                                     Text("État global")
                                         .font(AppTheme.sectionTitleFont)
-                                    Spacer()
-                                    StatusPill(
-                                        text: health.status == "operational" ? "Opérationnelle" : "Dégradée",
-                                        color: health.status == "operational" ? AppTheme.ok : AppTheme.warning,
-                                        systemImage: health.status == "operational" ? "heart.text.square.fill" : "waveform.path.ecg"
-                                    )
                                 }
                                 Text("Projection évaluée \(TimestampParser.relativeString(from: health.checkedAt)).")
                                     .foregroundStyle(.secondary)
 
-                                HStack(spacing: 12) {
+                                MetricGrid {
                                     MetricTile(
                                         title: "Observations 24 h",
                                         value: "\(conclusiveObservations24h)",
@@ -69,7 +60,7 @@ struct HealthView: View {
                                 Text("PostgreSQL")
                                     .font(AppTheme.sectionTitleFont)
 
-                                HStack(spacing: 12) {
+                                MetricGrid {
                                     MetricTile(
                                         title: "Latence courante",
                                         value: "\(health.database.latencyMilliseconds.formatted(.number.precision(.fractionLength(1)))) ms",
@@ -91,14 +82,23 @@ struct HealthView: View {
                 }
             } else {
                 ContentUnavailableView(
-                    "Projection sante indisponible",
+                    "Projection santé indisponible",
                     systemImage: "waveform.path.ecg",
-                    description: Text("Le serveur n'a pas renvoye de vue sante exploitable pour le moment.")
+                    description: Text("Le serveur n’a pas renvoyé de vue santé exploitable pour le moment.")
                 )
             }
         }
         .background(AppBackdrop())
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Santé")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                refreshButton
+            }
+        }
+        .refreshable {
+            await model.refresh()
+        }
     }
 
     private var expectedObservations24h: Int {
@@ -113,10 +113,8 @@ struct HealthView: View {
         AsyncButton {
             await model.refresh()
         } label: {
-            RefreshGlyph()
+            Image(systemName: "arrow.clockwise")
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(AppTheme.accent)
         .accessibilityLabel("Actualiser la santé")
     }
 

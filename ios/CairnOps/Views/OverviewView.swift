@@ -44,13 +44,6 @@ struct OverviewView: View {
 
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                ScreenHeader(
-                    title: "Vue d’ensemble",
-                    subtitle: "Projection partagée de \(model.instanceLabel)"
-                ) {
-                    refreshButton
-                }
-
                 heroCard(summary)
                 summaryPanel(summary)
 
@@ -58,7 +51,7 @@ struct OverviewView: View {
                     ContentUnavailableView(
                         "Aucune cible active",
                         systemImage: "dot.scope",
-                        description: Text("La projection mobile apparaitra ici des qu'une premiere cible sera supervisee.")
+                        description: Text("La projection mobile apparaîtra ici dès qu’une première cible sera supervisée.")
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.top, 24)
@@ -113,26 +106,24 @@ struct OverviewView: View {
                 if let systemHealth = model.snapshot.systemHealth {
                     Panel {
                         VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text("Sante de CairnOps")
+                            ResponsiveStatusHeader(
+                                text: systemHealth.status == "operational" ? "Opérationnelle" : "Dégradée",
+                                color: systemHealth.status == "operational" ? AppTheme.ok : AppTheme.warning,
+                                systemImage: systemHealth.status == "operational" ? "heart.text.square.fill" : "waveform.path.ecg"
+                            ) {
+                                Text("Santé de CairnOps")
                                     .font(AppTheme.sectionTitleFont)
-                                Spacer()
-                                StatusPill(
-                                    text: systemHealth.status == "operational" ? "Opérationnelle" : "Dégradée",
-                                    color: systemHealth.status == "operational" ? AppTheme.ok : AppTheme.warning,
-                                    systemImage: systemHealth.status == "operational" ? "heart.text.square.fill" : "waveform.path.ecg"
-                                )
                             }
 
                             Text("Contrôle le \(TimestampParser.absoluteString(from: systemHealth.checkedAt)).")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
 
-                            HStack(spacing: 12) {
+                            MetricGrid {
                                 MetricTile(
-                                    title: "Observations 24 h",
+                                    title: "À traiter",
                                     value: "\(summary.unacknowledgedCount)",
-                                    subtitle: "Incidents demandant une action",
+                                    subtitle: "Incidents non acquittés",
                                     tone: AppTheme.critical,
                                     systemImage: "exclamationmark.triangle.fill"
                                 )
@@ -162,35 +153,35 @@ struct OverviewView: View {
             .padding(.bottom, AppTheme.bottomScrollInset)
         }
         .background(AppBackdrop())
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Vue d’ensemble")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                refreshButton
+            }
+        }
+        .refreshable {
+            await model.refresh()
+        }
     }
 
     private func summaryPanel(_ summary: Summary) -> some View {
         Panel {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("État global")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                        Text(model.instanceLabel)
-                            .font(AppTheme.cardTitleFont)
-                        Text(verdictLine)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 12) {
+                        globalIdentity
+                        Spacer(minLength: 12)
+                        globalStatusPill
                     }
 
-                    Spacer(minLength: 12)
-
-                    StatusPill(
-                        text: AppTheme.globalStatusLabel(model.snapshot.globalStatus),
-                        color: AppTheme.globalStatusColor(model.snapshot.globalStatus),
-                        systemImage: AppTheme.globalStatusSymbol(model.snapshot.globalStatus)
-                    )
+                    VStack(alignment: .leading, spacing: 12) {
+                        globalIdentity
+                        globalStatusPill
+                    }
                 }
 
-                HStack(spacing: 12) {
+                MetricGrid {
                     MetricTile(
                         title: "Non acquittés",
                         value: "\(summary.unacknowledgedCount)",
@@ -248,12 +239,8 @@ struct OverviewView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Spacer(minLength: 12)
-
-            Image(systemName: "chevron.right")
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(.tertiary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 22)
@@ -280,14 +267,34 @@ struct OverviewView: View {
         }
     }
 
+    private var globalIdentity: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("État global")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            Text(model.instanceLabel)
+                .font(AppTheme.cardTitleFont)
+            Text(verdictLine)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var globalStatusPill: some View {
+        StatusPill(
+            text: AppTheme.globalStatusLabel(model.snapshot.globalStatus),
+            color: AppTheme.globalStatusColor(model.snapshot.globalStatus),
+            systemImage: AppTheme.globalStatusSymbol(model.snapshot.globalStatus)
+        )
+    }
+
     private var refreshButton: some View {
         AsyncButton {
             await model.refresh()
         } label: {
-            RefreshGlyph()
+            Image(systemName: "arrow.clockwise")
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(AppTheme.accent)
         .accessibilityLabel("Actualiser la projection")
     }
 

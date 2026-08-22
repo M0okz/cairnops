@@ -13,7 +13,7 @@ struct AppRootView: View {
                 if model.showsShell {
                     AppShellView()
                 } else if model.isBootstrapping {
-                    ProgressView("Connexion a l'instance")
+                    ProgressView("Connexion à l’instance")
                         .controlSize(.large)
                 } else {
                     LoginView()

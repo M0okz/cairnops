@@ -118,6 +118,13 @@ struct AppSnapshot: Codable, Equatable, Sendable {
         )
     }
 
+    func incidents(forTargetID targetID: Target.ID) -> [Incident] {
+        if let cached = derived?.incidentsByTarget[targetID] {
+            return cached
+        }
+        return incidents.filter { $0.targetID == targetID }
+    }
+
     // MARK: - Construction de l'index
 
     private func healthLookup() -> [String: TargetHealth] {
@@ -197,6 +204,10 @@ struct AppSnapshot: Codable, Equatable, Sendable {
         var hasInformation = false
 
         for incident in ownIncidents {
+            guard !incident.isResolved else {
+                continue
+            }
+
             if incident.maintenanceActive {
                 hasActiveMaintenance = true
             }
@@ -260,7 +271,7 @@ struct AppSnapshot: Codable, Equatable, Sendable {
     }
 
     private static func makeActionableIncidents(from incidents: [Incident]) -> [Incident] {
-        incidents.filter { !$0.maintenanceActive }
+        incidents.filter { !$0.isResolved && !$0.maintenanceActive }
     }
 
     private static func makeUnacknowledgedIncidents(from actionable: [Incident]) -> [Incident] {
