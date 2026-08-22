@@ -1,16 +1,17 @@
 # Déploiement de production
 
 Le déploiement retenu est **pull-based** : GitHub Actions teste CairnOps puis
-publie les images `server` et `worker` dans GHCR. La VM ne reçoit aucune
+publie les images `server`, `worker` et `relay` dans GHCR. La VM ne reçoit aucune
 connexion de déploiement entrante. Watchtower interroge GHCR toutes les cinq
-minutes et ne redéploie que les deux conteneurs portant son label explicite.
+minutes et ne redéploie que les conteneurs portant son label explicite.
 
 ## Images publiées
 
 Chaque push sur `main` qui passe les contrôles publie :
 
 - `ghcr.io/m0okz/cairnops-server:<version>`, `:<sha>` et `:latest` ;
-- `ghcr.io/m0okz/cairnops-worker:<version>`, `:<sha>` et `:latest`.
+- `ghcr.io/m0okz/cairnops-worker:<version>`, `:<sha>` et `:latest` ;
+- `ghcr.io/m0okz/cairnops-relay:<version>`, `:<sha>` et `:latest`.
 
 La version suit le format `<majeure>.<mineure>.<build>`. La série
 `majeure.mineure` est conservée dans le fichier `VERSION` ; GitHub Actions
@@ -22,11 +23,12 @@ disponible pour un retour arrière manuel et le déploiement automatique suit
 
 GHCR crée normalement un nouveau package avec une visibilité privée, même si
 le dépôt source est public. Après la première exécution réussie du workflow,
-ouvrir les paramètres de chacun des deux packages et choisir **Change
+ouvrir les paramètres de chacun des trois packages et choisir **Change
 visibility → Public** :
 
 - `cairnops-server` ;
-- `cairnops-worker`.
+- `cairnops-worker` ;
+- `cairnops-relay`.
 
 Cette opération unique permet ensuite à la VM de puller anonymement les images,
 sans token GitHub durable.
@@ -42,9 +44,16 @@ CAIRNOPS_BOOTSTRAP_TOKEN=<secret>
 CAIRNOPS_HTTP_PORT=8080
 CAIRNOPS_PUBLIC_URL=https://cairnops.int.homeblack.fr
 CAIRNOPS_UPDATE_INTERVAL=300
+CAIRNOPS_PUSH_RELAY_URL=https://cairnops-push.int.homeblack.fr
+CAIRNOPS_RELAY_BIND=0.0.0.0:8082
+CAIRNOPS_RELAY_APNS_KEY_HOST_PATH=/opt/stacks/cairnops/secrets/AuthKey.p8
+CAIRNOPS_RELAY_APNS_KEY_ID=<key-id-apple>
+CAIRNOPS_RELAY_APNS_TEAM_ID=<team-id-apple>
 ```
 
-Les deux secrets sont conservés dans Bitwarden et ne sont jamais versionnés.
+Les secrets sont conservés dans Bitwarden et ne sont jamais versionnés. La clé
+APNs `.p8` est matérialisée par Ansible dans un répertoire `0700`, puis montée
+en lecture seule dans le Relais.
 Le jeton d'amorçage doit être gardé après la création du premier Administrateur,
 car il permet aussi le rétablissement d'un accès perdu.
 
@@ -67,7 +76,7 @@ historique `containrrr/watchtower` est archivé et n'est pas utilisé.
 ## Retour arrière
 
 Pour revenir temporairement à une révision connue, remplacer `latest` par le
-SHA Git voulu pour `server` et `worker`, puis relancer :
+SHA Git voulu pour `server`, `worker` et `relay`, puis relancer :
 
 ```shell
 docker compose pull

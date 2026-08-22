@@ -133,7 +133,7 @@ components:
           description: URI cairnops://pair contenant l'URL manuelle et le secret temporaire.
     DevicePairingClaim:
       type: object
-      required: [name, platform, encryption_public_key, push_recipient]
+      required: [name, platform, encryption_public_key]
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         platform: { type: string, enum: [ios, android] }
@@ -150,7 +150,9 @@ components:
           type: string
           minLength: 16
           maxLength: 1024
-          description: Destinataire opaque délivré à l'application par le Relais Push.
+          description: >-
+            Destinataire opaque délivré à l'application par le Relais Push. Facultatif
+            pendant l'appairage ; l'application l'ajoute après l'autorisation système.
     DevicePairingResult:
       type: object
       required: [status]
@@ -171,10 +173,14 @@ components:
           type: string
           description: Nouvelle clé publique X25519 en base64url sans remplissage.
         push_recipient:
-          type: string
-          minLength: 16
-          maxLength: 1024
-          description: Nouveau destinataire opaque après rotation par APNs ou FCM.
+          oneOf:
+            - type: string
+              minLength: 16
+              maxLength: 1024
+            - const: ''
+          description: >-
+            Nouveau destinataire opaque après rotation par APNs ou FCM. Une chaîne
+            vide désactive le Push et annule les livraisons en attente.
     Target:
       type: object
       required: [id, name, description, created_at, external_source_count, sources]

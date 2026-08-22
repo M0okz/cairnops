@@ -31,7 +31,7 @@ struct CairnOpsAPI {
         let locale: String
         let notificationContent: String
         let encryptionPublicKey: String
-        let pushRecipient: String
+		let pushRecipient: String?
 
         private enum CodingKeys: String, CodingKey {
             case name
@@ -161,12 +161,28 @@ struct CairnOpsAPI {
         )
     }
 
-    func getDevicePairingResult(pairingToken: String) async throws -> DevicePairingResult {
+	func getDevicePairingResult(pairingToken: String) async throws -> DevicePairingResult {
         try await request(
             path: "api/v1/device-pairings/result",
             bearerToken: pairingToken
         )
-    }
+	}
+
+	func updatePushRecipient(deviceID: String, recipient: String) async throws {
+		struct Update: Encodable {
+			let pushRecipient: String
+
+			private enum CodingKeys: String, CodingKey {
+				case pushRecipient = "push_recipient"
+			}
+		}
+
+		try await requestVoid(
+			path: "api/v1/devices/\(deviceID)",
+			method: "PATCH",
+			body: try encoder.encode(Update(pushRecipient: recipient))
+		)
+	}
 
     func fetchTargets() async throws -> [Target] {
         let payload: TargetsEnvelope = try await request(path: "api/v1/targets")

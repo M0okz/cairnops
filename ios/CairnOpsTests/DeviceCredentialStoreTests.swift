@@ -25,10 +25,13 @@ struct DeviceCredentialStoreTests {
         try store.save(pendingPairing: pending)
         let identity = DeviceIdentity(
             serverBaseURL: pending.serverBaseURL,
-            deviceID: "device-id",
-            deviceToken: "device-token",
-            encryptionPrivateKey: pending.encryptionPrivateKey,
-            pushRecipient: pending.pushRecipient
+			deviceID: "device-id",
+			deviceToken: "device-token",
+			encryptionPrivateKey: pending.encryptionPrivateKey,
+			pushRegistration: PushRelayRegistration(
+				recipient: "opaque-recipient-1234",
+				managementToken: "management-token-1234"
+			)
         )
 
         try store.save(identity: identity)
@@ -56,10 +59,9 @@ struct DeviceCredentialStoreTests {
             deviceName: "iPhone de Gregory",
             appVersion: "0.1.0 (1)",
             locale: "fr",
-            notificationContent: "complete",
-            encryptionPrivateKey: Data(repeating: 7, count: 32),
-            pushRecipient: "opaque-recipient-1234",
-            createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+			notificationContent: "complete",
+			encryptionPrivateKey: Data(repeating: 7, count: 32),
+			createdAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
     }
 }

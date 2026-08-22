@@ -16,7 +16,56 @@ paths:
       operationId: getPushRelayHealth
       responses:
         '204': { description: Relais prêt à accepter des livraisons }
-        '503': { description: APNs, FCM ou stockage du relais indisponible }
+        '503': { description: Configuration ou stockage du relais indisponible }
+  /v1/registrations:
+    post:
+      operationId: createPushRegistration
+      description: >-
+        Échange le jeton APNs remis directement à l'application contre deux
+        capacités indépendantes. `recipient` est transmis à l'instance CairnOps ;
+        `management_token` reste uniquement dans le Keychain de l'appareil.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistrationRequest' }
+      responses:
+        '201':
+          description: Inscription créée
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegistrationCredentials' }
+        '400': { description: Plateforme, environnement ou jeton APNs invalide }
+        '429': { description: Limite de création atteinte }
+  /v1/registrations/{recipient}:
+    parameters:
+      - name: recipient
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/RelayCapability' }
+    put:
+      operationId: rotatePushRegistration
+      security: [{ RegistrationManagementBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistrationRequest' }
+      responses:
+        '204': { description: Jeton fournisseur remplacé }
+        '400': { description: Plateforme, environnement ou jeton APNs invalide }
+        '401': { description: Capacité de gestion absente ou invalide }
+        '404': { description: Inscription inconnue }
+    delete:
+      operationId: deletePushRegistration
+      security: [{ RegistrationManagementBearer: [] }]
+      responses:
+        '204': { description: Inscription supprimée }
+        '401': { description: Capacité de gestion absente ou invalide }
+        '404': { description: Inscription inconnue }
   /v1/deliveries:
     post:
       operationId: createPushDelivery
@@ -37,16 +86,44 @@ paths:
         '429': { description: Limite de débit atteinte }
         '503': { description: Fournisseur mobile temporairement indisponible }
 components:
+  securitySchemes:
+    RegistrationManagementBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque 256-bit capability
   schemas:
+    RelayCapability:
+      type: string
+      pattern: '^[A-Za-z0-9_-]{43}$'
+      description: Capacité aléatoire de 256 bits en base64url sans remplissage.
+    RegistrationRequest:
+      type: object
+      additionalProperties: false
+      required: [platform, environment, device_token]
+      properties:
+        platform: { type: string, enum: [ios] }
+        environment:
+          type: string
+          enum: [sandbox, production]
+          description: Environnement APNs correspondant au profil signé de l'application.
+        device_token:
+          type: string
+          pattern: '^[0-9a-fA-F]+$'
+          description: Jeton APNs hexadécimal remis par iOS.
+    RegistrationCredentials:
+      type: object
+      additionalProperties: false
+      required: [recipient, management_token]
+      properties:
+        recipient: { $ref: '#/components/schemas/RelayCapability' }
+        management_token: { $ref: '#/components/schemas/RelayCapability' }
     PushDelivery:
       type: object
       additionalProperties: false
       required: [recipient, envelope, collapse_key, priority, expires_at]
       properties:
         recipient:
-          type: string
-          minLength: 16
-          maxLength: 1024
+          $ref: '#/components/schemas/RelayCapability'
           description: Capacité opaque sans signification opérationnelle pour le relais.
         envelope: { $ref: '#/components/schemas/EncryptedEnvelope' }
         collapse_key:

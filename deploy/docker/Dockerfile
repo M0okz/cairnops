@@ -28,12 +28,19 @@ RUN CGO_ENABLED=0 go build \
     -ldflags "-s -w -X github.com/M0okz/cairnops/internal/version.Version=${VERSION} -X github.com/M0okz/cairnops/internal/version.Commit=${COMMIT} -X github.com/M0okz/cairnops/internal/version.BuildDate=${BUILD_DATE}" \
     -o /out/cairnops ./cmd/cairnops-worker
 
+FROM go-base AS relay-build
+RUN CGO_ENABLED=0 go build \
+    -trimpath \
+    -ldflags "-s -w -X github.com/M0okz/cairnops/internal/version.Version=${VERSION} -X github.com/M0okz/cairnops/internal/version.Commit=${COMMIT} -X github.com/M0okz/cairnops/internal/version.BuildDate=${BUILD_DATE}" \
+    -o /out/cairnops ./cmd/cairnops-push-relay
+
 FROM alpine:3.23 AS runtime
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S cairnops \
     && adduser -S -G cairnops -h /app cairnops \
     && mkdir -p /var/lib/cairnops \
-    && chown cairnops:cairnops /var/lib/cairnops
+    && mkdir -p /var/lib/cairnops-relay/registrations \
+    && chown -R cairnops:cairnops /var/lib/cairnops /var/lib/cairnops-relay
 WORKDIR /app
 
 FROM runtime AS server
@@ -44,5 +51,10 @@ ENTRYPOINT ["/app/cairnops"]
 
 FROM runtime AS worker
 COPY --from=worker-build --chown=cairnops:cairnops /out/cairnops /app/cairnops
+USER cairnops
+ENTRYPOINT ["/app/cairnops"]
+
+FROM runtime AS relay
+COPY --from=relay-build --chown=cairnops:cairnops /out/cairnops /app/cairnops
 USER cairnops
 ENTRYPOINT ["/app/cairnops"]

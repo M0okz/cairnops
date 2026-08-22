@@ -15,10 +15,9 @@ struct PendingDevicePairing: Codable, Equatable, Sendable {
     let deviceName: String
     let appVersion: String
     let locale: String
-    let notificationContent: String
-    let encryptionPrivateKey: Data
-    let pushRecipient: String
-    let createdAt: Date
+	let notificationContent: String
+	let encryptionPrivateKey: Data
+	let createdAt: Date
 
     static func make(
         from link: DevicePairingLink,
@@ -26,12 +25,9 @@ struct PendingDevicePairing: Codable, Equatable, Sendable {
         appVersion: String,
         locale: String,
         now: Date = .now
-    ) -> PendingDevicePairing {
-        let privateKey = Curve25519.KeyAgreement.PrivateKey()
-        let provisionalPushRecipient = SymmetricKey(size: .bits256).withUnsafeBytes {
-            Data($0).base64URLEncodedString()
-        }
-        let trimmedName = deviceName.trimmingCharacters(in: .whitespacesAndNewlines)
+	) -> PendingDevicePairing {
+		let privateKey = Curve25519.KeyAgreement.PrivateKey()
+		let trimmedName = deviceName.trimmingCharacters(in: .whitespacesAndNewlines)
         return PendingDevicePairing(
             serverBaseURL: link.instanceURL.absoluteString,
             pairingToken: link.token,
@@ -40,14 +36,10 @@ struct PendingDevicePairing: Codable, Equatable, Sendable {
                 : trimmedName.prefixingUnicodeScalars(100),
             appVersion: appVersion.prefixingUnicodeScalars(64),
             locale: locale == "en" ? "en" : "fr",
-            notificationContent: "complete",
-            encryptionPrivateKey: privateKey.rawRepresentation,
-            // L’inscription au Relais Push fera tourner cette capacité via PATCH.
-            // Elle doit déjà être stable et opaque pour satisfaire le contrat
-            // d’identité, même lorsque le Relais est désactivé sur l’instance.
-            pushRecipient: provisionalPushRecipient,
-            createdAt: now
-        )
+			notificationContent: "complete",
+			encryptionPrivateKey: privateKey.rawRepresentation,
+			createdAt: now
+		)
     }
 
     func encryptionPublicKey() throws -> String {
@@ -60,12 +52,22 @@ struct PendingDevicePairing: Codable, Equatable, Sendable {
     }
 }
 
+struct PushRelayRegistration: Codable, Equatable, Sendable {
+	let recipient: String
+	let managementToken: String
+
+	private enum CodingKeys: String, CodingKey {
+		case recipient
+		case managementToken = "management_token"
+	}
+}
+
 struct DeviceIdentity: Codable, Equatable, Sendable {
     let serverBaseURL: String
     let deviceID: String
-    let deviceToken: String
-    let encryptionPrivateKey: Data
-    let pushRecipient: String
+	let deviceToken: String
+	let encryptionPrivateKey: Data
+	let pushRegistration: PushRelayRegistration?
 }
 
 struct DeviceCredentialState: Codable, Equatable, Sendable {

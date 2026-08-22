@@ -28,11 +28,9 @@ struct DeviceIdentityTests {
             locale: "de"
         )
 
-        #expect(pending.deviceName.unicodeScalars.count == 100)
-        #expect(pending.appVersion.unicodeScalars.count == 64)
-        #expect(pending.locale == "fr")
-        #expect(pending.pushRecipient.count == 43)
-        #expect(!pending.pushRecipient.contains("="))
+		#expect(pending.deviceName.unicodeScalars.count == 100)
+		#expect(pending.appVersion.unicodeScalars.count == 64)
+		#expect(pending.locale == "fr")
     }
 
     private func makePending() throws -> PendingDevicePairing {

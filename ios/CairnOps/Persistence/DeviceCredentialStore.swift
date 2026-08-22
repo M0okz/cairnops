@@ -71,11 +71,8 @@ private final class KeychainSecureDataStore: SecureDataStore {
         }
     }
 
-    private let service = "fr.cairnops.ios.device-credentials"
-    private let account = "current-device"
-
-    func read() throws -> Data? {
-        var query = baseQuery
+	func read() throws -> Data? {
+		var query = baseQuery
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -87,8 +84,8 @@ private final class KeychainSecureDataStore: SecureDataStore {
                 throw KeychainError.invalidData
             }
             return data
-        case errSecItemNotFound:
-            return nil
+		case errSecItemNotFound:
+			return try migrateLegacyItemIfPresent()
         default:
             throw KeychainError.unexpectedStatus(status)
         }
@@ -123,12 +120,30 @@ private final class KeychainSecureDataStore: SecureDataStore {
         }
     }
 
-    private var baseQuery: [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecAttrSynchronizable as String: false,
-        ]
-    }
+	private var baseQuery: [String: Any] {
+		SharedDeviceCredentials.query(shared: true)
+	}
+
+	private func migrateLegacyItemIfPresent() throws -> Data? {
+		guard SharedDeviceCredentials.accessGroup != nil else {
+			return nil
+		}
+		var legacyQuery = SharedDeviceCredentials.query(shared: false)
+		legacyQuery[kSecReturnData as String] = true
+		legacyQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+		var result: CFTypeRef?
+		let status = SecItemCopyMatching(legacyQuery as CFDictionary, &result)
+		if status == errSecItemNotFound {
+			return nil
+		}
+		guard status == errSecSuccess, let data = result as? Data else {
+			throw KeychainError.unexpectedStatus(status)
+		}
+		try write(data)
+		let deletionStatus = SecItemDelete(legacyQuery as CFDictionary)
+		guard deletionStatus == errSecSuccess || deletionStatus == errSecItemNotFound else {
+			throw KeychainError.unexpectedStatus(deletionStatus)
+		}
+		return data
+	}
 }
