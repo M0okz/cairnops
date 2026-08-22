@@ -2,6 +2,7 @@ import SwiftUI
 
 struct IncidentRow: View {
     let incident: Incident
+    var isStandalone = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -20,7 +21,7 @@ struct IncidentRow: View {
                         .lineLimit(2)
                 }
 
-                ViewThatFits(in: .vertical) {
+                ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) {
                         metaLabel("clock", TimestampParser.relativeString(from: incident.openedAt))
                         metaLabel("waveform.path.ecg", incident.visibleSignalCountLabel)
@@ -64,8 +65,13 @@ struct IncidentRow: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(AppTheme.subpanel)
+                .fill(isStandalone ? AppTheme.panel : AppTheme.subpanel)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(isStandalone ? AppTheme.line : .clear)
+                )
         )
+        .contentShape(.rect(cornerRadius: 16))
     }
 
     private func metaLabel(_ systemImage: String, _ text: String) -> some View {

@@ -14,10 +14,10 @@ struct IncidentsView: View {
         var isEmpty: Bool { active.isEmpty && resolved.isEmpty }
     }
 
-    private var partition: Partition {
+    private func makePartition(from snapshot: AppSnapshot) -> Partition {
         var result = Partition()
 
-        for incident in model.snapshot.incidents {
+        for incident in snapshot.incidents {
             if !query.isEmpty,
                !incident.targetName.localizedStandardContains(query),
                !incident.natureLabel.localizedStandardContains(query) {
@@ -35,80 +35,94 @@ struct IncidentsView: View {
     }
 
     var body: some View {
-        let partition = partition
+        let partition = makePartition(from: model.snapshot)
 
-        return Group {
-            if partition.isEmpty {
-                if query.isEmpty {
-                    ContentUnavailableView(
-                        "Aucun incident",
-                        systemImage: "checkmark.shield",
-                        description: Text("Les incidents actifs et résolus s’afficheront ici.")
-                    )
-                } else {
-                    ContentUnavailableView.search
-                }
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                        ScreenHeader(
-                            title: "Incidents",
-                            subtitle: "\(partition.active.count) actifs · \(partition.resolved.count) résolus"
-                        ) {
-                            refreshButton
-                        }
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                Text("\(partition.active.count) actifs · \(partition.resolved.count) résolus")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
 
-                        if !partition.active.isEmpty {
-                            Panel {
-                                incidentSection("Actifs", incidents: partition.active)
-                            }
-                        }
-
-                        if !partition.resolved.isEmpty {
-                            Panel {
-                                incidentSection("Résolus", incidents: partition.resolved)
-                            }
+                if partition.isEmpty {
+                    Group {
+                        if query.isEmpty {
+                            ContentUnavailableView(
+                                "Aucun incident",
+                                systemImage: "checkmark.shield",
+                                description: Text("Les incidents actifs et résolus s’afficheront ici.")
+                            )
+                        } else {
+                            ContentUnavailableView.search
                         }
                     }
-                    .padding(AppTheme.screenPadding)
-                    .padding(.bottom, AppTheme.bottomScrollInset)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 64)
+                } else {
+                    if !partition.active.isEmpty {
+                        sectionHeader("Actifs", count: partition.active.count)
+
+                        ForEach(partition.active) { incident in
+                            NavigationLink {
+                                IncidentDetailView(incidentID: incident.id)
+                            } label: {
+                                IncidentRow(incident: incident, isStandalone: true)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    if !partition.resolved.isEmpty {
+                        sectionHeader("Résolus", count: partition.resolved.count)
+                            .padding(.top, 8)
+
+                        ForEach(partition.resolved) { incident in
+                            NavigationLink {
+                                IncidentDetailView(incidentID: incident.id)
+                            } label: {
+                                IncidentRow(incident: incident, isStandalone: true)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
             }
+            .padding(AppTheme.screenPadding)
+            .padding(.bottom, AppTheme.bottomScrollInset)
         }
         .background(AppBackdrop())
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Incidents")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                refreshButton
+            }
+        }
         .searchable(text: $query, prompt: "Cible ou nature")
+        .scrollDismissesKeyboard(.interactively)
+        .refreshable {
+            await model.refresh()
+        }
     }
 
     @ViewBuilder
-    private func incidentSection(_ title: String, incidents: [Incident]) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private func sectionHeader(_ title: String, count: Int) -> some View {
+        HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(.title3.bold())
-
-            ForEach(incidents) { incident in
-                NavigationLink {
-                    IncidentDetailView(incidentID: incident.id)
-                } label: {
-                    IncidentRow(incident: incident)
-                }
-                .buttonStyle(.plain)
-
-                if incident.id != incidents.last?.id {
-                    Divider()
-                }
-            }
+                .font(AppTheme.sectionTitleFont)
+            Spacer()
+            Text(count == 1 ? "1 incident" : "\(count) incidents")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
+        .padding(.top, 4)
     }
 
     private var refreshButton: some View {
         AsyncButton {
             await model.refresh()
         } label: {
-            RefreshGlyph()
+            Image(systemName: "arrow.clockwise")
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(AppTheme.accent)
         .accessibilityLabel("Actualiser les incidents")
     }
 }

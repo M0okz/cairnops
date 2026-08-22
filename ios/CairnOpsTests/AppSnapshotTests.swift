@@ -24,6 +24,38 @@ final class AppSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.globalStatus, .incompleteMonitoring)
     }
 
+    func testResolvedIncidentDoesNotKeepTargetUnavailable() {
+        let target = makeTarget(name: "API", externalSourceCount: 1)
+        let incident = makeIncident(
+            targetID: target.id,
+            severity: .critical,
+            status: "resolved"
+        )
+
+        var snapshot = AppSnapshot()
+        snapshot.targets = [target]
+        snapshot.incidents = [incident]
+
+        XCTAssertEqual(snapshot.health(for: target), .ok)
+        XCTAssertEqual(snapshot.globalStatus, .allOperational)
+    }
+
+    func testResolvedIncidentDoesNotRemainActionable() {
+        let target = makeTarget(name: "API", externalSourceCount: 1)
+        let incident = makeIncident(
+            targetID: target.id,
+            severity: .major,
+            status: "resolved"
+        )
+
+        var snapshot = AppSnapshot()
+        snapshot.targets = [target]
+        snapshot.incidents = [incident]
+
+        XCTAssertTrue(snapshot.actionableIncidents.isEmpty)
+        XCTAssertTrue(snapshot.unacknowledgedIncidents.isEmpty)
+    }
+
     private func makeTarget(name: String, externalSourceCount: Int) -> Target {
         Target(
             id: UUID().uuidString,
@@ -35,18 +67,24 @@ final class AppSnapshotTests: XCTestCase {
         )
     }
 
-    private func makeIncident(targetID: String, severity: IncidentSeverity) -> Incident {
+    private func makeIncident(
+        targetID: String,
+        severity: IncidentSeverity,
+        status: String = "active"
+    ) -> Incident {
+        let resolvedAt = status == "resolved" ? Date.now.ISO8601Format() : nil
+
         Incident(
             id: UUID().uuidString,
             targetID: targetID,
             targetName: "API",
             natureKey: "availability",
             natureLabel: "Indisponibilite",
-            status: "active",
+            status: status,
             sourceSeverity: severity,
             effectiveSeverity: severity,
             openedAt: Date.now.ISO8601Format(),
-            resolvedAt: nil,
+            resolvedAt: resolvedAt,
             acknowledgedAt: nil,
             acknowledgedBy: nil,
             acknowledgementOrigin: nil,

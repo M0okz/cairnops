@@ -4,6 +4,7 @@ struct TargetRow: View {
     let target: Target
     let health: AppSnapshot.TargetHealth
     let measures: TargetMeasures?
+    var isStandalone = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -28,20 +29,28 @@ struct TargetRow: View {
                     }
                 }
 
-                // `ViewThatFits` construisait et mesurait les deux dispositions
-                // a chaque rendu de chaque ligne. Un `FlowLayout` natif via
-                // `HStack` a retour automatique n'existe pas ici, mais ces trois
-                // etiquettes tiennent sur une ligne avec `minimumScaleFactor`,
-                // et le repli vertical est gere par le retour a la ligne du
-                // conteneur.
-                HStack(spacing: 10) {
-                    metaLabel("sensor.tag.radiowaves.forward", sourceCountLabel)
-                    if let availability = measures?.last24Hours?.availabilityDisplayValue {
-                        metaLabel("chart.xyaxis.line", availability)
+                // `HStack` ne revient pas a la ligne. La seconde disposition
+                // evite donc de comprimer ou tronquer les metadonnees sur les
+                // petits iPhone et avec Dynamic Type.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        metaLabel("sensor.tag.radiowaves.forward", sourceCountLabel)
+                        if let availability = measures?.last24Hours?.availabilityDisplayValue {
+                            metaLabel("chart.xyaxis.line", availability)
+                        }
+                        metaLabel("clock", observedAtLabel)
                     }
-                    metaLabel("clock", observedAtLabel)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 10) {
+                            metaLabel("sensor.tag.radiowaves.forward", sourceCountLabel)
+                            if let availability = measures?.last24Hours?.availabilityDisplayValue {
+                                metaLabel("chart.xyaxis.line", availability)
+                            }
+                        }
+                        metaLabel("clock", observedAtLabel)
+                    }
                 }
-                .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 12)
@@ -61,8 +70,13 @@ struct TargetRow: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(AppTheme.subpanel)
+                .fill(isStandalone ? AppTheme.panel : AppTheme.subpanel)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(isStandalone ? AppTheme.line : .clear)
+                )
         )
+        .contentShape(.rect(cornerRadius: 16))
     }
 
     private var sourceCountLabel: String {

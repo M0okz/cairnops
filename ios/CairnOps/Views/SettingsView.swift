@@ -6,15 +6,10 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                ScreenHeader(
-                    title: "Réglages",
-                    subtitle: "Instance, appareil et cache local"
-                )
-
                 Panel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Instance")
-                                .font(AppTheme.sectionTitleFont)
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Instance")
+                            .font(AppTheme.sectionTitleFont)
 
                         VStack(alignment: .leading, spacing: 16) {
                             InfoRow(label: "Nom", value: model.instanceLabel)
@@ -54,7 +49,7 @@ struct SettingsView: View {
                             Text("Appareil associé")
                                 .font(AppTheme.sectionTitleFont)
 
-                            HStack(spacing: 12) {
+                            MetricGrid {
                                 MetricTile(title: "Utilisateur", value: user.displayName, monospaced: false)
                                 MetricTile(title: "Rôle", value: user.role.label, tone: AppTheme.info, monospaced: false)
                             }
@@ -92,7 +87,8 @@ struct SettingsView: View {
             .padding(.bottom, AppTheme.bottomScrollInset)
         }
         .background(AppBackdrop())
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Réglages")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func actionButton(

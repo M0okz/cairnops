@@ -8,25 +8,38 @@ struct ComponentHealthRow: View {
     let detail: String?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(AppTheme.rowTitleFont)
-
-                if let detail, !detail.isEmpty {
-                    Text(detail)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 16) {
+                identity
+                Spacer(minLength: 16)
+                status
             }
 
-            Spacer(minLength: 16)
-
-            StatusPill(
-                text: statusText,
-                color: statusColor,
-                systemImage: statusSymbol
-            )
+            VStack(alignment: .leading, spacing: 8) {
+                identity
+                status
+            }
         }
+    }
+
+    private var identity: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(AppTheme.rowTitleFont)
+
+            if let detail, !detail.isEmpty {
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var status: some View {
+        StatusPill(
+            text: statusText,
+            color: statusColor,
+            systemImage: statusSymbol
+        )
     }
 }

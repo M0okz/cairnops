@@ -14,6 +14,8 @@ struct StatusPill: View {
             }
         }
         .font(.caption.weight(.medium))
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
         .foregroundStyle(color)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

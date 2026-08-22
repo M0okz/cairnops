@@ -10,14 +10,13 @@ struct IncidentDetailView: View {
             if let incident = model.incident(withID: incidentID) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                        DetailHeader(
-                            title: "Incident",
-                            subtitle: incident.targetName
-                        )
-
                         Panel {
                             VStack(alignment: .leading, spacing: 14) {
-                                HStack(alignment: .top) {
+                                ResponsiveStatusHeader(
+                                    text: incident.effectiveSeverity.label,
+                                    color: AppTheme.severityColor(incident.effectiveSeverity),
+                                    systemImage: AppTheme.severitySymbol(incident.effectiveSeverity)
+                                ) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(incident.natureLabel)
                                             .font(AppTheme.cardTitleFont)
@@ -26,17 +25,9 @@ struct IncidentDetailView: View {
                                             .foregroundStyle(.secondary)
                                             .lineLimit(3)
                                     }
-
-                                    Spacer(minLength: 12)
-
-                                    StatusPill(
-                                        text: incident.effectiveSeverity.label,
-                                        color: AppTheme.severityColor(incident.effectiveSeverity),
-                                        systemImage: AppTheme.severitySymbol(incident.effectiveSeverity)
-                                    )
                                 }
 
-                                HStack(spacing: 12) {
+                                MetricGrid {
                                     MetricTile(
                                         title: "Ouvert",
                                         value: TimestampParser.relativeString(from: incident.openedAt),
@@ -67,7 +58,7 @@ struct IncidentDetailView: View {
 
                         Panel {
                             VStack(alignment: .leading, spacing: 14) {
-                                Text("Preuves actives")
+                                Text("Preuves")
                                     .font(AppTheme.sectionTitleFont)
 
                                 ForEach(incident.signals) { signal in
@@ -77,7 +68,7 @@ struct IncidentDetailView: View {
                                                 .font(.headline)
                                             Spacer()
                                             StatusPill(
-                                                text: signal.active ? "Active" : "Resolue",
+                                                text: signal.active ? "Active" : "Résolue",
                                                 color: signal.active ? AppTheme.severityColor(signal.severity) : AppTheme.ok
                                             )
                                         }
@@ -96,10 +87,13 @@ struct IncidentDetailView: View {
 
                         Panel {
                             VStack(alignment: .leading, spacing: 14) {
-                                Text("Journal d'activite")
+                                Text("Journal d’activité")
                                     .font(AppTheme.sectionTitleFont)
 
-                                ForEach(incident.activity.sorted(by: { $0.id > $1.id })) { activity in
+                                // Le serveur livre deja le journal du plus
+                                // recent au plus ancien : aucun tri n'est requis
+                                // pendant le rendu.
+                                ForEach(incident.activity) { activity in
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(activity.message)
                                             .font(.headline)
@@ -114,13 +108,16 @@ struct IncidentDetailView: View {
                     .padding(AppTheme.screenPadding)
                     .padding(.bottom, AppTheme.bottomScrollInset)
                 }
-                .background(AppBackdrop())
-                .toolbar(.hidden, for: .navigationBar)
             } else {
                 ContentUnavailableView("Incident introuvable", systemImage: "exclamationmark.circle")
             }
         }
         .background(AppBackdrop())
+        .navigationTitle("Incident")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await model.refresh()
+        }
     }
 
     private func syncLabel(for value: String) -> String {
@@ -128,9 +125,9 @@ struct IncidentDetailView: View {
         case "pending":
             "En cours"
         case "synchronized":
-            "Synchronisee"
+            "Synchronisée"
         case "failed":
-            "Echouee"
+            "Échouée"
         default:
             "Sans propagation"
         }

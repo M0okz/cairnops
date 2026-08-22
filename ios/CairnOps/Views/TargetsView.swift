@@ -4,8 +4,8 @@ struct TargetsView: View {
     @Environment(AppModel.self) private var model
     @State private var query = ""
 
-    private var filteredTargets: [Target] {
-        let sorted = model.snapshot.sortedTargets
+    private func filteredTargets(in snapshot: AppSnapshot) -> [Target] {
+        let sorted = snapshot.sortedTargets
         guard !query.isEmpty else {
             return sorted
         }
@@ -17,71 +17,72 @@ struct TargetsView: View {
     }
 
     var body: some View {
-        let targets = filteredTargets
+        let snapshot = model.snapshot
+        let targets = filteredTargets(in: snapshot)
 
-        return Group {
-            if targets.isEmpty {
-                if query.isEmpty {
-                    ContentUnavailableView(
-                        "Aucune cible",
-                        systemImage: "dot.scope",
-                        description: Text("Les cibles supervisées apparaîtront ici avec leur santé et leur fraîcheur.")
-                    )
-                } else {
-                    ContentUnavailableView.search
-                }
-            } else {
-                ScrollView {
-                    // `LazyVStack` ne construit que les lignes visibles : au-dela
-                    // de quelques dizaines de cibles, `VStack` instanciait toute
-                    // la liste a chaque rendu.
-                    LazyVStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                        ScreenHeader(
-                            title: "Cibles",
-                            subtitle: "\(targets.count) visibles · \(model.snapshot.targets.count) au total"
-                        ) {
-                            refreshButton
-                        }
+        return ScrollView {
+            // Les lignes sont des enfants directs du `LazyVStack`. Les placer
+            // dans un `Panel` contenant un `VStack` construisait les 1 000
+            // cibles d'un coup et annulait entierement la paresse du conteneur.
+            LazyVStack(alignment: .leading, spacing: 10) {
+                Text("\(targets.count) visibles · \(snapshot.targets.count) au total")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
 
-                        Panel {
-                            VStack(alignment: .leading, spacing: 14) {
-                                ForEach(targets) { target in
-                                    NavigationLink {
-                                        TargetDetailView(targetID: target.id)
-                                    } label: {
-                                        TargetRow(
-                                            target: target,
-                                            health: model.snapshot.health(for: target),
-                                            measures: model.snapshot.measures[target.id]
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-
-                                    if target.id != targets.last?.id {
-                                        Divider()
-                                    }
-                                }
-                            }
+                if targets.isEmpty {
+                    Group {
+                        if query.isEmpty {
+                            ContentUnavailableView(
+                                "Aucune cible",
+                                systemImage: "dot.scope",
+                                description: Text("Les cibles supervisées apparaîtront ici avec leur santé et leur fraîcheur.")
+                            )
+                        } else {
+                            ContentUnavailableView.search
                         }
                     }
-                    .padding(AppTheme.screenPadding)
-                    .padding(.bottom, AppTheme.bottomScrollInset)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 64)
+                } else {
+                    ForEach(targets) { target in
+                        NavigationLink {
+                            TargetDetailView(targetID: target.id)
+                        } label: {
+                            TargetRow(
+                                target: target,
+                                health: snapshot.health(for: target),
+                                measures: snapshot.measures[target.id],
+                                isStandalone: true
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
+            .padding(AppTheme.screenPadding)
+            .padding(.bottom, AppTheme.bottomScrollInset)
         }
         .background(AppBackdrop())
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Cibles")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                refreshButton
+            }
+        }
         .searchable(text: $query, prompt: "Nom ou description")
+        .scrollDismissesKeyboard(.interactively)
+        .refreshable {
+            await model.refresh()
+        }
     }
 
     private var refreshButton: some View {
         AsyncButton {
             await model.refresh()
         } label: {
-            RefreshGlyph()
+            Image(systemName: "arrow.clockwise")
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(AppTheme.accent)
         .accessibilityLabel("Actualiser les cibles")
     }
 }

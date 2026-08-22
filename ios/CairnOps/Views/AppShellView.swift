@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AppShellView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppModel.self) private var model
     @State private var selectedTab: AppTab = .overview
 
@@ -37,23 +38,32 @@ struct AppShellView: View {
             .tag(AppTab.settings)
         }
         .overlay(alignment: .top) {
-            if let statusMessage = model.statusMessage {
-                Text(statusMessage)
-                    .font(.footnote)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(bannerColor)
-                    )
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+            Group {
+                if let statusMessage = model.statusMessage {
+                    Text(statusMessage)
+                        .font(.footnote)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(bannerColor)
+                        )
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            // La banniere est informative : elle ne doit jamais voler le
+            // premier geste de defilement ou masquer un bouton de la barre.
+            .allowsHitTesting(false)
+            .animation(
+                reduceMotion ? nil : .easeInOut(duration: 0.2),
+                value: model.statusMessage
+            )
         }
-        .animation(.easeInOut(duration: 0.2), value: model.statusMessage)
     }
 
     private var bannerColor: Color {
