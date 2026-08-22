@@ -10,7 +10,15 @@ struct AppRootView: View {
             AppBackdrop()
 
             Group {
-                if model.showsShell {
+                if showsSettingsPreview {
+                    NavigationStack {
+                        SettingsView()
+                    }
+                } else if showsNotificationSettingsPreview {
+                    NavigationStack {
+                        NotificationSettingsView()
+                    }
+                } else if model.showsShell {
                     AppShellView()
                 } else if model.isBootstrapping {
                     ProgressView("Connexion à l’instance")
@@ -58,5 +66,21 @@ struct AppRootView: View {
         .onOpenURL { url in
             model.acceptPairingURL(url)
         }
+    }
+
+    private var showsNotificationSettingsPreview: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-CairnOpsNotificationSettingsPreview")
+#else
+        false
+#endif
+    }
+
+    private var showsSettingsPreview: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-CairnOpsSettingsPreview")
+#else
+        false
+#endif
     }
 }

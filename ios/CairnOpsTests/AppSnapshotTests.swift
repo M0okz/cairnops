@@ -74,7 +74,7 @@ final class AppSnapshotTests: XCTestCase {
     ) -> Incident {
         let resolvedAt = status == "resolved" ? Date.now.ISO8601Format() : nil
 
-        Incident(
+        return Incident(
             id: UUID().uuidString,
             targetID: targetID,
             targetName: "API",

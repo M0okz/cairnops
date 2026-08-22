@@ -7,6 +7,7 @@ struct CairnOpsApp: App {
 	var body: some Scene {
 		WindowGroup {
 			AppRootView(pushNotifications: pushNotifications)
+				.environment(pushNotifications)
 		}
 	}
 }

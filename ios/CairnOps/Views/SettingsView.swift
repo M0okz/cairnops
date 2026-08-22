@@ -8,6 +8,42 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
                 Panel {
                     VStack(alignment: .leading, spacing: 14) {
+                        Text("Notifications")
+                            .font(AppTheme.sectionTitleFont)
+
+                        NavigationLink {
+                            NotificationSettingsView()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "bell.badge")
+                                    .font(.title3)
+                                    .foregroundStyle(AppTheme.accent)
+                                    .frame(width: 30)
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Alertes sur cet iPhone")
+                                        .font(AppTheme.rowTitleFont)
+                                    Text("Sons, alertes critiques et rappels")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer(minLength: 8)
+
+                                Image(systemName: "chevron.right")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .frame(minHeight: 44)
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Ouvre les réglages de notification")
+                    }
+                }
+
+                Panel {
+                    VStack(alignment: .leading, spacing: 14) {
                         Text("Instance")
                             .font(AppTheme.sectionTitleFont)
 
