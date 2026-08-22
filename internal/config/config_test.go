@@ -94,6 +94,26 @@ func TestLoadWorkerRejectsUnencryptedPushRelay(t *testing.T) {
 	}
 }
 
+func TestLoadPushRelayRequiresAPNSIdentity(t *testing.T) {
+	t.Setenv("CAIRNOPS_RELAY_APNS_KEY_ID", "")
+	t.Setenv("CAIRNOPS_RELAY_APNS_TEAM_ID", "TEAMID1234")
+	if _, err := LoadPushRelay(); err == nil {
+		t.Fatal("relay accepted a missing APNs key ID")
+	}
+}
+
+func TestLoadPushRelayAcceptsAPNSIdentity(t *testing.T) {
+	t.Setenv("CAIRNOPS_RELAY_APNS_KEY_ID", "KEYID12345")
+	t.Setenv("CAIRNOPS_RELAY_APNS_TEAM_ID", "TEAMID1234")
+	cfg, err := LoadPushRelay()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.APNSTopic != "fr.cairnops.ios" || cfg.HTTPAddress != ":8082" {
+		t.Fatalf("unexpected relay configuration: %#v", cfg)
+	}
+}
+
 func TestLoadWorkerRejectsExplicitEmptyInstanceID(t *testing.T) {
 	t.Setenv("CAIRNOPS_INSTANCE_ID", "")
 

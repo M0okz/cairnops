@@ -148,7 +148,7 @@ func normalizeClaim(input ClaimInput) (normalizedClaim, error) {
 		return normalizedClaim{}, fmt.Errorf("%w: encryption public key is not a valid X25519 point", ErrInvalidInput)
 	}
 	recipient := strings.TrimSpace(input.PushRecipient)
-	if !validOpaqueRecipient(recipient) {
+	if recipient != "" && !validOpaqueRecipient(recipient) {
 		return normalizedClaim{}, fmt.Errorf("%w: push recipient must be an opaque value containing between 16 and 1024 characters", ErrInvalidInput)
 	}
 	return normalizedClaim{

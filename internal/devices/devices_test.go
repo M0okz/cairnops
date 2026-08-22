@@ -32,6 +32,19 @@ func TestNormalizeClaimRejectsInvalidCryptographicIdentity(t *testing.T) {
 	}
 }
 
+func TestNormalizeClaimAllowsPushRegistrationAfterPairing(t *testing.T) {
+	publicKey := base64.RawURLEncoding.EncodeToString(curve25519.Basepoint)
+	claim, err := normalizeClaim(ClaimInput{
+		Name: "iPhone", Platform: "ios", EncryptionPublicKey: publicKey,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claim.PushRecipient != "" {
+		t.Fatalf("unexpected provisional push recipient: %q", claim.PushRecipient)
+	}
+}
+
 func TestPairingPayloadContainsInstanceAndSecret(t *testing.T) {
 	payload := pairingPayload("https://cairnops.example.test", "secret-token")
 	if !strings.HasPrefix(payload, "cairnops://pair?") || !strings.Contains(payload, "instance=https%3A%2F%2Fcairnops.example.test") || !strings.Contains(payload, "token=secret-token") {

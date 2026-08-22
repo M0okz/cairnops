@@ -58,7 +58,7 @@ services:
       CAIRNOPS_WORKER_HEALTH_ADDRESS: :8081
       CAIRNOPS_PUBLIC_URL: ${CAIRNOPS_PUBLIC_URL:?CAIRNOPS_PUBLIC_URL must be set}
       CAIRNOPS_MASTER_KEY_FILE: /var/lib/cairnops/master.key
-      CAIRNOPS_PUSH_RELAY_URL: ${CAIRNOPS_PUSH_RELAY_URL:-}
+      CAIRNOPS_PUSH_RELAY_URL: ${CAIRNOPS_PUSH_RELAY_URL:?CAIRNOPS_PUSH_RELAY_URL must be set}
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +73,33 @@ services:
       - NET_RAW
     volumes:
       - cairnops-secrets:/var/lib/cairnops
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    restart: unless-stopped
+    logging: *default-logging
+
+  relay:
+    image: ghcr.io/m0okz/cairnops-relay:latest
+    environment:
+      CAIRNOPS_RELAY_HTTP_ADDRESS: :8082
+      CAIRNOPS_RELAY_STORAGE_DIR: /var/lib/cairnops-relay/registrations
+      CAIRNOPS_RELAY_MASTER_KEY_FILE: /var/lib/cairnops-relay/master.key
+      CAIRNOPS_RELAY_APNS_KEY_FILE: /run/secrets/apns-auth-key.p8
+      CAIRNOPS_RELAY_APNS_KEY_ID: ${CAIRNOPS_RELAY_APNS_KEY_ID:?CAIRNOPS_RELAY_APNS_KEY_ID must be set}
+      CAIRNOPS_RELAY_APNS_TEAM_ID: ${CAIRNOPS_RELAY_APNS_TEAM_ID:?CAIRNOPS_RELAY_APNS_TEAM_ID must be set}
+      CAIRNOPS_RELAY_APNS_TOPIC: ${CAIRNOPS_RELAY_APNS_TOPIC:-fr.cairnops.ios}
+    healthcheck:
+      test: ["CMD", "/app/cairnops", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    ports:
+      - "${CAIRNOPS_RELAY_BIND:-127.0.0.1:8082}:8082"
+    volumes:
+      - cairnops-relay:/var/lib/cairnops-relay
+      - ${CAIRNOPS_RELAY_APNS_KEY_HOST_PATH:?CAIRNOPS_RELAY_APNS_KEY_HOST_PATH must be set}:/run/secrets/apns-auth-key.p8:ro
     security_opt:
       - no-new-privileges:true
     labels:
@@ -97,3 +124,4 @@ services:
 volumes:
   cairnops-postgres:
   cairnops-secrets:
+  cairnops-relay:

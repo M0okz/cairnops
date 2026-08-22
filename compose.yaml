@@ -71,6 +71,35 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
 
+  relay:
+    profiles: ["push"]
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+      target: relay
+    environment:
+      CAIRNOPS_RELAY_HTTP_ADDRESS: :8082
+      CAIRNOPS_RELAY_STORAGE_DIR: /var/lib/cairnops-relay/registrations
+      CAIRNOPS_RELAY_MASTER_KEY_FILE: /var/lib/cairnops-relay/master.key
+      CAIRNOPS_RELAY_APNS_KEY_FILE: /run/secrets/apns-auth-key.p8
+      CAIRNOPS_RELAY_APNS_KEY_ID: ${CAIRNOPS_RELAY_APNS_KEY_ID:-}
+      CAIRNOPS_RELAY_APNS_TEAM_ID: ${CAIRNOPS_RELAY_APNS_TEAM_ID:-}
+      CAIRNOPS_RELAY_APNS_TOPIC: ${CAIRNOPS_RELAY_APNS_TOPIC:-fr.cairnops.ios}
+    healthcheck:
+      test: ["CMD", "/app/cairnops", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    ports:
+      - "${CAIRNOPS_RELAY_BIND:-127.0.0.1:8082}:8082"
+    volumes:
+      - cairnops-relay:/var/lib/cairnops-relay
+      - ${CAIRNOPS_RELAY_APNS_KEY_HOST_PATH:-./.secrets/apns-auth-key.p8}:/run/secrets/apns-auth-key.p8:ro
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
 volumes:
   cairnops-postgres:
   cairnops-secrets:
+  cairnops-relay:

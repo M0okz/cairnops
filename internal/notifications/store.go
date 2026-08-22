@@ -341,6 +341,7 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 			JOIN cairnops_users users ON users.id = device.user_id
 			WHERE inbox.incident_id = $1::uuid AND inbox.event_kind = $2
 			  AND device.revoked_at IS NULL AND device.push_disabled_at IS NULL
+			  AND device.push_recipient_sealed IS NOT NULL
 			  AND users.deactivated_at IS NULL
 			ON CONFLICT (device_id, inbox_id) DO NOTHING
 		`, delivery.IncidentID, delivery.EventKind); err != nil {

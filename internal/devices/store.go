@@ -94,9 +94,13 @@ func (store *Store) ClaimPairing(ctx context.Context, token string, input ClaimI
 	if err != nil {
 		return PairingResult{}, err
 	}
-	sealedRecipient, err := store.secrets.Seal([]byte(claim.PushRecipient), PushRecipientPurpose)
-	if err != nil {
-		return PairingResult{}, fmt.Errorf("seal push recipient: %w", err)
+	var sealedRecipient any
+	if claim.PushRecipient != "" {
+		sealed, err := store.secrets.Seal([]byte(claim.PushRecipient), PushRecipientPurpose)
+		if err != nil {
+			return PairingResult{}, fmt.Errorf("seal push recipient: %w", err)
+		}
+		sealedRecipient = sealed
 	}
 	result, err := store.pool.Exec(ctx, `
 		UPDATE cairnops_device_pairings
@@ -176,7 +180,7 @@ func (store *Store) ConfirmPairing(ctx context.Context, userID, pairingID string
 		) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id::text, created_at, updated_at
 	`, userID, pairing.ClaimedName, pairing.ClaimedPlatform, appVersion, locale,
-		content, publicKey, recipientSealed, digest[:]).Scan(
+		content, publicKey, nullableText(recipientSealed), digest[:]).Scan(
 		&pairing.DeviceID, &deviceCreatedAt, &deviceUpdatedAt,
 	); err != nil {
 		return Pairing{}, fmt.Errorf("create paired device: %w", err)
@@ -338,7 +342,8 @@ func (store *Store) List(ctx context.Context, actor identitymodel.Principal) ([]
 	rows, err := store.pool.Query(ctx, `
 		SELECT device.id::text, device.user_id::text, users.display_name,
 		       device.name, device.platform, device.app_version, device.locale,
-		       device.notification_content, device.push_disabled_at IS NULL,
+		       device.notification_content,
+		       device.push_recipient_sealed IS NOT NULL AND device.push_disabled_at IS NULL,
 		       device.last_seen_at, device.revoked_at, device.created_at, device.updated_at
 		FROM cairnops_devices device
 		JOIN cairnops_users users ON users.id = device.user_id
@@ -381,9 +386,10 @@ func (store *Store) Update(ctx context.Context, actor identitymodel.Principal, d
 	err = tx.QueryRow(ctx, `
 		SELECT device.id::text, device.user_id::text, users.display_name,
 		       device.name, device.platform, device.app_version, device.locale,
-		       device.notification_content, device.push_disabled_at IS NULL,
+		       device.notification_content,
+		       device.push_recipient_sealed IS NOT NULL AND device.push_disabled_at IS NULL,
 		       device.encryption_public_key,
-		       device.push_recipient_sealed, device.last_seen_at, device.revoked_at,
+		       coalesce(device.push_recipient_sealed, ''), device.last_seen_at, device.revoked_at,
 		       device.created_at, device.updated_at
 		FROM cairnops_devices device
 		JOIN cairnops_users users ON users.id = device.user_id
@@ -409,7 +415,7 @@ func (store *Store) Update(ctx context.Context, actor identitymodel.Principal, d
 	claim := ClaimInput{
 		Name: device.Name, Platform: device.Platform, AppVersion: device.AppVersion,
 		Locale: device.Locale, NotificationContent: device.NotificationContent,
-		EncryptionPublicKey: encodePublicKey(publicKey), PushRecipient: strings.Repeat("x", 16),
+		EncryptionPublicKey: encodePublicKey(publicKey), PushRecipient: "",
 	}
 	if input.Name != nil {
 		claim.Name = *input.Name
@@ -434,9 +440,13 @@ func (store *Store) Update(ctx context.Context, actor identitymodel.Principal, d
 		return Device{}, err
 	}
 	if input.PushRecipient != nil {
-		recipientSealed, err = store.secrets.Seal([]byte(normalized.PushRecipient), PushRecipientPurpose)
-		if err != nil {
-			return Device{}, fmt.Errorf("seal push recipient: %w", err)
+		if normalized.PushRecipient == "" {
+			recipientSealed = ""
+		} else {
+			recipientSealed, err = store.secrets.Seal([]byte(normalized.PushRecipient), PushRecipientPurpose)
+			if err != nil {
+				return Device{}, fmt.Errorf("seal push recipient: %w", err)
+			}
 		}
 	}
 	device.Name, device.AppVersion, device.Locale = normalized.Name, normalized.AppVersion, normalized.Locale
@@ -450,17 +460,34 @@ func (store *Store) Update(ctx context.Context, actor identitymodel.Principal, d
 		WHERE id = $1::uuid
 		RETURNING updated_at
 	`, device.ID, device.Name, device.AppVersion, device.Locale,
-		device.NotificationContent, publicKey, recipientSealed, input.PushRecipient != nil,
+		device.NotificationContent, publicKey, nullableText(recipientSealed), input.PushRecipient != nil,
 	).Scan(&device.UpdatedAt); err != nil {
 		return Device{}, fmt.Errorf("update device: %w", err)
+	}
+	if input.PushRecipient != nil && normalized.PushRecipient == "" {
+		if _, err := tx.Exec(ctx, `
+			UPDATE cairnops_push_outbox
+			SET status = 'cancelled', last_error = 'Push désactivé',
+			    lease_owner = NULL, lease_until = NULL, updated_at = now()
+			WHERE device_id = $1::uuid AND status IN ('pending', 'failed')
+		`, device.ID); err != nil {
+			return Device{}, fmt.Errorf("cancel disabled device notifications: %w", err)
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Device{}, fmt.Errorf("commit device update: %w", err)
 	}
 	if input.PushRecipient != nil {
-		device.PushEnabled = true
+		device.PushEnabled = normalized.PushRecipient != ""
 	}
 	return device, nil
+}
+
+func nullableText(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
 
 func encodePublicKey(publicKey []byte) string {

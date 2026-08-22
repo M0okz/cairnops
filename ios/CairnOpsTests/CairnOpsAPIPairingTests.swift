@@ -21,9 +21,9 @@ struct CairnOpsAPIPairingTests {
             platform: "ios",
             appVersion: "0.1.0 (1)",
             locale: "fr",
-            notificationContent: "complete",
-            encryptionPublicKey: "public-key",
-            pushRecipient: "opaque-recipient-1234"
+			notificationContent: "complete",
+			encryptionPublicKey: "public-key",
+			pushRecipient: nil
         )
 
         let result = try await api.claimDevicePairing(pairingToken: pairingToken, claim: claim)
@@ -40,7 +40,7 @@ struct CairnOpsAPIPairingTests {
         #expect(decoded.name == claim.name)
         #expect(decoded.platform == "ios")
         #expect(decoded.encryptionPublicKey == claim.encryptionPublicKey)
-        #expect(decoded.pushRecipient == claim.pushRecipient)
+		#expect(decoded.pushRecipient == nil)
     }
 
     @Test("Le résultat d’appairage récupère le jeton remis une seule fois")
@@ -104,7 +104,7 @@ private struct ClaimBody: Decodable {
     let name: String
     let platform: String
     let encryptionPublicKey: String
-    let pushRecipient: String
+	let pushRecipient: String?
 
     private enum CodingKeys: String, CodingKey {
         case name

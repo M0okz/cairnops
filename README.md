@@ -41,9 +41,12 @@ laisser l'instance sans Administrateur actif. Le backend mobile sait désormais
 associer et révoquer chaque appareil, chiffrer sa projection Push et la remettre
 au Relais officiel avec reprise par appareil. Le compagnon iOS sait scanner ou
 recevoir le lien d'appairage, attendre la confirmation Web, conserver son
-identité dans Keychain et authentifier durablement REST et WebSocket. Le
-compagnon Android, l'inscription APNs au Relais et l'exploitation publique de ce
-dernier restent à construire avant toute version destinée à la production.
+identité dans Keychain et authentifier durablement REST et WebSocket. Il demande
+ensuite l'autorisation système, inscrit et renouvelle son jeton APNs auprès du
+Relais, puis déchiffre localement l'enveloppe dans une extension de notification
+avant affichage. Le Relais APNs officiel possède son stockage chiffré, son image
+Docker et ses contrats de création, rotation, suppression et livraison. Le
+compagnon Android reste à construire avant la V1 multiplateforme.
 
 ## Ce que vise la V1
 
@@ -108,6 +111,11 @@ avec l'origine HTTPS réellement utilisée.
 Le worker active la livraison mobile lorsque `CAIRNOPS_PUSH_RELAY_URL` contient
 l'origine HTTPS du Relais officiel. Sans cette variable, les identités mobiles
 restent utilisables mais le composant Push apparaît indisponible dans la Santé.
+Le profil Compose `push` lance le Relais APNs localement lorsqu'une clé `.p8`,
+son Key ID et le Team ID Apple sont fournis ; cette clé reste montée en lecture
+seule et n'entre jamais dans une image. Chaque inscription conserve aussi
+l'environnement APNs du profil signé, afin qu'un build de développement et un
+build de production utilisent automatiquement le bon endpoint Apple.
 
 Endpoints utiles :
 

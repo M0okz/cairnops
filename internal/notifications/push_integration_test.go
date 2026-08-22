@@ -1,6 +1,7 @@
 package notifications_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -42,6 +43,13 @@ func TestIntegratedDeliverySchedulesOnePushPerActiveDevice(t *testing.T) {
 			push_recipient_sealed, token_digest
 		) VALUES ($1::uuid, 'iPhone', 'ios', $2, $3, $4)
 	`, userID, curve25519.Basepoint, "sealed-recipient-with-sufficient-length", make([]byte, 32)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO cairnops_devices (
+			user_id, name, platform, encryption_public_key, token_digest
+		) VALUES ($1::uuid, 'iPad sans Push', 'ios', $2, $3)
+	`, userID, curve25519.Basepoint, bytes.Repeat([]byte{1}, 32)); err != nil {
 		t.Fatal(err)
 	}
 	store := notifications.NewPostgresStore(pool)

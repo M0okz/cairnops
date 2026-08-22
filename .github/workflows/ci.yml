@@ -67,6 +67,7 @@ jobs:
         target:
           - server
           - worker
+          - relay
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7

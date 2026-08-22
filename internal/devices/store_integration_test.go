@@ -98,3 +98,69 @@ func TestPairingCreatesOneRevocableDeviceIdentity(t *testing.T) {
 		t.Fatal("the opaque relay recipient was persisted in plaintext")
 	}
 }
+
+func TestPairingActivatesAndDeactivatesPushAfterConfirmation(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	var userID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_users (username, display_name, password_hash, role)
+		VALUES ('mobile-push-later', 'Mobile Push Later', 'not-used', 'operator')
+		RETURNING id::text
+	`).Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	secrets, err := secretbox.New(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := NewStore(pool, secrets, "https://cairnops.example.test")
+	invitation, err := store.CreatePairing(ctx, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ClaimPairing(ctx, invitation.Token, ClaimInput{
+		Name: "iPhone sans Push", Platform: "ios",
+		EncryptionPublicKey: base64.RawURLEncoding.EncodeToString(curve25519.Basepoint),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	pairing, err := store.ConfirmPairing(ctx, userID, invitation.Pairing.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := identitymodel.Principal{ID: userID, Role: "operator"}
+	items, err := store.List(ctx, actor)
+	if err != nil || len(items) != 1 || items[0].PushEnabled {
+		t.Fatalf("unregistered device unexpectedly has Push: %#v (%v)", items, err)
+	}
+
+	recipient := "opaque-relay-recipient-0123456789"
+	device, err := store.Update(ctx, actor, pairing.DeviceID, UpdateInput{PushRecipient: &recipient})
+	if err != nil || !device.PushEnabled {
+		t.Fatalf("Push registration was not activated: %#v (%v)", device, err)
+	}
+	var sealedRecipient *string
+	if err := pool.QueryRow(ctx, `
+		SELECT push_recipient_sealed FROM cairnops_devices WHERE id = $1::uuid
+	`, pairing.DeviceID).Scan(&sealedRecipient); err != nil {
+		t.Fatal(err)
+	}
+	if sealedRecipient == nil || *sealedRecipient == recipient {
+		t.Fatal("Push registration was not persisted as a sealed value")
+	}
+
+	disabled := ""
+	device, err = store.Update(ctx, actor, pairing.DeviceID, UpdateInput{PushRecipient: &disabled})
+	if err != nil || device.PushEnabled {
+		t.Fatalf("Push registration was not disabled: %#v (%v)", device, err)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT push_recipient_sealed FROM cairnops_devices WHERE id = $1::uuid
+	`, pairing.DeviceID).Scan(&sealedRecipient); err != nil {
+		t.Fatal(err)
+	}
+	if sealedRecipient != nil {
+		t.Fatalf("disabled Push recipient remained stored: %q", *sealedRecipient)
+	}
+}

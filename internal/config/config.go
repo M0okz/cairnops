@@ -28,6 +28,16 @@ type Worker struct {
 	PushRelayURL  string
 }
 
+type PushRelay struct {
+	HTTPAddress   string
+	StorageDir    string
+	MasterKeyFile string
+	APNSKeyFile   string
+	APNSKeyID     string
+	APNSTeamID    string
+	APNSTopic     string
+}
+
 func LoadServer() (Server, error) {
 	cfg := Server{
 		HTTPAddress:    envOr("CAIRNOPS_HTTP_ADDRESS", ":8080"),
@@ -80,6 +90,34 @@ func LoadWorker() (Worker, error) {
 	if cfg.PushRelayURL != "" {
 		if err := validatePushRelayURL(cfg.PushRelayURL); err != nil {
 			return Worker{}, fmt.Errorf("CAIRNOPS_PUSH_RELAY_URL: %w", err)
+		}
+	}
+	return cfg, nil
+}
+
+func LoadPushRelay() (PushRelay, error) {
+	cfg := PushRelay{
+		HTTPAddress:   envOr("CAIRNOPS_RELAY_HTTP_ADDRESS", ":8082"),
+		StorageDir:    envOr("CAIRNOPS_RELAY_STORAGE_DIR", "/var/lib/cairnops-relay/registrations"),
+		MasterKeyFile: envOr("CAIRNOPS_RELAY_MASTER_KEY_FILE", "/var/lib/cairnops-relay/master.key"),
+		APNSKeyFile:   envOr("CAIRNOPS_RELAY_APNS_KEY_FILE", "/run/secrets/apns-auth-key.p8"),
+		APNSKeyID:     envOr("CAIRNOPS_RELAY_APNS_KEY_ID", ""),
+		APNSTeamID:    envOr("CAIRNOPS_RELAY_APNS_TEAM_ID", ""),
+		APNSTopic:     envOr("CAIRNOPS_RELAY_APNS_TOPIC", "fr.cairnops.ios"),
+	}
+	if err := validateAddress(cfg.HTTPAddress); err != nil {
+		return PushRelay{}, fmt.Errorf("CAIRNOPS_RELAY_HTTP_ADDRESS: %w", err)
+	}
+	for name, value := range map[string]string{
+		"CAIRNOPS_RELAY_STORAGE_DIR":     cfg.StorageDir,
+		"CAIRNOPS_RELAY_MASTER_KEY_FILE": cfg.MasterKeyFile,
+		"CAIRNOPS_RELAY_APNS_KEY_FILE":   cfg.APNSKeyFile,
+		"CAIRNOPS_RELAY_APNS_KEY_ID":     cfg.APNSKeyID,
+		"CAIRNOPS_RELAY_APNS_TEAM_ID":    cfg.APNSTeamID,
+		"CAIRNOPS_RELAY_APNS_TOPIC":      cfg.APNSTopic,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return PushRelay{}, fmt.Errorf("%s must not be empty", name)
 		}
 	}
 	return cfg, nil

@@ -104,14 +104,16 @@ final class AppModel {
 
     @ObservationIgnored private let configurationStore: ServerConfigurationStore
     @ObservationIgnored private let credentialStore: DeviceCredentialStore
-    @ObservationIgnored private let snapshotStore: SnapshotStore
-    @ObservationIgnored private let apiFactory: (ServerConfiguration, String?) -> CairnOpsAPI
-    @ObservationIgnored private let pairingPollInterval: Duration
+	@ObservationIgnored private let snapshotStore: SnapshotStore
+	@ObservationIgnored private let apiFactory: (ServerConfiguration, String?) -> CairnOpsAPI
+	@ObservationIgnored private let pushRelayFactory: () throws -> PushRelayClient
+	@ObservationIgnored private let pairingPollInterval: Duration
     @ObservationIgnored private var api: CairnOpsAPI?
     @ObservationIgnored private var pendingPairing: PendingDevicePairing?
     @ObservationIgnored private var recoveredIdentity: DeviceIdentity?
     @ObservationIgnored private var activePairingAttemptID: UUID?
-    @ObservationIgnored private var deferredPairingLink: String?
+	@ObservationIgnored private var deferredPairingLink: String?
+	@ObservationIgnored private var pushRegistrationInFlight: String?
 
     /// Passe a `false` des que la scene quitte le premier plan. La boucle temps
     /// reel s'arrete alors au lieu de maintenir une socket et des requetes
@@ -145,17 +147,21 @@ final class AppModel {
     init(
         configurationStore: ServerConfigurationStore = ServerConfigurationStore(),
         credentialStore: DeviceCredentialStore = DeviceCredentialStore(),
-        snapshotStore: SnapshotStore = SnapshotStore(),
-        pairingPollInterval: Duration = .seconds(2),
-        apiFactory: @escaping (ServerConfiguration, String?) -> CairnOpsAPI = {
-            CairnOpsAPI(configuration: $0, deviceToken: $1)
-        }
-    ) {
+		snapshotStore: SnapshotStore = SnapshotStore(),
+		pairingPollInterval: Duration = .seconds(2),
+		apiFactory: @escaping (ServerConfiguration, String?) -> CairnOpsAPI = {
+			CairnOpsAPI(configuration: $0, deviceToken: $1)
+		},
+		pushRelayFactory: @escaping () throws -> PushRelayClient = {
+			try PushRelayClient.configured()
+		}
+	) {
         self.configurationStore = configurationStore
         self.credentialStore = credentialStore
         self.snapshotStore = snapshotStore
-        self.pairingPollInterval = pairingPollInterval
-        self.apiFactory = apiFactory
+		self.pairingPollInterval = pairingPollInterval
+		self.apiFactory = apiFactory
+		self.pushRelayFactory = pushRelayFactory
     }
 
     var instanceLabel: String {
@@ -462,14 +468,14 @@ final class AppModel {
             let instance = pairingInstanceLabel(pending.serverBaseURL)
             pairingState = .claiming(instance: instance)
             try await waitUntilPairingCanContactServer(attemptID)
-            let claim = CairnOpsAPI.DevicePairingClaim(
+			let claim = CairnOpsAPI.DevicePairingClaim(
                 name: pending.deviceName,
                 platform: "ios",
                 appVersion: pending.appVersion,
                 locale: pending.locale,
                 notificationContent: pending.notificationContent,
-                encryptionPublicKey: try pending.encryptionPublicKey(),
-                pushRecipient: pending.pushRecipient
+				encryptionPublicKey: try pending.encryptionPublicKey(),
+				pushRecipient: nil
             )
 
             do {
@@ -499,12 +505,12 @@ final class AppModel {
                         throw PairingFlowError.incompleteCredential
                     }
 
-                    let identity = DeviceIdentity(
+					let identity = DeviceIdentity(
                         serverBaseURL: pending.serverBaseURL,
                         deviceID: deviceID,
                         deviceToken: deviceToken,
-                        encryptionPrivateKey: pending.encryptionPrivateKey,
-                        pushRecipient: pending.pushRecipient
+						encryptionPrivateKey: pending.encryptionPrivateKey,
+						pushRegistration: nil
                     )
                     recoveredIdentity = identity
                     hasDeviceIdentity = true
@@ -534,15 +540,70 @@ final class AppModel {
         }
     }
 
-    func refresh() async {
+	func refresh() async {
         if user == nil {
             isBootstrapping = true
             await bootstrap()
             return
-        }
+		}
 
-        await refreshProjection()
-    }
+		await refreshProjection()
+	}
+
+	func registerForPush(deviceToken: String) async {
+		let normalizedToken = deviceToken.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+		guard !normalizedToken.isEmpty,
+			pushRegistrationInFlight != normalizedToken,
+			let identity = try? credentialStore.load().identity else {
+			return
+		}
+
+		pushRegistrationInFlight = normalizedToken
+		defer {
+			if pushRegistrationInFlight == normalizedToken {
+				pushRegistrationInFlight = nil
+			}
+		}
+
+		do {
+			let relay = try pushRelayFactory()
+			let registration: PushRelayRegistration
+			if let current = identity.pushRegistration {
+				do {
+					try await relay.rotate(current, deviceToken: normalizedToken)
+					registration = current
+				} catch let error as PushRelayError
+					where error.statusCode == 401 || error.statusCode == 404 || error.statusCode == 410 {
+					registration = try await relay.register(deviceToken: normalizedToken)
+				}
+			} else {
+				registration = try await relay.register(deviceToken: normalizedToken)
+			}
+
+			let updatedIdentity = DeviceIdentity(
+				serverBaseURL: identity.serverBaseURL,
+				deviceID: identity.deviceID,
+				deviceToken: identity.deviceToken,
+				encryptionPrivateKey: identity.encryptionPrivateKey,
+				pushRegistration: registration
+			)
+			// La capacité de gestion est durable avant le PATCH : une coupure entre
+			// les deux appels reprend ainsi la même inscription au prochain essai.
+			try credentialStore.save(identity: updatedIdentity)
+			let configuration = try ServerConfiguration(
+				baseURLString: identity.serverBaseURL
+			).validated()
+			try await apiFactory(configuration, identity.deviceToken).updatePushRecipient(
+				deviceID: identity.deviceID,
+				recipient: registration.recipient
+			)
+		} catch is CancellationError {
+			return
+		} catch {
+			statusMessage = "Les notifications Push ne sont pas encore actives : \(userFacingMessage(from: error))"
+			bannerTone = .caution
+		}
+	}
 
     /// Repercute le cycle de vie de la scene sur le flux temps reel.
     func setScenePhaseActive(_ isActive: Bool) {
@@ -598,8 +659,13 @@ final class AppModel {
         }
     }
 
-    func logout() async {
-        if let recoveredIdentity,
+	func logout() async {
+		let identity = (try? credentialStore.load().identity) ?? recoveredIdentity
+		if let registration = identity?.pushRegistration,
+			let relay = try? pushRelayFactory() {
+			try? await relay.remove(registration)
+		}
+		if let recoveredIdentity,
            let configuration = try? ServerConfiguration(
                baseURLString: recoveredIdentity.serverBaseURL
            ).validated() {

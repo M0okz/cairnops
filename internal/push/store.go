@@ -52,6 +52,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 			  AND outgoing.next_attempt_at <= now()
 			  AND (outgoing.lease_until IS NULL OR outgoing.lease_until < now())
 			  AND device.revoked_at IS NULL AND device.push_disabled_at IS NULL
+			  AND device.push_recipient_sealed IS NOT NULL
 			  AND users.deactivated_at IS NULL
 			ORDER BY outgoing.next_attempt_at, outgoing.id
 			FOR UPDATE OF outgoing SKIP LOCKED
