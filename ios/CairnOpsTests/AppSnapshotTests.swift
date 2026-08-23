@@ -2,6 +2,13 @@ import XCTest
 @testable import CairnOps
 
 final class AppSnapshotTests: XCTestCase {
+    func testOlderOfflineSnapshotDefaultsToNoIndicators() throws {
+        let data = Data(#"{"serverBaseURL":"https://example.test","targets":[],"incidents":[],"measures":{},"inbox":[],"unreadCount":0}"#.utf8)
+        let snapshot = try JSONDecoder().decode(AppSnapshot.self, from: data)
+
+        XCTAssertTrue(snapshot.indicatorTargets.isEmpty)
+    }
+
     func testCriticalIncidentMakesTargetUnavailable() {
         let target = makeTarget(name: "API", externalSourceCount: 1)
         let incident = makeIncident(targetID: target.id, severity: .critical)

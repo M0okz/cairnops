@@ -24,6 +24,7 @@
     type TargetState
   } from '$lib/format';
   import { i18n, plural, t } from '$lib/i18n.svelte';
+  import { formatIndicator } from '$lib/indicator-format';
   import type { Measure, Outcome, SourceMeasures, Target } from '$lib/api';
 
   /* Les Contrôles natifs portent le nom de leur protocole : il ne se traduit
@@ -79,6 +80,7 @@
     divergent: boolean;
     sourceCount: number;
     sources: SourceMeasures[];
+    contextual: { label: string; value: string } | null;
   };
 
   const rows = $derived.by<Row[]>(() => {
@@ -108,7 +110,11 @@
           trend: measured?.latency_trend ?? [],
           divergent: session.hasDivergence(target),
           sourceCount: target.sources.length + target.external_source_count,
-          sources
+          sources,
+          contextual: (() => {
+            const indicator = session.indicatorOverview[target.id]?.indicators[0];
+            return indicator ? { label: indicator.label, value: formatIndicator(indicator.last_value, indicator.unit) } : null;
+          })()
         };
       })
       .filter((row) => {
@@ -203,6 +209,7 @@
           <span>
             <strong>{row.target.name}</strong>
             {#if row.target.description}<small>{row.target.description}</small>{/if}
+            {#if row.contextual}<small class="contextual">{row.contextual.label} · <b class="num">{row.contextual.value}</b></small>{/if}
           </span>
         </span>
 
@@ -384,6 +391,9 @@
   .nature {
     font-size: 0.75rem;
   }
+
+  .cell-name .contextual { color: var(--accent); font-size: .625rem; }
+  .cell-name .contextual b { font-weight: 600; }
 
   .sources {
     display: flex;

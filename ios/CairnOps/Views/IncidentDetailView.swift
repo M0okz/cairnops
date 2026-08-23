@@ -56,6 +56,9 @@ struct IncidentDetailView: View {
                             }
                         }
 
+
+                        IncidentIndicatorsPanel(incidentID: incident.id)
+
                         Panel {
                             VStack(alignment: .leading, spacing: 14) {
                                 Text("Preuves")

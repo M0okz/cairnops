@@ -38,7 +38,9 @@ type Monitor struct {
 	// ResponseMilliseconds est le temps de réponse mesuré par Uptime Kuma.
 	// Il reste absent quand le produit ne le publie pas : CairnOps ne mesure
 	// alors aucune latence plutôt que d'en inventer une nulle.
-	ResponseMilliseconds *int `json:"response_milliseconds,omitempty"`
+	ResponseMilliseconds     *int     `json:"response_milliseconds,omitempty"`
+	CertificateDaysRemaining *float64 `json:"certificate_days_remaining,omitempty"`
+	CertificateValid         *bool    `json:"certificate_valid,omitempty"`
 }
 
 func (monitor Monitor) Address() string {
@@ -198,6 +200,55 @@ func attachResponseTimes(families map[string]*dto.MetricFamily, byID map[string]
 	}
 }
 
+// attachCertificateMetrics lit uniquement les deux gauges documentées par
+// l'endpoint Prometheus. Elles restent facultatives : les monitors sans TLS
+// ne doivent pas fabriquer un certificat valide ni une échéance nulle.
+func attachCertificateMetrics(families map[string]*dto.MetricFamily, byID map[string]Monitor) {
+	if family := families["monitor_cert_days_remaining"]; family != nil {
+		for _, metric := range family.GetMetric() {
+			if metric.GetGauge() == nil {
+				continue
+			}
+			identity := metricIdentity(metric)
+			monitor, known := byID[identity]
+			value := metric.GetGauge().GetValue()
+			if !known || math.IsNaN(value) || math.IsInf(value, 0) {
+				continue
+			}
+			monitor.CertificateDaysRemaining = &value
+			byID[identity] = monitor
+		}
+	}
+	if family := families["monitor_cert_is_valid"]; family != nil {
+		for _, metric := range family.GetMetric() {
+			if metric.GetGauge() == nil {
+				continue
+			}
+			identity := metricIdentity(metric)
+			monitor, known := byID[identity]
+			value := metric.GetGauge().GetValue()
+			if !known || (value != 0 && value != 1) {
+				continue
+			}
+			valid := value == 1
+			monitor.CertificateValid = &valid
+			byID[identity] = monitor
+		}
+	}
+}
+
+func metricIdentity(metric *dto.Metric) string {
+	labels := make(map[string]string, len(metric.GetLabel()))
+	for _, pair := range metric.GetLabel() {
+		labels[pair.GetName()] = pair.GetValue()
+	}
+	identity := strings.TrimSpace(labels["monitor_id"])
+	if identity == "" {
+		identity = "name:" + strings.TrimSpace(labels["monitor_name"])
+	}
+	return identity
+}
+
 func parseMonitors(body []byte) ([]Monitor, error) {
 	parser := expfmt.NewTextParser(model.LegacyValidation)
 	families, err := parser.TextToMetricFamilies(bytes.NewReader(body))
@@ -245,6 +296,7 @@ func parseMonitors(body []byte) ([]Monitor, error) {
 		byID[monitor.ID] = monitor
 	}
 	attachResponseTimes(families, byID)
+	attachCertificateMetrics(families, byID)
 
 	monitors := make([]Monitor, 0, len(byID))
 	for _, monitor := range byID {

@@ -21,6 +21,9 @@ import {
   type Target,
   type TargetMeasureDetail,
   type TargetMeasures,
+  type TargetIndicators,
+  type IncidentIndicators,
+  type ContextIndicator,
   type User
 } from './api';
 import { i18n, t } from './i18n.svelte';
@@ -86,6 +89,12 @@ class Session {
   /* Les trois fenêtres et la part de chaque Source, chargées seulement par le
    * détail qui les montre. */
   measureDetails = $state<Record<string, TargetMeasureDetail>>({});
+
+  /* Les Indicateurs restent une projection distincte des mesures : les placer
+   * dans le même objet rendrait trop facile de les faire participer à la santé. */
+  indicatorOverview = $state<Record<string, TargetIndicators>>({});
+  indicatorDetails = $state<Record<string, TargetIndicators>>({});
+  incidentIndicatorDetails = $state<Record<string, IncidentIndicators>>({});
 
   /* Les Observations brutes d'une Cible, sous le Journal qui les résume. Elles
    * ne sont chargées que lorsqu'on demande à les voir : ce sont des milliers de
@@ -387,6 +396,9 @@ class Session {
       this.targets = [];
       this.measures = {};
       this.measureDetails = {};
+      this.indicatorOverview = {};
+      this.indicatorDetails = {};
+      this.incidentIndicatorDetails = {};
       this.connectors = [];
       this.incidents = [];
       this.incidentHistoryTarget = '';
@@ -421,6 +433,7 @@ class Session {
        * Observation : une latence moyenne sur 24 heures ne bouge pas à la
        * seconde, et une liste de Cibles n'a pas à recharger si souvent. */
       void this.loadMeasures();
+      void this.loadIndicatorOverview();
       for (const targetId of Object.keys(this.measureDetails)) {
         void this.loadMeasureDetail(targetId);
       }
@@ -433,6 +446,7 @@ class Session {
     await Promise.all([
       this.loadTargets(),
       this.loadMeasures(),
+      this.loadIndicatorOverview(),
       this.loadConnectors(),
       this.loadIncidents(),
       this.loadIncidentDays(),
@@ -598,6 +612,61 @@ class Session {
     }
   }
 
+  async loadIndicatorOverview() {
+    try {
+      const response = await api<{ targets: TargetIndicators[] }>('/api/v1/indicators/targets');
+      this.indicatorOverview = Object.fromEntries(response.targets.map((target) => [target.target_id, target]));
+    } catch (cause) {
+      if (this.#expired(cause)) return;
+      /* Un contexte illisible ne retire ni verdict ni Incident de l'écran. */
+    }
+  }
+
+  async loadTargetIndicators(targetId: string, window: '24h' | '7d' = '24h') {
+    try {
+      const detail = await api<TargetIndicators>(`/api/v1/targets/${targetId}/indicators?window=${window}`);
+      this.indicatorDetails = { ...this.indicatorDetails, [`${targetId}:${window}`]: detail };
+      return detail;
+    } catch (cause) {
+      if (this.#expired(cause)) return null;
+      return null;
+    }
+  }
+
+  async loadIncidentIndicators(incidentId: string) {
+    try {
+      const detail = await api<IncidentIndicators>(`/api/v1/incidents/${incidentId}/indicators`);
+      this.incidentIndicatorDetails = { ...this.incidentIndicatorDetails, [incidentId]: detail };
+      return detail;
+    } catch (cause) {
+      if (this.#expired(cause)) return null;
+      return null;
+    }
+  }
+
+  async toggleIndicatorPin(indicator: ContextIndicator) {
+    const current = Object.values(this.indicatorOverview)
+      .flatMap((target) => target.indicators)
+      .sort((left, right) => (left.pin_position ?? 99) - (right.pin_position ?? 99))
+      .map((item) => item.id);
+    if (!indicator.pinned && current.length >= 4) {
+      this.showNotice('Quatre épingles sont déjà affichées. Désépinglez-en une avant d’en ajouter une autre.');
+      return false;
+    }
+    const next = indicator.pinned
+      ? current.filter((id) => id !== indicator.id)
+      : [...current, indicator.id];
+    try {
+      await api('/api/v1/me/indicator-pins', { method: 'PUT', body: JSON.stringify({ indicator_ids: next }) });
+      await Promise.all([this.loadIndicatorOverview(), this.loadTargetIndicators(indicator.target_id, '24h')]);
+      return true;
+    } catch (cause) {
+      if (this.#expired(cause)) return false;
+      this.showNotice(`Impossible de modifier les épingles : ${messageFrom(cause)}`);
+      return false;
+    }
+  }
+
   /** Les trois fenêtres d'une Cible, pour l'écran qui les détaille. */
   async loadMeasureDetail(targetId: string) {
     try {
@@ -684,6 +753,7 @@ class Session {
     if (kind === 'component.heartbeat') this.#dirty.add('health');
     else if (kind === 'connector.changed') this.#dirty.add('connectors');
     else if (kind === 'incident.changed') this.#dirty.add('incidents');
+    else if (kind === 'indicator.changed') this.#dirty.add('indicators');
     else if (kind === 'maintenance.changed') {
       this.#dirty.add('maintenances');
       this.#dirty.add('incidents');
@@ -704,6 +774,14 @@ class Session {
       if (this.#dirty.has('notifications')) {
         void this.loadNotifications();
         void this.loadInbox();
+      }
+      if (this.#dirty.has('indicators')) {
+        void this.loadIndicatorOverview();
+        for (const key of Object.keys(this.indicatorDetails)) {
+          const [targetId, window] = key.split(':') as [string, '24h' | '7d'];
+          void this.loadTargetIndicators(targetId, window);
+        }
+        for (const incidentId of Object.keys(this.incidentIndicatorDetails)) void this.loadIncidentIndicators(incidentId);
       }
       this.#dirty.clear();
     }, 90);

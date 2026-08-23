@@ -8,6 +8,7 @@
   import Bars from '$lib/components/Bars.svelte';
   import Uptime from '$lib/components/Uptime.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
+  import IndicatorOverview from '$lib/components/IndicatorOverview.svelte';
   import { coverageWindow } from '$lib/overview';
   import { session } from '$lib/session.svelte';
   import {
@@ -277,6 +278,8 @@
       </div>
     </div>
   </div>
+
+  <IndicatorOverview />
 
   <div class="band">
     <h2>{t('overview.toTreat')}</h2>

@@ -71,6 +71,21 @@ struct CairnOpsAPI {
         let incidents: [Incident]
         let measures: [TargetMeasures]
         let inbox: InboxPayload
+        let indicatorTargets: [TargetIndicators]
+
+        init(
+            targets: [Target],
+            incidents: [Incident],
+            measures: [TargetMeasures],
+            inbox: InboxPayload,
+            indicatorTargets: [TargetIndicators] = []
+        ) {
+            self.targets = targets
+            self.incidents = incidents
+            self.measures = measures
+            self.inbox = inbox
+            self.indicatorTargets = indicatorTargets
+        }
     }
 
     private struct SessionEnvelope: Decodable {
@@ -87,6 +102,10 @@ struct CairnOpsAPI {
 
     private struct MeasuresEnvelope: Decodable {
         let targets: [TargetMeasures]
+    }
+
+    private struct IndicatorsEnvelope: Decodable {
+        let targets: [TargetIndicators]
     }
 
     private struct VersionEnvelope: Decodable {
@@ -203,17 +222,35 @@ struct CairnOpsAPI {
         try await request(path: "api/v1/notifications")
     }
 
+    func fetchPinnedIndicators() async throws -> [TargetIndicators] {
+        let payload: IndicatorsEnvelope = try await request(path: "api/v1/indicators/targets")
+        return payload.targets
+    }
+
+    func fetchTargetIndicators(targetID: String, window: String) async throws -> TargetIndicators {
+        try await request(
+            path: "api/v1/targets/\(targetID)/indicators",
+            queryItems: [URLQueryItem(name: "window", value: window)]
+        )
+    }
+
+    func fetchIncidentIndicators(incidentID: String) async throws -> IncidentIndicators {
+        try await request(path: "api/v1/incidents/\(incidentID)/indicators")
+    }
+
     func fetchOperationalProjection() async throws -> OperationalProjection {
         async let targets = fetchTargets()
         async let incidents = fetchIncidents()
         async let measures = fetchTargetMeasures()
         async let inbox = fetchInbox()
+        async let indicatorTargets = fetchPinnedIndicators()
 
         return try await OperationalProjection(
             targets: targets,
             incidents: incidents,
             measures: measures,
-            inbox: inbox
+            inbox: inbox,
+            indicatorTargets: indicatorTargets
         )
     }
 
@@ -292,13 +329,15 @@ struct CairnOpsAPI {
         path: String,
         method: String = "GET",
         body: Data? = nil,
-        bearerToken: String? = nil
+        bearerToken: String? = nil,
+        queryItems: [URLQueryItem] = []
     ) async throws -> T {
         let request = try makeRequest(
             path: path,
             method: method,
             body: body,
-            bearerToken: bearerToken
+            bearerToken: bearerToken,
+            queryItems: queryItems
         )
         let (data, response) = try await transport.perform(request)
         return try decodeResponse(data: data, response: response)
@@ -314,7 +353,8 @@ struct CairnOpsAPI {
             path: path,
             method: method,
             body: body,
-            bearerToken: bearerToken
+            bearerToken: bearerToken,
+            queryItems: []
         )
         let (data, response) = try await transport.perform(request)
         let _: EmptyResponse = try decodeResponse(data: data, response: response)
@@ -324,10 +364,19 @@ struct CairnOpsAPI {
         path: String,
         method: String,
         body: Data?,
-        bearerToken: String?
+        bearerToken: String?,
+        queryItems: [URLQueryItem]
     ) throws -> URLRequest {
         let baseURL = try configuration.resolvedBaseURL()
-        var request = URLRequest(url: baseURL.appending(path: path))
+        let endpoint = baseURL.appending(path: path)
+        guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else {
+            throw ServerConfiguration.ConfigurationError.invalidBaseURL
+        }
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        guard let requestURL = components.url else {
+            throw ServerConfiguration.ConfigurationError.invalidBaseURL
+        }
+        var request = URLRequest(url: requestURL)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 

@@ -85,6 +85,29 @@ struct CairnOpsAPIPairingTests {
         #expect(realtimeRequest.value(forHTTPHeaderField: "Authorization") == "Bearer durable-device-token")
     }
 
+    @Test("Les projections d’indicateurs conservent la fenêtre et l’identité exacte")
+    func fetchesContextIndicators() async throws {
+        let targetBody = #"{"target_id":"target-1","generated_at":"2026-08-23T00:00:00Z","indicators":[{"id":"indicator-1","connector_id":"connector-1","binding_id":"binding-1","target_id":"target-1","semantic_key":"cpu.utilization","label":"Utilisation CPU","external_id":"item-42","unit":"percent","enabled":true,"metadata":{},"last_value":37.5,"last_observed_at":"2026-08-23T00:00:00Z","pinned":true,"pin_position":0}],"series":{"indicator-1":[{"at":"2026-08-23T00:00:00Z","value":37.5}]}}"#
+        let incidentBody = #"{"incident_id":"incident-1","target_id":"target-1","opened_at":"2026-08-23T00:00:00Z","snapshots":[{"indicator_id":"indicator-1","semantic_key":"cpu.utilization","label":"Utilisation CPU","unit":"percent","value":37.5,"observed_at":"2026-08-23T00:00:00Z"}],"indicators":[],"series":{},"disclaimer":"Corrélation temporelle uniquement"}"#
+        let transport = HTTPTransportSpy(stubs: [
+            .json(statusCode: 200, body: #"{"targets":[\#(targetBody)]}"#),
+            .json(statusCode: 200, body: targetBody),
+            .json(statusCode: 200, body: incidentBody),
+        ])
+        let api = try makeAPI(deviceToken: "device-token", transport: transport)
+
+        let overview = try await api.fetchPinnedIndicators()
+        let target = try await api.fetchTargetIndicators(targetID: "target-1", window: "7d")
+        let incident = try await api.fetchIncidentIndicators(incidentID: "incident-1")
+
+        #expect(overview.first?.indicators.first?.externalID == "item-42")
+        #expect(target.series?["indicator-1"]?.first?.value == 37.5)
+        #expect(incident.snapshots.first?.unit == .percent)
+        let requests = await transport.recordedRequests()
+        #expect(requests[1].url?.path == "/base/api/v1/targets/target-1/indicators")
+        #expect(requests[1].url?.query == "window=7d")
+    }
+
     private func makeAPI(
         deviceToken: String? = nil,
         transport: HTTPTransportSpy

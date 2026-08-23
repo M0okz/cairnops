@@ -60,6 +60,24 @@ monitor_status{monitor_name="API",monitor_type="http",monitor_url="https://two.e
 	}
 }
 
+func TestParseMonitorsReadsCertificateAndResponseGauges(t *testing.T) {
+	monitors, err := parseMonitors([]byte(`# TYPE monitor_status gauge
+monitor_status{monitor_id="4",monitor_name="API",monitor_type="http",monitor_url="https://api.example.net"} 1
+# TYPE monitor_response_time gauge
+monitor_response_time{monitor_id="4",monitor_name="API"} 37
+# TYPE monitor_cert_days_remaining gauge
+monitor_cert_days_remaining{monitor_id="4",monitor_name="API"} 21.5
+# TYPE monitor_cert_is_valid gauge
+monitor_cert_is_valid{monitor_id="4",monitor_name="API"} 1
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(monitors) != 1 || monitors[0].ResponseMilliseconds == nil || *monitors[0].ResponseMilliseconds != 37 || monitors[0].CertificateDaysRemaining == nil || *monitors[0].CertificateDaysRemaining != 21.5 || monitors[0].CertificateValid == nil || !*monitors[0].CertificateValid {
+		t.Fatalf("unexpected contextual metrics: %#v", monitors)
+	}
+}
+
 func TestMonitorsRejectsRedirectsAndInvalidPayloads(t *testing.T) {
 	t.Parallel()
 	redirect := httptest.NewServer(http.RedirectHandler("https://example.net/metrics", http.StatusFound))

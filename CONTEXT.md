@@ -104,6 +104,10 @@ _Éviter_ : Ping, ICMP
 Résultat daté produit par une Source de signal au sujet d'une Cible. Une observation isolée ne constitue pas nécessairement un changement d'état ni un Incident.
 _Éviter_ : Incident, alerte
 
+**Indicateur contextuel** :
+Valeur numérique ou booléenne, explicitement sélectionnée depuis un Connecteur, qui aide à comprendre la situation d'une Cible sans participer à son État de santé, à sa Disponibilité ni à l'ouverture d'un Incident. CairnOps en conserve un historique court et borné ; le produit d'origine reste l'autorité sur ses seuils et ses alertes.
+_Éviter_ : Source de signal, Observation, seuil CairnOps, cause d'Incident
+
 **Divergence de Sources** :
 Situation temporaire dans laquelle des Sources valides rattachées à une même Cible soutiennent des conclusions opposées. Elle qualifie les preuves sans constituer un État de santé supplémentaire ni bloquer un Incident.
 _Éviter_ : État contradictoire, consensus

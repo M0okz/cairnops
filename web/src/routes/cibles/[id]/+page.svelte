@@ -10,6 +10,8 @@
   import Uptime from '$lib/components/Uptime.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import MaintenanceWorkshop from '$lib/components/MaintenanceWorkshop.svelte';
+  import TargetIndicators from '$lib/components/TargetIndicators.svelte';
+  import IncidentIndicatorContext from '$lib/components/IncidentIndicatorContext.svelte';
   import { incidentTimelineForTarget } from '$lib/incident-timeline';
   import { session } from '$lib/session.svelte';
   import {
@@ -363,6 +365,10 @@
           <b><Odometer value={lastObservedAt ? since(lastObservedAt, now) : t('common.none')} /></b>
         </div>
       </div>
+
+      <TargetIndicators targetId={target.id} />
+
+      {#if lead}<IncidentIndicatorContext incidentId={lead.id} />{/if}
 
       <div class="split">
         <section>

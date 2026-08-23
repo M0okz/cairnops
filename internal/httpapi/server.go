@@ -26,6 +26,7 @@ type ServerOptions struct {
 	Identity       Identity
 	ControlPlane   ControlPlane
 	Metrics        Metrics
+	Indicators     Indicators
 	Connectors     Connectors
 	Webhooks       Webhooks
 	Incidents      Incidents
@@ -112,6 +113,17 @@ func NewServer(options ServerOptions) *http.Server {
 		handler := metricsHandler{metrics: options.Metrics, logger: logger}
 		mux.Handle("GET /api/v1/metrics/targets", identityHTTP.requireSession(http.HandlerFunc(handler.list)))
 		mux.Handle("GET /api/v1/targets/{targetID}/metrics", identityHTTP.requireSession(http.HandlerFunc(handler.target)))
+	}
+	if options.Indicators != nil && options.Identity != nil {
+		handler := indicatorHandler{indicators: options.Indicators, logger: logger}
+		mux.Handle("GET /api/v1/connectors/{connectorID}/indicator-configuration", identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.configuration))))
+		mux.Handle("POST /api/v1/connectors/{connectorID}/indicator-configuration/preview", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.preview)))))
+		mux.Handle("PUT /api/v1/connectors/{connectorID}/indicator-configuration", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.apply)))))
+		mux.Handle("GET /api/v1/indicators/targets", identityHTTP.requireSession(http.HandlerFunc(handler.overview)))
+		mux.Handle("GET /api/v1/targets/{targetID}/indicators", identityHTTP.requireSession(http.HandlerFunc(handler.target)))
+		mux.Handle("GET /api/v1/incidents/{incidentID}/indicators", identityHTTP.requireSession(http.HandlerFunc(handler.incident)))
+		mux.Handle("GET /api/v1/me/indicator-pins", identityHTTP.requireSession(http.HandlerFunc(handler.pins)))
+		mux.Handle("PUT /api/v1/me/indicator-pins", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(handler.setPins))))
 	}
 	if options.Connectors != nil && options.Identity != nil {
 		handler := connectorHandler{connectors: options.Connectors, logger: logger}

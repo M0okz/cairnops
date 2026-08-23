@@ -215,6 +215,143 @@ export type Connector = {
   updated_at: string;
 };
 
+export type IndicatorSemanticKey =
+  | 'cpu.utilization'
+  | 'memory.utilization'
+  | 'filesystem.utilization'
+  | 'network.in'
+  | 'network.out'
+  | 'response.time'
+  | 'certificate.days_remaining'
+  | 'certificate.valid'
+  | 'updates.count'
+  | 'security_updates.count'
+  | 'reboot.required'
+  | 'reporting.age';
+
+export type IndicatorUnit =
+  | 'percent'
+  | 'bytes_per_second'
+  | 'milliseconds'
+  | 'days'
+  | 'count'
+  | 'boolean'
+  | 'seconds';
+
+export type IndicatorCandidate = {
+  semantic_key: IndicatorSemanticKey;
+  label: string;
+  external_id: string;
+  dimension?: string;
+  unit: IndicatorUnit;
+  recommended: boolean;
+  available: boolean;
+  reason?: string;
+  metadata: Record<string, unknown>;
+};
+
+export type ContextIndicator = {
+  id: string;
+  connector_id: string;
+  binding_id: string;
+  target_id: string;
+  semantic_key: IndicatorSemanticKey;
+  label: string;
+  external_id: string;
+  dimension?: string;
+  unit: IndicatorUnit;
+  enabled: boolean;
+  metadata: Record<string, unknown>;
+  last_value?: number;
+  last_observed_at?: string;
+  last_error?: string;
+  pinned: boolean;
+  pin_position?: number;
+};
+
+export type IndicatorBinding = {
+  id?: string;
+  target_id?: string;
+  target_name?: string;
+  external_id: string;
+  external_name: string;
+  enabled: boolean;
+  imported: boolean;
+  indicators: ContextIndicator[];
+  candidates: IndicatorCandidate[];
+};
+
+export type IndicatorProfileEntry = {
+  semantic_key: IndicatorSemanticKey;
+  dimension?: string;
+  enabled: boolean;
+};
+
+export type IndicatorProfile = {
+  id: string;
+  name: string;
+  specification: IndicatorProfileEntry[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type IndicatorConfiguration = {
+  connector_id: string;
+  connector_kind: Exclude<Connector['kind'], 'generic_webhook'>;
+  connector_name: string;
+  endpoint: string;
+  generated_at: string;
+  expires_at?: string;
+  capabilities: Array<{
+    key: string;
+    status: 'available' | 'degraded' | 'unavailable';
+    message?: string;
+    checked_at: string;
+  }>;
+  bindings: IndicatorBinding[];
+  profiles: IndicatorProfile[];
+  activity: Array<{
+    id: number;
+    actor_id?: string;
+    actor_name?: string;
+    summary: string;
+    data: Record<string, unknown>;
+    occurred_at: string;
+  }>;
+};
+
+export type IndicatorPoint = {
+  at: string;
+  value: number;
+  minimum?: number;
+  maximum?: number;
+  samples?: number;
+};
+
+export type TargetIndicators = {
+  target_id: string;
+  generated_at: string;
+  indicators: ContextIndicator[];
+  series?: Record<string, IndicatorPoint[]>;
+};
+
+export type IncidentIndicators = {
+  incident_id: string;
+  target_id: string;
+  opened_at: string;
+  snapshots: Array<{
+    indicator_id?: string;
+    semantic_key: IndicatorSemanticKey;
+    label: string;
+    unit: IndicatorUnit;
+    value: number;
+    observed_at: string;
+  }>;
+  indicators: ContextIndicator[];
+  series: Record<string, IndicatorPoint[]>;
+  disclaimer: string;
+};
+
 /* Le compte rendu de suppression vient du serveur : c'est lui qui sait ce que
  * la cascade a réellement emporté, l'écran ne faisait qu'une estimation. */
 export type ConnectorRemoval = {
@@ -478,8 +615,8 @@ export type InboxEntry = {
 export type RealtimeMessage = {
   type: 'ready' | 'event';
   version: number;
-  kind?: 'target.changed' | 'source.changed' | 'observation.created' | 'component.heartbeat' | 'connector.changed' | 'incident.changed' | 'maintenance.changed' | 'notification.changed';
-  entity_type?: 'target' | 'source' | 'component' | 'connector' | 'incident' | 'maintenance' | 'notification';
+  kind?: 'target.changed' | 'source.changed' | 'observation.created' | 'component.heartbeat' | 'connector.changed' | 'incident.changed' | 'maintenance.changed' | 'notification.changed' | 'device.changed' | 'indicator.changed';
+  entity_type?: 'target' | 'source' | 'component' | 'connector' | 'incident' | 'maintenance' | 'notification' | 'device' | 'indicator';
   entity_id?: string;
   occurred_at?: string;
 };

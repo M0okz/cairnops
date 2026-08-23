@@ -102,6 +102,68 @@ func TestPostgresImportUsesExplicitTargetAssignment(t *testing.T) {
 	}
 }
 
+func TestPostgresImportPromotesIndicatorOnlyBindingToOperationalSource(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+
+	var actorID, targetID, connectorID, bindingID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_users (username, display_name, password_hash, role)
+		VALUES ('indicator-promotion', 'Indicator Promotion', 'not-used', 'administrator')
+		RETURNING id::text
+	`).Scan(&actorID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO cairnops_targets (name) VALUES ('API contexte') RETURNING id::text`).Scan(&targetID); err != nil {
+		t.Fatal(err)
+	}
+	endpoint := "https://zabbix-indicator-promotion.example.net/api_jsonrpc.php"
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_connectors (
+			kind, name, endpoint, credential_sealed, status,
+			compatibility, encrypted_transport, created_by
+		) VALUES ('zabbix', 'Zabbix contexte', $1, repeat('x', 40), 'connected', 'supported', true, $2::uuid)
+		RETURNING id::text
+	`, endpoint, actorID).Scan(&connectorID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_connector_bindings (
+			connector_id, target_id, external_id, external_name,
+			integration_enabled, indicators_enabled
+		) VALUES ($1::uuid, $2::uuid, 'host-context', 'API contexte', false, true)
+		RETURNING id::text
+	`, connectorID, targetID).Scan(&bindingID); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := NewPostgresStore(pool).ImportZabbix(ctx, PersistZabbixInput{
+		ActorID: actorID, Name: "Zabbix production", Endpoint: endpoint,
+		CredentialSealed: "sealed-credential-with-sufficient-length", Version: "7.4.2",
+		Compatibility: "supported", EncryptedTransport: true,
+		Hosts: []zabbix.Host{{ID: "host-context", Name: "API contexte"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Targets) != 1 || result.Targets[0].Disposition != "already_imported" {
+		t.Fatalf("unexpected promoted import: %#v", result.Targets)
+	}
+
+	var integrationEnabled, indicatorsEnabled, sourceEnabled bool
+	if err := pool.QueryRow(ctx, `
+		SELECT binding.integration_enabled, binding.indicators_enabled, source.enabled
+		FROM cairnops_connector_bindings binding
+		JOIN cairnops_signal_sources source ON source.connector_binding_id = binding.id
+		WHERE binding.id = $1::uuid
+	`, bindingID).Scan(&integrationEnabled, &indicatorsEnabled, &sourceEnabled); err != nil {
+		t.Fatal(err)
+	}
+	if !integrationEnabled || !indicatorsEnabled || !sourceEnabled {
+		t.Fatalf("promotion lost a scope: integration=%t indicators=%t source=%t", integrationEnabled, indicatorsEnabled, sourceEnabled)
+	}
+}
+
 func TestPostgresRemovalClosesIncidentsLeftWithoutEvidence(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)

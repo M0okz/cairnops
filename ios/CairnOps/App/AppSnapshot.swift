@@ -37,6 +37,7 @@ struct AppSnapshot: Codable, Equatable, Sendable {
     var targets: [Target] = [] { didSet { derived = nil } }
     var incidents: [Incident] = [] { didSet { derived = nil } }
     var measures: [String: TargetMeasures] = [:] { didSet { derived = nil } }
+    var indicatorTargets: [String: TargetIndicators] = [:]
     var systemHealth: SystemHealth?
     var inbox: [InboxEntry] = []
     var unreadCount = 0
@@ -56,12 +57,14 @@ struct AppSnapshot: Codable, Equatable, Sendable {
         targets: [Target],
         incidents: [Incident],
         measures: [String: TargetMeasures],
+        indicatorTargets: [String: TargetIndicators] = [:],
         inbox: [InboxEntry],
         unreadCount: Int
     ) {
         self.targets = targets
         self.incidents = incidents
         self.measures = measures
+        self.indicatorTargets = indicatorTargets
         self.inbox = inbox
         self.unreadCount = unreadCount
         rebuildDerived()
@@ -74,7 +77,7 @@ struct AppSnapshot: Codable, Equatable, Sendable {
     // MARK: - Lectures
 
     var hasProjection: Bool {
-        !targets.isEmpty || !incidents.isEmpty || systemHealth != nil || !measures.isEmpty
+        !targets.isEmpty || !incidents.isEmpty || systemHealth != nil || !measures.isEmpty || !indicatorTargets.isEmpty
     }
 
     var actionableIncidents: [Incident] {
@@ -351,6 +354,7 @@ struct AppSnapshot: Codable, Equatable, Sendable {
         case targets
         case incidents
         case measures
+        case indicatorTargets
         case systemHealth
         case inbox
         case unreadCount
@@ -364,6 +368,7 @@ struct AppSnapshot: Codable, Equatable, Sendable {
         targets = try container.decodeIfPresent([Target].self, forKey: .targets) ?? []
         incidents = try container.decodeIfPresent([Incident].self, forKey: .incidents) ?? []
         measures = try container.decodeIfPresent([String: TargetMeasures].self, forKey: .measures) ?? [:]
+        indicatorTargets = try container.decodeIfPresent([String: TargetIndicators].self, forKey: .indicatorTargets) ?? [:]
         systemHealth = try container.decodeIfPresent(SystemHealth.self, forKey: .systemHealth)
         inbox = try container.decodeIfPresent([InboxEntry].self, forKey: .inbox) ?? []
         unreadCount = try container.decodeIfPresent(Int.self, forKey: .unreadCount) ?? 0
@@ -383,6 +388,7 @@ struct AppSnapshot: Codable, Equatable, Sendable {
             && lhs.targets == rhs.targets
             && lhs.incidents == rhs.incidents
             && lhs.measures == rhs.measures
+            && lhs.indicatorTargets == rhs.indicatorTargets
             && lhs.inbox == rhs.inbox
     }
 }

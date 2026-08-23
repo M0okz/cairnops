@@ -10,7 +10,11 @@ struct AppRootView: View {
             AppBackdrop()
 
             Group {
-                if showsSettingsPreview {
+                if showsIndicatorsPreview {
+                    NavigationStack {
+                        IndicatorsPreviewView()
+                    }
+                } else if showsSettingsPreview {
                     NavigationStack {
                         SettingsView()
                     }
@@ -71,6 +75,14 @@ struct AppRootView: View {
     private var showsNotificationSettingsPreview: Bool {
 #if DEBUG
         ProcessInfo.processInfo.arguments.contains("-CairnOpsNotificationSettingsPreview")
+#else
+        false
+#endif
+    }
+
+    private var showsIndicatorsPreview: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-CairnOpsIndicatorsPreview")
 #else
         false
 #endif

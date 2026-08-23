@@ -72,6 +72,8 @@ struct TargetDetailView: View {
                             }
                         }
 
+                        TargetIndicatorsPanel(targetID: target.id)
+
                         if !target.sources.isEmpty {
                             Panel {
                                 VStack(alignment: .leading, spacing: 14) {

@@ -47,6 +47,13 @@ struct OverviewView: View {
                 heroCard(summary)
                 summaryPanel(summary)
 
+                PinnedIndicatorsSection(
+                    projections: Array(model.snapshot.indicatorTargets.values),
+                    targetName: { targetID in
+                        model.target(withID: targetID)?.name ?? "Cible"
+                    }
+                )
+
                 if summary.targetCount == 0 && model.snapshot.incidents.isEmpty {
                     ContentUnavailableView(
                         "Aucune cible active",

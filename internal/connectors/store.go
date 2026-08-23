@@ -13,6 +13,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+func enableIntegrationBinding(ctx context.Context, tx pgx.Tx, connectorID, externalID string) (string, error) {
+	var bindingID string
+	if err := tx.QueryRow(ctx, `
+		UPDATE cairnops_connector_bindings
+		SET integration_enabled = true, updated_at = now()
+		WHERE connector_id = $1::uuid AND external_id = $2
+		RETURNING id::text
+	`, connectorID, externalID).Scan(&bindingID); err != nil {
+		return "", fmt.Errorf("enable integration binding: %w", err)
+	}
+	return bindingID, nil
+}
+
 // ensureIntegrationSource fait exister la Source de signal d'une liaison.
 //
 // L'Intégration en conserve la propriété : le nom et la cadence suivent le
@@ -36,6 +49,7 @@ func ensureIntegrationSource(ctx context.Context, tx pgx.Tx, bindingID string, m
 		DO UPDATE SET
 			target_id = excluded.target_id,
 			name = excluded.name,
+			enabled = excluded.enabled,
 			interval_seconds = excluded.interval_seconds,
 			measures_availability = excluded.measures_availability,
 			updated_at = now()
@@ -94,7 +108,7 @@ func (store *PostgresStore) List(ctx context.Context) ([]Connector, error) {
 	rows, err := store.pool.Query(ctx, `
 		SELECT connector.id::text, connector.kind, connector.name, connector.endpoint,
 		       connector.status, connector.remote_version, connector.compatibility,
-		       connector.encrypted_transport, count(binding.id)::integer,
+		       connector.encrypted_transport, count(binding.id) FILTER (WHERE binding.integration_enabled)::integer,
 		       (SELECT count(*)::integer FROM cairnops_webhook_quarantine quarantine
 		        WHERE quarantine.connector_id = connector.id AND quarantine.approved_at IS NULL),
 		       connector.last_checked_at, connector.last_error,
@@ -162,7 +176,7 @@ func (store *PostgresStore) SetStatus(ctx context.Context, connectorID, status s
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE cairnops_signal_sources source
-		SET enabled = ($2 <> 'disabled'), updated_at = now()
+		SET enabled = ($2 <> 'disabled' AND binding.integration_enabled), updated_at = now()
 		FROM cairnops_connector_bindings binding
 		WHERE binding.id = source.connector_binding_id
 		  AND binding.connector_id = $1::uuid
@@ -710,6 +724,15 @@ func (store *PostgresStore) ImportUptimeKuma(ctx context.Context, input PersistU
 		if err == nil && assignedTargetID != "" && assignedTargetID != targetID {
 			return UptimeKumaImport{}, fmt.Errorf("%w: Uptime Kuma monitor %s is already linked to another target", ErrInvalidInput, monitor.ID)
 		}
+		if err == nil {
+			bindingID, enableErr := enableIntegrationBinding(ctx, tx, connector.ID, monitor.ID)
+			if enableErr != nil {
+				return UptimeKumaImport{}, enableErr
+			}
+			if sourceErr := ensureIntegrationSource(ctx, tx, bindingID, true); sourceErr != nil {
+				return UptimeKumaImport{}, sourceErr
+			}
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			disposition = "reused"
 			if assignedTargetID != "" {
@@ -754,6 +777,7 @@ func (store *PostgresStore) ImportUptimeKuma(ctx context.Context, input PersistU
 					target_id = EXCLUDED.target_id,
 					external_name = EXCLUDED.external_name,
 					metadata = EXCLUDED.metadata,
+					integration_enabled = true,
 					updated_at = now()
 				RETURNING id::text
 			`, connector.ID, targetID, monitor.ID, monitor.Name, metadata).Scan(&bindingID); err != nil {
@@ -824,6 +848,15 @@ func (store *PostgresStore) ImportPatchMon(ctx context.Context, input PersistPat
 		if err == nil && assignedTargetID != "" && assignedTargetID != targetID {
 			return PatchMonImport{}, fmt.Errorf("%w: PatchMon host %s is already linked to another target", ErrInvalidInput, host.ID)
 		}
+		if err == nil {
+			bindingID, enableErr := enableIntegrationBinding(ctx, tx, connector.ID, host.ID)
+			if enableErr != nil {
+				return PatchMonImport{}, enableErr
+			}
+			if sourceErr := ensureIntegrationSource(ctx, tx, bindingID, false); sourceErr != nil {
+				return PatchMonImport{}, sourceErr
+			}
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			disposition = "reused"
 			if assignedTargetID != "" {
@@ -868,6 +901,7 @@ func (store *PostgresStore) ImportPatchMon(ctx context.Context, input PersistPat
 					target_id = EXCLUDED.target_id,
 					external_name = EXCLUDED.external_name,
 					metadata = EXCLUDED.metadata,
+					integration_enabled = true,
 					updated_at = now()
 				RETURNING id::text
 			`, connector.ID, targetID, host.ID, host.Name(), metadata).Scan(&bindingID); err != nil {
@@ -940,6 +974,15 @@ func (store *PostgresStore) ImportZabbix(ctx context.Context, input PersistZabbi
 		if err == nil && assignedTargetID != "" && assignedTargetID != targetID {
 			return ZabbixImport{}, fmt.Errorf("%w: Zabbix host %s is already linked to another target", ErrInvalidInput, host.ID)
 		}
+		if err == nil {
+			bindingID, enableErr := enableIntegrationBinding(ctx, tx, connector.ID, host.ID)
+			if enableErr != nil {
+				return ZabbixImport{}, enableErr
+			}
+			if sourceErr := ensureIntegrationSource(ctx, tx, bindingID, true); sourceErr != nil {
+				return ZabbixImport{}, sourceErr
+			}
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			disposition = "reused"
 			if assignedTargetID != "" {
@@ -984,6 +1027,7 @@ func (store *PostgresStore) ImportZabbix(ctx context.Context, input PersistZabbi
 					target_id = EXCLUDED.target_id,
 					external_name = EXCLUDED.external_name,
 					metadata = EXCLUDED.metadata,
+					integration_enabled = true,
 					updated_at = now()
 				RETURNING id::text
 			`, connector.ID, targetID, host.ID, host.Name, metadata).Scan(&bindingID); err != nil {
@@ -1047,7 +1091,7 @@ func (store *PostgresStore) ClaimDueConnector(ctx context.Context, kind, owner s
 		bindingRows, err := store.pool.Query(ctx, `
 			SELECT id::text, target_id::text, external_id
 			FROM cairnops_connector_bindings
-			WHERE connector_id = $1::uuid
+			WHERE connector_id = $1::uuid AND integration_enabled
 			ORDER BY external_id, id
 		`, connectors[index].ID)
 		if err != nil {

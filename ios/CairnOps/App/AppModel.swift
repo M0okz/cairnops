@@ -1078,6 +1078,7 @@ final class AppModel {
             nextSnapshot.targets = projection.targets
             nextSnapshot.incidents = projection.incidents
             nextSnapshot.measures = measuresByTarget(projection.measures)
+            nextSnapshot.indicatorTargets = indicatorsByTarget(projection.indicatorTargets)
             nextSnapshot.inbox = projection.inbox.entries
             nextSnapshot.unreadCount = projection.inbox.unread
             rebuildsDerivedProjection = true
@@ -1135,6 +1136,18 @@ final class AppModel {
             measures[entry.targetID] = entry
         }
         return measures
+    }
+
+    private func indicatorsByTarget(_ entries: [TargetIndicators]) -> [String: TargetIndicators] {
+        Dictionary(uniqueKeysWithValues: entries.map { ($0.targetID, $0) })
+    }
+
+    func fetchTargetIndicators(targetID: Target.ID, window: String) async throws -> TargetIndicators {
+        try await currentAPI().fetchTargetIndicators(targetID: targetID, window: window)
+    }
+
+    func fetchIncidentIndicators(incidentID: Incident.ID) async throws -> IncidentIndicators {
+        try await currentAPI().fetchIncidentIndicators(incidentID: incidentID)
     }
 
     private func finishSynchronization(generation: Int) {

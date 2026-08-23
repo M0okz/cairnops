@@ -21,6 +21,7 @@ import (
 	"github.com/M0okz/cairnops/internal/httpapi"
 	"github.com/M0okz/cairnops/internal/identity"
 	"github.com/M0okz/cairnops/internal/incidents"
+	"github.com/M0okz/cairnops/internal/indicators"
 	"github.com/M0okz/cairnops/internal/maintenance"
 	"github.com/M0okz/cairnops/internal/metrics"
 	"github.com/M0okz/cairnops/internal/migrations"
@@ -87,6 +88,9 @@ func run(logger *slog.Logger) error {
 	connectorSync := connectors.NewSynchronizer(connectorStore, incidentStore, zabbixClient, secrets, "server:"+hostname, logger)
 	uptimeKumaSync := connectors.NewUptimeKumaSynchronizer(connectorStore, incidentStore, uptimeKumaClient, secrets, "server:"+hostname, logger)
 	patchMonSync := connectors.NewPatchMonSynchronizer(connectorStore, incidentStore, patchMonClient, secrets, "server:"+hostname, logger)
+	indicatorStore := indicators.NewStore(pool)
+	indicatorService := indicators.NewService(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets)
+	indicatorCollector := indicators.NewCollector(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets, logger)
 
 	server := httpapi.NewServer(httpapi.ServerOptions{
 		Address:        cfg.HTTPAddress,
@@ -99,6 +103,7 @@ func run(logger *slog.Logger) error {
 		Identity:       identity.NewStore(pool),
 		ControlPlane:   controlplane.NewStore(pool),
 		Metrics:        metrics.NewStore(pool),
+		Indicators:     indicatorService,
 		Connectors:     connectorService,
 		Webhooks:       webhookService,
 		Incidents:      incidentService,
@@ -109,7 +114,7 @@ func run(logger *slog.Logger) error {
 		SystemHealth:   systemhealth.NewStore(pool),
 	})
 
-	errCh := make(chan error, 4)
+	errCh := make(chan error, 5)
 	go func() {
 		logger.Info("server listening", "address", cfg.HTTPAddress, "version", version.Version)
 		errCh <- server.ListenAndServe()
@@ -126,6 +131,11 @@ func run(logger *slog.Logger) error {
 	}()
 	go func() {
 		if err := patchMonSync.Run(ctx); err != nil {
+			errCh <- err
+		}
+	}()
+	go func() {
+		if err := indicatorCollector.Run(ctx); err != nil {
 			errCh <- err
 		}
 	}()

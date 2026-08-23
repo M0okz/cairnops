@@ -431,6 +431,217 @@ components:
         last_error: { type: string }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    IndicatorCandidate:
+      type: object
+      required: [semantic_key, label, external_id, unit, recommended, available, metadata]
+      properties:
+        semantic_key:
+          type: string
+          enum: [cpu.utilization, memory.utilization, filesystem.utilization, network.in, network.out, response.time, certificate.days_remaining, certificate.valid, updates.count, security_updates.count, reboot.required, reporting.age]
+        label: { type: string, minLength: 1, maxLength: 160 }
+        external_id:
+          type: string
+          maxLength: 255
+          description: Identifiant exact dans le produit d'origine ; jamais remappé silencieusement.
+        dimension: { type: string, maxLength: 255, description: Volume ou interface pour les Indicateurs dimensionnés. }
+        unit: { type: string, enum: [percent, bytes_per_second, milliseconds, days, count, boolean, seconds] }
+        recommended: { type: boolean }
+        available: { type: boolean }
+        reason: { type: string, maxLength: 500 }
+        metadata: { type: object, additionalProperties: true }
+    ContextIndicator:
+      type: object
+      required: [id, connector_id, binding_id, target_id, semantic_key, label, external_id, unit, enabled, metadata, pinned]
+      properties:
+        id: { type: string, format: uuid }
+        connector_id: { type: string, format: uuid }
+        binding_id: { type: string, format: uuid }
+        target_id: { type: string, format: uuid }
+        semantic_key: { $ref: '#/components/schemas/IndicatorCandidate/properties/semantic_key' }
+        label: { type: string }
+        external_id: { type: string }
+        dimension: { type: string }
+        unit: { $ref: '#/components/schemas/IndicatorCandidate/properties/unit' }
+        enabled: { type: boolean }
+        metadata: { type: object, additionalProperties: true }
+        last_value: { type: number, format: double }
+        last_observed_at: { type: string, format: date-time }
+        last_error: { type: string }
+        pinned: { type: boolean }
+        pin_position: { type: integer, minimum: 0, maximum: 3 }
+    IndicatorBinding:
+      type: object
+      required: [external_id, external_name, enabled, imported, indicators, candidates]
+      properties:
+        id: { type: string, format: uuid }
+        target_id: { type: string, format: uuid }
+        target_name: { type: string }
+        external_id: { type: string }
+        external_name: { type: string }
+        enabled: { type: boolean }
+        imported: { type: boolean }
+        indicators:
+          type: array
+          items: { $ref: '#/components/schemas/ContextIndicator' }
+        candidates:
+          type: array
+          items: { $ref: '#/components/schemas/IndicatorCandidate' }
+    IndicatorSelection:
+      type: object
+      additionalProperties: false
+      required: [semantic_key, label, external_id, unit]
+      properties:
+        semantic_key: { $ref: '#/components/schemas/IndicatorCandidate/properties/semantic_key' }
+        label: { type: string, minLength: 1, maxLength: 160 }
+        external_id: { type: string, minLength: 1, maxLength: 255 }
+        dimension: { type: string, maxLength: 255 }
+        unit: { $ref: '#/components/schemas/IndicatorCandidate/properties/unit' }
+        metadata: { type: object, additionalProperties: true }
+    IndicatorBindingInput:
+      type: object
+      additionalProperties: false
+      required: [external_id, external_name, enabled, indicators]
+      properties:
+        id: { type: string, format: uuid }
+        target_id:
+          type: string
+          format: uuid
+          description: Requis pour une nouvelle liaison ; immuable pour une liaison opérationnelle existante.
+        external_id: { type: string, minLength: 1, maxLength: 255 }
+        external_name: { type: string, maxLength: 160 }
+        enabled: { type: boolean }
+        indicators:
+          type: array
+          items: { $ref: '#/components/schemas/IndicatorSelection' }
+    IndicatorProfileEntry:
+      type: object
+      additionalProperties: false
+      required: [semantic_key, enabled]
+      properties:
+        semantic_key: { $ref: '#/components/schemas/IndicatorCandidate/properties/semantic_key' }
+        dimension: { type: string, maxLength: 255 }
+        enabled: { type: boolean }
+    IndicatorProfileInput:
+      type: object
+      additionalProperties: false
+      required: [name, specification]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        specification:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/IndicatorProfileEntry' }
+    IndicatorConfiguration:
+      type: object
+      required: [connector_id, connector_kind, connector_name, endpoint, generated_at, capabilities, bindings, profiles, activity]
+      properties:
+        connector_id: { type: string, format: uuid }
+        connector_kind: { type: string, enum: [zabbix, uptime_kuma, patchmon] }
+        connector_name: { type: string }
+        endpoint: { type: string, format: uri }
+        generated_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, description: Échéance de l'aperçu distant, pas de la configuration enregistrée. }
+        capabilities:
+          type: array
+          items:
+            type: object
+            required: [key, status, checked_at]
+            properties:
+              key: { type: string }
+              status: { type: string, enum: [available, degraded, unavailable] }
+              message: { type: string }
+              checked_at: { type: string, format: date-time }
+        bindings:
+          type: array
+          items: { $ref: '#/components/schemas/IndicatorBinding' }
+        profiles:
+          type: array
+          items:
+            type: object
+            required: [id, name, specification, created_at, updated_at]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              specification: { type: array, items: { type: object, additionalProperties: true } }
+              created_at: { type: string, format: date-time }
+              updated_at: { type: string, format: date-time }
+        activity:
+          type: array
+          items:
+            type: object
+            required: [id, summary, data, occurred_at]
+            properties:
+              id: { type: integer, format: int64 }
+              actor_id: { type: string, format: uuid }
+              actor_name: { type: string }
+              summary: { type: string }
+              data: { type: object, additionalProperties: true }
+              occurred_at: { type: string, format: date-time }
+    IndicatorPoint:
+      type: object
+      required: [at, value]
+      properties:
+        at: { type: string, format: date-time }
+        value: { type: number, format: double }
+        minimum: { type: number, format: double }
+        maximum: { type: number, format: double }
+        samples: { type: integer, minimum: 0 }
+    TargetIndicators:
+      type: object
+      required: [target_id, generated_at, indicators]
+      properties:
+        target_id: { type: string, format: uuid }
+        generated_at: { type: string, format: date-time }
+        indicators: { type: array, items: { $ref: '#/components/schemas/ContextIndicator' } }
+        series:
+          type: object
+          additionalProperties:
+            type: array
+            items: { $ref: '#/components/schemas/IndicatorPoint' }
+    IncidentIndicatorSnapshot:
+      type: object
+      required: [semantic_key, label, unit, value, observed_at]
+      properties:
+        indicator_id: { type: string, format: uuid }
+        semantic_key: { $ref: '#/components/schemas/IndicatorCandidate/properties/semantic_key' }
+        label: { type: string }
+        unit: { $ref: '#/components/schemas/IndicatorCandidate/properties/unit' }
+        value: { type: number, format: double }
+        observed_at: { type: string, format: date-time }
+    IncidentIndicators:
+      type: object
+      required: [incident_id, target_id, opened_at, snapshots, indicators, series, disclaimer]
+      properties:
+        incident_id: { type: string, format: uuid }
+        target_id: { type: string, format: uuid }
+        opened_at: { type: string, format: date-time }
+        snapshots:
+          type: array
+          items: { $ref: '#/components/schemas/IncidentIndicatorSnapshot' }
+        indicators:
+          type: array
+          items: { $ref: '#/components/schemas/ContextIndicator' }
+        series:
+          type: object
+          additionalProperties:
+            type: array
+            items: { $ref: '#/components/schemas/IndicatorPoint' }
+        disclaimer: { type: string }
+    IndicatorPins:
+      type: object
+      required: [pins, limit]
+      properties:
+        pins:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+            required: [indicator_id, position]
+            properties:
+              indicator_id: { type: string, format: uuid }
+              position: { type: integer, minimum: 0, maximum: 3 }
+        limit: { type: integer, const: 4 }
     ConnectorRemoval:
       type: object
       required: [id, kind, name, bindings, quarantined, resolved_incidents]
@@ -1046,6 +1257,66 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/Connector' }
         '401': { description: Authentification requise }
+  /api/v1/connectors/{connectorID}/indicator-configuration:
+    get:
+      operationId: getIndicatorConfiguration
+      description: Lit la configuration enregistrée, sans contacter le produit d'origine.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: connectorID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Configuration et historique local, content: { application/json: { schema: { $ref: '#/components/schemas/IndicatorConfiguration' } } } }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Connecteur absent }
+    put:
+      operationId: applyIndicatorConfiguration
+      description: >-
+        Revalide l'aperçu distant puis applique atomiquement le périmètre, les
+        sélections et les profils explicitement confirmés. Les points masqués
+        ne sont pas effacés immédiatement : ils expirent selon la rétention.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: connectorID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [bindings, profiles]
+              properties:
+                bindings: { type: array, maxItems: 5000, items: { $ref: '#/components/schemas/IndicatorBindingInput' } }
+                profiles: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IndicatorProfileInput' } }
+                summary: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Configuration appliquée, content: { application/json: { schema: { $ref: '#/components/schemas/IndicatorConfiguration' } } } }
+        '400': { description: Sélection invalide ou à confirmer de nouveau }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Connecteur absent }
+  /api/v1/connectors/{connectorID}/indicator-configuration/preview:
+    post:
+      operationId: previewIndicatorConfiguration
+      description: Redécouvre les Cibles et le catalogue court permis par les capacités actuelles du produit d'origine.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - in: path
+          name: connectorID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Aperçu temporaire à confirmer, content: { application/json: { schema: { $ref: '#/components/schemas/IndicatorConfiguration' } } } }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Connecteur absent ou suspendu }
   /api/v1/connectors/zabbix/preview:
     post:
       operationId: previewZabbixConnector
@@ -2339,6 +2610,83 @@ paths:
                   targets:
                     type: array
                     items: { $ref: '#/components/schemas/TargetMeasures' }
+        '401': { description: Authentification requise }
+  /api/v1/indicators/targets:
+    get:
+      operationId: listPinnedTargetIndicators
+      description: Rend au plus les quatre Indicateurs personnels épinglés, regroupés par Cible, avec leur tendance de 24 heures.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      responses:
+        '200':
+          description: Projection personnelle synchronisée entre Web et mobile
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [targets, limit]
+                properties:
+                  targets: { type: array, items: { $ref: '#/components/schemas/TargetIndicators' } }
+                  limit: { type: integer, const: 4 }
+        '401': { description: Authentification requise }
+  /api/v1/targets/{targetID}/indicators:
+    get:
+      operationId: getTargetIndicators
+      description: Lit tous les Indicateurs sélectionnés de la Cible ; ils ne participent jamais à sa santé.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      parameters:
+        - in: path
+          name: targetID
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: window
+          schema: { type: string, enum: ['24h', '7d'], default: '24h' }
+      responses:
+        '200': { description: Valeurs et courbes contextuelles, content: { application/json: { schema: { $ref: '#/components/schemas/TargetIndicators' } } } }
+        '400': { description: Identifiant ou fenêtre invalide }
+        '401': { description: Authentification requise }
+        '404': { description: Cible absente }
+  /api/v1/incidents/{incidentID}/indicators:
+    get:
+      operationId: getIncidentIndicators
+      description: Rend l'instantané d'ouverture et la courbe environnante, explicitement comme corrélation et non causalité.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      parameters:
+        - in: path
+          name: incidentID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Contexte contemporain de l'Incident, content: { application/json: { schema: { $ref: '#/components/schemas/IncidentIndicators' } } } }
+        '400': { description: Identifiant invalide }
+        '401': { description: Authentification requise }
+        '404': { description: Incident absent }
+  /api/v1/me/indicator-pins:
+    get:
+      operationId: listIndicatorPins
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      responses:
+        '200': { description: Épingles personnelles ordonnées, au plus quatre, content: { application/json: { schema: { $ref: '#/components/schemas/IndicatorPins' } } } }
+        '401': { description: Authentification requise }
+    put:
+      operationId: replaceIndicatorPins
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [indicator_ids]
+              properties:
+                indicator_ids:
+                  type: array
+                  maxItems: 4
+                  uniqueItems: true
+                  items: { type: string, format: uuid }
+      responses:
+        '200': { description: Épingles remplacées atomiquement, content: { application/json: { schema: { $ref: '#/components/schemas/IndicatorPins' } } } }
+        '400': { description: Plus de quatre épingles ou Indicateur indisponible }
         '401': { description: Authentification requise }
   /api/v1/targets/{targetID}/metrics:
     get:

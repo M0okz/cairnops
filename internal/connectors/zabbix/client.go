@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 const (
 	maximumResponseBytes = 4 << 20
 	maximumHosts         = 5000
+	maximumItems         = 20000
 )
 
 type Interface struct {
@@ -54,6 +56,20 @@ type Problem struct {
 	Suppressed   bool
 	StartedAt    time.Time
 	HostIDs      []string
+}
+
+// Item est la projection numérique minimale utilisée par les Indicateurs.
+// L'identifiant Zabbix reste l'identité durable : la clé et le nom servent à
+// proposer une sémantique, jamais à remplacer silencieusement un item disparu.
+type Item struct {
+	ID        string     `json:"id"`
+	HostID    string     `json:"host_id"`
+	Name      string     `json:"name"`
+	Key       string     `json:"key"`
+	Units     string     `json:"units,omitempty"`
+	ValueType int        `json:"value_type"`
+	LastValue *float64   `json:"last_value,omitempty"`
+	LastClock *time.Time `json:"last_observed_at,omitempty"`
 }
 
 type Client struct {
@@ -315,6 +331,74 @@ func (client *Client) Problems(ctx context.Context, endpoint, token string, host
 		})
 	}
 	return problems, nil
+}
+
+// Items découvre les items numériques actifs d'un périmètre d'hôtes et peut
+// également relire une sélection exacte par itemids. Les valeurs non finies
+// ou non numériques restent absentes au lieu d'être transformées en zéro.
+func (client *Client) Items(ctx context.Context, endpoint, token string, hostIDs, itemIDs []string) ([]Item, error) {
+	endpoint, err := NormalizeEndpoint(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	token = strings.TrimSpace(token)
+	if token == "" || len(token) > 4096 {
+		return nil, fmt.Errorf("API token must contain between 1 and 4096 characters")
+	}
+	if len(hostIDs) == 0 && len(itemIDs) == 0 {
+		return []Item{}, nil
+	}
+	if len(hostIDs) > maximumHosts || len(itemIDs) > maximumItems {
+		return nil, fmt.Errorf("item scope is too large")
+	}
+	params := map[string]any{
+		"output":    []string{"itemid", "hostid", "name", "key_", "units", "value_type", "lastvalue", "lastclock"},
+		"monitored": true,
+		"sortfield": []string{"hostid", "name"},
+		"limit":     maximumItems + 1,
+	}
+	if len(hostIDs) > 0 {
+		params["hostids"] = hostIDs
+	}
+	if len(itemIDs) > 0 {
+		params["itemids"] = itemIDs
+	}
+	var remote []struct {
+		ItemID    string `json:"itemid"`
+		HostID    string `json:"hostid"`
+		Name      string `json:"name"`
+		Key       string `json:"key_"`
+		Units     string `json:"units"`
+		ValueType string `json:"value_type"`
+		LastValue string `json:"lastvalue"`
+		LastClock string `json:"lastclock"`
+	}
+	if err := client.call(ctx, endpoint, token, "item.get", params, &remote); err != nil {
+		return nil, fmt.Errorf("retrieve Zabbix items: %w", err)
+	}
+	if len(remote) > maximumItems {
+		return nil, fmt.Errorf("more than %d Zabbix items are visible", maximumItems)
+	}
+	items := make([]Item, 0, len(remote))
+	for _, candidate := range remote {
+		valueType, parseErr := strconv.Atoi(candidate.ValueType)
+		if parseErr != nil || (valueType != 0 && valueType != 3) {
+			continue
+		}
+		if _, parseErr := strconv.ParseUint(candidate.ItemID, 10, 64); parseErr != nil {
+			return nil, fmt.Errorf("retrieve Zabbix items: invalid item identity")
+		}
+		item := Item{ID: candidate.ItemID, HostID: candidate.HostID, Name: strings.TrimSpace(candidate.Name), Key: strings.TrimSpace(candidate.Key), Units: strings.TrimSpace(candidate.Units), ValueType: valueType}
+		if value, parseErr := strconv.ParseFloat(strings.TrimSpace(candidate.LastValue), 64); parseErr == nil && !math.IsNaN(value) && !math.IsInf(value, 0) {
+			item.LastValue = &value
+		}
+		if seconds, parseErr := strconv.ParseInt(strings.TrimSpace(candidate.LastClock), 10, 64); parseErr == nil && seconds > 0 {
+			observed := time.Unix(seconds, 0).UTC()
+			item.LastClock = &observed
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 func (client *Client) Acknowledge(ctx context.Context, endpoint, token, eventID, message string) error {

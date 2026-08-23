@@ -10,6 +10,7 @@
   import WebhookQuarantine from '$lib/components/WebhookQuarantine.svelte';
   import ConnectorRemoval from '$lib/components/ConnectorRemoval.svelte';
   import ConnectorSuspension from '$lib/components/ConnectorSuspension.svelte';
+  import IndicatorConfigurator from '$lib/components/IndicatorConfigurator.svelte';
   import MattermostConnector from '$lib/components/MattermostConnector.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import { goto } from '$app/navigation';
@@ -29,6 +30,7 @@
   let quarantineFor = $state<Connector | null>(null);
   let removalFor = $state<Connector | null>(null);
   let suspensionFor = $state<Connector | null>(null);
+  let indicatorFor = $state<Connector | null>(null);
   let mattermostOpen = $state(false);
   let now = $state(new Date());
 
@@ -196,6 +198,13 @@
           </div>
 
           <p class="contract">{contracts[connector.kind]}</p>
+
+          {#if connector.kind !== 'generic_webhook'}
+            <section class="indicator-section">
+              <span><strong>Indicateurs</strong><small>Métriques contextuelles importées depuis le Connecteur</small></span>
+              {#if isAdministrator}<button class="btn sm" type="button" onclick={() => (indicatorFor = connector)}>Configurer</button>{/if}
+            </section>
+          {/if}
 
           {#if connector.last_error}
             <p class="error">{connector.last_error}</p>
@@ -408,6 +417,10 @@
   />
 {/if}
 
+{#if indicatorFor}
+  <IndicatorConfigurator connector={indicatorFor} onclose={() => (indicatorFor = null)} onsuccess={() => session.loadConnectors()} />
+{/if}
+
 <style>
   .grid {
     display: grid;
@@ -470,6 +483,22 @@
     color: var(--muted);
     font-size: 0.75rem;
   }
+
+  .indicator-section {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    margin-top: var(--s3);
+    padding: var(--s3);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-m);
+    background: var(--bg);
+  }
+
+  .indicator-section > span { min-width: 0; flex: 1; }
+  .indicator-section strong, .indicator-section small { display: block; }
+  .indicator-section strong { color: var(--accent); font-size: .6875rem; }
+  .indicator-section small { color: var(--faint); font-size: .625rem; }
 
   /* Deux fiches côte à côte n'ont pas la même hauteur de contenu : sans cela,
    * celle qui ne dit pas sa version remonte ses boutons d'une ligne. Les
