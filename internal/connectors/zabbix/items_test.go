@@ -2,8 +2,10 @@ package zabbix
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -22,5 +24,43 @@ func TestItemsReadsOnlyFiniteNumericValuesAndKeepsExactIdentity(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].ID != "42" || items[0].LastValue == nil || *items[0].LastValue != 12.5 || items[0].LastClock == nil || !items[0].LastClock.Equal(time.Unix(1787443200, 0)) {
 		t.Fatalf("unexpected items: %#v", items)
+	}
+}
+
+func TestItemsUsesSupportedRemoteSortAndReturnsDeterministicOrder(t *testing.T) {
+	client := NewClientWithHTTP(&http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		var payload struct {
+			Method string `json:"method"`
+			Params struct {
+				SortField []string `json:"sortfield"`
+			} `json:"params"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.Method != "item.get" {
+			t.Fatalf("unexpected method %q", payload.Method)
+		}
+		if !reflect.DeepEqual(payload.Params.SortField, []string{"name", "itemid"}) {
+			t.Fatalf("unsupported or unstable item.get sort fields: %#v", payload.Params.SortField)
+		}
+		body := `{"jsonrpc":"2.0","result":[` +
+			`{"itemid":"30","hostid":"8","name":"Zulu","key_":"z","value_type":"0","lastvalue":"1","lastclock":"1787443200"},` +
+			`{"itemid":"20","hostid":"7","name":"Bravo","key_":"b","value_type":"0","lastvalue":"1","lastclock":"1787443200"},` +
+			`{"itemid":"10","hostid":"7","name":"Alpha","key_":"a","value_type":"0","lastvalue":"1","lastclock":"1787443200"}` +
+			`],"id":1}`
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+	})})
+
+	items, err := client.Items(context.Background(), "https://zabbix.example.test/api_jsonrpc.php", "secret", []string{"7", "8"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identities := make([]string, 0, len(items))
+	for _, item := range items {
+		identities = append(identities, item.HostID+":"+item.Name+":"+item.ID)
+	}
+	if !reflect.DeepEqual(identities, []string{"7:Alpha:10", "7:Bravo:20", "8:Zulu:30"}) {
+		t.Fatalf("items are not deterministically ordered: %#v", identities)
 	}
 }

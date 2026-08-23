@@ -354,7 +354,7 @@ func (client *Client) Items(ctx context.Context, endpoint, token string, hostIDs
 	params := map[string]any{
 		"output":    []string{"itemid", "hostid", "name", "key_", "units", "value_type", "lastvalue", "lastclock"},
 		"monitored": true,
-		"sortfield": []string{"hostid", "name"},
+		"sortfield": []string{"name", "itemid"},
 		"limit":     maximumItems + 1,
 	}
 	if len(hostIDs) > 0 {
@@ -398,6 +398,16 @@ func (client *Client) Items(ctx context.Context, endpoint, token string, hostIDs
 		}
 		items = append(items, item)
 	}
+	sort.SliceStable(items, func(left, right int) bool {
+		if items[left].HostID != items[right].HostID {
+			return items[left].HostID < items[right].HostID
+		}
+		leftName, rightName := strings.ToLower(items[left].Name), strings.ToLower(items[right].Name)
+		if leftName != rightName {
+			return leftName < rightName
+		}
+		return items[left].ID < items[right].ID
+	})
 	return items, nil
 }
 

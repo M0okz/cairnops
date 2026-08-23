@@ -1,5 +1,6 @@
 <script lang="ts">
   import { reconciliationState } from '$lib/reconciliation.svelte';
+  import { startReconciliationPolling } from '$lib/reconciliation-polling';
   import { session } from '$lib/session.svelte';
   import type { ReconciliationStage } from '$lib/api';
   import { t, type MessageKey } from '$lib/i18n.svelte';
@@ -15,15 +16,15 @@
   };
   const watched = new Set<string>();
   const announced = new Set<string>();
+  const hasActiveOperations = $derived(reconciliationState.activeOperations.length > 0);
 
   $effect(() => {
     if (session.user?.role !== 'administrator') return;
-    void reconciliationState.load();
-    const timer = setInterval(
-      () => void reconciliationState.load(),
-      reconciliationState.activeOperations.length > 0 ? 2_000 : 30_000
+    const activePolling = hasActiveOperations;
+    return startReconciliationPolling(
+      () => reconciliationState.load(),
+      () => activePolling
     );
-    return () => clearInterval(timer);
   });
 
   const active = $derived(reconciliationState.activeOperations[0] ?? null);
