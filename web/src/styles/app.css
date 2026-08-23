@@ -99,6 +99,8 @@
   --topbar-h: 3rem;
   --ctl-h: 1.875rem;
   --ctl-h-lg: 2rem;
+  --counter-slot-w: 1.75rem;
+  --counter-pill-h: 1.125rem;
 
   /* Mouvement */
   --d1: 120ms;
@@ -397,16 +399,29 @@ td.num,
   stroke: var(--accent);
 }
 
-.rail a > b {
+.rail-indicator {
+  width: var(--counter-slot-w);
+  height: 100%;
   margin-left: auto;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.rail-indicator > b {
+  display: inline-grid;
+  place-items: center;
   color: var(--faint);
   font-family: var(--font-num);
   font-size: 0.6875rem;
   font-weight: 500;
+  line-height: 1;
 }
 
-.rail a > b.hot {
-  padding: 1px 0.375rem;
+.rail-indicator > b.hot {
+  min-width: var(--counter-pill-h);
+  height: var(--counter-pill-h);
+  padding: 0 calc(var(--s3) - var(--s1));
   border-radius: var(--r-pill);
   background: var(--crit-bg);
   color: var(--crit);

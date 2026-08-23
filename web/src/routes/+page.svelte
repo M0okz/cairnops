@@ -576,12 +576,17 @@
   }
 
   .tally {
-    padding: 1px 0.375rem;
+    min-width: var(--counter-pill-h);
+    height: var(--counter-pill-h);
+    padding: 0 calc(var(--s3) - var(--s1));
+    display: inline-grid;
+    place-items: center;
     border-radius: var(--r-pill);
     background: var(--surface-2);
     color: var(--faint);
     font-family: var(--font-num);
     font-size: 0.625rem;
+    line-height: 1;
   }
 
   .more {

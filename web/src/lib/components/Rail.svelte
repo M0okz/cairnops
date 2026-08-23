@@ -152,10 +152,14 @@
       <a href={item.href} aria-current={current(item.href) ? 'page' : undefined}>
         <Icon name={item.icon} />
         {item.label}
-        {#if item.dot}
-          <i class="dot {item.dot}"></i>
-        {:else if item.count !== undefined}
-          <b class="num" class:hot={item.hot}><Odometer value={item.count} /></b>
+        {#if item.dot || item.count !== undefined}
+          <span class="rail-indicator">
+            {#if item.dot}
+              <i class="dot {item.dot}"></i>
+            {:else}
+              <b class="num" class:hot={item.hot}><Odometer value={item.count ?? 0} /></b>
+            {/if}
+          </span>
         {/if}
       </a>
     {/each}
