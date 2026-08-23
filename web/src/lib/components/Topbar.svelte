@@ -4,6 +4,7 @@
   import { palette } from '$lib/palette.svelte';
   import { session } from '$lib/session.svelte';
   import { i18n, t } from '$lib/i18n.svelte';
+  import ReconciliationProgress from './ReconciliationProgress.svelte';
 
   /* Le déclencheur de la Palette est le même sur tous les écrans : la barre
    * supérieure n'a plus de champ propre. Filtrer une liste est le travail de
@@ -66,6 +67,7 @@
   </nav>
 
   <div class="topbar-right">
+    <ReconciliationProgress />
     {#if session.availableVersion}
       <button
         class="btn sm primary update-cta"

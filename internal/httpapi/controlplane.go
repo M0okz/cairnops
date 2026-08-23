@@ -212,6 +212,10 @@ func (handler controlPlaneHandler) writeError(w http.ResponseWriter, err error) 
 		writeJSON(w, http.StatusConflict, map[string]string{
 			"error": "cette Source appartient à une Intégration : réglez-la dans le produit d'origine",
 		})
+	case errors.Is(err, controlplane.ErrStructureBusy):
+		writeJSON(w, http.StatusConflict, map[string]string{
+			"error": "la structure de cette Cible est verrouillée pendant son rapprochement",
+		})
 	default:
 		if handler.logger != nil {
 			handler.logger.Error("control plane request failed", "error", err)

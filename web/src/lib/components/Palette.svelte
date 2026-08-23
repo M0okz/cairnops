@@ -119,6 +119,7 @@
             tone: stateTones[state],
             score: score(target.name, [
               target.description,
+              ...target.aliases,
               ...target.sources.map((source) => source.name)
             ])
           };

@@ -14,10 +14,16 @@
 
   let {
     onclose,
-    onsuccess
+    onsuccess,
+    connectorId = '',
+    initialName = '',
+    initialAddress = ''
   }: {
     onclose: () => void;
     onsuccess: (result: PatchMonImportResult) => Promise<void> | void;
+    connectorId?: string;
+    initialName?: string;
+    initialAddress?: string;
   } = $props();
 
   let addressInput = $state<HTMLInputElement>();
@@ -33,8 +39,31 @@
   let busy = $state(false);
   let error = $state('');
   let reconciliation = $derived(reconciliationCounts(selected, targetAssignments));
+  let initialized = $state(false);
 
-  onMount(() => addressInput?.focus());
+  $effect(() => {
+    if (initialized) return;
+    initialized = true;
+    if (initialName) name = initialName;
+    if (initialAddress) address = initialAddress;
+  });
+
+  onMount(() => connectorId ? void inspectExisting() : addressInput?.focus());
+
+  function adoptPreview(value: PatchMonPreview) {
+    preview = value;
+    selected = value.hosts.filter((host) => !host.already_imported_to).map((host) => host.external_id);
+    targetAssignments = prepareTargetAssignments(value.hosts);
+  }
+
+  async function inspectExisting() {
+    busy = true; error = '';
+    try {
+      adoptPreview(await api<PatchMonPreview>(`/api/v1/connectors/${connectorId}/preview`, { method: 'POST' }));
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : t('patchmon.verifyFailed');
+    } finally { busy = false; }
+  }
 
   function onKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape' && !busy) onclose();
@@ -86,14 +115,12 @@
     busy = true;
     error = '';
     try {
-      preview = await api<PatchMonPreview>('/api/v1/connectors/patchmon/preview', {
+      adoptPreview(await api<PatchMonPreview>('/api/v1/connectors/patchmon/preview', {
         method: 'POST',
         body: JSON.stringify({ name, address, token_key: tokenKey, token_secret: tokenSecret })
-      });
+      }));
       tokenKey = '';
       tokenSecret = '';
-      selected = preview.hosts.filter((host) => !host.already_imported_to).map((host) => host.external_id);
-      targetAssignments = prepareTargetAssignments(preview.hosts);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : t('patchmon.verifyFailed');
     } finally {

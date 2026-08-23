@@ -138,3 +138,24 @@ func TestSupportingNameEvidenceBreaksSharedIPTie(t *testing.T) {
 		t.Fatalf("the corroborated target should win a shared-IP tie: matches=%#v suggestion=%#v", matches, suggestion)
 	}
 }
+
+func TestMatchTargetsMakesStableIdentityConflictAnExplicitWeakLead(t *testing.T) {
+	t.Parallel()
+	discovered := DiscoveredIdentity{
+		Names:       []string{"same-name"},
+		Identifiers: []string{"machine-a"},
+	}
+	target := TargetIdentity{
+		TargetReference: TargetReference{ID: "target", Name: "same-name"},
+		Names:           []string{"same-name"},
+		Identifiers:     []string{"machine-b"},
+	}
+
+	matches := MatchTargets(discovered, []TargetIdentity{target})
+	if len(matches) != 1 || matches[0].Confidence != "low" || len(matches[0].Contradictions) != 1 || matches[0].Contradictions[0].Kind != "different_machine_id" {
+		t.Fatalf("stable identity conflict was not an explicit abstention: %#v", matches)
+	}
+	if suggestion := suggestedTarget(matches); suggestion != nil {
+		t.Fatalf("a contradictory identity must never be suggested implicitly: %#v", suggestion)
+	}
+}

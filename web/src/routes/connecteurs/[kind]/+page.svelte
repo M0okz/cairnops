@@ -26,6 +26,9 @@
 
   const kind = $derived(page.params.kind as Kind | undefined);
   const label = $derived(kind && kind in known ? known[kind] : null);
+  const managedConnector = $derived(
+    session.connectors.find((connector) => connector.id === page.url.searchParams.get('connector')) ?? null
+  );
 
   function leave() {
     void goto('/connecteurs');
@@ -69,11 +72,11 @@
     </div>
   </div>
 {:else if kind === 'zabbix'}
-  <ZabbixConnector onclose={leave} onsuccess={imported} />
+  <ZabbixConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else if kind === 'uptime-kuma'}
-  <UptimeKumaConnector onclose={leave} onsuccess={imported} />
+  <UptimeKumaConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else if kind === 'patchmon'}
-  <PatchMonConnector onclose={leave} onsuccess={imported} />
+  <PatchMonConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else}
   <GenericWebhookConnector
     onclose={leave}

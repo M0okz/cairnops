@@ -103,6 +103,7 @@ export type Target = {
   description: string;
   created_at: string;
   external_source_count: number;
+  aliases: string[];
   sources: Source[];
 };
 
@@ -373,7 +374,7 @@ export type ZabbixInterface = {
 export type TargetReference = { id: string; name: string };
 
 export type MatchEvidence = {
-  kind: 'same_machine_id' | 'same_name' | 'same_ip' | 'same_hostname' | 'similar_name';
+  kind: 'same_machine_id' | 'same_name' | 'same_ip' | 'same_hostname' | 'similar_name' | 'different_machine_id';
   value: string;
 };
 
@@ -381,6 +382,108 @@ export type TargetMatch = {
   target: TargetReference;
   confidence: 'high' | 'medium' | 'low';
   evidence: MatchEvidence[];
+  contradictions?: MatchEvidence[];
+  score: number;
+};
+
+export type ReconciliationTargetSummary = {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  source_count: number;
+  incident_count: number;
+  active_incident_count: number;
+  observation_count: number;
+  maintenance_count: number;
+  indicator_count: number;
+  richness_score: number;
+  human_managed: boolean;
+};
+
+export type ReconciliationSourceSummary = {
+  id: string;
+  target_id: string;
+  name: string;
+  kind: string;
+  origin: 'native' | 'integration';
+};
+
+export type ReconciliationSuggestion = {
+  id: string;
+  kind: 'target_merge' | 'source_move';
+  left: ReconciliationTargetSummary;
+  right: ReconciliationTargetSummary;
+  source?: ReconciliationSourceSummary;
+  confidence: 'high' | 'medium' | 'low';
+  score: number;
+  evidence: MatchEvidence[];
+  contradictions: MatchEvidence[];
+  status: 'pending' | 'rejected' | 'snoozed' | 'accepted' | 'superseded';
+  snoozed_until?: string;
+  decision_reason?: string;
+  last_detected_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReconciliationPreview = {
+  kind: 'target_merge' | 'source_move';
+  primary: ReconciliationTargetSummary;
+  secondary: ReconciliationTargetSummary;
+  suggested_primary_id: string;
+  incident_conflicts: Array<{
+    nature_key: string;
+    nature_label: string;
+    left_incident_id: string;
+    right_incident_id: string;
+  }>;
+  combined_source_count: number;
+  warnings: string[];
+  source?: ReconciliationSourceSummary;
+};
+
+export type ReconciliationStage =
+  | 'preparing'
+  | 'consolidating'
+  | 'reconciling_incidents'
+  | 'recalculating_metrics'
+  | 'finalizing'
+  | 'completed'
+  | 'failed';
+
+export type ReconciliationOperation = {
+  id: string;
+  kind: 'target_merge' | 'source_move';
+  primary_target_id: string;
+  primary_target_name: string;
+  secondary_target_id: string;
+  secondary_target_name: string;
+  source_id?: string;
+  suggestion_id?: string;
+  archive_origin: boolean;
+  reason: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  stage: ReconciliationStage;
+  preview: Record<string, unknown>;
+  result: Record<string, unknown>;
+  last_error?: string;
+  attempts: number;
+  requested_by?: string;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TargetReconciliationActivity = {
+  id: number;
+  target_id: string;
+  kind: 'reconciliation_started' | 'reconciled' | 'source_moved' | 'suggestion_rejected' | 'suggestion_snoozed';
+  actor_name?: string;
+  message: string;
+  data: Record<string, unknown>;
+  occurred_at: string;
 };
 
 export type ZabbixHostPreview = {
@@ -615,8 +718,8 @@ export type InboxEntry = {
 export type RealtimeMessage = {
   type: 'ready' | 'event';
   version: number;
-  kind?: 'target.changed' | 'source.changed' | 'observation.created' | 'component.heartbeat' | 'connector.changed' | 'incident.changed' | 'maintenance.changed' | 'notification.changed' | 'device.changed' | 'indicator.changed';
-  entity_type?: 'target' | 'source' | 'component' | 'connector' | 'incident' | 'maintenance' | 'notification' | 'device' | 'indicator';
+  kind?: 'target.changed' | 'source.changed' | 'observation.created' | 'component.heartbeat' | 'connector.changed' | 'incident.changed' | 'maintenance.changed' | 'notification.changed' | 'device.changed' | 'indicator.changed' | 'reconciliation.changed';
+  entity_type?: 'target' | 'source' | 'component' | 'connector' | 'incident' | 'maintenance' | 'notification' | 'device' | 'indicator' | 'reconciliation';
   entity_id?: string;
   occurred_at?: string;
 };

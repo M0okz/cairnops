@@ -12,6 +12,9 @@
   import MaintenanceWorkshop from '$lib/components/MaintenanceWorkshop.svelte';
   import TargetIndicators from '$lib/components/TargetIndicators.svelte';
   import IncidentIndicatorContext from '$lib/components/IncidentIndicatorContext.svelte';
+  import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
+  import ReconciliationWorkshop from '$lib/components/ReconciliationWorkshop.svelte';
+  import { reconciliationState } from '$lib/reconciliation.svelte';
   import { incidentTimelineForTarget } from '$lib/incident-timeline';
   import { session } from '$lib/session.svelte';
   import {
@@ -31,7 +34,7 @@
     windowLabel
   } from '$lib/format';
   import { plural, t } from '$lib/i18n.svelte';
-  import type { IncidentSignal, MeasureWindow } from '$lib/api';
+  import { api, type IncidentSignal, type MeasureWindow, type ReconciliationSourceSummary, type TargetReconciliationActivity } from '$lib/api';
 
   type Tab = 'view' | 'sources' | 'checks' | 'log' | 'settings';
 
@@ -42,6 +45,11 @@
   let invalidationFor = $state<{ incidentId: string; signal: IncidentSignal } | null>(null);
   let invalidationReason = $state('');
   let now = $state(new Date());
+  let controlOpen = $state(false);
+  let reconciliationOpen = $state(false);
+  let sourceForMove = $state<ReconciliationSourceSummary | null>(null);
+  let targetActivity = $state<TargetReconciliationActivity[]>([]);
+  let resolutionCheckedFor = $state('');
 
   $effect(() => {
     const timer = setInterval(() => (now = new Date()), 15_000);
@@ -53,6 +61,11 @@
   const incidentHistory = $derived(target ? session.incidentHistoryFor(target.id) : []);
   const lead = $derived(leadIncident(incidents));
   const healthState = $derived(target ? session.targetState(target) : 'unknown');
+  const structureBusy = $derived(
+    target ? reconciliationState.activeOperations.some((operation) =>
+      operation.primary_target_id === target.id || operation.secondary_target_id === target.id
+    ) : false
+  );
 
   /* Les trois fenêtres viennent du serveur ; la fenêtre choisie gouverne à la
    * fois les chiffres de la Cible et la part de chaque Source. */
@@ -69,7 +82,21 @@
     if (targetId) {
       void session.loadMeasureDetail(targetId);
       void session.loadIncidentHistory(targetId);
+      void api<{ activity: TargetReconciliationActivity[] }>(`/api/v1/targets/${targetId}/reconciliation-activity`)
+        .then((response) => (targetActivity = response.activity))
+        .catch(() => (targetActivity = []));
     }
+  });
+
+  $effect(() => {
+    const targetId = page.params.id;
+    if (session.gate !== 'app' || target || !targetId || resolutionCheckedFor === targetId) return;
+    resolutionCheckedFor = targetId;
+    void api<{ target_id: string }>(`/api/v1/targets/${targetId}/resolution`)
+      .then((resolved) => {
+        if (resolved.target_id !== targetId) void goto(`/cibles/${resolved.target_id}`, { replaceState: true });
+      })
+      .catch(() => undefined);
   });
 
   function sourceMeasure(sourceId: string) {
@@ -284,6 +311,7 @@
           {t('target.putUnderMaintenance')}
         </button>
         {#if admin}
+          <button class="btn" type="button" disabled={structureBusy} onclick={() => (reconciliationOpen = true)}>{t('target.reconcile')}</button>
           <button class="btn" type="button" onclick={() => (tab = 'settings')}>{t('target.edit')}</button>
         {/if}
         {#if lead && !lead.acknowledged_at}
@@ -608,9 +636,10 @@
         {#each target.sources as source (source.id)}
           {@const measured = sourceMeasure(source.id)}
           <div class="trow">
-            <span class="cell-name">
+            <span class="cell-name source-cell">
               <i class="dot {source.latest_outcome === 'healthy' ? 'ok' : source.latest_outcome === 'unhealthy' ? 'crit' : 'idle'}"></i>
               <span><strong>{source.name}</strong></span>
+              {#if admin}<button class="btn sm source-move" type="button" disabled={structureBusy} onclick={() => (sourceForMove = { id: source.id, target_id: target.id, name: source.name, kind: source.kind, origin: 'native' })}>{t('target.attachSource')}</button>{/if}
             </span>
             <span class="pill">{kindLabels[source.kind] ?? source.kind}</span>
             <span class="hide-sm">{outcomeLabels[source.latest_outcome ?? 'unknown']}</span>
@@ -629,12 +658,13 @@
         {#each integrationSources as source (source.source_id)}
           {@const measured = inWindow(source, period)}
           <div class="trow">
-            <span class="cell-name">
+            <span class="cell-name source-cell">
               <i class="dot {source.latest_outcome === 'healthy' ? 'ok' : source.latest_outcome === 'unhealthy' ? 'crit' : 'idle'}"></i>
               <span>
                 <strong>{source.name}</strong>
                 <small class="nature">{t('target.fromConnector')}</small>
               </span>
+              {#if admin}<button class="btn sm source-move" type="button" disabled={structureBusy} onclick={() => (sourceForMove = { id: source.source_id, target_id: target.id, name: source.name, kind: source.kind, origin: 'integration' })}>{t('target.attachSource')}</button>{/if}
             </span>
             <span class="pill info">{kindLabels[source.kind] ?? source.kind}</span>
             <span class="hide-sm">{outcomeLabels[source.latest_outcome ?? 'unknown']}</span>
@@ -658,6 +688,9 @@
         {/if}
       </div>
     {:else if tab === 'checks'}
+      {#if admin}
+        <div class="section-actions"><button class="btn primary" type="button" disabled={structureBusy} onclick={() => (controlOpen = true)}>{t('target.addCheck')}</button></div>
+      {/if}
       <div class="card cols-check">
         <div class="thead">
           <span>{t('target.column.check')}</span>
@@ -684,13 +717,14 @@
               <!-- Suspendre arrête la sonde sans rien perdre ; retirer emporte
                    ses Observations, d'où la confirmation. -->
               <span class="row-actions">
-                <button class="btn sm" type="button" disabled={saving} onclick={() => toggleSource(source)}>
+                <button class="btn sm" type="button" disabled={saving || structureBusy} onclick={() => (sourceForMove = { id: source.id, target_id: target.id, name: source.name, kind: source.kind, origin: 'native' })}>{t('target.attachSource')}</button>
+                <button class="btn sm" type="button" disabled={saving || structureBusy} onclick={() => toggleSource(source)}>
                   {source.enabled ? t('target.suspend') : t('target.resume')}
                 </button>
                 <button
                   class="btn sm"
                   type="button"
-                  disabled={saving}
+                  disabled={saving || structureBusy}
                   onclick={() => (removalFor = { id: source.id, name: source.name })}
                 >{t('target.remove')}</button>
               </span>
@@ -708,6 +742,15 @@
     {:else if tab === 'log'}
       <div class="card">
         <div class="card-body log">
+          {#each targetActivity as entry (`target-${entry.id}`)}
+            <div class="entry">
+              <span class="when num">{stamp(entry.occurred_at)}</span>
+              <span class="what">
+                <strong>{entry.message}</strong>
+                <small class="faint">{t('target.identity')}{#if entry.actor_name} · {entry.actor_name}{/if}</small>
+              </span>
+            </div>
+          {/each}
           {#each journal as item (item.entry.id)}
             <div class="entry">
               <span class="when num">{stamp(item.entry.occurred_at)}</span>
@@ -719,9 +762,10 @@
                 </small>
               </span>
             </div>
-          {:else}
-            <p class="faint">{t('target.noEntries')}</p>
           {/each}
+          {#if targetActivity.length === 0 && journal.length === 0}
+            <p class="faint">{t('target.noEntries')}</p>
+          {/if}
         </div>
       </div>
     {:else}
@@ -744,7 +788,7 @@
                 <input id="target-description" bind:value={draftDescription} maxlength="2000" />
               </div>
               <div class="settings-actions">
-                <button class="btn primary" type="submit" disabled={saving || draftName.trim().length === 0}>
+                <button class="btn primary" type="submit" disabled={saving || structureBusy || draftName.trim().length === 0}>
                   {saving ? t('common.saving') : t('common.save')}
                 </button>
                 <button class="btn" type="button" disabled={saving} onclick={resetDraft}>
@@ -753,12 +797,22 @@
               </div>
             </form>
 
+            <div class="danger identity-management">
+              <div>
+                <strong>{t('target.identity')}</strong>
+                <p>{t('target.identityHint')}</p>
+              </div>
+              <button class="btn" type="button" disabled={saving || structureBusy} onclick={() => (reconciliationOpen = true)}>
+                {t('target.reconcileAnother')}
+              </button>
+            </div>
+
             <div class="danger">
               <div>
                 <strong>{t('target.archiveTitle')}</strong>
                 <p>{t('target.archiveSay')}</p>
               </div>
-              <button class="btn" type="button" disabled={saving} onclick={() => (archiveOpen = true)}>
+              <button class="btn" type="button" disabled={saving || structureBusy} onclick={() => (archiveOpen = true)}>
                 {t('target.archive')}
               </button>
             </div>
@@ -817,7 +871,7 @@
         <button class="btn" type="button" disabled={saving} onclick={() => (archiveOpen = false)}>
           {t('common.cancel')}
         </button>
-        <button class="btn primary" type="button" disabled={saving} onclick={confirmArchive}>
+        <button class="btn primary" type="button" disabled={saving || structureBusy} onclick={confirmArchive}>
           {saving ? t('target.archiving') : t('target.archiveConfirm')}
         </button>
       </footer>
@@ -841,7 +895,7 @@
         <button class="btn" type="button" disabled={saving} onclick={() => (removalFor = null)}>
           {t('common.cancel')}
         </button>
-        <button class="btn primary" type="button" disabled={saving} onclick={() => removalFor && removeSource(removalFor.id)}>
+        <button class="btn primary" type="button" disabled={saving || structureBusy} onclick={() => removalFor && removeSource(removalFor.id)}>
           {saving ? t('target.removing') : t('target.removeConfirm')}
         </button>
       </footer>
@@ -860,6 +914,25 @@
   />
 {/if}
 
+{#if controlOpen && target}
+  <TargetWorkshop
+    target={target}
+    onclose={() => (controlOpen = false)}
+    onsuccess={async () => {
+      await session.loadTargets();
+      session.showNotice(t('target.checkAdded'));
+    }}
+  />
+{/if}
+
+{#if reconciliationOpen && target}
+  <ReconciliationWorkshop primaryTargetId={target.id} onclose={() => (reconciliationOpen = false)} />
+{/if}
+
+{#if sourceForMove}
+  <ReconciliationWorkshop source={sourceForMove} secondaryTargetId={sourceForMove.target_id} onclose={() => (sourceForMove = null)} />
+{/if}
+
 <style>
   .page-head h1 {
     display: flex;
@@ -874,6 +947,11 @@
     margin-bottom: var(--s5);
     border-bottom: 1px solid var(--line);
   }
+
+  .section-actions { display: flex; justify-content: flex-end; margin-bottom: var(--s4); }
+  .source-cell { min-width: 0; }
+  .source-move { margin-left: auto; opacity: 0; transition: opacity var(--d1) var(--ease); }
+  .trow:hover .source-move, .trow:focus-within .source-move { opacity: 1; }
 
   .tabs button {
     padding: 0 0 0.625rem;

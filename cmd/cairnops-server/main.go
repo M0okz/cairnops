@@ -27,6 +27,7 @@ import (
 	"github.com/M0okz/cairnops/internal/migrations"
 	"github.com/M0okz/cairnops/internal/notifications"
 	"github.com/M0okz/cairnops/internal/realtime"
+	"github.com/M0okz/cairnops/internal/reconciliation"
 	"github.com/M0okz/cairnops/internal/secretbox"
 	"github.com/M0okz/cairnops/internal/systemhealth"
 	"github.com/M0okz/cairnops/internal/version"
@@ -91,27 +92,29 @@ func run(logger *slog.Logger) error {
 	indicatorStore := indicators.NewStore(pool)
 	indicatorService := indicators.NewService(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets)
 	indicatorCollector := indicators.NewCollector(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets, logger)
+	reconciliationStore := reconciliation.NewStore(pool)
 
 	server := httpapi.NewServer(httpapi.ServerOptions{
-		Address:        cfg.HTTPAddress,
-		WebDir:         cfg.WebDir,
-		PublicURL:      cfg.PublicURL,
-		Pinger:         pool,
-		Logger:         logger,
-		Service:        "server",
-		BootstrapToken: cfg.BootstrapToken,
-		Identity:       identity.NewStore(pool),
-		ControlPlane:   controlplane.NewStore(pool),
-		Metrics:        metrics.NewStore(pool),
-		Indicators:     indicatorService,
-		Connectors:     connectorService,
-		Webhooks:       webhookService,
-		Incidents:      incidentService,
-		Maintenances:   maintenanceService,
-		Notifications:  notificationService,
-		Devices:        deviceStore,
-		Events:         realtime.NewStore(pool),
-		SystemHealth:   systemhealth.NewStore(pool),
+		Address:         cfg.HTTPAddress,
+		WebDir:          cfg.WebDir,
+		PublicURL:       cfg.PublicURL,
+		Pinger:          pool,
+		Logger:          logger,
+		Service:         "server",
+		BootstrapToken:  cfg.BootstrapToken,
+		Identity:        identity.NewStore(pool),
+		ControlPlane:    controlplane.NewStore(pool),
+		Metrics:         metrics.NewStore(pool),
+		Indicators:      indicatorService,
+		Connectors:      connectorService,
+		Webhooks:        webhookService,
+		Incidents:       incidentService,
+		Maintenances:    maintenanceService,
+		Notifications:   notificationService,
+		Devices:         deviceStore,
+		Events:          realtime.NewStore(pool),
+		SystemHealth:    systemhealth.NewStore(pool),
+		Reconciliations: reconciliationStore,
 	})
 
 	errCh := make(chan error, 5)

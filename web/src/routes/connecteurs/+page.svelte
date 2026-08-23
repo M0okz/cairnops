@@ -77,6 +77,11 @@
     patchmon: 'patchmon'
   };
 
+  function sourceManagementRoute(connector: Connector) {
+    const kind = connector.kind === 'uptime_kuma' ? 'uptime-kuma' : connector.kind;
+    return `/connecteurs/${kind}?connector=${connector.id}`;
+  }
+
   const statusLabels = $derived<Record<Connector['status'], { label: string; tone: string }>>({
     connected: { label: t('connector.status.connected'), tone: 'ok' },
     degraded: { label: t('connector.status.degraded'), tone: 'warn' },
@@ -223,6 +228,9 @@
             {/if}
             {#if isAdministrator}
               <span class="spacer"></span>
+              {#if connector.kind !== 'generic_webhook'}
+                <a class="btn sm" href={sourceManagementRoute(connector)}>{t('connectors.manageSources')}</a>
+              {/if}
               <button
                 class="btn sm"
                 type="button"

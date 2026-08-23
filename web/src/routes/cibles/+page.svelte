@@ -26,6 +26,7 @@
   import { i18n, plural, t } from '$lib/i18n.svelte';
   import { formatIndicator } from '$lib/indicator-format';
   import type { Measure, Outcome, SourceMeasures, Target } from '$lib/api';
+  import { reconciliationState } from '$lib/reconciliation.svelte';
 
   /* Les Contrôles natifs portent le nom de leur protocole : il ne se traduit
    * pas, et « Heartbeat » est le mot des Écrans dans les deux langues. */
@@ -122,7 +123,7 @@
         if (scope === 'maintenance' && row.state !== 'maintenance') return false;
         if (divergentOnly && !row.divergent) return false;
         if (!query) return true;
-        return [row.target.name, row.target.description, ...row.target.sources.map((source) => source.name)]
+        return [row.target.name, row.target.description, ...row.target.aliases, ...row.target.sources.map((source) => source.name)]
           .some((value) => value.toLocaleLowerCase(i18n.locale).includes(query));
       })
       .sort((a, b) => {
@@ -159,6 +160,12 @@
       </p>
     </div>
     <div class="page-actions">
+      {#if session.user?.role === 'administrator'}
+        <a class="btn" href="/cibles/rapprochements">
+          {t('reconciliation.title')}
+          {#if reconciliationState.actionable.length > 0}<b class="action-count">{reconciliationState.actionable.length}</b>{/if}
+        </a>
+      {/if}
       <button class="btn" type="button" onclick={() => (chooserOpen = true)}>
         {t('targets.importFromConnector')}
       </button>
@@ -527,5 +534,17 @@
     margin-top: var(--s4);
     color: var(--faint);
     font-size: 0.75rem;
+  }
+
+  .action-count {
+    min-width: 1.125rem;
+    height: 1.125rem;
+    display: inline-grid;
+    place-items: center;
+    margin-left: var(--s1);
+    border-radius: var(--r-pill);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font: 0.625rem var(--font-num);
   }
 </style>

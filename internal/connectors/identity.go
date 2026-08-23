@@ -42,16 +42,43 @@ type DiscoveredIdentity struct {
 	Identifiers []string
 }
 
+// IdentityCandidateKeys produit l'index grossier du moteur de rapprochement.
+// Partager une clé autorise uniquement une comparaison détaillée ; MatchTargets
+// reste l'autorité qui pondère les preuves, détecte les contradictions et peut
+// s'abstenir. L'index évite ainsi un balayage quadratique des Cibles.
+func IdentityCandidateKeys(names, addresses, identifiers []string) []string {
+	keys := make(map[string]struct{})
+	for value := range normalizedSet(names, normalizeName) {
+		keys["name:"+value] = struct{}{}
+	}
+	for value := range normalizedSet(addresses, normalizeAddress) {
+		keys["address:"+value] = struct{}{}
+	}
+	for value := range normalizedSet(identifiers, normalizeIdentifier) {
+		keys["identifier:"+value] = struct{}{}
+	}
+	for _, fingerprint := range nameFingerprints(names) {
+		keys["alias:"+fingerprint.Core] = struct{}{}
+	}
+	result := make([]string, 0, len(keys))
+	for key := range keys {
+		result = append(result, key)
+	}
+	sort.Strings(result)
+	return result
+}
+
 type MatchEvidence struct {
 	Kind  string `json:"kind"`
 	Value string `json:"value"`
 }
 
 type TargetMatch struct {
-	Target     TargetReference `json:"target"`
-	Confidence string          `json:"confidence"`
-	Evidence   []MatchEvidence `json:"evidence"`
-	score      int
+	Target         TargetReference `json:"target"`
+	Confidence     string          `json:"confidence"`
+	Evidence       []MatchEvidence `json:"evidence"`
+	Contradictions []MatchEvidence `json:"contradictions,omitempty"`
+	Score          int             `json:"score"`
 }
 
 func identityForZabbix(host zabbix.Host) DiscoveredIdentity {
@@ -78,16 +105,26 @@ func identityForPatchMon(host patchmon.Host) DiscoveredIdentity {
 }
 
 func matchTargets(discovered DiscoveredIdentity, targets []TargetIdentity) []TargetMatch {
+	return MatchTargets(discovered, targets)
+}
+
+// MatchTargets expose le même moteur déterministe à la détection continue.
+// Les preuves restent explicables et une contradiction d'identifiants stables
+// force l'abstention : un rapprochement manuel reste toujours possible.
+func MatchTargets(discovered DiscoveredIdentity, targets []TargetIdentity) []TargetMatch {
 	discoveredNames := normalizedSet(discovered.Names, normalizeName)
 	discoveredAddresses := normalizedSet(discovered.Addresses, normalizeAddress)
 	discoveredAliases := nameFingerprints(discovered.Names)
 	discoveredIdentifiers := normalizedSet(discovered.Identifiers, normalizeIdentifier)
 	matches := make([]TargetMatch, 0)
 	for _, candidate := range targets {
+		candidateIdentifiers := normalizedSet(candidate.Identifiers, normalizeIdentifier)
+		matchingIdentifiers := intersection(discoveredIdentifiers, candidateIdentifiers)
+		stableIdentityConflict := len(discoveredIdentifiers) > 0 && len(candidateIdentifiers) > 0 && len(matchingIdentifiers) == 0
 		evidenceByKey := make(map[string]MatchEvidence)
 		evidenceKinds := make(map[string]struct{})
 		score := 0
-		for identifier := range intersection(discoveredIdentifiers, normalizedSet(candidate.Identifiers, normalizeIdentifier)) {
+		for identifier := range matchingIdentifiers {
 			addMatchEvidence(evidenceByKey, evidenceKinds, MatchEvidence{Kind: "same_machine_id", Value: identifier})
 			if score < matchMachineIDScore {
 				score = matchMachineIDScore
@@ -132,19 +169,25 @@ func matchTargets(discovered DiscoveredIdentity, targets []TargetIdentity) []Tar
 			return evidencePriority(evidence[i].Kind) < evidencePriority(evidence[j].Kind)
 		})
 		confidence := "low"
-		if score >= matchNameScore {
+		contradictions := make([]MatchEvidence, 0, 1)
+		if stableIdentityConflict {
+			contradictions = append(contradictions, MatchEvidence{
+				Kind:  "different_machine_id",
+				Value: strings.Join(sortedSetValues(discoveredIdentifiers), ", ") + " ≠ " + strings.Join(sortedSetValues(candidateIdentifiers), ", "),
+			})
+		} else if score >= matchNameScore {
 			confidence = "high"
 		} else if score >= matchIPScore {
 			confidence = "medium"
 		}
 		matches = append(matches, TargetMatch{
 			Target: candidate.TargetReference, Confidence: confidence,
-			Evidence: evidence, score: score,
+			Evidence: evidence, Contradictions: contradictions, Score: score,
 		})
 	}
 	sort.SliceStable(matches, func(i, j int) bool {
-		if matches[i].score != matches[j].score {
-			return matches[i].score > matches[j].score
+		if matches[i].Score != matches[j].Score {
+			return matches[i].Score > matches[j].Score
 		}
 		if normalizeName(matches[i].Target.Name) != normalizeName(matches[j].Target.Name) {
 			return normalizeName(matches[i].Target.Name) < normalizeName(matches[j].Target.Name)
@@ -152,6 +195,15 @@ func matchTargets(discovered DiscoveredIdentity, targets []TargetIdentity) []Tar
 		return matches[i].Target.ID < matches[j].Target.ID
 	})
 	return matches
+}
+
+func sortedSetValues(values map[string]struct{}) []string {
+	result := make([]string, 0, len(values))
+	for value := range values {
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func addMatchEvidence(byKey map[string]MatchEvidence, kinds map[string]struct{}, evidence MatchEvidence) {
@@ -269,12 +321,11 @@ func matchingAliases(left, right []nameFingerprint) map[string]struct{} {
 	return result
 }
 
-// suggestedTarget ne choisit que si le meilleur score est unique et repose au
-// moins sur une adresse. Un alias de nom d'infrastructure reste une suggestion
-// à confirmer ; une IP partagée reste visible mais ne devient jamais une
-// décision implicite.
+// suggestedTarget ne choisit que si le meilleur score est unique, assez fort
+// et sans contradiction. Une piste contradictoire reste visible mais ne
+// devient jamais une décision implicite, même si son nom est identique.
 func suggestedTarget(matches []TargetMatch) *TargetReference {
-	if len(matches) == 0 || matches[0].score < matchIPScore || (len(matches) > 1 && matches[0].score == matches[1].score) {
+	if len(matches) == 0 || matches[0].Score < matchIPScore || len(matches[0].Contradictions) > 0 || (len(matches) > 1 && matches[0].Score == matches[1].Score) {
 		return nil
 	}
 	target := matches[0].Target

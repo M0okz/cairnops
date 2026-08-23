@@ -224,6 +224,27 @@ func (store *PostgresStore) Delete(ctx context.Context, connectorID string) (Rem
 		return Removal{}, fmt.Errorf("load connector to remove: %w", err)
 	}
 
+	var reconciliationBusy bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM cairnops_connector_bindings binding
+			JOIN cairnops_signal_sources source ON source.connector_binding_id = binding.id
+			JOIN cairnops_target_reconciliation_operations operation
+			  ON operation.status IN ('queued', 'running')
+			 AND (
+				operation.source_id = source.id
+				OR source.target_id IN (operation.primary_target_id, operation.secondary_target_id)
+			 )
+			WHERE binding.connector_id = $1::uuid
+		)
+	`, connectorID).Scan(&reconciliationBusy); err != nil {
+		return Removal{}, fmt.Errorf("check connector reconciliation: %w", err)
+	}
+	if reconciliationBusy {
+		return Removal{}, ErrStructureBusy
+	}
+
 	exposed, err := collectIncidentIDs(ctx, tx, `
 		SELECT DISTINCT incident.id::text
 		FROM cairnops_incidents incident

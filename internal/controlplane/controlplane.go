@@ -23,6 +23,7 @@ var (
 	ErrNotFound          = errors.New("not found")
 	ErrInvalidInput      = errors.New("invalid input")
 	ErrHeartbeatNotFound = errors.New("heartbeat not found")
+	ErrStructureBusy     = errors.New("target structure is being reconciled")
 	// ErrIntegrationOwned protège ce qui appartient à une Intégration : son nom
 	// et sa cadence viennent du produit distant, et prétendre les fixer ici
 	// ferait diverger CairnOps au premier cycle de synchronisation.
@@ -35,6 +36,7 @@ type Target struct {
 	Description         string    `json:"description"`
 	CreatedAt           time.Time `json:"created_at"`
 	ExternalSourceCount int       `json:"external_source_count"`
+	Aliases             []string  `json:"aliases"`
 	Sources             []Source  `json:"sources"`
 }
 
@@ -120,10 +122,28 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
+type queryRower interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func targetStructureBusy(ctx context.Context, query queryRower, targetID string) (bool, error) {
+	var busy bool
+	err := query.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM cairnops_target_reconciliation_operations operation
+			WHERE operation.status IN ('queued', 'running')
+			  AND $1::uuid IN (operation.primary_target_id, operation.secondary_target_id)
+		)
+	`, targetID).Scan(&busy)
+	return busy, err
+}
+
 func (store *Store) ListTargets(ctx context.Context) ([]Target, error) {
 	rows, err := store.pool.Query(ctx, `
 		SELECT target.id::text, target.name, target.description, target.created_at,
-		       count(binding.id)::integer
+		       count(binding.id)::integer,
+		       coalesce((SELECT array_agg(alias.alias ORDER BY lower(alias.alias), alias.id)
+		                 FROM cairnops_target_aliases alias WHERE alias.target_id = target.id), ARRAY[]::text[])
 		FROM cairnops_targets target
 		LEFT JOIN cairnops_connector_bindings binding ON binding.target_id = target.id
 		WHERE target.archived_at IS NULL
@@ -139,7 +159,7 @@ func (store *Store) ListTargets(ctx context.Context) ([]Target, error) {
 	indexes := make(map[string]int)
 	for rows.Next() {
 		var target Target
-		if err := rows.Scan(&target.ID, &target.Name, &target.Description, &target.CreatedAt, &target.ExternalSourceCount); err != nil {
+		if err := rows.Scan(&target.ID, &target.Name, &target.Description, &target.CreatedAt, &target.ExternalSourceCount, &target.Aliases); err != nil {
 			return nil, fmt.Errorf("scan target: %w", err)
 		}
 		target.Sources = make([]Source, 0)
@@ -199,10 +219,10 @@ func (store *Store) CreateTarget(ctx context.Context, input CreateTargetInput) (
 		return Target{}, fmt.Errorf("%w: target description must not exceed 2000 characters", ErrInvalidInput)
 	}
 
-	target := Target{Name: input.Name, Description: input.Description, Sources: make([]Source, 0)}
+	target := Target{Name: input.Name, Description: input.Description, Aliases: make([]string, 0), Sources: make([]Source, 0)}
 	err := store.pool.QueryRow(ctx, `
-		INSERT INTO cairnops_targets (name, description)
-		VALUES ($1, $2)
+		INSERT INTO cairnops_targets (name, description, identity_managed_at)
+		VALUES ($1, $2, now())
 		RETURNING id::text, created_at
 	`, target.Name, target.Description).Scan(&target.ID, &target.CreatedAt)
 	if err != nil {
@@ -223,11 +243,16 @@ func (store *Store) UpdateTarget(ctx context.Context, targetID string, input Upd
 	if utf8.RuneCountInString(input.Description) > 2000 {
 		return Target{}, fmt.Errorf("%w: target description must not exceed 2000 characters", ErrInvalidInput)
 	}
+	if busy, err := targetStructureBusy(ctx, store.pool, targetID); err != nil {
+		return Target{}, fmt.Errorf("check target reconciliation: %w", err)
+	} else if busy {
+		return Target{}, ErrStructureBusy
+	}
 
-	target := Target{ID: targetID, Name: input.Name, Description: input.Description, Sources: make([]Source, 0)}
+	target := Target{ID: targetID, Name: input.Name, Description: input.Description, Aliases: make([]string, 0), Sources: make([]Source, 0)}
 	err := store.pool.QueryRow(ctx, `
 		UPDATE cairnops_targets
-		SET name = $2, description = $3, updated_at = now()
+		SET name = $2, description = $3, identity_managed_at = now(), updated_at = now()
 		WHERE id = $1::uuid AND archived_at IS NULL
 		RETURNING created_at
 	`, targetID, target.Name, target.Description).Scan(&target.CreatedAt)
@@ -249,6 +274,11 @@ func (store *Store) ArchiveTarget(ctx context.Context, targetID string) error {
 		return fmt.Errorf("begin target archival: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	if busy, err := targetStructureBusy(ctx, tx, targetID); err != nil {
+		return fmt.Errorf("check target reconciliation: %w", err)
+	} else if busy {
+		return ErrStructureBusy
+	}
 
 	var name string
 	err = tx.QueryRow(ctx, `
@@ -280,7 +310,7 @@ func (store *Store) RestoreTarget(ctx context.Context, targetID string) (Target,
 	err := store.pool.QueryRow(ctx, `
 		UPDATE cairnops_targets
 		SET archived_at = NULL, updated_at = now()
-		WHERE id = $1::uuid AND archived_at IS NOT NULL
+		WHERE id = $1::uuid AND archived_at IS NOT NULL AND reconciled_into_target_id IS NULL
 		RETURNING id::text, name, description, created_at
 	`, targetID).Scan(&target.ID, &target.Name, &target.Description, &target.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -290,6 +320,7 @@ func (store *Store) RestoreTarget(ctx context.Context, targetID string) (Target,
 		return Target{}, fmt.Errorf("restore target: %w", err)
 	}
 	target.Sources = make([]Source, 0)
+	target.Aliases = make([]string, 0)
 	return target, nil
 }
 
@@ -341,6 +372,11 @@ func (store *Store) CreateSource(ctx context.Context, targetID string, input Cre
 	}
 	if !exists {
 		return CreatedSource{}, ErrNotFound
+	}
+	if busy, err := targetStructureBusy(ctx, store.pool, targetID); err != nil {
+		return CreatedSource{}, fmt.Errorf("check target reconciliation: %w", err)
+	} else if busy {
+		return CreatedSource{}, ErrStructureBusy
 	}
 
 	created := CreatedSource{Source: Source{
@@ -414,6 +450,11 @@ func (store *Store) UpdateSource(ctx context.Context, sourceID string, input Upd
 	}
 	if origin != "native" {
 		return Source{}, ErrIntegrationOwned
+	}
+	if busy, err := targetStructureBusy(ctx, tx, current.TargetID); err != nil {
+		return Source{}, fmt.Errorf("check target reconciliation: %w", err)
+	} else if busy {
+		return Source{}, ErrStructureBusy
 	}
 	current.Kind = domain.SourceKind(kind)
 
@@ -502,10 +543,10 @@ func (store *Store) UpdateSource(ctx context.Context, sourceID string, input Upd
 // DeleteSource retire un Contrôle natif et les Observations qu'il portait : une
 // preuve sans Source qui la porte ne s'interprète plus.
 func (store *Store) DeleteSource(ctx context.Context, sourceID string) error {
-	var origin string
+	var origin, targetID string
 	err := store.pool.QueryRow(ctx,
-		`SELECT origin FROM cairnops_signal_sources WHERE id = $1::uuid`, sourceID,
-	).Scan(&origin)
+		`SELECT origin, target_id::text FROM cairnops_signal_sources WHERE id = $1::uuid`, sourceID,
+	).Scan(&origin, &targetID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -514,6 +555,11 @@ func (store *Store) DeleteSource(ctx context.Context, sourceID string) error {
 	}
 	if origin != "native" {
 		return ErrIntegrationOwned
+	}
+	if busy, err := targetStructureBusy(ctx, store.pool, targetID); err != nil {
+		return fmt.Errorf("check target reconciliation: %w", err)
+	} else if busy {
+		return ErrStructureBusy
 	}
 	if _, err := store.pool.Exec(ctx, `DELETE FROM cairnops_signal_sources WHERE id = $1::uuid`, sourceID); err != nil {
 		return fmt.Errorf("delete source: %w", err)

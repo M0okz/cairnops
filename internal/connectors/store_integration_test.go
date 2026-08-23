@@ -164,6 +164,65 @@ func TestPostgresImportPromotesIndicatorOnlyBindingToOperationalSource(t *testin
 	}
 }
 
+func TestPostgresDeleteRefusesConnectorUsedByActiveReconciliation(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	suffix := time.Now().UTC().UnixNano()
+
+	var actorID, destinationID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_users (username, display_name, password_hash, role)
+		VALUES ($1, 'Reconciliation Guard', 'not-used', 'administrator')
+		RETURNING id::text
+	`, fmt.Sprintf("connector-reconciliation-guard-%d", suffix)).Scan(&actorID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_targets (name) VALUES ($1) RETURNING id::text
+	`, fmt.Sprintf("Destination %d", suffix)).Scan(&destinationID); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewPostgresStore(pool)
+	imported, err := store.ImportZabbix(ctx, PersistZabbixInput{
+		ActorID: actorID, Name: fmt.Sprintf("Guard %d", suffix),
+		Endpoint:         fmt.Sprintf("https://guard-%d.example.net/api_jsonrpc.php", suffix),
+		CredentialSealed: "sealed-credential-with-sufficient-length", Version: "7.4.2",
+		Compatibility: "supported", EncryptedTransport: true,
+		Hosts: []zabbix.Host{{ID: "guard-host", Name: fmt.Sprintf("Origin %d", suffix)}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(imported.Targets) != 1 {
+		t.Fatalf("unexpected import: %#v", imported)
+	}
+
+	var operationID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_target_reconciliation_operations (
+			kind, primary_target_id, secondary_target_id, reason, requested_by
+		) VALUES ('target_merge', $1::uuid, $2::uuid, 'Test connector deletion guard', $3::uuid)
+		RETURNING id::text
+	`, imported.Targets[0].TargetID, destinationID, actorID).Scan(&operationID); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.Delete(ctx, imported.Connector.ID); !errors.Is(err, ErrStructureBusy) {
+		t.Fatalf("expected connector deletion to be blocked, got %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_target_reconciliation_operations
+		SET status = 'failed', stage = 'failed', completed_at = now()
+		WHERE id = $1::uuid
+	`, operationID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Delete(ctx, imported.Connector.ID); err != nil {
+		t.Fatalf("connector should be removable once reconciliation is terminal: %v", err)
+	}
+}
+
 func TestPostgresRemovalClosesIncidentsLeftWithoutEvidence(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)

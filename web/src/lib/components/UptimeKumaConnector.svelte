@@ -14,10 +14,16 @@
 
   let {
     onclose,
-    onsuccess
+    onsuccess,
+    connectorId = '',
+    initialName = '',
+    initialAddress = ''
   }: {
     onclose: () => void;
     onsuccess: (result: UptimeKumaImportResult) => Promise<void> | void;
+    connectorId?: string;
+    initialName?: string;
+    initialAddress?: string;
   } = $props();
 
   let addressInput = $state<HTMLInputElement>();
@@ -32,8 +38,31 @@
   let busy = $state(false);
   let error = $state('');
   let reconciliation = $derived(reconciliationCounts(selected, targetAssignments));
+  let initialized = $state(false);
 
-  onMount(() => addressInput?.focus());
+  $effect(() => {
+    if (initialized) return;
+    initialized = true;
+    if (initialName) name = initialName;
+    if (initialAddress) address = initialAddress;
+  });
+
+  onMount(() => connectorId ? void inspectExisting() : addressInput?.focus());
+
+  function adoptPreview(value: UptimeKumaPreview) {
+    preview = value;
+    selected = value.monitors.filter((monitor) => !monitor.already_imported_to).map((monitor) => monitor.external_id);
+    targetAssignments = prepareTargetAssignments(value.monitors);
+  }
+
+  async function inspectExisting() {
+    busy = true; error = '';
+    try {
+      adoptPreview(await api<UptimeKumaPreview>(`/api/v1/connectors/${connectorId}/preview`, { method: 'POST' }));
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : t('kuma.verifyFailed');
+    } finally { busy = false; }
+  }
 
   function onKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape' && !busy) onclose();
@@ -85,13 +114,11 @@
     busy = true;
     error = '';
     try {
-      preview = await api<UptimeKumaPreview>('/api/v1/connectors/uptime-kuma/preview', {
+      adoptPreview(await api<UptimeKumaPreview>('/api/v1/connectors/uptime-kuma/preview', {
         method: 'POST',
         body: JSON.stringify({ name, address, api_key: apiKey })
-      });
+      }));
       apiKey = '';
-      selected = preview.monitors.filter((monitor) => !monitor.already_imported_to).map((monitor) => monitor.external_id);
-      targetAssignments = prepareTargetAssignments(preview.monitors);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : t('kuma.verifyFailed');
     } finally {

@@ -15,6 +15,7 @@ import (
 	"github.com/M0okz/cairnops/internal/httpapi"
 	"github.com/M0okz/cairnops/internal/notifications"
 	"github.com/M0okz/cairnops/internal/push"
+	"github.com/M0okz/cairnops/internal/reconciliation"
 	"github.com/M0okz/cairnops/internal/secretbox"
 	"github.com/M0okz/cairnops/internal/worker"
 )
@@ -76,7 +77,13 @@ func run(logger *slog.Logger) error {
 			push.NewPostgresStore(pool), relay, secrets,
 			cfg.InstanceID, cfg.PublicURL, logger,
 		)
-		errCh <- worker.New(pool, cfg.InstanceID, logger, notificationDispatcher, pushDispatcher).Run(ctx)
+		reconciliationDetector := reconciliation.NewDetector(pool, logger)
+		reconciliationProcessor := reconciliation.NewProcessor(pool, cfg.InstanceID, logger)
+		errCh <- worker.New(
+			pool, cfg.InstanceID, logger,
+			notificationDispatcher, pushDispatcher,
+			reconciliationDetector, reconciliationProcessor,
+		).Run(ctx)
 	}()
 
 	select {

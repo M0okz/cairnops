@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/reconciliation"
 	"github.com/M0okz/cairnops/internal/version"
 )
 
@@ -16,25 +17,26 @@ type Pinger interface {
 }
 
 type ServerOptions struct {
-	Address        string
-	WebDir         string
-	PublicURL      string
-	Pinger         Pinger
-	Logger         *slog.Logger
-	Service        string
-	BootstrapToken string
-	Identity       Identity
-	ControlPlane   ControlPlane
-	Metrics        Metrics
-	Indicators     Indicators
-	Connectors     Connectors
-	Webhooks       Webhooks
-	Incidents      Incidents
-	Maintenances   Maintenances
-	Notifications  Notifications
-	Devices        DeviceManager
-	Events         EventStream
-	SystemHealth   SystemHealth
+	Address         string
+	WebDir          string
+	PublicURL       string
+	Pinger          Pinger
+	Logger          *slog.Logger
+	Service         string
+	BootstrapToken  string
+	Identity        Identity
+	ControlPlane    ControlPlane
+	Metrics         Metrics
+	Indicators      Indicators
+	Connectors      Connectors
+	Webhooks        Webhooks
+	Incidents       Incidents
+	Maintenances    Maintenances
+	Notifications   Notifications
+	Devices         DeviceManager
+	Events          EventStream
+	SystemHealth    SystemHealth
+	Reconciliations reconciliation.Service
 }
 
 func NewServer(options ServerOptions) *http.Server {
@@ -134,6 +136,7 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("POST /api/v1/connectors/uptime-kuma/import", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.importUptimeKuma)))))
 		mux.Handle("POST /api/v1/connectors/patchmon/preview", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.previewPatchMon)))))
 		mux.Handle("POST /api/v1/connectors/patchmon/import", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.importPatchMon)))))
+		mux.Handle("POST /api/v1/connectors/{connectorID}/preview", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.previewExisting)))))
 		mux.Handle("POST /api/v1/connectors/{connectorID}/suspension", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.suspend)))))
 		mux.Handle("DELETE /api/v1/connectors/{connectorID}/suspension", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.resume)))))
 		mux.Handle("DELETE /api/v1/connectors/{connectorID}", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.remove)))))
@@ -177,6 +180,24 @@ func NewServer(options ServerOptions) *http.Server {
 	if options.SystemHealth != nil && options.Identity != nil {
 		handler := systemHealthHandler{health: options.SystemHealth, logger: logger}
 		mux.Handle("GET /api/v1/system/health", identityHTTP.requireSession(http.HandlerFunc(handler.snapshot)))
+	}
+	if options.Reconciliations != nil && options.Identity != nil {
+		handler := reconciliationHandler{service: options.Reconciliations, logger: logger}
+		admin := func(next http.Handler) http.Handler {
+			return identityHTTP.requireSession(identityHTTP.requireRole("administrator", next))
+		}
+		adminMutation := func(next http.Handler) http.Handler {
+			return identityHTTP.requireSameOrigin(admin(next))
+		}
+		mux.Handle("GET /api/v1/target-reconciliation/suggestions", admin(http.HandlerFunc(handler.suggestions)))
+		mux.Handle("POST /api/v1/target-reconciliation/preview", adminMutation(http.HandlerFunc(handler.previewTargets)))
+		mux.Handle("POST /api/v1/source-reassignments/preview", adminMutation(http.HandlerFunc(handler.previewSource)))
+		mux.Handle("GET /api/v1/target-reconciliation/operations", admin(http.HandlerFunc(handler.operations)))
+		mux.Handle("POST /api/v1/target-reconciliation/operations", adminMutation(http.HandlerFunc(handler.enqueue)))
+		mux.Handle("POST /api/v1/target-reconciliation/suggestions/{suggestionID}/rejection", adminMutation(http.HandlerFunc(handler.reject)))
+		mux.Handle("POST /api/v1/target-reconciliation/suggestions/{suggestionID}/snooze", adminMutation(http.HandlerFunc(handler.snooze)))
+		mux.Handle("GET /api/v1/targets/{targetID}/resolution", identityHTTP.requireSession(http.HandlerFunc(handler.resolveTarget)))
+		mux.Handle("GET /api/v1/targets/{targetID}/reconciliation-activity", identityHTTP.requireSession(http.HandlerFunc(handler.targetActivity)))
 	}
 
 	if options.WebDir != "" {

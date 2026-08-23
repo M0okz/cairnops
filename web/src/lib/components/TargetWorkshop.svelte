@@ -6,10 +6,12 @@
 
   let {
     onclose,
-    onsuccess
+    onsuccess,
+    target: existingTarget = null
   }: {
     onclose: () => void;
     onsuccess: (target: Target, created: CreatedSource) => Promise<void> | void;
+    target?: Target | null;
   } = $props();
 
   let nameInput = $state<HTMLInputElement>();
@@ -37,6 +39,10 @@
   let error = $state('');
   let createdTarget = $state<Target | null>(null);
   let receipt = $state<CreatedSource | null>(null);
+
+  $effect(() => {
+    if (!createdTarget && existingTarget) createdTarget = existingTarget;
+  });
   let copied = $state(false);
 
   const kindLabels: Record<SourceKind, string> = {
@@ -109,11 +115,11 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="workshop-title">
     <header>
       <div>
-        <h2 id="workshop-title">{receipt ? t('workshop.keepSecret') : t('workshop.createTarget')}</h2>
+        <h2 id="workshop-title">{receipt ? t('workshop.keepSecret') : existingTarget ? t('target.addCheck') : t('workshop.createTarget')}</h2>
         <p>
           {receipt
             ? t('workshop.secretSay')
-            : t('workshop.createSay')}
+            : existingTarget ? t('workshop.addCheckSay', { name: existingTarget.name }) : t('workshop.createSay')}
         </p>
       </div>
       <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
@@ -144,21 +150,23 @@
     {:else}
       <form onsubmit={submit}>
         <div class="modal-body">
-          <section>
-            <h3>{t('targets.column.target')}</h3>
-            <div class="grid">
-              <div class="field">
-                <label for="target-name">{t('workshop.targetName')}</label>
-                <input id="target-name" bind:this={nameInput} bind:value={targetName} required maxlength="160"
-                  placeholder="Nextcloud" disabled={createdTarget !== null} />
+          {#if !existingTarget}
+            <section>
+              <h3>{t('targets.column.target')}</h3>
+              <div class="grid">
+                <div class="field">
+                  <label for="target-name">{t('workshop.targetName')}</label>
+                  <input id="target-name" bind:this={nameInput} bind:value={targetName} required maxlength="160"
+                    placeholder="Nextcloud" disabled={createdTarget !== null} />
+                </div>
+                <div class="field">
+                  <label for="target-description">{t('workshop.optionalHint')}</label>
+                  <input id="target-description" bind:value={description} maxlength="2000"
+                    placeholder="cloud.homeblack.fr" disabled={createdTarget !== null} />
+                </div>
               </div>
-              <div class="field">
-                <label for="target-description">{t('workshop.optionalHint')}</label>
-                <input id="target-description" bind:value={description} maxlength="2000"
-                  placeholder="cloud.homeblack.fr" disabled={createdTarget !== null} />
-              </div>
-            </div>
-          </section>
+            </section>
+          {/if}
 
           <section>
             <h3>{t('workshop.signalSource')}</h3>

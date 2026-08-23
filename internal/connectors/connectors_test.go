@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,10 +33,16 @@ type fakeStore struct {
 	statusID          string
 	status            string
 	deletedID         string
+	listed            []Connector
+	credential        RuntimeCredential
 }
 
-func (*fakeStore) List(context.Context) ([]Connector, error) {
-	return []Connector{}, nil
+func (fake *fakeStore) List(context.Context) ([]Connector, error) {
+	return fake.listed, nil
+}
+
+func (fake *fakeStore) RuntimeCredential(context.Context, string) (RuntimeCredential, error) {
+	return fake.credential, nil
 }
 
 func (fake *fakeStore) SetStatus(_ context.Context, connectorID, status string) (Connector, error) {
@@ -148,6 +155,38 @@ func TestPreviewAndImportZabbixUseSealedShortLivedReceipt(t *testing.T) {
 	}
 	if len(result.Targets) != 1 || result.Targets[0].ExternalID != "10085" {
 		t.Fatalf("unexpected import result: %#v", result)
+	}
+}
+
+func TestPreviewExistingConnectorReusesSealedCredentialWithoutExposingIt(t *testing.T) {
+	t.Parallel()
+	box, err := secretbox.New(bytes.Repeat([]byte{0x38}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := "https://zabbix.example.net/api_jsonrpc.php"
+	sealed, err := box.Seal([]byte("stored-secret-token"), "connector:zabbix:"+endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &fakeStore{
+		listed:     []Connector{{ID: "connector-one", Kind: "zabbix", Name: "Production", Endpoint: endpoint}},
+		credential: RuntimeCredential{Kind: "zabbix", Endpoint: endpoint, CredentialSealed: sealed},
+		state:      PreviewState{TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{}},
+	}
+	remote := &fakeZabbix{inspection: zabbix.Inspection{
+		Endpoint: endpoint, Version: "7.4.2", Compatibility: "supported",
+		EncryptedTransport: true, Hosts: []zabbix.Host{{ID: "10084", Name: "Authentik"}},
+	}}
+	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box)
+
+	result, err := service.PreviewExisting(context.Background(), "connector-one")
+	if err != nil {
+		t.Fatalf("preview existing connector: %v", err)
+	}
+	preview, ok := result.(ZabbixPreview)
+	if !ok || remote.calls != 1 || preview.Name != "Production" || len(preview.Hosts) != 1 || preview.Receipt == "" || strings.Contains(preview.Receipt, "stored-secret-token") {
+		t.Fatalf("stored connector inventory was not reopened safely: %#v calls=%d", result, remote.calls)
 	}
 }
 

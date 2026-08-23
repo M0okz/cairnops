@@ -18,6 +18,7 @@ type Connectors interface {
 	Suspend(context.Context, string) (connectors.Connector, error)
 	Resume(context.Context, string) (connectors.Connector, error)
 	Delete(context.Context, string) (connectors.Removal, error)
+	PreviewExisting(context.Context, string) (any, error)
 	PreviewZabbix(context.Context, connectors.ZabbixPreviewInput) (connectors.ZabbixPreview, error)
 	ImportZabbix(context.Context, string, connectors.ZabbixImportInput) (connectors.ZabbixImport, error)
 	PreviewUptimeKuma(context.Context, connectors.UptimeKumaPreviewInput) (connectors.UptimeKumaPreview, error)
@@ -29,6 +30,20 @@ type Connectors interface {
 type connectorHandler struct {
 	connectors Connectors
 	logger     *slog.Logger
+}
+
+func (handler connectorHandler) previewExisting(w http.ResponseWriter, r *http.Request) {
+	connectorID := r.PathValue("connectorID")
+	if !validUUID(connectorID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		return
+	}
+	preview, err := handler.connectors.PreviewExisting(r.Context(), connectorID)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
 }
 
 func (handler connectorHandler) previewUptimeKuma(w http.ResponseWriter, r *http.Request) {
@@ -181,6 +196,8 @@ func (handler connectorHandler) writeError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), connectors.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, connectors.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "connector not found"})
+	case errors.Is(err, connectors.ErrStructureBusy):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "a target reconciliation involving this connector is in progress"})
 	case errors.Is(err, connectors.ErrPreviewExpired):
 		writeJSON(w, http.StatusGone, map[string]string{"error": "connector preview expired; run the verification again"})
 	case errors.Is(err, connectors.ErrConnection):

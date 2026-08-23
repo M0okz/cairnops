@@ -26,6 +26,12 @@ type fakeConnectors struct {
 	suspendedID          string
 	resumedID            string
 	deletedID            string
+	existingPreviewID    string
+}
+
+func (fake *fakeConnectors) PreviewExisting(_ context.Context, connectorID string) (any, error) {
+	fake.existingPreviewID = connectorID
+	return connectors.ZabbixPreview{Kind: "zabbix", Hosts: []connectors.DiscoveredHost{}}, nil
 }
 
 func (fake *fakeConnectors) PreviewPatchMon(_ context.Context, input connectors.PatchMonPreviewInput) (connectors.PatchMonPreview, error) {
@@ -120,6 +126,29 @@ func TestZabbixPreviewRequiresAdministratorAndPassesTokenOnlyToService(t *testin
 	}
 	if bytes.Contains(response.Body.Bytes(), []byte("secret-token")) {
 		t.Fatal("API token leaked into preview response")
+	}
+}
+
+func TestExistingConnectorInventoryRequiresAdministrator(t *testing.T) {
+	t.Parallel()
+	const connectorID = "12345678-1234-4234-8234-123456789012"
+	fake := &fakeConnectors{}
+	operator := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "operator"}, Connectors: fake})
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/connectors/"+connectorID+"/preview", nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	operator.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || fake.existingPreviewID != "" {
+		t.Fatalf("operator reopened stored inventory: status=%d id=%s", response.Code, fake.existingPreviewID)
+	}
+
+	administrator := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "administrator"}, Connectors: fake})
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/connectors/"+connectorID+"/preview", nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response = httptest.NewRecorder()
+	administrator.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || fake.existingPreviewID != connectorID {
+		t.Fatalf("administrator could not reopen stored inventory: status=%d id=%s body=%s", response.Code, fake.existingPreviewID, response.Body.String())
 	}
 }
 

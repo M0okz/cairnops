@@ -24,6 +24,7 @@ var (
 	ErrConnection     = errors.New("connector connection failed")
 	ErrPreviewExpired = errors.New("connector preview expired")
 	ErrNotFound       = errors.New("connector not found")
+	ErrStructureBusy  = errors.New("target reconciliation is in progress")
 )
 
 type Connector struct {
@@ -294,6 +295,60 @@ func (service *Service) List(ctx context.Context) ([]Connector, error) {
 	return service.store.List(ctx)
 }
 
+type runtimeCredentialStore interface {
+	RuntimeCredential(context.Context, string) (RuntimeCredential, error)
+}
+
+// PreviewExisting rouvre l'inventaire avec le secret déjà scellé. Il produit
+// exactement le même reçu court que le parcours de connexion : l'import reste
+// donc explicite et ne reçoit jamais le secret persistant dans le navigateur.
+func (service *Service) PreviewExisting(ctx context.Context, connectorID string) (any, error) {
+	connectorID = strings.TrimSpace(connectorID)
+	credentialStore, ok := service.store.(runtimeCredentialStore)
+	if connectorID == "" || !ok {
+		return nil, fmt.Errorf("%w: connector identity is required", ErrInvalidInput)
+	}
+	credential, err := credentialStore.RuntimeCredential(ctx, connectorID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	name := ""
+	items, err := service.store.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list connector for inventory: %w", err)
+	}
+	for _, item := range items {
+		if item.ID == connectorID {
+			name = item.Name
+			break
+		}
+	}
+	if name == "" {
+		return nil, ErrNotFound
+	}
+	plaintext, err := service.secrets.Open(credential.CredentialSealed, "connector:"+credential.Kind+":"+credential.Endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("open connector inventory credential: %w", err)
+	}
+	switch credential.Kind {
+	case "zabbix":
+		return service.PreviewZabbix(ctx, ZabbixPreviewInput{Name: name, Address: credential.Endpoint, APIToken: string(plaintext)})
+	case "uptime_kuma":
+		return service.PreviewUptimeKuma(ctx, UptimeKumaPreviewInput{Name: name, Address: credential.Endpoint, APIKey: string(plaintext)})
+	case "patchmon":
+		var patchCredentials patchmon.Credentials
+		if err := json.Unmarshal(plaintext, &patchCredentials); err != nil {
+			return nil, fmt.Errorf("decode PatchMon inventory credential: %w", err)
+		}
+		return service.PreviewPatchMon(ctx, PatchMonPreviewInput{
+			Name: name, Address: credential.Endpoint,
+			TokenKey: patchCredentials.Key, TokenSecret: patchCredentials.Secret,
+		})
+	default:
+		return nil, fmt.Errorf("%w: connector does not expose a discoverable inventory", ErrInvalidInput)
+	}
+}
+
 // Suspend arrête la lecture sans rien effacer : les liaisons, la quarantaine et
 // les Incidents ouverts restent en place. C'est la réponse réversible à un
 // Connecteur qui déraille, et le webhook générique la respecte aussi puisque
@@ -353,7 +408,7 @@ func (service *Service) PreviewZabbix(ctx context.Context, input ZabbixPreviewIn
 		}
 		discovered.CandidateTargets = matchTargets(identityForZabbix(host), state.Targets)
 		discovered.SuggestedTarget = suggestedTarget(discovered.CandidateTargets)
-		if discovered.SuggestedTarget == nil {
+		if discovered.SuggestedTarget == nil && len(discovered.CandidateTargets) == 0 {
 			if target, ok := state.TargetsByName[normalizeName(host.Name)]; ok {
 				targetCopy := target
 				discovered.SuggestedTarget = &targetCopy
@@ -415,7 +470,7 @@ func (service *Service) PreviewUptimeKuma(ctx context.Context, input UptimeKumaP
 		}
 		discovered.CandidateTargets = matchTargets(identityForUptimeKuma(monitor), state.Targets)
 		discovered.SuggestedTarget = suggestedTarget(discovered.CandidateTargets)
-		if discovered.SuggestedTarget == nil {
+		if discovered.SuggestedTarget == nil && len(discovered.CandidateTargets) == 0 {
 			if target, ok := state.TargetsByName[normalizeName(monitor.Name)]; ok {
 				targetCopy := target
 				discovered.SuggestedTarget = &targetCopy
@@ -479,7 +534,7 @@ func (service *Service) PreviewPatchMon(ctx context.Context, input PatchMonPrevi
 		}
 		discovered.CandidateTargets = matchTargets(identityForPatchMon(host), state.Targets)
 		discovered.SuggestedTarget = suggestedTarget(discovered.CandidateTargets)
-		if discovered.SuggestedTarget == nil {
+		if discovered.SuggestedTarget == nil && len(discovered.CandidateTargets) == 0 {
 			if target, ok := state.TargetsByName[normalizeName(host.Name())]; ok {
 				targetCopy := target
 				discovered.SuggestedTarget = &targetCopy
