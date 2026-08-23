@@ -4,6 +4,7 @@
   import { api, type Connector, type IndicatorBinding, type IndicatorCandidate, type IndicatorConfiguration, type IndicatorProfile, type IndicatorProfileEntry } from '$lib/api';
   import { session, messageFrom } from '$lib/session.svelte';
   import { stamp } from '$lib/format';
+  import { addSystemIndicators, indicatorSelectionKey, setBindingsEnabled } from '$lib/indicator-bulk';
 
   let { connector, onclose, onsuccess }: { connector: Connector; onclose: () => void; onsuccess: () => Promise<void> | void } = $props();
   type Section = 'scope' | 'indicators' | 'capabilities' | 'history';
@@ -22,10 +23,9 @@
   let profileName = $state('');
   let search = $state('');
   let activeExternal = $state('');
+  let bulkNotice = $state('');
 
   const brands: Record<Exclude<Connector['kind'], 'generic_webhook'>, BrandName> = { zabbix: 'zabbix', uptime_kuma: 'uptime_kuma', patchmon: 'patchmon' };
-  const selectionKey = (candidate: IndicatorCandidate) => `${candidate.external_id}\u0000${candidate.semantic_key}\u0000${candidate.dimension ?? ''}`;
-
   $effect(() => { void load(); });
 
   async function load() {
@@ -42,7 +42,7 @@
       }
       bindings = configuration.bindings.map((binding) => {
         const current = new Set(binding.indicators.filter((indicator) => indicator.enabled).map((indicator) => `${indicator.external_id}\u0000${indicator.semantic_key}\u0000${indicator.dimension ?? ''}`));
-        const intelligent = current.size === 0 ? new Set(binding.candidates.filter((candidate) => candidate.recommended && candidate.available).map(selectionKey)) : current;
+        const intelligent = current.size === 0 ? new Set(binding.candidates.filter((candidate) => candidate.recommended && candidate.available).map(indicatorSelectionKey)) : current;
         return { source: binding, enabled: binding.imported ? binding.enabled : false, targetId: binding.target_id ?? '', selected: intelligent };
       });
       profiles = configuration.profiles.map((profile) => ({ id: profile.id, name: profile.name, specification: profile.specification }));
@@ -51,21 +51,23 @@
     finally { loading = false; }
   }
 
-  const active = $derived(bindings.find((binding) => binding.source.external_id === activeExternal) ?? bindings[0] ?? null);
+  const active = $derived(bindings.find((binding) => binding.enabled && binding.source.external_id === activeExternal) ?? bindings.find((binding) => binding.enabled) ?? null);
   const visibleBindings = $derived(bindings.filter((binding) => `${binding.source.external_name} ${binding.source.target_name ?? ''}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())));
   const enabledCount = $derived(bindings.filter((binding) => binding.enabled).length);
   const selectedCount = $derived(bindings.reduce((total, binding) => total + (binding.enabled ? binding.selected.size : 0), 0));
   const unassigned = $derived(bindings.filter((binding) => binding.enabled && !binding.targetId).length);
-  const unavailableSelected = $derived(bindings.reduce((total, binding) => total + [...binding.selected].filter((key) => !binding.source.candidates.some((candidate) => selectionKey(candidate) === key && candidate.available)).length, 0));
+  const unavailableSelected = $derived(bindings.reduce((total, binding) => total + [...binding.selected].filter((key) => !binding.source.candidates.some((candidate) => indicatorSelectionKey(candidate) === key && candidate.available)).length, 0));
+  const visibleAttached = $derived(visibleBindings.filter((binding) => binding.targetId.trim()));
+  const allVisibleEnabled = $derived(visibleAttached.length > 0 && visibleAttached.every((binding) => binding.enabled));
 
   function toggleCandidate(binding: DraftBinding, candidate: IndicatorCandidate) {
-    const key = selectionKey(candidate);
+    const key = indicatorSelectionKey(candidate);
     if (binding.selected.has(key)) binding.selected.delete(key); else if (candidate.available) binding.selected.add(key);
   }
 
   function addProfile() {
     const name = profileName.trim(); if (!name || !active) return;
-    const specification = active.source.candidates.map((candidate) => ({ semantic_key: candidate.semantic_key, dimension: candidate.dimension, enabled: active.selected.has(selectionKey(candidate)) }));
+    const specification = active.source.candidates.map((candidate) => ({ semantic_key: candidate.semantic_key, dimension: candidate.dimension, enabled: active.selected.has(indicatorSelectionKey(candidate)) }));
     profiles = [...profiles.filter((profile) => profile.name.toLocaleLowerCase() !== name.toLocaleLowerCase()), { name, specification }];
     profileName = '';
   }
@@ -75,9 +77,29 @@
       for (const candidate of binding.source.candidates) {
         const entry = profile.specification.find((item) => item.semantic_key === candidate.semantic_key && (item.dimension ?? '') === (candidate.dimension ?? ''));
         if (!entry) continue;
-        if (entry.enabled && candidate.available) binding.selected.add(selectionKey(candidate)); else binding.selected.delete(selectionKey(candidate));
+        if (entry.enabled && candidate.available) binding.selected.add(indicatorSelectionKey(candidate)); else binding.selected.delete(indicatorSelectionKey(candidate));
       }
     }
+    bulkNotice = `Profil appliqué aux ${bindings.length} périmètre(s).`;
+  }
+
+  function toggleVisibleBindings() {
+    const enable = !allVisibleEnabled;
+    const result = setBindingsEnabled(bindings, new Set(visibleBindings.map((binding) => binding.source.external_id)), enable);
+    if (enable) {
+      bulkNotice = `${result.changed} périmètre(s) activé(s)${result.skipped ? ` · ${result.skipped} ignoré(s), sans Cible liée` : ''}.`;
+      activeExternal = bindings.find((binding) => binding.enabled)?.source.external_id ?? activeExternal;
+    } else {
+      bulkNotice = `${result.changed} périmètre(s) désactivé(s).`;
+      activeExternal = bindings.find((binding) => binding.enabled)?.source.external_id ?? '';
+    }
+  }
+
+  function applySystemIndicators() {
+    const result = addSystemIndicators(bindings);
+    bulkNotice = result.added
+      ? `${result.added} Indicateur(s) CPU, RAM ou disque ajouté(s) sur ${result.affectedBindings} périmètre(s).`
+      : 'Le socle CPU, RAM et disques est déjà appliqué à tous les périmètres actifs.';
   }
 
   function review() {
@@ -100,7 +122,7 @@
             external_id: binding.source.external_id,
             external_name: binding.source.external_name,
             enabled: binding.enabled,
-            indicators: binding.source.candidates.filter((candidate) => binding.selected.has(selectionKey(candidate))).map((candidate) => ({ semantic_key: candidate.semantic_key, label: candidate.label, external_id: candidate.external_id, dimension: candidate.dimension ?? '', unit: candidate.unit, metadata: candidate.metadata }))
+            indicators: binding.source.candidates.filter((candidate) => binding.selected.has(indicatorSelectionKey(candidate))).map((candidate) => ({ semantic_key: candidate.semantic_key, label: candidate.label, external_id: candidate.external_id, dimension: candidate.dimension ?? '', unit: candidate.unit, metadata: candidate.metadata }))
           })),
           profiles: profiles.map((profile) => ({ id: profile.id, name: profile.name, specification: profile.specification })),
           summary: `${enabledCount} périmètre(s) · ${selectedCount} Indicateur(s)`
@@ -148,7 +170,8 @@
         </section>
       {:else if section === 'scope'}
         <section class="scope-section">
-          <div class="section-head"><div><h3>Périmètre</h3><p>Une nouvelle Cible n’entre jamais automatiquement. Chaque activation reste explicite.</p></div><label class="search"><Icon name="search" size={13} /><input bind:value={search} aria-label="Filtrer les périmètres" placeholder="Filtrer les Cibles" /></label></div>
+          <div class="section-head"><div><h3>Périmètre</h3><p>Une nouvelle Cible n’entre jamais automatiquement. Chaque activation reste explicite.</p></div><div class="scope-actions"><button class="btn sm" type="button" onclick={toggleVisibleBindings} disabled={!editable || visibleAttached.length === 0}>{allVisibleEnabled ? 'Tout désélectionner' : 'Tout sélectionner'} <span class="num">{visibleAttached.length}</span></button><button class="btn sm" type="button" onclick={applySystemIndicators} disabled={!editable || enabledCount === 0} title="Ajoute les Indicateurs disponibles sans retirer la sélection actuelle">Ajouter CPU · RAM · disques</button><label class="search"><Icon name="search" size={13} /><input bind:value={search} aria-label="Filtrer les périmètres" placeholder="Filtrer les Cibles" /></label></div></div>
+          {#if bulkNotice}<p class="bulk-notice" role="status">{bulkNotice}</p>{/if}
           <div class="scope-table">
             {#each visibleBindings as binding (binding.source.external_id)}
               <div class="scope-row" class:pending={!binding.source.imported}>
@@ -174,14 +197,15 @@
           <div class="catalog">
             {#if active}
               <div class="section-head"><div><h3>{active.source.external_name}</h3><p>Présélection intelligente · chaque élément reste modifiable avant confirmation.</p></div></div>
+              {#if bulkNotice}<p class="bulk-notice" role="status">{bulkNotice}</p>{/if}
               <div class="profile-strip">
                 {#each profiles as profile (profile.id ?? profile.name)}<button class="btn sm" type="button" onclick={() => applyProfile(profile)}>Appliquer « {profile.name} »</button>{/each}
                 <span></span><input bind:value={profileName} maxlength="100" placeholder="Nom du profil" aria-label="Nom du nouveau profil" /><button class="btn sm" type="button" onclick={addProfile} disabled={!profileName.trim()}>Enregistrer le profil</button>
               </div>
               <div class="candidate-list">
-                {#each active.source.candidates as candidate (selectionKey(candidate))}
+                {#each active.source.candidates as candidate (indicatorSelectionKey(candidate))}
                   <label class="candidate" class:unavailable={!candidate.available}>
-                    <input type="checkbox" checked={active.selected.has(selectionKey(candidate))} disabled={!candidate.available} onchange={() => toggleCandidate(active, candidate)} />
+                    <input type="checkbox" checked={active.selected.has(indicatorSelectionKey(candidate))} disabled={!candidate.available} onchange={() => toggleCandidate(active, candidate)} />
                     <span><strong>{candidate.label}</strong><small>{candidate.dimension || candidate.semantic_key}</small></span>
                     {#if candidate.recommended}<span class="recommended">Recommandé</span>{/if}
                     <code>{candidate.external_id}</code>
@@ -223,6 +247,9 @@
   h3 { font-size: .875rem; }
   .section-head p, .review p { margin-top: var(--s1); color: var(--muted); font-size: .75rem; }
   .search { display: flex; align-items: center; gap: var(--s2); width: 16rem; height: var(--ctl-h); padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--surface); color: var(--faint); }
+  .scope-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--s3); flex-wrap: wrap; }
+  .scope-actions .btn { white-space: nowrap; }
+  .scope-actions .btn span { margin-left: var(--s1); color: var(--faint); }
   .search input, .profile-strip input { min-width: 0; width: 100%; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; }
   .scope-table, .candidate-list, .capabilities, .activity { border: 1px solid var(--line-strong); border-radius: var(--r-l); background: var(--surface); overflow: hidden; }
   .scope-row { display: grid; grid-template-columns: 2.5rem minmax(12rem, 1fr) minmax(12rem, .8fr) 3rem; align-items: center; min-height: 3.5rem; padding: 0 var(--s4); border-bottom: 1px solid var(--line-row); }
@@ -239,6 +266,7 @@
   .scope-name small { color: var(--faint); font-size: .6875rem; }
   select, .profile-strip input { height: var(--ctl-h); border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--bg); color: var(--ink); padding: 0 var(--s3); }
   .count { justify-self: end; color: var(--faint); }
+  .bulk-notice { margin: 0 0 var(--s4); padding: var(--s3); border-left: 2px solid var(--accent); background: var(--surface); color: var(--muted); font-size: .6875rem; }
   .indicator-workbench { display: grid; grid-template-columns: 14rem minmax(0, 1fr); min-height: 100%; margin: calc(-1 * var(--s5)); }
   .indicator-workbench aside { padding: var(--s5); border-right: 1px solid var(--line); background: var(--surface); }
   aside h3 { margin-bottom: var(--s3); }
@@ -277,5 +305,5 @@
   .retention { grid-column: 2; padding: var(--s4); border-left: 2px solid var(--accent); background: var(--surface); }
   .retention strong { font-size: .75rem; }
   .retention p { font-size: .6875rem; }
-  @media (max-width: 48rem) { .scrim { padding: 0; } .indicator-modal, .indicator-modal.maximized { width: 100vw; max-width: none; height: 100dvh; max-height: none; border: 0; border-radius: 0; } .window-control { display: none; } .indicator-workbench { grid-template-columns: 8rem minmax(0, 1fr); } .scope-row { grid-template-columns: 2.5rem minmax(0, 1fr) 3rem; padding: var(--s3); } .scope-row select { grid-column: 2 / -1; width: 100%; } .candidate { grid-template-columns: 1.25rem minmax(0, 1fr); } .candidate .recommended, .candidate code { grid-column: 2; } .review { grid-template-columns: 1fr; margin: var(--s4) 0; } .review-mark { grid-row: auto; } .review dl, .retention { grid-column: 1; } }
+  @media (max-width: 48rem) { .scrim { padding: 0; } .indicator-modal, .indicator-modal.maximized { width: 100vw; max-width: none; height: 100dvh; max-height: none; border: 0; border-radius: 0; } .window-control { display: none; } .section-head { align-items: flex-start; flex-direction: column; } .scope-actions { width: 100%; flex-wrap: wrap; } .search { flex: 1; } .indicator-workbench { grid-template-columns: 8rem minmax(0, 1fr); } .scope-row { grid-template-columns: 2.5rem minmax(0, 1fr) 3rem; padding: var(--s3); } .scope-row select { grid-column: 2 / -1; width: 100%; } .candidate { grid-template-columns: 1.25rem minmax(0, 1fr); } .candidate .recommended, .candidate code { grid-column: 2; } .review { grid-template-columns: 1fr; margin: var(--s4) 0; } .review-mark { grid-row: auto; } .review dl, .retention { grid-column: 1; } }
 </style>
