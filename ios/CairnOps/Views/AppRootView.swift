@@ -23,17 +23,8 @@ struct AppRootView: View {
                     NavigationStack {
                         NotificationSettingsView()
                     }
-                } else if let previewDetail {
-                    NavigationStack {
-                        switch previewDetail {
-                        case .incident:
-                            IncidentDetailView(incidentID: ShellPreviewData.previewIncidentID)
-                        case .target:
-                            TargetDetailView(targetID: ShellPreviewData.previewTargetID)
-                        case .settings:
-                            SettingsView()
-                        }
-                    }
+                } else if showsPreviewDetail {
+                    previewDetailContent
                 } else if showsShellPreview || model.showsShell {
                     AppShellView()
                 } else if model.isBootstrapping {
@@ -103,11 +94,33 @@ struct AppRootView: View {
         }
     }
 
-    private var previewDetail: ShellPreviewData.Detail? {
+    /// Tout ce qui touche a la prévisualisation reste derriere `#if DEBUG`,
+    /// y compris les types : `ShellPreviewData` n'existe pas en Release, et
+    /// l'exposer dans une signature suffisait a casser la compilation de
+    /// l'archive alors que le simulateur en Debug l'acceptait.
+    private var showsPreviewDetail: Bool {
 #if DEBUG
-        showsShellPreview ? ShellPreviewData.detail : nil
+        showsShellPreview && ShellPreviewData.detail != nil
 #else
-        nil
+        false
+#endif
+    }
+
+    @ViewBuilder
+    private var previewDetailContent: some View {
+#if DEBUG
+        NavigationStack {
+            switch ShellPreviewData.detail {
+            case .incident:
+                IncidentDetailView(incidentID: ShellPreviewData.previewIncidentID)
+            case .target:
+                TargetDetailView(targetID: ShellPreviewData.previewTargetID)
+            case .settings, .none:
+                SettingsView()
+            }
+        }
+#else
+        EmptyView()
 #endif
     }
 
