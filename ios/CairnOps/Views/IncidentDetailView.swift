@@ -157,9 +157,14 @@ struct IncidentDetailView: View {
                 .foregroundStyle(AppTheme.inkMuted)
                 .padding(.vertical, 13)
         } else {
-            ForEach(incident.signals) { signal in
-                EvidenceRow(signal: signal)
+            ForEach(Array(incident.signals.enumerated()), id: \.element.id) { index, signal in
+                EvidenceRow(
+                    signal: signal,
+                    isFirst: index == 0,
+                    isLast: index == incident.signals.count - 1
+                )
             }
+            .padding(.top, 8)
         }
 
         IncidentIndicatorsPanel(incidentID: incident.id)
@@ -175,22 +180,14 @@ struct IncidentDetailView: View {
 
             // Le serveur livre deja le journal du plus recent au plus ancien :
             // aucun tri n'est requis pendant le rendu.
-            ForEach(incident.activity) { entry in
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(entry.message)
-                        .font(AppTheme.fieldValueFont)
-                        .foregroundStyle(AppTheme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text("\(entry.origin.capitalized) · \(TimestampParser.absoluteString(from: entry.occurredAt))")
-                        .font(AppTheme.metaFont)
-                        .foregroundStyle(AppTheme.inkMuted)
-                }
-                .padding(.vertical, 13)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .hairlineTop()
-                .accessibilityElement(children: .combine)
+            ForEach(Array(incident.activity.enumerated()), id: \.element.id) { index, entry in
+                ActivityRow(
+                    activity: entry,
+                    isFirst: index == 0,
+                    isLast: index == incident.activity.count - 1
+                )
             }
+            .padding(.top, 8)
         }
     }
 
