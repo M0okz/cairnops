@@ -5,6 +5,7 @@ import SwiftUI
 /// La taille reste pilotee par Dynamic Type via `@ScaledMetric`, mais bornee :
 /// un 56 pt libre debordait de l'ecran aux tailles d'accessibilite.
 struct DisplayNumber: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var scale = 1
 
     let value: String
@@ -24,5 +25,13 @@ struct DisplayNumber: View {
             .foregroundStyle(tone)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
+            // Les chiffres defilent comme un compteur mecanique lorsqu'ils
+            // changent : le mouvement confirme la mise a jour sans la retarder,
+            // et s'efface si l'utilisateur reduit les animations.
+            .contentTransition(.numericText())
+            .animation(
+                reduceMotion ? nil : .snappy(duration: 0.35),
+                value: value
+            )
     }
 }

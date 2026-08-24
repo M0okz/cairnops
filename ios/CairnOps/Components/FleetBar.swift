@@ -5,6 +5,7 @@ import SwiftUI
 /// Elle dit d'un coup d'oeil ce que trois compteurs separes obligeaient a
 /// recomposer mentalement : la part de Cibles saines, degradees et injoignables.
 struct FleetBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     struct Segment: Identifiable {
         let id: String
@@ -81,6 +82,11 @@ struct FleetBar: View {
                 .font(AppTheme.metaFont.weight(.bold))
                 .monospacedDigit()
                 .foregroundStyle(AppTheme.ink)
+                .contentTransition(.numericText())
+                .animation(
+                    reduceMotion ? nil : .snappy(duration: 0.35),
+                    value: segment.count
+                )
         }
     }
 }

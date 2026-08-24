@@ -96,7 +96,7 @@ struct OverviewView: View {
     var body: some View {
         let summary = makeSummary()
 
-        return BareScreen {
+        return BareScreen(hidesNavigationBar: true) {
             identity
             title
 

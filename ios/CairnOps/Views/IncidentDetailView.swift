@@ -18,7 +18,6 @@ struct IncidentDetailView: View {
             } else {
                 ContentUnavailableView("Incident introuvable", systemImage: "exclamationmark.circle")
                     .background(AppTheme.ground.ignoresSafeArea())
-                    .toolbar(.hidden, for: .navigationBar)
             }
         }
         .refreshable {
@@ -28,35 +27,27 @@ struct IncidentDetailView: View {
 
     private func content(_ incident: Incident) -> some View {
         BareScreen(bottomInset: AppTheme.actionBarScrollInset) {
-            header(incident)
             state(incident)
+                .padding(.top, 4)
             title(incident)
             fields(incident)
             latency(incident)
             evidence(incident)
             activity(incident)
         }
+        .navigationTitle("Incident")
+        .navigationSubtitle(incident.id.prefix(8).uppercased())
+        .navigationBarTitleDisplayMode(.inline)
+        // La barre d'actions occupe le bas de l'ecran : y superposer la barre
+        // d'onglets empilerait deux barres flottantes. La maquette montre
+        // d'ailleurs les ecrans de detail sans onglets.
+        .toolbar(.hidden, for: .tabBar)
         .overlay(alignment: .bottom) {
             actionBar(incident)
         }
     }
 
     // MARK: - Haut de page
-
-    private func header(_ incident: Incident) -> some View {
-        HStack(spacing: 10) {
-            BackLink(title: "Incidents")
-
-            Spacer(minLength: 8)
-
-            Text(incident.id.prefix(8).uppercased())
-                .font(AppTheme.metaFont)
-                .monospaced()
-                .foregroundStyle(AppTheme.inkMuted)
-        }
-        .padding(.vertical, 2)
-        .padding(.bottom, 14)
-    }
 
     private func state(_ incident: Incident) -> some View {
         HStack(spacing: 10) {
@@ -89,7 +80,7 @@ struct IncidentDetailView: View {
     private func title(_ incident: Incident) -> some View {
         Text(incident.natureLabel)
             .font(AppTheme.detailTitleFont)
-            .tracking(-0.8)
+            .tracking(-0.5)
             .foregroundStyle(AppTheme.ink)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isHeader)

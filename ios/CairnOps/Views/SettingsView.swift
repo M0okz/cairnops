@@ -10,27 +10,17 @@ struct SettingsView: View {
 
     var body: some View {
         BareScreen {
-            header
             account
             general
             notifications
             about
             device
         }
+        .navigationTitle("Réglages")
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             await model.refresh()
         }
-    }
-
-    // MARK: - Haut de page
-
-    private var header: some View {
-        HStack {
-            BackLink(title: "Vue d’ensemble")
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 2)
-        .padding(.bottom, 18)
     }
 
     @ViewBuilder

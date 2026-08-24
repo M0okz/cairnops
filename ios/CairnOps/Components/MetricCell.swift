@@ -5,7 +5,8 @@ import SwiftUI
 /// Elle remplace l'ancienne `MetricTile` a fond et contour : la maquette pose
 /// la mesure directement sur la page, sous un filet.
 struct MetricCell: View {
-    @ScaledMetric(relativeTo: .title) private var valueScale = 1
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .title2) private var valueScale = 1
 
     let label: String
     let value: String
@@ -43,14 +44,23 @@ struct MetricCell: View {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Group {
                     if isNumeric {
+                        // La maquette pose ces valeurs a 28 px en graisse
+                        // maximale. Sur quatre dalles empilees, la page devient
+                        // un mur de chiffres : le corps redescend et la graisse
+                        // s'allege, la tendance dessous portant la lecture.
                         Text(value)
-                            .font(.system(size: 28 * min(valueScale, 1.4), weight: .heavy))
+                            .font(.system(size: 22 * min(valueScale, 1.4), weight: .bold))
                             .monospacedDigit()
-                            .tracking(-0.9)
+                            .tracking(-0.5)
+                            .contentTransition(.numericText())
+                            .animation(
+                                reduceMotion ? nil : .snappy(duration: 0.35),
+                                value: value
+                            )
                     } else {
                         Text(value)
-                            .font(.title3.weight(.bold))
-                            .tracking(-0.3)
+                            .font(.subheadline.weight(.semibold))
+                            .tracking(-0.2)
                     }
                 }
                 .foregroundStyle(tone)
@@ -69,13 +79,14 @@ struct MetricCell: View {
                 Sparkline(
                     values: series,
                     tone: tone,
+                    height: 22,
                     lowerBound: lowerBound,
                     upperBound: upperBound
                 )
-                .padding(.top, 8)
+                .padding(.top, 7)
             }
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .hairlineTop()
         .accessibilityElement(children: .combine)

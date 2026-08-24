@@ -31,7 +31,7 @@ struct Sparkline: View {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    tone.opacity(colorScheme == .dark ? 0.22 : 0.16),
+                                    tone.opacity(colorScheme == .dark ? 0.15 : 0.11),
                                     tone.opacity(0),
                                 ],
                                 startPoint: .top,
@@ -41,7 +41,7 @@ struct Sparkline: View {
                 }
 
                 TrendCurve(values: values, lowerBound: lowerBound, upperBound: upperBound)
-                    .stroke(tone, style: StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round))
+                    .stroke(tone, style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
 
                 endMarker
             }
@@ -62,10 +62,10 @@ struct Sparkline: View {
             )
 
             if let last = points.last {
-                Rectangle()
+                Circle()
                     .fill(tone)
-                    .frame(width: 4.4, height: 3.2)
-                    .position(x: last.x - 2.2, y: last.y)
+                    .frame(width: 3.2, height: 3.2)
+                    .position(x: last.x - 1.6, y: last.y)
             }
         }
     }

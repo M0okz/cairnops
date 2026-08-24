@@ -13,9 +13,6 @@ struct HealthView: View {
                 content(health)
             } else {
                 BareScreen {
-                    PageTitle("Santé")
-                        .padding(.bottom, 20)
-
                     ContentUnavailableView(
                         "Projection santé indisponible",
                         systemImage: "waveform.path.ecg",
@@ -24,6 +21,8 @@ struct HealthView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 48)
                 }
+                .navigationTitle("Santé")
+                .navigationBarTitleDisplayMode(.inline)
             }
         }
         .refreshable {
@@ -35,24 +34,16 @@ struct HealthView: View {
         let isOperational = health.status == "operational"
 
         return BareScreen {
-            PageTitle("Santé", detail: TimestampParser.relativeString(from: health.checkedAt)) {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(isOperational ? AppTheme.ok : AppTheme.warning)
-                        .frame(width: 7, height: 7)
-
-                    Text(isOperational ? "Opérationnelle" : "Dégradée")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(isOperational ? AppTheme.okInk : AppTheme.warningInk)
-                }
-                .lineLimit(1)
-            }
-            .padding(.bottom, 20)
-
             observations(health)
+                .padding(.top, 4)
             components(health)
             database(health)
         }
+        .navigationTitle("Santé")
+        .navigationSubtitle(
+            "\(isOperational ? "Opérationnelle" : "Dégradée") · \(TimestampParser.relativeString(from: health.checkedAt))"
+        )
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     // MARK: - Observations

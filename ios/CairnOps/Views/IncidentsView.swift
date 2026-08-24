@@ -111,9 +111,6 @@ struct IncidentsView: View {
         let listing = makeListing()
 
         return BareScreen {
-            PageTitle("Incidents", detail: headerDetail(listing))
-                .padding(.bottom, 14)
-
             UnderlineTabs(
                 selection: $scope,
                 items: [
@@ -122,8 +119,7 @@ struct IncidentsView: View {
                     .init(Scope.all, "Tous", count: listing.totalCount),
                 ]
             )
-            .padding(.top, 14)
-            .hairlineTop()
+            .padding(.top, 4)
 
             severityFilters
                 .padding(.vertical, 14)
@@ -138,6 +134,9 @@ struct IncidentsView: View {
                 }
             }
         }
+        .navigationTitle("Incidents")
+        .navigationSubtitle(headerDetail(listing))
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             await model.refresh()
         }

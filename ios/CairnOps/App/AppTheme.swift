@@ -86,16 +86,12 @@ enum AppTheme {
     /// Retrait lateral de la barre flottante.
     static let barInset = 14.0
 
-    /// Hauteur de la barre d'onglets.
-    static let tabBarHeight = 62.0
-
-    /// Espace reserve sous le contenu pour degager la barre d'onglets.
+    /// Respiration sous le contenu.
     ///
-    /// La barre systeme etant masquee, le defilement ne recoit plus d'encart
-    /// automatique : cette reserve s'ajoute a la zone sure basse, et se limite
-    /// a la hauteur de la barre plus une respiration. Une valeur plus large
-    /// rouvrirait la longue zone morte de fin de defilement deja corrigee.
-    static let tabBarScrollInset = 82.0
+    /// La barre d'onglets systeme reserve deja sa propre zone sure : y ajouter
+    /// sa hauteur rouvrirait la longue zone morte de fin de defilement deja
+    /// corrigee une fois.
+    static let tabBarScrollInset = 24.0
 
     /// Espace reserve sous le contenu pour degager la barre d'actions.
     static let actionBarScrollInset = 72.0
@@ -105,7 +101,6 @@ enum AppTheme {
     static let headerTopInset = 8.0
 
     static let sectionSpacing = 16.0
-    static let barCorner = 26.0
     static let actionCorner = 21.0
 
     // MARK: - Typographie
@@ -117,8 +112,9 @@ enum AppTheme {
     /// Titre d'ecran : 20 px, graisse maximale, chasse serree.
     static let pageTitleFont = Font.title3.weight(.heavy)
 
-    /// Titre de detail d'Incident.
-    static let detailTitleFont = Font.title.weight(.heavy)
+    /// Titre de detail d'Incident. La barre de navigation portant deja le nom
+    /// de l'ecran, ce titre nomme le sujet sans avoir a crier.
+    static let detailTitleFont = Font.title2.weight(.bold)
 
     /// Libelle de section en petites capitales.
     static let sectionLabelFont = Font.caption2.weight(.bold)
@@ -142,8 +138,6 @@ enum AppTheme {
     static let filterFont = Font.subheadline.weight(.bold)
     static let filterIdleFont = Font.subheadline.weight(.medium)
 
-    /// Libelle de la barre d'onglets.
-    static let tabLabelFont = Font.caption2.weight(.semibold)
 
     /// Chasse negative des grands titres, en points.
     static let titleTracking = -0.5

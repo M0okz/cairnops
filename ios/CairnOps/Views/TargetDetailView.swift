@@ -21,7 +21,6 @@ struct TargetDetailView: View {
             } else {
                 ContentUnavailableView("Cible introuvable", systemImage: "questionmark.circle")
                     .background(AppTheme.ground.ignoresSafeArea())
-                    .toolbar(.hidden, for: .navigationBar)
             }
         }
         .refreshable {
@@ -35,28 +34,21 @@ struct TargetDetailView: View {
         let health = model.snapshot.health(for: target)
 
         return BareScreen(bottomInset: AppTheme.actionBarScrollInset) {
-            header
             identity(target, health: health)
+                .padding(.top, 4)
             state(target, health: health)
             measureGrid(target)
             TargetIndicatorsPanel(targetID: target.id)
             sources(target)
             incidents(target)
         }
+        .navigationTitle("Cible")
+        .navigationSubtitle(AppTheme.targetHealthLabel(health))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .overlay(alignment: .bottom) {
             actionBar
         }
-    }
-
-    // MARK: - Haut de page
-
-    private var header: some View {
-        HStack {
-            BackLink(title: "Cibles")
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 2)
-        .padding(.bottom, 14)
     }
 
     private func identity(_ target: Target, health: AppSnapshot.TargetHealth) -> some View {
@@ -64,9 +56,12 @@ struct TargetDetailView: View {
             StatusDot(tone: AppTheme.targetHealthColor(health), size: 12, haloWidth: 5)
 
             VStack(alignment: .leading, spacing: 4) {
+                // La barre de navigation nomme deja l'ecran : le nom de la
+                // Cible n'a plus besoin du corps le plus grand pour se lire
+                // comme le sujet de la page.
                 Text(target.name)
-                    .font(.largeTitle.weight(.heavy))
-                    .tracking(-1.0)
+                    .font(.title.weight(.bold))
+                    .tracking(-0.6)
                     .foregroundStyle(AppTheme.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)

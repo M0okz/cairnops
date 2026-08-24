@@ -28,11 +28,9 @@ struct NotificationSettingsView: View {
         .background(AppTheme.ground.ignoresSafeArea())
         // Le formulaire systeme est conserve : ses interrupteurs et selecteurs
         // portent un comportement d'accessibilite que la refonte n'a pas de
-        // raison de reimplementer. Seul l'en-tete rejoint le reste de l'app.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            header
-        }
-        .toolbar(.hidden, for: .navigationBar)
+        // raison de reimplementer.
+        .navigationTitle("Notifications")
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             loadPreferences()
             await pushNotifications.refreshNotificationSettings()
@@ -60,20 +58,6 @@ struct NotificationSettingsView: View {
                 await enableCriticalAlerts()
             }
         }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                BackLink(title: "Réglages")
-                Spacer(minLength: 0)
-            }
-            PageTitle("Notifications")
-        }
-        .padding(.horizontal, AppTheme.screenPadding)
-        .padding(.top, AppTheme.headerTopInset)
-        .padding(.bottom, 12)
-        .background(AppTheme.ground)
     }
 
     private var soundsSection: some View {

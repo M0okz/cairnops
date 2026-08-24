@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Coque de l'application : les quatre vues operationnelles et leur barre.
+/// Coque de l'application : les quatre vues operationnelles.
 ///
-/// La barre systeme est masquee au profit de la barre de verre de la maquette.
-/// Le `TabView` est conserve dessous : il preserve la pile de navigation de
-/// chaque onglet et n'en construit le contenu qu'a la premiere visite, ce
-/// qu'un simple `ZStack` de vues cachees ne ferait pas.
+/// La barre d'onglets est celle du systeme. Une barre dessinee a la main
+/// reproduisait l'apparence de la maquette mais perdait tout ce qui va avec :
+/// le verre natif, le repli au defilement, les tailles d'accessibilite et les
+/// comportements attendus d'une barre iOS.
 struct AppShellView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppModel.self) private var model
@@ -21,43 +21,35 @@ struct AppShellView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            Tab(value: AppTab.overview) {
+            Tab(AppTab.overview.title, systemImage: AppTab.overview.symbolName, value: AppTab.overview) {
                 NavigationStack {
                     OverviewView()
                 }
-                .toolbar(.hidden, for: .tabBar)
             }
 
-            Tab(value: AppTab.incidents) {
+            Tab(AppTab.incidents.title, systemImage: AppTab.incidents.symbolName, value: AppTab.incidents) {
                 NavigationStack {
                     IncidentsView()
                 }
-                .toolbar(.hidden, for: .tabBar)
             }
 
-            Tab(value: AppTab.targets) {
+            Tab(AppTab.targets.title, systemImage: AppTab.targets.symbolName, value: AppTab.targets) {
                 NavigationStack {
                     TargetsView()
                 }
-                .toolbar(.hidden, for: .tabBar)
             }
 
-            Tab(value: AppTab.health) {
+            Tab(AppTab.health.title, systemImage: AppTab.health.symbolName, value: AppTab.health) {
                 NavigationStack {
                     HealthView()
                 }
-                .toolbar(.hidden, for: .tabBar)
             }
         }
         .environment(\.selectTab) { tab in
             selectedTab = tab
         }
-        .overlay(alignment: .bottom) {
-            GlassTabBar(selection: $selectedTab)
-        }
-        // La barre de navigation etant masquee, le haut de page est du contenu :
-        // une banniere posee en recouvrement cachait l'identite et le titre.
-        // Elle reserve donc sa place au lieu de s'y superposer.
+        // La barre de navigation etant a nouveau visible, la banniere se pose
+        // sous elle plutot que de recouvrir le titre.
         .safeAreaInset(edge: .top, spacing: 0) {
             statusBanner
         }

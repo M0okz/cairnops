@@ -65,33 +65,6 @@ struct PageTitle<Trailing: View>: View {
     }
 }
 
-/// Retour explicite vers l'ecran parent.
-///
-/// La barre de navigation etant masquee, le retour est dessine dans le contenu
-/// et nomme sa destination plutot que d'afficher un simple chevron.
-struct BackLink: View {
-    @Environment(\.dismiss) private var dismiss
-
-    let title: String
-
-    var body: some View {
-        Button {
-            dismiss()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .bold))
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-            }
-            .foregroundStyle(AppTheme.accent)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Revenir à \(title)")
-    }
-}
-
 /// Pastille d'identite : initiale de l'utilisateur sur fond cuivre.
 struct AvatarBadge: View {
     let name: String

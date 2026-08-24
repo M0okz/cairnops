@@ -106,10 +106,8 @@ struct TargetsView: View {
         let listing = makeListing()
 
         return BareScreen {
-            PageTitle("Cibles", detail: supervisedLabel)
-                .padding(.bottom, 12)
-
             SearchField(text: $query, prompt: "Nom ou description")
+                .padding(.top, 4)
 
             UnderlineTabs(
                 selection: $scope,
@@ -130,6 +128,9 @@ struct TargetsView: View {
                 }
             }
         }
+        .navigationTitle("Cibles")
+        .navigationSubtitle(supervisedLabel)
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             await model.refresh()
         }
