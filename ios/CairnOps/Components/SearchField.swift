@@ -2,9 +2,8 @@ import SwiftUI
 
 /// Champ de recherche pose dans le contenu.
 ///
-/// La barre de navigation etant masquee, `searchable` n'a plus de support :
-/// la maquette dessine de toute facon la recherche comme une ligne du contenu,
-/// entre deux filets.
+/// Il porte sa propre surface arrondie : entre deux filets, il se confondait
+/// avec les lignes qu'il sert justement a filtrer.
 struct SearchField: View {
     @Binding var text: String
     let prompt: String
@@ -37,10 +36,14 @@ struct SearchField: View {
                 .accessibilityLabel("Effacer la recherche")
             }
         }
-        .padding(.vertical, 13)
-        // La ligne entiere reste une cible tactile confortable.
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        // Le champ entier reste une cible tactile confortable.
         .frame(minHeight: 44)
-        .hairlineTop()
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(AppTheme.surface)
+        )
     }
 }
 

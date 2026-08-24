@@ -107,7 +107,7 @@ struct TargetsView: View {
 
         return BareScreen {
             SearchField(text: $query, prompt: "Nom ou description")
-                .padding(.top, 4)
+                .padding(.top, 8)
 
             UnderlineTabs(
                 selection: $scope,
@@ -117,8 +117,7 @@ struct TargetsView: View {
                     .init(Scope.down, "HS", count: listing.downCount),
                 ]
             )
-            .padding(.top, 14)
-            .hairlineTop()
+            .padding(.top, 16)
 
             if listing.groups.isEmpty {
                 emptyState
@@ -136,11 +135,17 @@ struct TargetsView: View {
         }
     }
 
+    /// Un filet par groupe suffit.
+    ///
+    /// Un filet sous chaque ligne hachait la page en autant de bandes que de
+    /// Cibles : sur une flotte de cent cibles, la separation devenait le motif
+    /// dominant. Seul le changement d'Etat de sante merite une ligne.
     @ViewBuilder
     private func section(_ group: HealthGroup) -> some View {
         SectionLabel(group.title, detail: countLabel(group.targets.count))
             .padding(.top, 20)
-            .padding(.bottom, 4)
+            .padding(.bottom, 6)
+            .hairlineTop()
 
         ForEach(group.targets) { target in
             NavigationLink {
@@ -152,7 +157,6 @@ struct TargetsView: View {
                     measures: model.snapshot.measures[target.id],
                     indicators: model.snapshot.indicatorTargets[target.id]
                 )
-                .hairlineTop()
             }
             .buttonStyle(.plain)
         }

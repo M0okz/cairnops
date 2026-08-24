@@ -168,30 +168,86 @@ struct TargetDetailView: View {
 
     // MARK: - Sources et Incidents
 
+    /// Une Source telle qu'affichee, quelle que soit son origine.
+    private struct SourceEntry: Identifiable {
+        let id: String
+        let name: String
+        let origin: String
+        let kind: String
+        let outcome: String?
+        let observedAt: String?
+        let native: Target.Source?
+    }
+
+    /// Toutes les Sources de la Cible, une ligne chacune.
+    ///
+    /// `Target.sources` ne porte que les Controles natifs ; les Sources
+    /// importees n'y figurent que par leur nombre. Les replier en une seule
+    /// ligne « Integration » revenait a masquer la moitie de ce qui observe la
+    /// Cible. La projection des mesures, elle, decrit chaque Source quelle que
+    /// soit son origine : c'est donc elle qui fait foi ici.
+    private func sourceEntries(_ target: Target) -> [SourceEntry] {
+        let nativeByID = Dictionary(
+            target.sources.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        if let measured = measures?.sources, !measured.isEmpty {
+            return measured.map { entry in
+                SourceEntry(
+                    id: entry.sourceID,
+                    name: entry.name,
+                    origin: entry.origin,
+                    kind: entry.kind,
+                    outcome: entry.latestOutcome,
+                    observedAt: entry.latestObservedAt,
+                    native: nativeByID[entry.sourceID]
+                )
+            }
+        }
+
+        return target.sources.map { source in
+            SourceEntry(
+                id: source.id,
+                name: source.name,
+                origin: "native",
+                kind: source.kind.rawValue,
+                outcome: source.latestOutcome?.rawValue,
+                observedAt: source.lastObservedAt,
+                native: source
+            )
+        }
+    }
+
     @ViewBuilder
     private func sources(_ target: Target) -> some View {
-        if !target.sources.isEmpty || target.externalSourceCount > 0 {
+        let entries = sourceEntries(target)
+        let unlisted = max(target.totalSourceCount - entries.count, 0)
+
+        if !entries.isEmpty || unlisted > 0 {
             SectionLabel("Sources de signal", detail: sourceCountLabel(target))
                 .padding(.top, 18)
                 .padding(.bottom, 2)
                 .hairlineTop()
 
-            ForEach(target.sources) { source in
+            ForEach(entries) { entry in
                 MetaRow(
-                    title: source.name,
-                    subtitle: "Intervalle \(source.intervalSeconds) s · seuil \(source.failureThreshold)/\(source.recoveryThreshold)",
-                    detail: TimestampParser.relativeString(from: source.lastObservedAt),
-                    state: source.enabled ? source.kind.rawValue.uppercased() : "SUSPENDUE",
-                    tone: sourceTone(source),
-                    stateInk: source.enabled ? AppTheme.inkStrong : AppTheme.warningInk
+                    title: entry.name,
+                    subtitle: sourceSubtitle(entry),
+                    detail: TimestampParser.relativeString(from: entry.observedAt),
+                    state: sourceState(entry),
+                    tone: sourceTone(entry),
+                    stateInk: entry.native?.enabled == false ? AppTheme.warningInk : AppTheme.inkStrong
                 )
             }
 
-            if target.externalSourceCount > 0 {
+            // Sans projection de mesures, les Sources importees ne sont connues
+            // que par leur nombre : on le dit plutot que de les taire.
+            if unlisted > 0 {
                 MetaRow(
-                    title: target.connectorName ?? "Intégration",
-                    subtitle: "Sources importées, propriété du produit d’origine",
-                    state: "\(target.externalSourceCount)",
+                    title: target.connectorName ?? "Sources importées",
+                    subtitle: "Détail non projeté pour le moment",
+                    state: "\(unlisted)",
                     tone: AppTheme.info,
                     stateInk: AppTheme.inkStrong
                 )
@@ -199,16 +255,43 @@ struct TargetDetailView: View {
         }
     }
 
-    private func sourceTone(_ source: Target.Source) -> Color {
-        guard source.enabled else {
+    private func sourceSubtitle(_ entry: SourceEntry) -> String {
+        if let native = entry.native {
+            return "Intervalle \(native.intervalSeconds) s · seuil \(native.failureThreshold)/\(native.recoveryThreshold)"
+        }
+        return sourceOriginLabel(entry.origin)
+    }
+
+    private func sourceOriginLabel(_ origin: String) -> String {
+        switch origin {
+        case "native":
+            "Contrôle natif"
+        case "integration":
+            "Importée par une Intégration"
+        case "webhook":
+            "Signal entrant"
+        default:
+            origin.capitalized
+        }
+    }
+
+    private func sourceState(_ entry: SourceEntry) -> String {
+        if entry.native?.enabled == false {
+            return "SUSPENDUE"
+        }
+        return entry.kind.uppercased()
+    }
+
+    private func sourceTone(_ entry: SourceEntry) -> Color {
+        if entry.native?.enabled == false {
             return AppTheme.neutral
         }
-        switch source.latestOutcome {
-        case .healthy:
+        switch entry.outcome {
+        case "healthy":
             return AppTheme.ok
-        case .unhealthy:
-            return AppTheme.severityColor(source.severity)
-        case .unknown, .none:
+        case "unhealthy":
+            return entry.native.map { AppTheme.severityColor($0.severity) } ?? AppTheme.critical
+        default:
             return AppTheme.neutral
         }
     }

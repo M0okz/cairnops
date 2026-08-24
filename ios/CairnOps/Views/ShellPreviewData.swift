@@ -103,7 +103,47 @@ enum ShellPreviewData {
                 trend: series(seed: plan.seed, count: 24, start: plan.availability, spread: 0.015, minimum: 0.82, maximum: 1),
                 latencyTrend: series(seed: plan.seed &+ 7, count: 44, start: plan.latency, spread: plan.latency * 0.12, minimum: plan.latency * 0.55, maximum: plan.latency * 1.6),
                 latestObservedAt: iso(-18),
-                sources: []
+                sources: sourceMeasures(for: plan.id)
+            )
+        }
+    }
+
+    /// Les Sources telles que la projection des mesures les decrit : natives
+    /// et importees melees, chacune nommee.
+    private static func sourceMeasures(for targetID: String) -> [TargetMeasures.SourceMeasures] {
+        let plans: [(suffix: String, name: String, kind: String, origin: String, outcome: String)]
+
+        switch targetID {
+        case "api-gw-02":
+            plans = [
+                ("http-a", "Sonde HTTP eu-west-1a", "http", "native", "unhealthy"),
+                ("http-b", "Sonde HTTP eu-west-1b", "http", "native", "unhealthy"),
+                ("prom", "Prometheus · probe_success", "metric", "integration", "unhealthy"),
+            ]
+        case "db-primary-01":
+            plans = [
+                ("tcp", "Sonde TCP 5432", "tcp", "native", "healthy"),
+                ("agent", "Agent système", "metric", "integration", "unhealthy"),
+            ]
+        case "edge-lb-01":
+            plans = [
+                ("http", "Sonde HTTP publique", "http", "native", "healthy"),
+                ("tls", "Contrôle certificat TLS", "http", "native", "unhealthy"),
+            ]
+        default:
+            plans = [("http", "Sonde HTTP", "http", "native", "healthy")]
+        }
+
+        return plans.map { plan in
+            TargetMeasures.SourceMeasures(
+                sourceID: "\(targetID)-src-\(plan.suffix)",
+                name: plan.name,
+                kind: plan.kind,
+                origin: plan.origin,
+                measuresAvailability: plan.origin == "native",
+                latestOutcome: plan.outcome,
+                latestObservedAt: iso(-24),
+                measures: []
             )
         }
     }

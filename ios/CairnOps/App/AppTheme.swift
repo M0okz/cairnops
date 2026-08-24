@@ -32,6 +32,13 @@ enum AppTheme {
     /// Filet de 1 px qui remplace les contours de dalle.
     static let hairline = Color(light: 0x201E1D, dark: 0xFFFFFF, lightAlpha: 0.12, darkAlpha: 0.07)
 
+    /// Fond des champs de saisie.
+    ///
+    /// Le systeme « a nu » pose tout a plat, mais un champ de recherche doit se
+    /// distinguer de ce qu'il filtre : sans surface propre, il se lisait comme
+    /// une ligne de contenu parmi les autres.
+    static let surface = Color(light: 0x201E1D, dark: 0xFFFFFF, lightAlpha: 0.05, darkAlpha: 0.07)
+
     // MARK: - Cuivre
 
     /// Accent unique : action principale et route courante, jamais decoratif.

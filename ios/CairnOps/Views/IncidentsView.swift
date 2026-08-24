@@ -125,6 +125,7 @@ struct IncidentsView: View {
                 .padding(.vertical, 14)
 
             SearchField(text: $query, prompt: "Cible ou nature")
+                .padding(.bottom, 4)
 
             if listing.isEmpty {
                 emptyState
@@ -145,9 +146,13 @@ struct IncidentsView: View {
     @ViewBuilder
     private func section(_ bucket: Bucket, incidents: [Incident]) -> some View {
         if !incidents.isEmpty {
+            // Le decoupage par age reste marque d'un filet : c'est lui qui
+            // structure la lecture. Un filet sous chaque Incident en plus
+            // saturait la page sans rien separer d'utile.
             SectionLabel(bucket.title)
                 .padding(.top, 20)
-                .padding(.bottom, 2)
+                .padding(.bottom, 4)
+                .hairlineTop()
 
             ForEach(Array(incidents.enumerated()), id: \.element.id) { index, incident in
                 NavigationLink {
@@ -161,7 +166,6 @@ struct IncidentsView: View {
                         isLead: isLead(bucket: bucket, index: index, incident: incident),
                         acknowledge: acknowledgement(for: incident)
                     )
-                    .hairlineTop()
                 }
                 .buttonStyle(.plain)
             }
