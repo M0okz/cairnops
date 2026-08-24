@@ -20,14 +20,19 @@ struct NotificationSettingsView: View {
             if let persistenceError {
                 Section {
                     Label(persistenceError, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(AppTheme.critical)
+                        .foregroundStyle(AppTheme.criticalInk)
                 }
             }
         }
         .scrollContentBackground(.hidden)
-        .background(AppBackdrop())
-        .navigationTitle("Notifications")
-        .navigationBarTitleDisplayMode(.inline)
+        .background(AppTheme.ground.ignoresSafeArea())
+        // Le formulaire systeme est conserve : ses interrupteurs et selecteurs
+        // portent un comportement d'accessibilite que la refonte n'a pas de
+        // raison de reimplementer. Seul l'en-tete rejoint le reste de l'app.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            header
+        }
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             loadPreferences()
             await pushNotifications.refreshNotificationSettings()
@@ -55,6 +60,20 @@ struct NotificationSettingsView: View {
                 await enableCriticalAlerts()
             }
         }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                BackLink(title: "Réglages")
+                Spacer(minLength: 0)
+            }
+            PageTitle("Notifications")
+        }
+        .padding(.horizontal, AppTheme.screenPadding)
+        .padding(.top, AppTheme.headerTopInset)
+        .padding(.bottom, 12)
+        .background(AppTheme.ground)
     }
 
     private var soundsSection: some View {
@@ -115,7 +134,7 @@ struct NotificationSettingsView: View {
                 Text(criticalAlertsExplanation)
                 if let permissionMessage {
                     Text(permissionMessage)
-                        .foregroundStyle(AppTheme.warning)
+                        .foregroundStyle(AppTheme.warningInk)
                 }
             }
         }
@@ -162,7 +181,7 @@ struct NotificationSettingsView: View {
     }
 
     private var criticalAlertStatusColor: Color {
-        pushNotifications.criticalAlertSetting == .enabled ? AppTheme.ok : .secondary
+        pushNotifications.criticalAlertSetting == .enabled ? AppTheme.okInk : AppTheme.inkMuted
     }
 
     private var criticalAlertsExplanation: String {

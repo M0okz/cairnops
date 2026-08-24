@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// Contexte mesure autour de l'ouverture d'un Incident.
+///
+/// La fenetre couvre deux heures avant et apres : elle situe l'Incident sans
+/// pretendre l'expliquer, et les valeurs relevees a l'ouverture sont donnees
+/// separement de la courbe.
 struct IncidentIndicatorsPanel: View {
     @Environment(AppModel.self) private var model
 
@@ -11,78 +16,82 @@ struct IncidentIndicatorsPanel: View {
     @State private var isLoading = false
 
     var body: some View {
-        let displayedProjection = previewProjection ?? projection
+        let displayed = previewProjection ?? projection
 
-        Panel {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Contexte autour de l’incident")
-                        .font(AppTheme.sectionTitleFont)
-                    Text("Fenêtre de deux heures avant et après l’ouverture")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            if isLoading, displayed == nil {
+                sectionLabel
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            } else if let errorMessage, displayed == nil {
+                sectionLabel
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(errorMessage)
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.warningInk)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button("Réessayer") { Task { await load() } }
+                        .font(AppTheme.fieldValueFont)
+                        .foregroundStyle(AppTheme.accent)
                 }
-
-                if isLoading, displayedProjection == nil {
-                    ProgressView("Lecture du contexte…")
-                        .frame(maxWidth: .infinity, minHeight: 100)
-                } else if let errorMessage, displayedProjection == nil {
-                    ContentUnavailableView {
-                        Label("Contexte indisponible", systemImage: "chart.xyaxis.line")
-                    } description: {
-                        Text(errorMessage)
-                    } actions: {
-                        Button("Réessayer") { Task { await load() } }
-                    }
-                } else if let displayedProjection, displayedProjection.indicators.isEmpty, displayedProjection.snapshots.isEmpty {
-                    ContentUnavailableView(
-                        "Aucun indicateur à cette date",
-                        systemImage: "clock.arrow.circlepath",
-                        description: Text("Les données expirent naturellement selon leur durée de conservation.")
-                    )
-                } else if let displayedProjection {
-                    if !displayedProjection.snapshots.isEmpty {
-                        MetricGrid {
-                            ForEach(displayedProjection.snapshots) { snapshot in
-                                MetricTile(
-                                    title: snapshot.label,
-                                    value: snapshot.unit.format(snapshot.value),
-                                    subtitle: "À l’ouverture",
-                                    tone: AppTheme.accent
-                                )
-                            }
-                        }
-                    }
-
-                    ForEach(displayedProjection.indicators) { indicator in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(indicator.displayLabel)
-                                    .font(.headline)
-                                Spacer()
-                                Text(indicator.displayValue)
-                                    .font(.headline.monospacedDigit())
-                            }
-                            IndicatorChart(
-                                points: displayedProjection.series[indicator.id] ?? [],
-                                unit: indicator.unit
-                            )
-                        }
-
-                        if indicator.id != displayedProjection.indicators.last?.id {
-                            Divider()
-                        }
-                    }
-
-                    Label(displayedProjection.disclaimer, systemImage: "info.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                .padding(.vertical, 14)
+            } else if let displayed, !displayed.indicators.isEmpty || !displayed.snapshots.isEmpty {
+                sectionLabel
+                content(displayed)
             }
         }
         .task(id: incidentID) {
             guard previewProjection == nil else { return }
             await load()
+        }
+    }
+
+    /// La section disparait entierement lorsqu'aucun Connecteur ne fournit de
+    /// contexte : une dalle vide n'apprendrait rien.
+    private var sectionLabel: some View {
+        SectionLabel("Contexte", detail: "± 2 h autour de l’ouverture")
+            .padding(.top, 18)
+            .padding(.bottom, 2)
+            .hairlineTop()
+    }
+
+    private func content(_ projection: IncidentIndicators) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !projection.snapshots.isEmpty {
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 20, alignment: .topLeading),
+                              GridItem(.flexible(), spacing: 20, alignment: .topLeading)],
+                    alignment: .leading,
+                    spacing: 0
+                ) {
+                    ForEach(projection.snapshots) { snapshot in
+                        MetricCell(
+                            label: snapshot.label,
+                            value: snapshot.unit.format(snapshot.value),
+                            unit: "à l’ouverture",
+                            tone: AppTheme.ink,
+                            series: projection.series[snapshot.id]?.map(\.value) ?? []
+                        )
+                    }
+                }
+            }
+
+            ForEach(projection.indicators) { indicator in
+                MetaRow(
+                    title: indicator.displayLabel,
+                    subtitle: TimestampParser.relativeString(from: indicator.lastObservedAt),
+                    state: indicator.displayValue,
+                    tone: indicator.lastError == nil ? AppTheme.info : AppTheme.warning,
+                    stateInk: AppTheme.ink
+                )
+            }
+
+            Text(projection.disclaimer)
+                .font(.caption2)
+                .foregroundStyle(AppTheme.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 12)
         }
     }
 

@@ -1,97 +1,123 @@
 import SwiftUI
 
+/// Ligne de Cible posee a nu.
+///
+/// La maquette montre l'adresse IP et deux colonnes de charge. L'API ne porte
+/// pas d'adresse sur une Cible : la ligne affiche a la place ses Sources et son
+/// Connecteur, qui existent bel et bien, et les deux colonnes de droite suivent
+/// les indicateurs contextuels quand le Connecteur en fournit.
 struct TargetRow: View {
     let target: Target
     let health: AppSnapshot.TargetHealth
-    let measures: TargetMeasures?
-    var isStandalone = false
+    var measures: TargetMeasures?
+    var indicators: TargetIndicators?
+
+    private var tone: Color {
+        AppTheme.targetHealthColor(health)
+    }
+
+    /// Premiere colonne : charge processeur, sinon disponibilite sur 24 h.
+    private var leadingValue: (text: String, tone: Color)? {
+        if let cpu = indicator(for: "cpu.utilization") {
+            return (cpu.displayValue, load(cpu.lastValue))
+        }
+        if let availability = measures?.last24Hours?.availabilityDisplayValue {
+            return (availability, AppTheme.ink)
+        }
+        return nil
+    }
+
+    /// Seconde colonne : memoire, sinon nombre de Sources.
+    private var trailingValue: String? {
+        if let memory = indicator(for: "memory.utilization") {
+            return memory.displayValue
+        }
+        return nil
+    }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: AppTheme.targetHealthSymbol(health))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(AppTheme.targetHealthColor(health))
-                .frame(width: 24, height: 24)
-                .background(
-                    Circle()
-                        .fill(AppTheme.targetHealthColor(health).opacity(0.12))
-                )
+        HStack(alignment: .center, spacing: 12) {
+            StatusDot(tone: tone, size: 7, haloWidth: 3)
 
-            VStack(alignment: .leading, spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(target.name)
-                        .font(AppTheme.rowTitleFont)
-                    if let summary = target.sourceOriginSummary ?? target.displayDescription {
-                        Text(summary)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(target.name)
+                    .font(.subheadline.weight(.semibold))
+                    .tracking(-0.15)
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
 
-                // `HStack` ne revient pas a la ligne. La seconde disposition
-                // evite donc de comprimer ou tronquer les metadonnees sur les
-                // petits iPhone et avec Dynamic Type.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) {
-                        metaLabel("sensor.tag.radiowaves.forward", sourceCountLabel)
-                        if let availability = measures?.last24Hours?.availabilityDisplayValue {
-                            metaLabel("chart.xyaxis.line", availability)
-                        }
-                        metaLabel("clock", observedAtLabel)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 10) {
-                            metaLabel("sensor.tag.radiowaves.forward", sourceCountLabel)
-                            if let availability = measures?.last24Hours?.availabilityDisplayValue {
-                                metaLabel("chart.xyaxis.line", availability)
-                            }
-                        }
-                        metaLabel("clock", observedAtLabel)
-                    }
-                }
+                meta
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
 
-            VStack(alignment: .trailing, spacing: 10) {
-                StatusPill(
-                    text: AppTheme.targetHealthLabel(health),
-                    color: AppTheme.targetHealthColor(health),
-                    systemImage: AppTheme.targetHealthSymbol(health)
-                )
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
+            // Les deux colonnes sont toujours posees, meme vides : la densite
+            // constante veut que le bord droit s'aligne d'une ligne a l'autre.
+            value(leadingValue?.text, tone: leadingValue?.tone ?? AppTheme.ink)
+            value(trailingValue, tone: AppTheme.inkStrong)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(isStandalone ? AppTheme.panel : AppTheme.subpanel)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(isStandalone ? AppTheme.line : .clear)
-                )
-        )
-        .contentShape(.rect(cornerRadius: 16))
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(target.name), \(AppTheme.targetHealthLabel(health))")
+    }
+
+    private var meta: some View {
+        HStack(spacing: 6) {
+            Text(sourceCountLabel)
+
+            if let connector = target.connectorName {
+                separator
+                Text(connector)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppTheme.inkStrong)
+            }
+
+            separator
+            Text(TimestampParser.relativeString(from: measures?.latestObservedAt))
+                .lineLimit(1)
+        }
+        .font(.caption2)
+        .foregroundStyle(AppTheme.inkMuted)
+    }
+
+    private var separator: some View {
+        Circle()
+            .fill(AppTheme.inkMuted)
+            .frame(width: 3, height: 3)
+    }
+
+    private func value(_ text: String?, tone: Color) -> some View {
+        Text(text ?? "")
+            .font(.footnote.weight(.semibold))
+            .monospacedDigit()
+            .foregroundStyle(tone)
+            .lineLimit(1)
+            .frame(width: 48, alignment: .trailing)
     }
 
     private var sourceCountLabel: String {
         target.totalSourceCount == 1 ? "1 source" : "\(target.totalSourceCount) sources"
     }
 
-    private var observedAtLabel: String {
-        TimestampParser.relativeString(from: measures?.latestObservedAt)
+    private func indicator(for semanticKey: String) -> ContextIndicator? {
+        indicators?.indicators.first { $0.semanticKey == semanticKey && $0.lastValue != nil }
     }
 
-    private func metaLabel(_ systemImage: String, _ text: String) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.85)
+    /// Une charge n'est alarmante qu'au-dela d'un seuil : la couleur ne sert ici
+    /// qu'a signaler la saturation, jamais a decorer la colonne.
+    private func load(_ value: Double?) -> Color {
+        guard let value else {
+            return AppTheme.ink
+        }
+        if value >= 90 {
+            return AppTheme.criticalInk
+        }
+        if value >= 75 {
+            return AppTheme.warningInk
+        }
+        return AppTheme.ink
     }
 }

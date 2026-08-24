@@ -1,149 +1,225 @@
 import SwiftUI
 
+/// Reglages de l'application et de l'appareil associe.
+///
+/// L'ecran est atteint depuis l'identite de la Vue d'ensemble : la barre
+/// d'onglets reste consacree aux quatre vues operationnelles.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                Panel {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Notifications")
-                            .font(AppTheme.sectionTitleFont)
-
-                        NavigationLink {
-                            NotificationSettingsView()
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "bell.badge")
-                                    .font(.title3)
-                                    .foregroundStyle(AppTheme.accent)
-                                    .frame(width: 30)
-
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("Alertes sur cet iPhone")
-                                        .font(AppTheme.rowTitleFont)
-                                    Text("Sons, alertes critiques et rappels")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer(minLength: 8)
-
-                                Image(systemName: "chevron.right")
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .frame(minHeight: 44)
-                            .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Ouvre les réglages de notification")
-                    }
-                }
-
-                Panel {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Instance")
-                            .font(AppTheme.sectionTitleFont)
-
-                        VStack(alignment: .leading, spacing: 16) {
-                            InfoRow(label: "Nom", value: model.instanceLabel)
-
-                            Divider()
-
-                            InfoRow(
-                                label: "URL",
-                                value: model.serverURLText.isEmpty ? "Non configurée" : model.serverURLText,
-                                secondary: "Connexion directe à l’instance",
-                                tone: .secondary,
-                                allowsSelection: true
-                            )
-
-                            Divider()
-
-                            InfoRow(
-                                label: "Version serveur",
-                                value: model.serverVersion.isEmpty ? "Inconnue" : model.serverVersion,
-                                monospaced: true
-                            )
-
-                            Divider()
-
-                            InfoRow(
-                                label: "Dernière projection",
-                                value: TimestampParser.relativeString(from: model.snapshot.lastRefreshAt),
-                                secondary: TimestampParser.absoluteString(from: model.snapshot.lastRefreshAt)
-                            )
-                        }
-                    }
-                }
-
-                if let user = model.user {
-                    Panel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Appareil associé")
-                                .font(AppTheme.sectionTitleFont)
-
-                            MetricGrid {
-                                MetricTile(title: "Utilisateur", value: user.displayName, monospaced: false)
-                                MetricTile(title: "Rôle", value: user.role.label, tone: AppTheme.info, monospaced: false)
-                            }
-
-                            HStack(spacing: 12) {
-                                actionButton(title: "Actualiser", systemImage: "arrow.clockwise", tone: AppTheme.accent) {
-                                    await model.refresh()
-                                }
-                                actionButton(title: "Dissocier", systemImage: "iphone.slash", tone: AppTheme.warning) {
-                                    await model.logout()
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    DevicePairingPanel()
-
-                    if model.snapshot.hasProjection {
-                        Panel {
-                            VStack(alignment: .leading, spacing: 14) {
-                                Text("Cache local")
-                                    .font(AppTheme.sectionTitleFont)
-                                Text("Efface la projection hors ligne conservée sur l’appareil.")
-                                    .foregroundStyle(.secondary)
-
-                                actionButton(title: "Effacer le cache", systemImage: "trash", tone: AppTheme.critical) {
-                                    await model.clearOfflineSnapshot()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(AppTheme.screenPadding)
-            .padding(.bottom, AppTheme.bottomScrollInset)
+        BareScreen {
+            header
+            account
+            general
+            notifications
+            about
+            device
         }
-        .background(AppBackdrop())
-        .navigationTitle("Réglages")
-        .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await model.refresh()
+        }
     }
 
-    private func actionButton(
+    // MARK: - Haut de page
+
+    private var header: some View {
+        HStack {
+            BackLink(title: "Vue d’ensemble")
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 2)
+        .padding(.bottom, 18)
+    }
+
+    @ViewBuilder
+    private var account: some View {
+        if let user = model.user {
+            HStack(spacing: 14) {
+                AvatarBadge(name: user.displayName, size: 48)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(user.displayName)
+                        .font(.title3.weight(.bold))
+                        .tracking(-0.3)
+                        .foregroundStyle(AppTheme.ink)
+
+                    Text("\(user.role.label) · \(model.instanceLabel)")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.inkMuted)
+                }
+
+                Spacer(minLength: 8)
+            }
+            .padding(.vertical, 16)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    // MARK: - General
+
+    private var general: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel("Général")
+                .padding(.top, 22)
+                .padding(.bottom, 4)
+
+            HStack(spacing: 12) {
+                Text("Apparence")
+                    .font(AppTheme.fieldValueFont)
+                    .foregroundStyle(AppTheme.ink)
+
+                Spacer(minLength: 8)
+
+                UnderlineTabs(
+                    selection: $appearance,
+                    items: AppearancePreference.allCases.map { .init($0, $0.title) },
+                    isInline: true
+                )
+            }
+            .padding(.vertical, 15)
+            .frame(minHeight: 44)
+        }
+        .padding(.top, 10)
+        .hairlineTop()
+    }
+
+    // MARK: - Notifications
+
+    private var notifications: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel("Notifications")
+                .padding(.top, 22)
+                .padding(.bottom, 4)
+
+            NavigationLink {
+                NotificationSettingsView()
+            } label: {
+                SettingsRow(
+                    title: "Alertes sur cet iPhone",
+                    subtitle: "Sons, alertes critiques et rappels",
+                    systemImage: "bell"
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Ouvre les réglages de notification")
+        }
+        .padding(.top, 10)
+        .hairlineTop()
+    }
+
+    // MARK: - A propos
+
+    private var about: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel("À propos")
+                .padding(.top, 22)
+                .padding(.bottom, 4)
+
+            FieldRow(label: "Nom", value: model.instanceLabel)
+
+            FieldRow(
+                label: "URL",
+                value: model.serverURLText.isEmpty ? "Non configurée" : model.serverURLText,
+                secondary: "Connexion directe à l’instance",
+                allowsSelection: true
+            )
+
+            FieldRow(
+                label: "Version serveur",
+                value: model.serverVersion.isEmpty ? "Inconnue" : model.serverVersion
+            )
+
+            FieldRow(label: "Version app", value: Self.applicationVersion)
+
+            FieldRow(
+                label: "Dernière projection",
+                value: TimestampParser.relativeString(from: model.snapshot.lastRefreshAt),
+                secondary: TimestampParser.absoluteString(from: model.snapshot.lastRefreshAt)
+            )
+        }
+        .padding(.top, 10)
+        .hairlineTop()
+    }
+
+    private static var applicationVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "—"
+        guard let build = info?["CFBundleVersion"] as? String, !build.isEmpty else {
+            return version
+        }
+        return "\(version) (\(build))"
+    }
+
+    // MARK: - Appareil
+
+    @ViewBuilder
+    private var device: some View {
+        if let user = model.user {
+            VStack(alignment: .leading, spacing: 0) {
+                SectionLabel("Appareil associé")
+                    .padding(.top, 22)
+                    .padding(.bottom, 4)
+
+                FieldRow(label: "Utilisateur", value: user.displayName)
+                FieldRow(label: "Rôle", value: user.role.label, tone: AppTheme.accent)
+
+                HStack(spacing: 26) {
+                    inlineAction(title: "Actualiser", systemImage: "arrow.clockwise", tone: AppTheme.accent) {
+                        await model.refresh()
+                    }
+                    inlineAction(title: "Dissocier", systemImage: "iphone.slash", tone: AppTheme.inkStrong) {
+                        await model.logout()
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 16)
+            }
+            .padding(.top, 10)
+            .hairlineTop()
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                SectionLabel("Appareil")
+                    .padding(.top, 22)
+                    .padding(.bottom, 4)
+
+                DevicePairingPanel()
+
+                if model.snapshot.hasProjection {
+                    Text("Le cache local conserve la dernière projection hors ligne sur l’appareil.")
+                        .font(AppTheme.metaFont)
+                        .foregroundStyle(AppTheme.inkMuted)
+                        .padding(.top, 16)
+
+                    inlineAction(title: "Effacer le cache", systemImage: "trash", tone: AppTheme.criticalInk) {
+                        await model.clearOfflineSnapshot()
+                    }
+                    .padding(.top, 12)
+                }
+            }
+            .padding(.top, 10)
+            .hairlineTop()
+        }
+    }
+
+    private func inlineAction(
         title: String,
         systemImage: String,
         tone: Color,
         action: @escaping @Sendable () async -> Void
     ) -> some View {
         AsyncButton(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 26)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(tone.opacity(0.14))
-                )
+            HStack(spacing: 7) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .bold))
+                Text(title)
+                    .font(AppTheme.fieldValueFont)
+            }
+            .foregroundStyle(tone)
+            .frame(minHeight: 44)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(tone)
     }
 }

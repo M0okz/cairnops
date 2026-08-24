@@ -1,158 +1,272 @@
 import SwiftUI
 
+/// Detail d'une Cible.
+///
+/// L'identite et l'Etat de sante ouvrent l'ecran, les mesures suivent en dalles
+/// chiffrees avec leur tendance, puis les Sources qui l'observent et son
+/// historique d'Incidents.
 struct TargetDetailView: View {
     @Environment(AppModel.self) private var model
 
     let targetID: Target.ID
 
+    private var measures: TargetMeasures? {
+        model.snapshot.measures[targetID]
+    }
+
     var body: some View {
         Group {
             if let target = model.target(withID: targetID) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                        Panel {
-                            VStack(alignment: .leading, spacing: 14) {
-                                // Un seul calcul de sante au lieu de plusieurs
-                                // appels identiques pendant le rendu.
-                                let health = model.snapshot.health(for: target)
-                                ResponsiveStatusHeader(
-                                    text: AppTheme.targetHealthLabel(health),
-                                    color: AppTheme.targetHealthColor(health),
-                                    systemImage: AppTheme.targetHealthSymbol(health)
-                                ) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(target.name)
-                                            .font(AppTheme.cardTitleFont)
-                                        if let description = target.displayDescription {
-                                            Text(description)
-                                                .font(.body)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                }
-
-                                MetricGrid {
-                                    MetricTile(
-                                        title: "Dernière observation",
-                                        value: TimestampParser.relativeString(from: measures?.latestObservedAt),
-                                        subtitle: TimestampParser.absoluteString(from: measures?.latestObservedAt),
-                                        tone: AppTheme.info,
-                                        monospaced: false
-                                    )
-                                    MetricTile(
-                                        title: "Sources",
-                                        value: "\(target.totalSourceCount)",
-                                        subtitle: target.totalSourceCount == 1 ? "source active" : "sources actives"
-                                    )
-                                    MetricTile(
-                                        title: "Disponibilité 24 h",
-                                        value: measures?.last24Hours?.availabilityDisplayValue ?? "Non mesurée",
-                                        subtitle: measures?.last24Hours?.coverageDisplayValue.map { "Couverture \($0)" } ?? availabilityHint,
-                                        tone: measures?.last24Hours?.availabilityDisplayValue == nil ? AppTheme.info : .primary,
-                                        monospaced: false
-                                    )
-                                    MetricTile(
-                                        title: "Latence moyenne",
-                                        value: measures?.last24Hours?.averageLatencyMilliseconds.map { "\($0.formatted(.number.precision(.fractionLength(0)))) ms" } ?? "—",
-                                        subtitle: measures?.last24Hours?.maximumLatencyMilliseconds.map { "Pic \($0.formatted(.number.precision(.fractionLength(0)))) ms" },
-                                        tone: AppTheme.warning
-                                    )
-                                }
-                            }
-                        }
-
-                        if let importedContext = importedContext(for: target) {
-                            Panel {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Text("Supervision importée")
-                                        .font(AppTheme.sectionTitleFont)
-                                    Text(importedContext)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-
-                        TargetIndicatorsPanel(targetID: target.id)
-
-                        if !target.sources.isEmpty {
-                            Panel {
-                                VStack(alignment: .leading, spacing: 14) {
-                                    Text("Sources")
-                                        .font(AppTheme.sectionTitleFont)
-
-                                    ForEach(target.sources) { source in
-                                        ComponentHealthRow(
-                                            title: source.name,
-                                            statusText: source.enabled ? source.kind.rawValue.uppercased() : "Suspendue",
-                                            statusColor: source.enabled ? AppTheme.info : AppTheme.warning,
-                                            statusSymbol: source.enabled ? "sensor.tag.radiowaves.forward.fill" : "pause.circle.fill",
-                                            detail: "Intervalle \(source.intervalSeconds)s · seuil \(source.failureThreshold)/\(source.recoveryThreshold)"
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        let incidents = model.snapshot.incidents(forTargetID: target.id)
-                        Panel {
-                            VStack(alignment: .leading, spacing: 14) {
-                                Text("Incidents")
-                                    .font(AppTheme.sectionTitleFont)
-
-                                if incidents.isEmpty {
-                                    Label("Aucun incident actif ou résolu à afficher pour cette cible.", systemImage: "checkmark.circle.fill")
-                                        .font(.subheadline)
-                                        .foregroundStyle(AppTheme.ok)
-                                } else {
-                                    ForEach(incidents) { incident in
-                                        NavigationLink {
-                                            IncidentDetailView(incidentID: incident.id)
-                                        } label: {
-                                            IncidentRow(incident: incident)
-                                        }
-                                        .buttonStyle(.plain)
-
-                                        if incident.id != incidents.last?.id {
-                                            Divider()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(AppTheme.screenPadding)
-                    .padding(.bottom, AppTheme.bottomScrollInset)
-                }
+                content(target)
             } else {
                 ContentUnavailableView("Cible introuvable", systemImage: "questionmark.circle")
+                    .background(AppTheme.ground.ignoresSafeArea())
+                    .toolbar(.hidden, for: .navigationBar)
             }
         }
-        // Un seul fond pour l'ecran : il etait auparavant pose deux fois, ce qui
-        // doublait le cout de composition a chaque image.
-        .background(AppBackdrop())
-        .navigationTitle("Cible")
-        .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             await model.refresh()
         }
     }
 
-    private var measures: TargetMeasures? {
-        model.snapshot.measures[targetID]
+    private func content(_ target: Target) -> some View {
+        // Un seul calcul de sante au lieu de plusieurs appels identiques
+        // pendant le rendu.
+        let health = model.snapshot.health(for: target)
+
+        return BareScreen(bottomInset: AppTheme.actionBarScrollInset) {
+            header
+            identity(target, health: health)
+            state(target, health: health)
+            measureGrid(target)
+            TargetIndicatorsPanel(targetID: target.id)
+            sources(target)
+            incidents(target)
+        }
+        .overlay(alignment: .bottom) {
+            actionBar
+        }
     }
 
-    private var availabilityHint: String {
-        if measures?.hasImportedOnlySignals == true {
-            return "Mesure importée"
+    // MARK: - Haut de page
+
+    private var header: some View {
+        HStack {
+            BackLink(title: "Cibles")
+            Spacer(minLength: 0)
         }
-        return "En attente de données"
+        .padding(.vertical, 2)
+        .padding(.bottom, 14)
     }
 
-    private func importedContext(for target: Target) -> String? {
-        guard target.sources.isEmpty, let summary = target.sourceOriginSummary else {
-            return nil
-        }
+    private func identity(_ target: Target, health: AppSnapshot.TargetHealth) -> some View {
+        HStack(alignment: .center, spacing: 11) {
+            StatusDot(tone: AppTheme.targetHealthColor(health), size: 12, haloWidth: 5)
 
-        return "\(summary). CairnOps reprend l’état courant et la dernière observation, mais certaines fenêtres de disponibilité peuvent rester non mesurées."
+            VStack(alignment: .leading, spacing: 4) {
+                Text(target.name)
+                    .font(.largeTitle.weight(.heavy))
+                    .tracking(-1.0)
+                    .foregroundStyle(AppTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+
+                if let description = target.displayDescription ?? target.sourceOriginSummary {
+                    Text(description)
+                        .font(AppTheme.metaFont)
+                        .foregroundStyle(AppTheme.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    private func state(_ target: Target, health: AppSnapshot.TargetHealth) -> some View {
+        HStack(spacing: 9) {
+            Text(AppTheme.targetHealthShortLabel(health))
+                .font(AppTheme.metaFont.weight(.bold))
+                .tracking(0.6)
+                .foregroundStyle(AppTheme.targetHealthInk(health))
+
+            if let connector = target.connectorName {
+                Text(connector)
+                    .font(AppTheme.metaFont)
+                    .foregroundStyle(AppTheme.inkMuted)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(sourceCountLabel(target))
+                .font(AppTheme.metaFont)
+                .foregroundStyle(AppTheme.inkMuted)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: - Mesures
+
+    private func measureGrid(_ target: Target) -> some View {
+        LazyVGrid(
+            columns: [GridItem(.flexible(), spacing: 20, alignment: .topLeading),
+                      GridItem(.flexible(), spacing: 20, alignment: .topLeading)],
+            alignment: .leading,
+            spacing: 0
+        ) {
+            MetricCell(
+                label: "Dispo. 24 h",
+                value: measures?.last24Hours?.availabilityDisplayValue ?? "—",
+                unit: measures?.last24Hours?.coverageDisplayValue.map { "couv. \($0)" },
+                tone: availabilityTone,
+                // Cadrage automatique : borner a 0-1 tasserait toute la
+                // variation utile dans le dernier pour cent du cadre.
+                series: measures?.trend ?? []
+            )
+
+            MetricCell(
+                label: "Latence moy.",
+                value: latencyValue,
+                unit: latencyValue == "—" ? nil : "ms",
+                tone: AppTheme.ink,
+                series: measures?.latencyTrend ?? []
+            )
+
+            MetricCell(
+                label: "Sources",
+                value: "\(target.totalSourceCount)",
+                unit: target.totalSourceCount == 1 ? "active" : "actives",
+                tone: AppTheme.ink
+            )
+
+            MetricCell(
+                label: "Observation",
+                value: TimestampParser.relativeString(from: measures?.latestObservedAt),
+                tone: AppTheme.ink,
+                isNumeric: false
+            )
+        }
+        .padding(.top, 4)
+    }
+
+    private var latencyValue: String {
+        guard let latency = measures?.last24Hours?.averageLatencyMilliseconds else {
+            return "—"
+        }
+        return latency.formatted(.number.precision(.fractionLength(0)))
+    }
+
+    private var availabilityTone: Color {
+        guard let availability = measures?.last24Hours?.availability,
+              measures?.last24Hours?.hasAvailabilitySignal == true else {
+            return AppTheme.inkMuted
+        }
+        if availability < 0.95 {
+            return AppTheme.criticalInk
+        }
+        if availability < 0.99 {
+            return AppTheme.warningInk
+        }
+        return AppTheme.ink
+    }
+
+    // MARK: - Sources et Incidents
+
+    @ViewBuilder
+    private func sources(_ target: Target) -> some View {
+        if !target.sources.isEmpty || target.externalSourceCount > 0 {
+            SectionLabel("Sources de signal", detail: sourceCountLabel(target))
+                .padding(.top, 18)
+                .padding(.bottom, 2)
+                .hairlineTop()
+
+            ForEach(target.sources) { source in
+                MetaRow(
+                    title: source.name,
+                    subtitle: "Intervalle \(source.intervalSeconds) s · seuil \(source.failureThreshold)/\(source.recoveryThreshold)",
+                    detail: TimestampParser.relativeString(from: source.lastObservedAt),
+                    state: source.enabled ? source.kind.rawValue.uppercased() : "SUSPENDUE",
+                    tone: sourceTone(source),
+                    stateInk: source.enabled ? AppTheme.inkStrong : AppTheme.warningInk
+                )
+            }
+
+            if target.externalSourceCount > 0 {
+                MetaRow(
+                    title: target.connectorName ?? "Intégration",
+                    subtitle: "Sources importées, propriété du produit d’origine",
+                    state: "\(target.externalSourceCount)",
+                    tone: AppTheme.info,
+                    stateInk: AppTheme.inkStrong
+                )
+            }
+        }
+    }
+
+    private func sourceTone(_ source: Target.Source) -> Color {
+        guard source.enabled else {
+            return AppTheme.neutral
+        }
+        switch source.latestOutcome {
+        case .healthy:
+            return AppTheme.ok
+        case .unhealthy:
+            return AppTheme.severityColor(source.severity)
+        case .unknown, .none:
+            return AppTheme.neutral
+        }
+    }
+
+    @ViewBuilder
+    private func incidents(_ target: Target) -> some View {
+        let incidents = model.snapshot.incidents(forTargetID: target.id)
+
+        SectionLabel("Incidents", detail: incidents.isEmpty ? "aucun" : "\(incidents.count)")
+            .padding(.top, 18)
+            .padding(.bottom, 2)
+            .hairlineTop()
+
+        if incidents.isEmpty {
+            Text("Aucun incident actif ou résolu pour cette cible.")
+                .font(.subheadline)
+                .foregroundStyle(AppTheme.inkMuted)
+                .padding(.vertical, 13)
+        } else {
+            ForEach(incidents) { incident in
+                NavigationLink {
+                    IncidentDetailView(incidentID: incident.id)
+                } label: {
+                    IncidentRow(incident: incident)
+                        .hairlineTop()
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: - Barre d'actions
+
+    /// La maquette propose « Sonder maintenant » et « Maintenance ». Aucune des
+    /// deux n'existe dans le contrat client : la barre ne porte donc que
+    /// l'actualisation, plutot qu'un bouton sans effet.
+    private var actionBar: some View {
+        GlassActionBar {
+            AsyncButton {
+                await model.refresh()
+            } label: {
+                GlassActionLabel(
+                    title: "Actualiser",
+                    systemImage: "arrow.clockwise",
+                    isProminent: true
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.bottom, 4)
+    }
+
+    private func sourceCountLabel(_ target: Target) -> String {
+        target.totalSourceCount == 1 ? "1 source" : "\(target.totalSourceCount) sources"
     }
 }

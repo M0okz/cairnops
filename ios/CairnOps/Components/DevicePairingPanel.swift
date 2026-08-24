@@ -12,39 +12,40 @@ struct DevicePairingPanel: View {
     }
 
     var body: some View {
-        Panel {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Associer cet iPhone")
-                        .font(AppTheme.sectionTitleFont)
-                    Text("L’identité reste propre à cet appareil et peut être révoquée sans fermer vos autres accès.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Associer cet iPhone")
+                    .font(.title3.weight(.bold))
+                    .tracking(-0.3)
+                    .foregroundStyle(AppTheme.ink)
+                Text("L’identité reste propre à cet appareil et peut être révoquée sans fermer vos autres accès.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.inkMuted)
+            }
 
-                stateContent
+            stateContent
 
-                Divider()
+            Hairline()
 
-                VStack(alignment: .leading, spacing: 12) {
-                    PairingStep(
-                        number: 1,
-                        title: "Scanner",
-                        detail: "Le QR code contient l’adresse de l’instance et un secret valable dix minutes."
-                    )
-                    PairingStep(
-                        number: 2,
-                        title: "Vérifier sur le Web",
-                        detail: "Le navigateur affiche le nom de cet iPhone avant de créer son identité."
-                    )
-                    PairingStep(
-                        number: 3,
-                        title: "Confirmer",
-                        detail: "Le jeton révocable est remis une seule fois et conservé dans Keychain."
-                    )
-                }
+            VStack(alignment: .leading, spacing: 12) {
+                PairingStep(
+                    number: 1,
+                    title: "Scanner",
+                    detail: "Le QR code contient l’adresse de l’instance et un secret valable dix minutes."
+                )
+                PairingStep(
+                    number: 2,
+                    title: "Vérifier sur le Web",
+                    detail: "Le navigateur affiche le nom de cet iPhone avant de créer son identité."
+                )
+                PairingStep(
+                    number: 3,
+                    title: "Confirmer",
+                    detail: "Le jeton révocable est remis une seule fois et conservé dans Keychain."
+                )
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(item: $destination) { destination in
             switch destination {
             case .scanner:
@@ -86,7 +87,7 @@ struct DevicePairingPanel: View {
             VStack(alignment: .leading, spacing: 12) {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .font(.subheadline)
-                    .foregroundStyle(AppTheme.critical)
+                    .foregroundStyle(AppTheme.criticalInk)
 
                 if model.canRetryPairing {
                     Button("Réessayer") {
@@ -165,7 +166,7 @@ struct DevicePairingPanel: View {
                     .controlSize(.large)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(AppTheme.cardTitleFont)
+                        .font(AppTheme.fieldValueFont)
                     Text(detail)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -206,7 +207,8 @@ private struct PairingStep: View {
                 .font(.caption.weight(.semibold))
                 .monospacedDigit()
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(AppTheme.subpanel))
+                .foregroundStyle(AppTheme.accent)
+                .background(Circle().fill(AppTheme.accentSolid.opacity(0.16)))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {

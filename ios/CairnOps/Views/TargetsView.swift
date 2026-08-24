@@ -1,88 +1,184 @@
 import SwiftUI
 
+/// Inventaire des Cibles supervisees.
+///
+/// La maquette groupe les Cibles par zone d'infrastructure. L'API ne porte pas
+/// cette notion : le regroupement suit ici l'Etat de sante, ce qui respecte la
+/// hierarchie orientee exceptions et l'ordre de tri deja etabli par la
+/// projection.
 struct TargetsView: View {
     @Environment(AppModel.self) private var model
+
+    enum Scope: Hashable {
+        case all
+        case degraded
+        case down
+    }
+
+    @State private var scope: Scope = .all
     @State private var query = ""
 
-    private func filteredTargets(in snapshot: AppSnapshot) -> [Target] {
-        let sorted = snapshot.sortedTargets
-        guard !query.isEmpty else {
-            return sorted
+    private struct HealthGroup: Identifiable {
+        let health: AppSnapshot.TargetHealth
+        var targets: [Target] = []
+
+        var id: String { health.rawValue }
+
+        var title: String {
+            switch health {
+            case .down:
+                "Indisponibles"
+            case .degraded:
+                "Dégradées"
+            case .maintenance:
+                "En maintenance"
+            case .unknown:
+                "Sans mesure"
+            case .ok:
+                "Opérationnelles"
+            }
+        }
+    }
+
+    private struct Listing {
+        var groups: [HealthGroup] = []
+        var degradedCount = 0
+        var downCount = 0
+        var visibleCount = 0
+    }
+
+    /// L'ordre des sections reprend celui du tri de la projection : le plus
+    /// grave en premier, jamais l'ordre alphabetique.
+    private static let order: [AppSnapshot.TargetHealth] = [.down, .degraded, .maintenance, .unknown, .ok]
+
+    private func makeListing() -> Listing {
+        let snapshot = model.snapshot
+        var listing = Listing()
+        var byHealth: [AppSnapshot.TargetHealth: [Target]] = [:]
+
+        for target in snapshot.sortedTargets {
+            let health = snapshot.health(for: target)
+
+            switch health {
+            case .degraded, .maintenance:
+                listing.degradedCount += 1
+            case .down:
+                listing.downCount += 1
+            case .ok, .unknown:
+                break
+            }
+
+            guard matchesScope(health) else {
+                continue
+            }
+            if !query.isEmpty,
+               !target.name.localizedStandardContains(query),
+               !target.description.localizedStandardContains(query) {
+                continue
+            }
+
+            byHealth[health, default: []].append(target)
+            listing.visibleCount += 1
         }
 
-        return sorted.filter {
-            $0.name.localizedStandardContains(query) ||
-            $0.description.localizedStandardContains(query)
+        listing.groups = Self.order.compactMap { health in
+            guard let targets = byHealth[health], !targets.isEmpty else {
+                return nil
+            }
+            return HealthGroup(health: health, targets: targets)
+        }
+
+        return listing
+    }
+
+    private func matchesScope(_ health: AppSnapshot.TargetHealth) -> Bool {
+        switch scope {
+        case .all:
+            true
+        case .degraded:
+            health == .degraded || health == .maintenance
+        case .down:
+            health == .down
         }
     }
 
     var body: some View {
-        let snapshot = model.snapshot
-        let targets = filteredTargets(in: snapshot)
+        let listing = makeListing()
 
-        return ScrollView {
-            // Les lignes sont des enfants directs du `LazyVStack`. Les placer
-            // dans un `Panel` contenant un `VStack` construisait les 1 000
-            // cibles d'un coup et annulait entierement la paresse du conteneur.
-            LazyVStack(alignment: .leading, spacing: 10) {
-                Text("\(targets.count) visibles · \(snapshot.targets.count) au total")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+        return BareScreen {
+            PageTitle("Cibles", detail: supervisedLabel)
+                .padding(.bottom, 12)
 
-                if targets.isEmpty {
-                    Group {
-                        if query.isEmpty {
-                            ContentUnavailableView(
-                                "Aucune cible",
-                                systemImage: "dot.scope",
-                                description: Text("Les cibles supervisées apparaîtront ici avec leur santé et leur fraîcheur.")
-                            )
-                        } else {
-                            ContentUnavailableView.search
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 64)
-                } else {
-                    ForEach(targets) { target in
-                        NavigationLink {
-                            TargetDetailView(targetID: target.id)
-                        } label: {
-                            TargetRow(
-                                target: target,
-                                health: snapshot.health(for: target),
-                                measures: snapshot.measures[target.id],
-                                isStandalone: true
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
+            SearchField(text: $query, prompt: "Nom ou description")
+
+            UnderlineTabs(
+                selection: $scope,
+                items: [
+                    .init(Scope.all, "Toutes"),
+                    .init(Scope.degraded, "Dégradées", count: listing.degradedCount),
+                    .init(Scope.down, "HS", count: listing.downCount),
+                ]
+            )
+            .padding(.top, 14)
+            .hairlineTop()
+
+            if listing.groups.isEmpty {
+                emptyState
+            } else {
+                ForEach(listing.groups) { group in
+                    section(group)
                 }
             }
-            .padding(AppTheme.screenPadding)
-            .padding(.bottom, AppTheme.bottomScrollInset)
         }
-        .background(AppBackdrop())
-        .navigationTitle("Cibles")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                refreshButton
-            }
-        }
-        .searchable(text: $query, prompt: "Nom ou description")
-        .scrollDismissesKeyboard(.interactively)
         .refreshable {
             await model.refresh()
         }
     }
 
-    private var refreshButton: some View {
-        AsyncButton {
-            await model.refresh()
-        } label: {
-            Image(systemName: "arrow.clockwise")
+    @ViewBuilder
+    private func section(_ group: HealthGroup) -> some View {
+        SectionLabel(group.title, detail: countLabel(group.targets.count))
+            .padding(.top, 20)
+            .padding(.bottom, 4)
+
+        ForEach(group.targets) { target in
+            NavigationLink {
+                TargetDetailView(targetID: target.id)
+            } label: {
+                TargetRow(
+                    target: target,
+                    health: group.health,
+                    measures: model.snapshot.measures[target.id],
+                    indicators: model.snapshot.indicatorTargets[target.id]
+                )
+                .hairlineTop()
+            }
+            .buttonStyle(.plain)
         }
-        .accessibilityLabel("Actualiser les cibles")
+    }
+
+    private func countLabel(_ count: Int) -> String {
+        count == 1 ? "1 cible" : "\(count) cibles"
+    }
+
+    private var supervisedLabel: String {
+        let count = model.snapshot.targets.count
+        return count == 1 ? "1 supervisée" : "\(count) supervisées"
+    }
+
+    private var emptyState: some View {
+        Group {
+            if query.isEmpty && scope == .all {
+                ContentUnavailableView(
+                    "Aucune cible",
+                    systemImage: "dot.scope",
+                    description: Text("Les cibles supervisées apparaîtront ici avec leur santé et leur fraîcheur.")
+                )
+            } else {
+                ContentUnavailableView.search
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 56)
     }
 }

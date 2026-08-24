@@ -1,40 +1,94 @@
 import SwiftUI
 
+/// Vue d'ensemble orientee exceptions.
+///
+/// L'ecran descend du plus urgent au plus calme : identite et fraicheur, les
+/// deux compteurs de Gravite, la repartition de la flotte, les Incidents qui
+/// demandent une action, puis le contexte.
 struct OverviewView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.selectTab) private var selectTab
 
     /// Chiffres derives de la projection.
     ///
-    /// Chaque valeur affichee sur cet ecran declenchait auparavant son propre
-    /// parcours de `targets` ou `incidents`, plusieurs fois par rendu. On les
-    /// calcule ensemble, une fois par passe de mise en page.
+    /// Chaque valeur affichee declenchait auparavant son propre parcours de
+    /// `targets` ou `incidents`, plusieurs fois par rendu. Un seul passage les
+    /// calcule toutes.
     private struct Summary {
-        var unacknowledgedCount = 0
-        var actionableCount = 0
+        var criticalCount = 0
+        var criticalUnacknowledged = 0
+        var warningCount = 0
+        var warningUnacknowledged = 0
         var targetCount = 0
-        var healthyTargetCount = 0
-        var highlightedIncidents: [Incident] = []
-        var problematicTargets: [Target] = []
+        var healthyCount = 0
+        var degradedCount = 0
+        var downCount = 0
+        var availability: Double?
+        var highlighted: [Incident] = []
+        var loaded: [(target: Target, value: Double)] = []
     }
 
     private func makeSummary() -> Summary {
         let snapshot = model.snapshot
         var summary = Summary()
-
         summary.targetCount = snapshot.targets.count
-        summary.actionableCount = snapshot.actionableIncidents.count
 
-        let unacknowledged = snapshot.unacknowledgedIncidents
-        summary.unacknowledgedCount = unacknowledged.count
-        summary.highlightedIncidents = Array(unacknowledged.prefix(4))
-
-        for target in snapshot.sortedTargets {
-            if snapshot.health(for: target) == .ok {
-                summary.healthyTargetCount += 1
-            } else if summary.problematicTargets.count < 4 {
-                summary.problematicTargets.append(target)
+        for incident in snapshot.actionableIncidents {
+            switch incident.effectiveSeverity {
+            case .critical, .major:
+                summary.criticalCount += 1
+                if !incident.isAcknowledged {
+                    summary.criticalUnacknowledged += 1
+                }
+            case .warning:
+                summary.warningCount += 1
+                if !incident.isAcknowledged {
+                    summary.warningUnacknowledged += 1
+                }
+            case .information:
+                break
             }
         }
+
+        var availabilitySum = 0.0
+        var availabilityCount = 0
+
+        for target in snapshot.sortedTargets {
+            switch snapshot.health(for: target) {
+            case .ok:
+                summary.healthyCount += 1
+            case .degraded, .maintenance:
+                summary.degradedCount += 1
+            case .down:
+                summary.downCount += 1
+            case .unknown:
+                break
+            }
+
+            if let availability = snapshot.measures[target.id]?.last24Hours,
+               availability.hasAvailabilitySignal,
+               let value = availability.availability {
+                availabilitySum += value
+                availabilityCount += 1
+            }
+
+            // La charge n'existe que si un Connecteur fournit l'indicateur : on
+            // ne fabrique pas une valeur pour completer la section.
+            if let cpu = snapshot.indicatorTargets[target.id]?.indicators.first(
+                where: { $0.semanticKey == "cpu.utilization" && $0.lastValue != nil }
+            ), let value = cpu.lastValue {
+                summary.loaded.append((target, value))
+            }
+        }
+
+        if availabilityCount > 0 {
+            summary.availability = availabilitySum / Double(availabilityCount)
+        }
+
+        summary.highlighted = Array(snapshot.unacknowledgedIncidents.prefix(4))
+        summary.loaded = Array(
+            summary.loaded.sorted { $0.value > $1.value }.prefix(4)
+        )
 
         return summary
     }
@@ -42,129 +96,18 @@ struct OverviewView: View {
     var body: some View {
         let summary = makeSummary()
 
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                heroCard(summary)
-                summaryPanel(summary)
+        return BareScreen {
+            identity
+            title
 
-                PinnedIndicatorsSection(
-                    projections: Array(model.snapshot.indicatorTargets.values),
-                    targetName: { targetID in
-                        model.target(withID: targetID)?.name ?? "Cible"
-                    }
-                )
-
-                if summary.targetCount == 0 && model.snapshot.incidents.isEmpty {
-                    ContentUnavailableView(
-                        "Aucune cible active",
-                        systemImage: "dot.scope",
-                        description: Text("La projection mobile apparaîtra ici dès qu’une première cible sera supervisée.")
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 24)
-                }
-
-                if !summary.highlightedIncidents.isEmpty {
-                    Panel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            header("Incidents non acquittés", count: summary.unacknowledgedCount)
-
-                            ForEach(summary.highlightedIncidents) { incident in
-                                NavigationLink {
-                                    IncidentDetailView(incidentID: incident.id)
-                                } label: {
-                                    IncidentRow(incident: incident)
-                                }
-                                .buttonStyle(.plain)
-
-                                if incident.id != summary.highlightedIncidents.last?.id {
-                                    Color.clear.frame(height: 2)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if !summary.problematicTargets.isEmpty {
-                    Panel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            header("Cibles à surveiller", count: summary.problematicTargets.count)
-
-                            ForEach(summary.problematicTargets) { target in
-                                NavigationLink {
-                                    TargetDetailView(targetID: target.id)
-                                } label: {
-                                    TargetRow(
-                                        target: target,
-                                        health: model.snapshot.health(for: target),
-                                        measures: model.snapshot.measures[target.id]
-                                    )
-                                }
-                                .buttonStyle(.plain)
-
-                                if target.id != summary.problematicTargets.last?.id {
-                                    Color.clear.frame(height: 2)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if let systemHealth = model.snapshot.systemHealth {
-                    Panel {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ResponsiveStatusHeader(
-                                text: systemHealth.status == "operational" ? "Opérationnelle" : "Dégradée",
-                                color: systemHealth.status == "operational" ? AppTheme.ok : AppTheme.warning,
-                                systemImage: systemHealth.status == "operational" ? "heart.text.square.fill" : "waveform.path.ecg"
-                            ) {
-                                Text("Santé de CairnOps")
-                                    .font(AppTheme.sectionTitleFont)
-                            }
-
-                            Text("Contrôle le \(TimestampParser.absoluteString(from: systemHealth.checkedAt)).")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-
-                            MetricGrid {
-                                MetricTile(
-                                    title: "À traiter",
-                                    value: "\(summary.unacknowledgedCount)",
-                                    subtitle: "Incidents non acquittés",
-                                    tone: AppTheme.critical,
-                                    systemImage: "exclamationmark.triangle.fill"
-                                )
-                                MetricTile(
-                                    title: "Cibles saines",
-                                    value: "\(summary.healthyTargetCount)",
-                                    subtitle: "\(summary.targetCount) cibles suivies",
-                                    tone: AppTheme.ok,
-                                    systemImage: "checkmark.circle.fill"
-                                )
-                            }
-
-                            ForEach(systemHealth.components) { component in
-                                ComponentHealthRow(
-                                    title: componentLabel(component.name),
-                                    statusText: componentStatusText(component.status),
-                                    statusColor: component.status == "operational" ? AppTheme.ok : AppTheme.warning,
-                                    statusSymbol: component.status == "operational" ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                                    detail: "\(component.instances) instance(s)"
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(AppTheme.screenPadding)
-            .padding(.bottom, AppTheme.bottomScrollInset)
-        }
-        .background(AppBackdrop())
-        .navigationTitle("Vue d’ensemble")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                refreshButton
+            if summary.targetCount == 0 && model.snapshot.incidents.isEmpty {
+                emptyState
+            } else {
+                counters(summary)
+                fleet(summary)
+                incidents(summary)
+                pinnedIndicators
+                loaded(summary)
             }
         }
         .refreshable {
@@ -172,195 +115,314 @@ struct OverviewView: View {
         }
     }
 
-    private func summaryPanel(_ summary: Summary) -> some View {
-        Panel {
-            VStack(alignment: .leading, spacing: 16) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 12) {
-                        globalIdentity
-                        Spacer(minLength: 12)
-                        globalStatusPill
-                    }
+    // MARK: - Haut de page
 
-                    VStack(alignment: .leading, spacing: 12) {
-                        globalIdentity
-                        globalStatusPill
-                    }
-                }
-
-                MetricGrid {
-                    MetricTile(
-                        title: "Non acquittés",
-                        value: "\(summary.unacknowledgedCount)",
-                        tone: AppTheme.critical,
-                        systemImage: "exclamationmark.triangle.fill"
-                    )
-                    MetricTile(
-                        title: "Actifs",
-                        value: "\(summary.actionableCount)",
-                        tone: AppTheme.warning,
-                        systemImage: "bolt.horizontal.circle.fill"
-                    )
-                    MetricTile(
-                        title: "Cibles",
-                        value: "\(summary.targetCount)",
-                        tone: AppTheme.info,
-                        systemImage: "dot.scope"
-                    )
-                }
-
+    private var identity: some View {
+        HStack(spacing: 12) {
+            NavigationLink {
+                SettingsView()
+            } label: {
                 HStack(spacing: 12) {
-                    Label(TimestampParser.relativeString(from: model.snapshot.freshestObservationAt), systemImage: "clock")
-                    Label(realtimeLabel, systemImage: "dot.radiowaves.left.and.right")
+                    AvatarBadge(name: model.user?.displayName ?? model.instanceLabel)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(Self.identityDateStyle.format(.now))
+                        .font(.caption2)
+                        .foregroundStyle(AppTheme.inkMuted)
+
+                        Text(model.instanceLabel)
+                            .font(.subheadline.weight(.bold))
+                            .tracking(-0.15)
+                            .foregroundStyle(AppTheme.ink)
+                    }
                 }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                .contentShape(.rect)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Réglages de \(model.instanceLabel)")
+
+            Spacer(minLength: 8)
+
+            NavigationLink {
+                NotificationSettingsView()
+            } label: {
+                Image(systemName: "bell")
+                    .font(.system(size: 19, weight: .medium))
+                    .foregroundStyle(AppTheme.inkStrong)
+                    .overlay(alignment: .topTrailing) {
+                        if model.snapshot.unreadCount > 0 {
+                            Circle()
+                                .fill(AppTheme.accentSolid)
+                                .frame(width: 8, height: 8)
+                                .overlay(
+                                    Circle().strokeBorder(AppTheme.ground, lineWidth: 2)
+                                )
+                                .offset(x: 3, y: -2)
+                        }
+                    }
+                    .frame(width: 32, height: 32)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                model.snapshot.unreadCount > 0
+                    ? "Notifications, \(model.snapshot.unreadCount) non lues"
+                    : "Notifications"
+            )
         }
+        .padding(.vertical, 4)
+        .padding(.bottom, 10)
     }
 
-    private func heroCard(_ summary: Summary) -> some View {
-        let hasActionableIncidents = summary.unacknowledgedCount > 0
+    private var title: some View {
+        PageTitle("Vue d’ensemble") {
+            HStack(spacing: 6) {
+                Text(TimestampParser.relativeString(from: model.snapshot.freshestObservationAt))
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.inkMuted)
 
-        return HStack(alignment: .center, spacing: 16) {
-            Image(systemName: hasActionableIncidents ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                .font(.title2.weight(.bold))
-                .foregroundStyle(hasActionableIncidents ? AppTheme.critical : AppTheme.ok)
-                .frame(width: 56, height: 56)
-                .background(
-                    Circle()
-                        .fill((hasActionableIncidents ? AppTheme.critical : AppTheme.ok).opacity(0.12))
-                )
+                Image(systemName: realtimeSymbol)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(realtimeTone)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(hasActionableIncidents ? "Incidents actifs" : "Supervision stable")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(hasActionableIncidents ? AppTheme.critical : AppTheme.ok)
-                    .textCase(.uppercase)
+                Text(realtimeLabel)
+                    .font(.caption2)
+                    .foregroundStyle(realtimeTone)
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+        }
+        .padding(.bottom, 20)
+    }
 
-                Text(hasActionableIncidents ? actionHeadline(summary) : "Aucun incident non acquitté.")
-                    .font(AppTheme.heroTitleFont)
+    // MARK: - Compteurs
 
-                Text("\(summary.healthyTargetCount) cibles opérationnelles · \(summary.targetCount) supervisées")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+    private func counters(_ summary: Summary) -> some View {
+        HStack(alignment: .top, spacing: 24) {
+            counter(
+                label: "Critiques",
+                value: summary.criticalCount,
+                detail: summary.criticalUnacknowledged == 0
+                    ? "Tous acquittés"
+                    : "\(summary.criticalUnacknowledged) non acquitté\(summary.criticalUnacknowledged > 1 ? "s" : "")",
+                tone: AppTheme.accent,
+                valueTone: summary.criticalCount > 0 ? AppTheme.criticalDisplay : AppTheme.ink,
+                labelTone: AppTheme.accent
+            )
+
+            Rectangle()
+                .fill(AppTheme.hairline)
+                .frame(width: 1)
+
+            counter(
+                label: "Avertis.",
+                value: summary.warningCount,
+                detail: summary.warningUnacknowledged == 0
+                    ? "Tous acquittés"
+                    : "\(summary.warningUnacknowledged) non acquitté\(summary.warningUnacknowledged > 1 ? "s" : "")",
+                tone: AppTheme.warning,
+                valueTone: AppTheme.ink,
+                labelTone: AppTheme.inkFaint
+            )
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.bottom, 24)
+    }
+
+    private func counter(
+        label: String,
+        value: Int,
+        detail: String,
+        tone: Color,
+        valueTone: Color,
+        labelTone: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(tone)
+                    .frame(width: 7, height: 7)
+
+                Text(label.uppercased())
+                    .font(AppTheme.sectionLabelFont)
+                    .tracking(AppTheme.labelTracking)
+                    .foregroundStyle(labelTone)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
 
+            DisplayNumber(value: "\(value)", tone: valueTone)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
+            Text(detail)
+                .font(AppTheme.metaFont)
+                .foregroundStyle(AppTheme.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 22)
-                .fill(heroBackground(hasActionableIncidents))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .strokeBorder(
-                            hasActionableIncidents
-                                ? AppTheme.critical.opacity(0.18)
-                                : AppTheme.ok.opacity(0.18)
-                        )
-                )
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Flotte
+
+    private func fleet(_ summary: Summary) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("Flotte", detail: fleetDetail(summary))
+
+            FleetBar(segments: [
+                .init(id: "ok", label: "saines", count: summary.healthyCount, tone: AppTheme.ok),
+                .init(id: "degraded", label: "dégradées", count: summary.degradedCount, tone: AppTheme.warning),
+                .init(id: "down", label: "injoignables", count: summary.downCount, tone: AppTheme.critical),
+            ])
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 22)
+        .hairlineTop()
+    }
+
+    private func fleetDetail(_ summary: Summary) -> String {
+        let targets = summary.targetCount == 1 ? "1 cible" : "\(summary.targetCount) cibles"
+        guard let availability = summary.availability else {
+            return targets
+        }
+        return "\(targets) · \(availability.formatted(.percent.precision(.fractionLength(2)))) dispo."
+    }
+
+    // MARK: - Incidents
+
+    @ViewBuilder
+    private func incidents(_ summary: Summary) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel("Incidents actifs") {
+                Button {
+                    selectTab(.incidents)
+                } label: {
+                    Text("Tout voir")
+                        .font(AppTheme.metaFont.weight(.semibold))
+                        .foregroundStyle(AppTheme.accent)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.bottom, 4)
+
+            if summary.highlighted.isEmpty {
+                Text("Aucun incident ne demande d’action.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.inkMuted)
+                    .padding(.vertical, 14)
+            } else {
+                ForEach(summary.highlighted) { incident in
+                    NavigationLink {
+                        IncidentDetailView(incidentID: incident.id)
+                    } label: {
+                        IncidentRow(incident: incident)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.top, 16)
+        .hairlineTop()
+    }
+
+    // MARK: - Contexte
+
+    @ViewBuilder
+    private var pinnedIndicators: some View {
+        PinnedIndicatorsSection(
+            projections: Array(model.snapshot.indicatorTargets.values),
+            targetName: { targetID in
+                model.target(withID: targetID)?.name ?? "Cible"
+            }
         )
     }
+
+    @ViewBuilder
+    private func loaded(_ summary: Summary) -> some View {
+        if !summary.loaded.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                SectionLabel("Cibles les plus chargées", detail: "processeur")
+                    .padding(.bottom, 4)
+
+                ForEach(summary.loaded, id: \.target.id) { entry in
+                    NavigationLink {
+                        TargetDetailView(targetID: entry.target.id)
+                    } label: {
+                        LoadRow(
+                            title: entry.target.name,
+                            ratio: entry.value / 100,
+                            value: entry.value.formatted(.number.precision(.fractionLength(0))) + " %",
+                            tone: loadTone(entry.value)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 16)
+            .hairlineTop()
+        }
+    }
+
+    private func loadTone(_ value: Double) -> Color {
+        if value >= 90 {
+            return AppTheme.critical
+        }
+        if value >= 75 {
+            return AppTheme.warning
+        }
+        return AppTheme.ok
+    }
+
+    private var emptyState: some View {
+        ContentUnavailableView(
+            "Aucune cible active",
+            systemImage: "dot.scope",
+            description: Text("La projection mobile apparaîtra ici dès qu’une première cible sera supervisée.")
+        )
+        .frame(maxWidth: .infinity)
+        .padding(.top, 48)
+    }
+
+    /// « lundi 24 août · 10:00 » : la maquette date la projection autant
+    /// qu'elle l'heure.
+    private static let identityDateStyle = Date.FormatStyle(
+        date: .complete,
+        time: .shortened
+    )
+    .locale(Locale(identifier: "fr_FR"))
+    .year(.omitted)
 
     private var realtimeLabel: String {
         switch model.realtimeState {
         case .offline:
             "Flux hors ligne"
         case .connecting:
-            "Connexion en cours"
+            "Connexion"
         case .online:
             "Flux en ligne"
         }
     }
 
-    private var globalIdentity: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("État global")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            Text(model.instanceLabel)
-                .font(AppTheme.cardTitleFont)
-            Text(verdictLine)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+    private var realtimeTone: Color {
+        switch model.realtimeState {
+        case .offline:
+            AppTheme.inkMuted
+        case .connecting:
+            AppTheme.warningInk
+        case .online:
+            AppTheme.okInk
         }
     }
 
-    private var globalStatusPill: some View {
-        StatusPill(
-            text: AppTheme.globalStatusLabel(model.snapshot.globalStatus),
-            color: AppTheme.globalStatusColor(model.snapshot.globalStatus),
-            systemImage: AppTheme.globalStatusSymbol(model.snapshot.globalStatus)
-        )
-    }
-
-    private var refreshButton: some View {
-        AsyncButton {
-            await model.refresh()
-        } label: {
-            Image(systemName: "arrow.clockwise")
-        }
-        .accessibilityLabel("Actualiser la projection")
-    }
-
-    private var verdictLine: String {
-        "Dernière projection \(TimestampParser.relativeString(from: model.snapshot.lastRefreshAt))."
-    }
-
-    private func actionHeadline(_ summary: Summary) -> String {
-        summary.unacknowledgedCount == 1
-            ? "1 incident demande une action"
-            : "\(summary.unacknowledgedCount) incidents demandent une action"
-    }
-
-    private func heroBackground(_ hasActionableIncidents: Bool) -> LinearGradient {
-        LinearGradient(
-            colors: [
-                (hasActionableIncidents ? AppTheme.critical.opacity(0.10) : AppTheme.ok.opacity(0.08)),
-                AppTheme.panel,
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    @ViewBuilder
-    private func header(_ title: String, count: Int) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(title)
-                .font(AppTheme.sectionTitleFont)
-
-            Spacer()
-
-            Text(count == 1 ? "1 élément" : "\(count) éléments")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func componentLabel(_ value: String) -> String {
-        switch value {
-        case "server":
-            "Serveur"
-        case "worker":
-            "Worker"
-        case "postgresql":
-            "PostgreSQL"
-        default:
-            value.capitalized
-        }
-    }
-
-    private func componentStatusText(_ value: String) -> String {
-        switch value {
-        case "operational":
-            "Opérationnel"
-        case "stale":
-            "En retard"
-        default:
-            "Indisponible"
+    private var realtimeSymbol: String {
+        switch model.realtimeState {
+        case .offline:
+            "wifi.slash"
+        case .connecting:
+            "wifi.exclamationmark"
+        case .online:
+            "wifi"
         }
     }
 }

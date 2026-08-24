@@ -92,7 +92,7 @@ struct IndicatorsPreviewView: View {
             .padding(AppTheme.screenPadding)
         }
         .navigationTitle("Indicateurs")
-        .background(AppTheme.background)
+        .background(AppTheme.ground)
         .environment(AppModel())
     }
 
