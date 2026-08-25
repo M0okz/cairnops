@@ -213,14 +213,36 @@
   }
 
   button:nth-child(-n + 3) .tooltip {
-    left: 0;
     transform: translate(0, var(--s2));
   }
 
   button:nth-last-child(-n + 3) .tooltip {
-    right: 0;
     left: auto;
     transform: translate(0, var(--s2));
+  }
+
+  button:nth-child(1) .tooltip {
+    left: 0;
+  }
+
+  button:nth-child(2) .tooltip {
+    left: -100%;
+  }
+
+  button:nth-child(3) .tooltip {
+    left: -200%;
+  }
+
+  button:nth-last-child(1) .tooltip {
+    right: 0;
+  }
+
+  button:nth-last-child(2) .tooltip {
+    right: -100%;
+  }
+
+  button:nth-last-child(3) .tooltip {
+    right: -200%;
   }
 
   .tooltip.visible {
