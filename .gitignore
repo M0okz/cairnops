@@ -34,6 +34,9 @@ data/
 *.db
 *.sqlite
 
+# Mobile clients maintained outside this shared repository
+/ios/
+
 # Editors and operating systems
 .claude/
 .idea/

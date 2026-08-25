@@ -48,6 +48,10 @@ avant affichage. Le Relais APNs officiel possède son stockage chiffré, son ima
 Docker et ses contrats de création, rotation, suppression et livraison. Le
 compagnon Android reste à construire avant la V1 multiplateforme.
 
+Ce dépôt partagé contient le serveur, le worker, l’interface Web, le Relais Push
+et leurs contrats. Le code du compagnon iOS est maintenu séparément et n’est pas
+inclus dans cette distribution.
+
 ## Ce que vise la V1
 
 - contrôles natifs HTTP/HTTPS, TCP, ICMP, DNS et Heartbeat, exécutés côté serveur ;
