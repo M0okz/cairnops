@@ -7,7 +7,7 @@ struct LocalLockView: View {
         VStack(spacing: 18) {
             Image(systemName: "lock.shield.fill")
                 .font(.largeTitle)
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.control)
                 .accessibilityHidden(true)
 
             VStack(spacing: 6) {
@@ -31,7 +31,7 @@ struct LocalLockView: View {
                     .frame(minHeight: 44)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(AppTheme.accent)
+                            .fill(AppTheme.control)
                     )
             }
             .buttonStyle(.plain)

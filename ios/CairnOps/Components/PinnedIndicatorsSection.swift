@@ -62,7 +62,7 @@ struct PinnedIndicatorsSection: View {
             // d'un indicateur stable en une ligne plate.
             Sparkline(
                 values: (row.projection.series?[row.indicator.id] ?? []).map(\.value),
-                tone: AppTheme.accent,
+                tone: AppTheme.control,
                 height: 22,
                 showsArea: false
             )

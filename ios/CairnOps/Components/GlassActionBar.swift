@@ -41,7 +41,7 @@ struct GlassActionLabel: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
-        .foregroundStyle(isProminent ? AppTheme.accent : AppTheme.inkStrong)
+        .foregroundStyle(isProminent ? AppTheme.control : AppTheme.inkStrong)
         .padding(.vertical, 14)
         .padding(.horizontal, 18)
         .frame(maxWidth: isProminent ? .infinity : nil, minHeight: 24)
@@ -50,7 +50,7 @@ struct GlassActionLabel: View {
                 .fill(.ultraThinMaterial)
                 .overlay {
                     RoundedRectangle(cornerRadius: AppTheme.actionCorner, style: .continuous)
-                        .fill(isProminent ? AppTheme.accentSolid.opacity(0.30) : AppTheme.glassFill)
+                        .fill(isProminent ? AppTheme.controlProminentFill : AppTheme.glassFill)
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: AppTheme.actionCorner, style: .continuous)

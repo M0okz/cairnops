@@ -33,7 +33,7 @@ struct IncidentIndicatorsPanel: View {
 
                     Button("Réessayer") { Task { await load() } }
                         .font(AppTheme.fieldValueFont)
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.control)
                 }
                 .padding(.vertical, 14)
             } else if let displayed, !displayed.indicators.isEmpty || !displayed.snapshots.isEmpty {

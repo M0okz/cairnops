@@ -39,13 +39,23 @@ enum AppTheme {
     /// une ligne de contenu parmi les autres.
     static let surface = Color(light: 0x201E1D, dark: 0xFFFFFF, lightAlpha: 0.05, darkAlpha: 0.07)
 
-    // MARK: - Cuivre
+    // MARK: - Commandes
 
-    /// Accent unique : action principale et route courante, jamais decoratif.
-    static let accent = Color(light: 0xA9631F, dark: 0xDDA15F)
+    /// Teinte des commandes : selection courante, action, lien.
+    ///
+    /// La maquette Homeblack posait un cuivre unique sur tout ce qui est
+    /// interactif. A l'usage, cet accent se retrouvait sur presque chaque
+    /// ecran et alourdissait la lecture au lieu de la guider. L'habillage
+    /// revient donc a l'encre ; la couleur reste reservee a ce qu'elle seule
+    /// peut dire, l'Etat de sante et la Gravite.
+    static let control = Color(light: 0x201E1D, dark: 0xF5F3F2, lightAlpha: 0.88, darkAlpha: 0.92)
 
-    /// Cuivre plein : soulignement d'onglet et remplissages.
-    static let accentSolid = Color(hex: 0xC07434)
+    /// Fond de l'element selectionne.
+    static let controlFill = Color(light: 0x201E1D, dark: 0xFFFFFF, lightAlpha: 0.08, darkAlpha: 0.12)
+
+    /// Fond de l'action principale, un cran plus dense que `controlFill` pour
+    /// se distinguer d'une action secondaire sans recourir a la couleur.
+    static let controlProminentFill = Color(light: 0x201E1D, dark: 0xFFFFFF, lightAlpha: 0.14, darkAlpha: 0.20)
 
     // MARK: - Etat de sante et Gravite
     //
@@ -291,7 +301,9 @@ enum AppTheme {
         case .incompleteMonitoring:
             neutral
         case .notConfigured:
-            accent
+            // Une supervision non configuree n'est pas un etat de sante : elle
+            // appelle un reglage, pas une alerte.
+            info
         }
     }
 

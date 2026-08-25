@@ -152,7 +152,7 @@ struct OverviewView: View {
                     .overlay(alignment: .topTrailing) {
                         if model.snapshot.unreadCount > 0 {
                             Circle()
-                                .fill(AppTheme.accentSolid)
+                                .fill(AppTheme.criticalInk)
                                 .frame(width: 8, height: 8)
                                 .overlay(
                                     Circle().strokeBorder(AppTheme.ground, lineWidth: 2)
@@ -205,9 +205,11 @@ struct OverviewView: View {
                 detail: summary.criticalUnacknowledged == 0
                     ? "Tous acquittés"
                     : "\(summary.criticalUnacknowledged) non acquitté\(summary.criticalUnacknowledged > 1 ? "s" : "")",
-                tone: AppTheme.accent,
+                // Le libelle et la pastille disent une Gravite, pas une
+                // commande : ils gardent donc leur teinte.
+                tone: AppTheme.critical,
                 valueTone: summary.criticalCount > 0 ? AppTheme.criticalDisplay : AppTheme.ink,
-                labelTone: AppTheme.accent
+                labelTone: AppTheme.criticalInk
             )
 
             Rectangle()
@@ -300,7 +302,7 @@ struct OverviewView: View {
                 } label: {
                     Text("Tout voir")
                         .font(AppTheme.metaFont.weight(.semibold))
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.control)
                 }
                 .buttonStyle(.plain)
             }

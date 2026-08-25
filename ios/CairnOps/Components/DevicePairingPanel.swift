@@ -125,7 +125,7 @@ struct DevicePairingPanel: View {
                     beginNewPairing(at: .link)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.control)
                 .accessibilityIdentifier("pairing.link-again")
             }
         }
@@ -207,8 +207,8 @@ private struct PairingStep: View {
                 .font(.caption.weight(.semibold))
                 .monospacedDigit()
                 .frame(width: 26, height: 26)
-                .foregroundStyle(AppTheme.accent)
-                .background(Circle().fill(AppTheme.accentSolid.opacity(0.16)))
+                .foregroundStyle(AppTheme.control)
+                .background(Circle().fill(AppTheme.controlFill))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {

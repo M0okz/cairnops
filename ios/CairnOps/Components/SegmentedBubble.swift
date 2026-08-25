@@ -63,7 +63,7 @@ struct SegmentedBubble<Value: Hashable>: View {
             }
         }
         .font(isCompact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
-        .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.inkMuted)
+        .foregroundStyle(isSelected ? AppTheme.control : AppTheme.inkMuted)
         .lineLimit(1)
         .minimumScaleFactor(0.85)
         .padding(.vertical, isCompact ? 5 : 7)
@@ -72,7 +72,7 @@ struct SegmentedBubble<Value: Hashable>: View {
         .background {
             if isSelected {
                 Capsule(style: .continuous)
-                    .fill(AppTheme.accentSolid.opacity(0.18))
+                    .fill(AppTheme.controlFill)
                     // La pastille glisse d'un segment a l'autre plutot que de
                     // disparaitre puis reapparaitre ailleurs.
                     .matchedGeometryEffect(id: "selection", in: selectionNamespace)
@@ -102,11 +102,11 @@ struct FilterMenu<Content: View>: View {
         } label: {
             Image(systemName: "line.3.horizontal.decrease")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(isActive ? AppTheme.accent : AppTheme.inkMuted)
+                .foregroundStyle(isActive ? AppTheme.control : AppTheme.inkMuted)
                 .frame(width: 44, height: 44)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isActive ? AppTheme.accentSolid.opacity(0.18) : AppTheme.surface)
+                        .fill(isActive ? AppTheme.controlFill : AppTheme.surface)
                 )
                 .contentShape(.rect)
         }

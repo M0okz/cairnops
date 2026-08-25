@@ -53,7 +53,7 @@ struct ThresholdChart: View {
                         path.addLine(to: CGPoint(x: proxy.size.width, y: offset))
                     }
                     .stroke(
-                        AppTheme.accent.opacity(colorScheme == .dark ? 0.38 : 0.32),
+                        AppTheme.inkMuted.opacity(colorScheme == .dark ? 0.55 : 0.45),
                         style: StrokeStyle(lineWidth: 1, dash: [3, 6])
                     )
                 }

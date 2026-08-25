@@ -42,7 +42,7 @@ struct AppRootView: View {
         .environment(model)
 		.environment(localLock)
 		.environment(\.locale, appLanguage.locale)
-        .tint(AppTheme.accent)
+        .tint(AppTheme.control)
         .preferredColorScheme(appearance.colorScheme)
         .task {
             // La prévisualisation de coque installe sa propre projection :

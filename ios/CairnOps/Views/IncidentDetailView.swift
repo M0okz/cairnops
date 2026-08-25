@@ -116,7 +116,7 @@ struct IncidentDetailView: View {
 
                 ThresholdChart(
                     values: trend,
-                    tone: AppTheme.accent
+                    tone: AppTheme.control
                 )
 
                 HStack {

@@ -100,7 +100,7 @@ struct SettingsRow: View {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.control)
                     .frame(width: 22)
             }
 

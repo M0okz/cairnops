@@ -178,10 +178,10 @@ struct SettingsView: View {
                     .padding(.bottom, 4)
 
                 FieldRow(label: "Utilisateur", value: user.displayName)
-                FieldRow(label: "Rôle", value: user.role.label, tone: AppTheme.accent)
+                FieldRow(label: "Rôle", value: user.role.label, tone: AppTheme.control)
 
                 HStack(spacing: 26) {
-                    inlineAction(title: "Actualiser", systemImage: "arrow.clockwise", tone: AppTheme.accent) {
+                    inlineAction(title: "Actualiser", systemImage: "arrow.clockwise", tone: AppTheme.control) {
                         await model.refresh()
                     }
                     inlineAction(title: "Dissocier", systemImage: "iphone.slash", tone: AppTheme.inkStrong) {

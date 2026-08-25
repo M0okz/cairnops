@@ -70,7 +70,7 @@ struct IncidentRow: View {
                             Text("Acquitter")
                                 .font(.footnote.weight(.bold))
                         }
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.control)
                     }
                     .buttonStyle(.plain)
                 }

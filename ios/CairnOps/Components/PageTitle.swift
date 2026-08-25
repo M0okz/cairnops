@@ -65,7 +65,7 @@ struct PageTitle<Trailing: View>: View {
     }
 }
 
-/// Pastille d'identite : initiale de l'utilisateur sur fond cuivre.
+/// Pastille d'identite : initiale de l'utilisateur sur fond neutre.
 struct AvatarBadge: View {
     let name: String
     var size = 34.0
@@ -78,9 +78,9 @@ struct AvatarBadge: View {
     var body: some View {
         Text(initial)
             .font(.system(size: size * 0.41, weight: .heavy))
-            .foregroundStyle(Color(hex: 0xF7ECDF))
+            .foregroundStyle(AppTheme.control)
             .frame(width: size, height: size)
-            .background(Circle().fill(Color(hex: 0xA9631F)))
+            .background(Circle().fill(AppTheme.controlFill))
             .accessibilityHidden(true)
     }
 }

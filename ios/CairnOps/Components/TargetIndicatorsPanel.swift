@@ -30,7 +30,7 @@ struct TargetIndicatorsPanel: View {
                 message(errorMessage, tone: AppTheme.warningInk) {
                     Button("Réessayer") { Task { await load() } }
                         .font(AppTheme.fieldValueFont)
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.control)
                 }
             } else if let displayed, displayed.indicators.isEmpty {
                 message(
