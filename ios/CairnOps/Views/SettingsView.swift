@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system
+	@AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
 
     var body: some View {
         BareScreen {
@@ -70,6 +71,26 @@ struct SettingsView: View {
             }
             .padding(.vertical, 15)
             .frame(minHeight: 44)
+
+			HStack(spacing: 12) {
+				Text("language.title")
+					.font(AppTheme.fieldValueFont)
+					.foregroundStyle(AppTheme.ink)
+
+				Spacer(minLength: 8)
+
+				SegmentedBubble(
+					selection: $appLanguage,
+					items: AppLanguage.allCases.map { .init($0, $0.title) },
+					isCompact: true
+				)
+			}
+			.padding(.vertical, 15)
+			.frame(minHeight: 44)
+			.hairlineTop()
+
+			LocalLockSettingsRow()
+				.hairlineTop()
         }
         .padding(.top, 10)
         .hairlineTop()
@@ -111,14 +132,18 @@ struct SettingsView: View {
 
             FieldRow(
                 label: "URL",
-                value: model.serverURLText.isEmpty ? "Non configurée" : model.serverURLText,
+                value: model.serverURLText.isEmpty
+                    ? AppLanguage.localized("settings.notConfigured")
+                    : model.serverURLText,
                 secondary: "Connexion directe à l’instance",
                 allowsSelection: true
             )
 
             FieldRow(
                 label: "Version serveur",
-                value: model.serverVersion.isEmpty ? "Inconnue" : model.serverVersion
+                value: model.serverVersion.isEmpty
+                    ? AppLanguage.localized("time.unknown")
+                    : model.serverVersion
             )
 
             FieldRow(label: "Version app", value: Self.applicationVersion)
@@ -203,7 +228,7 @@ struct SettingsView: View {
             HStack(spacing: 7) {
                 Image(systemName: systemImage)
                     .font(.system(size: 15, weight: .bold))
-                Text(title)
+                Text(AppLanguage.localized(title))
                     .font(AppTheme.fieldValueFont)
             }
             .foregroundStyle(tone)
@@ -212,4 +237,35 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+private struct LocalLockSettingsRow: View {
+	@Environment(LocalAppLock.self) private var localLock
+
+	var body: some View {
+		HStack(spacing: 12) {
+			VStack(alignment: .leading, spacing: 3) {
+				Text("lock.setting.title")
+					.font(AppTheme.fieldValueFont)
+					.foregroundStyle(AppTheme.ink)
+				Text("lock.setting.detail")
+					.font(AppTheme.metaFont)
+					.foregroundStyle(AppTheme.inkMuted)
+			}
+
+			Spacer(minLength: 8)
+
+			AsyncButton {
+				await localLock.setEnabled(!localLock.isEnabled)
+			} label: {
+				Text(AppLanguage.localized(localLock.isEnabled ? "lock.enabled" : "lock.disabled"))
+					.font(AppTheme.fieldValueFont)
+					.foregroundStyle(localLock.isEnabled ? AppTheme.okInk : AppTheme.inkMuted)
+					.frame(minHeight: 44)
+			}
+			.buttonStyle(.plain)
+			.disabled(!localLock.isEnabled && !localLock.canEnable)
+		}
+		.padding(.vertical, 10)
+	}
 }

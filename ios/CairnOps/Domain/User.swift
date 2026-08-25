@@ -13,11 +13,11 @@ struct User: Codable, Equatable, Identifiable, Sendable {
         var label: String {
             switch self {
             case .administrator:
-                "Administrateur"
+                AppLanguage.localized("role.administrator")
             case .operator:
-                "Operateur"
+                AppLanguage.localized("role.operator")
             case .observer:
-                "Observateur"
+                AppLanguage.localized("role.observer")
             }
         }
     }

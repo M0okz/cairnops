@@ -203,6 +203,18 @@ struct CairnOpsAPI {
 		)
 	}
 
+	func updateDeviceLocale(deviceID: String, locale: String) async throws {
+		struct Update: Encodable {
+			let locale: String
+		}
+
+		try await requestVoid(
+			path: "api/v1/devices/\(deviceID)",
+			method: "PATCH",
+			body: try encoder.encode(Update(locale: locale == "en" ? "en" : "fr"))
+		)
+	}
+
     func fetchTargets() async throws -> [Target] {
         let payload: TargetsEnvelope = try await request(path: "api/v1/targets")
         return payload.targets

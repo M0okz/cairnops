@@ -10,6 +10,9 @@ final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNot
 	private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
 	private(set) var criticalAlertSetting: UNNotificationSetting = .notSupported
 	private(set) var criticalAlertError: String?
+	private(set) var latestActionResult: NotificationActionResult?
+
+	@ObservationIgnored private let actionService = NotificationActionService()
 
 	var notificationsEnabled: Bool {
 		switch authorizationStatus {
@@ -32,10 +35,15 @@ final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNot
 	) -> Bool {
 		let center = UNUserNotificationCenter.current()
 		center.delegate = self
+		let acknowledge = UNNotificationAction(
+			identifier: CairnOpsNotification.acknowledgeActionIdentifier,
+			title: AppLanguage.localized("notification.action.acknowledge"),
+			options: [.authenticationRequired, .foreground]
+		)
 		center.setNotificationCategories([
 			UNNotificationCategory(
-				identifier: "CAIRNOPS_INCIDENT",
-				actions: [],
+				identifier: CairnOpsNotification.incidentCategoryIdentifier,
+				actions: [acknowledge],
 				intentIdentifiers: [],
 				options: []
 			),
@@ -123,6 +131,48 @@ final class PushNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNot
 		willPresent notification: UNNotification
 	) async -> UNNotificationPresentationOptions {
 		[.banner, .list, .sound]
+	}
+
+	func userNotificationCenter(
+		_ center: UNUserNotificationCenter,
+		didReceive response: UNNotificationResponse
+	) async {
+		guard let request = NotificationActionRequest(
+			userInfo: response.notification.request.content.userInfo
+		) else {
+			return
+		}
+
+		switch response.actionIdentifier {
+		case CairnOpsNotification.acknowledgeActionIdentifier:
+			do {
+				_ = try await actionService.acknowledge(request)
+				UNUserNotificationCenter.current().removePendingNotificationRequests(
+					withIdentifiers: NotificationReminderIdentifier.identifiers(
+						incidentID: request.incidentID
+					)
+				)
+				latestActionResult = NotificationActionResult(
+					request: request,
+					outcome: .acknowledged,
+					authenticatedAction: true
+				)
+			} catch {
+				latestActionResult = NotificationActionResult(
+					request: request,
+					outcome: .failed(message: error.localizedDescription),
+					authenticatedAction: true
+				)
+			}
+		case UNNotificationDefaultActionIdentifier:
+			latestActionResult = NotificationActionResult(
+				request: request,
+				outcome: .opened,
+				authenticatedAction: false
+			)
+		default:
+			break
+		}
 	}
 
 	private func update(from settings: UNNotificationSettings) {

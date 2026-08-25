@@ -24,13 +24,17 @@ enum IndicatorUnit: String, Codable, Sendable {
         case .milliseconds:
             return value.formatted(.number.precision(.fractionLength(0))) + " ms"
         case .days:
-            return value.formatted(.number.precision(.fractionLength(0))) + " j"
+            return value.formatted(.number.precision(.fractionLength(0)).locale(AppLanguage.currentLocale))
+                + AppLanguage.localized("indicator.days.suffix")
         case .boolean:
-            return value >= 0.5 ? "Oui" : "Non"
+            return AppLanguage.localized(value >= 0.5 ? "common.yes" : "common.no")
         case .count:
             return value.formatted(.number.precision(.fractionLength(0)))
         case .seconds:
-            return Duration.seconds(value).formatted(.units(allowed: [.days, .hours, .minutes], width: .abbreviated))
+            return Duration.seconds(value).formatted(
+                .units(allowed: [.days, .hours, .minutes], width: .abbreviated)
+                    .locale(AppLanguage.currentLocale)
+            )
         }
     }
 }

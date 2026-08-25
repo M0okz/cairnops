@@ -15,7 +15,7 @@ struct SearchField: View {
                 .foregroundStyle(AppTheme.inkMuted)
 
             TextField(text: $text) {
-                Text(prompt)
+                Text(AppLanguage.localized(prompt))
                     .foregroundStyle(AppTheme.inkMuted)
             }
             .font(.subheadline)
@@ -33,7 +33,7 @@ struct SearchField: View {
                         .foregroundStyle(AppTheme.inkMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Effacer la recherche")
+                .accessibilityLabel(Text("Effacer la recherche"))
             }
         }
         .padding(.horizontal, 14)

@@ -55,7 +55,7 @@ struct SegmentedBubble<Value: Hashable>: View {
         let isSelected = item.value == selection
 
         return HStack(spacing: 5) {
-            Text(item.title)
+            Text(AppLanguage.localized(item.title))
             if let count = item.count {
                 Text("\(count)")
                     .monospacedDigit()

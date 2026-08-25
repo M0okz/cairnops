@@ -25,11 +25,11 @@ struct IncidentsView: View {
         var title: String {
             switch self {
             case .lastHour:
-                "Moins d’une heure"
+                AppLanguage.localized("incidents.bucket.hour")
             case .today:
-                "Moins d’un jour"
+                AppLanguage.localized("incidents.bucket.day")
             case .earlier:
-                "Plus tôt"
+                AppLanguage.localized("incidents.bucket.earlier")
             }
         }
     }
@@ -203,8 +203,17 @@ struct IncidentsView: View {
 
     private func headerDetail(_ listing: Listing) -> String {
         let total = listing.activeCount + listing.acknowledgedCount
-        let subject = total == 1 ? "1 en cours" : "\(total) en cours"
-        return "\(subject) · \(listing.acknowledgedCount) acquittés"
+        if total == 1 {
+            return String(
+                format: AppLanguage.localized("incidents.header.single"),
+                listing.acknowledgedCount
+            )
+        }
+        return String(
+            format: AppLanguage.localized("incidents.header.multiple"),
+            total,
+            listing.acknowledgedCount
+        )
     }
 
     private var emptyState: some View {

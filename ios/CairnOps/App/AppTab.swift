@@ -16,13 +16,13 @@ enum AppTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .overview:
-            "Vue"
+            AppLanguage.localized("tab.overview")
         case .incidents:
-            "Incidents"
+            AppLanguage.localized("Incidents")
         case .targets:
-            "Cibles"
+            AppLanguage.localized("Cibles")
         case .health:
-            "Santé"
+            AppLanguage.localized("Santé")
         }
     }
 

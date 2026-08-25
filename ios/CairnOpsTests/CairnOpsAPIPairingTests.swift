@@ -85,6 +85,25 @@ struct CairnOpsAPIPairingTests {
         #expect(realtimeRequest.value(forHTTPHeaderField: "Authorization") == "Bearer durable-device-token")
     }
 
+    @Test("La langue de l’appareil est normalisée avant le PATCH")
+    func updatesDeviceLocale() async throws {
+        let transport = HTTPTransportSpy(stubs: [
+            .json(statusCode: 204, body: ""),
+        ])
+        let api = try makeAPI(deviceToken: "device-token", transport: transport)
+
+        try await api.updateDeviceLocale(deviceID: "device-1", locale: "en")
+
+        let requests = await transport.recordedRequests()
+        let request = try #require(requests.first)
+        #expect(request.httpMethod == "PATCH")
+        #expect(request.url?.path == "/base/api/v1/devices/device-1")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer device-token")
+        let body = try #require(request.httpBody)
+        let payload = try JSONDecoder().decode(DeviceLocaleBody.self, from: body)
+        #expect(payload.locale == "en")
+    }
+
     @Test("Les projections d’indicateurs conservent la fenêtre et l’identité exacte")
     func fetchesContextIndicators() async throws {
         let targetBody = #"{"target_id":"target-1","generated_at":"2026-08-23T00:00:00Z","indicators":[{"id":"indicator-1","connector_id":"connector-1","binding_id":"binding-1","target_id":"target-1","semantic_key":"cpu.utilization","label":"Utilisation CPU","external_id":"item-42","unit":"percent","enabled":true,"metadata":{},"last_value":37.5,"last_observed_at":"2026-08-23T00:00:00Z","pinned":true,"pin_position":0}],"series":{"indicator-1":[{"at":"2026-08-23T00:00:00Z","value":37.5}]}}"#
@@ -135,6 +154,10 @@ private struct ClaimBody: Decodable {
         case encryptionPublicKey = "encryption_public_key"
         case pushRecipient = "push_recipient"
     }
+}
+
+private struct DeviceLocaleBody: Decodable {
+    let locale: String
 }
 
 private actor HTTPTransportSpy: CairnOpsHTTPTransport {

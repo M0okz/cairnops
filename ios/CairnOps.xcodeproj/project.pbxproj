@@ -234,10 +234,11 @@
 				};
 			};
 			buildConfigurationList = A10000000000000000000003 /* Build configuration list for PBXProject "CairnOps" */;
-			developmentRegion = en;
+			developmentRegion = fr;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				fr,
 				Base,
 			);
 			mainGroup = A10000000000000000000001;

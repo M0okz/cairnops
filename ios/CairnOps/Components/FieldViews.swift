@@ -8,7 +8,7 @@ struct FieldCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label.uppercased())
+            Text(AppLanguage.localized(label).uppercased(with: AppLanguage.currentLocale))
                 .font(AppTheme.fieldLabelFont)
                 .tracking(0.9)
                 .foregroundStyle(AppTheme.inkFaint)
@@ -57,7 +57,7 @@ struct FieldRow: View {
     }
 
     private var key: some View {
-        Text(label.uppercased())
+        Text(AppLanguage.localized(label).uppercased(with: AppLanguage.currentLocale))
             .font(AppTheme.fieldLabelFont)
             .tracking(0.9)
             .foregroundStyle(AppTheme.inkFaint)
@@ -77,7 +77,7 @@ struct FieldRow: View {
             .fixedSize(horizontal: false, vertical: true)
 
             if let secondary, !secondary.isEmpty {
-                Text(secondary)
+                Text(AppLanguage.localized(secondary))
                     .font(AppTheme.metaFont)
                     .foregroundStyle(AppTheme.inkMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -105,12 +105,12 @@ struct SettingsRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                Text(AppLanguage.localized(title))
                     .font(AppTheme.fieldValueFont)
                     .foregroundStyle(AppTheme.ink)
 
                 if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
+                    Text(AppLanguage.localized(subtitle))
                         .font(AppTheme.metaFont)
                         .foregroundStyle(AppTheme.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)

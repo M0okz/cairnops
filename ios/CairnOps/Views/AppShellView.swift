@@ -7,9 +7,14 @@ import SwiftUI
 /// le verre natif, le repli au defilement, les tailles d'accessibilite et les
 /// comportements attendus d'une barre iOS.
 struct AppShellView: View {
+	private struct NotificationIncidentRoute: Hashable {
+		let incidentID: Incident.ID
+	}
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(AppModel.self) private var model
     @State private var selectedTab: AppTab = Self.startingTab
+	@State private var incidentPath: [NotificationIncidentRoute] = []
 
     private static var startingTab: AppTab {
 #if DEBUG
@@ -28,8 +33,11 @@ struct AppShellView: View {
             }
 
             Tab(AppTab.incidents.title, systemImage: AppTab.incidents.symbolName, value: AppTab.incidents) {
-                NavigationStack {
+				NavigationStack(path: $incidentPath) {
                     IncidentsView()
+					.navigationDestination(for: NotificationIncidentRoute.self) { route in
+						IncidentDetailView(incidentID: route.incidentID)
+					}
                 }
             }
 
@@ -48,6 +56,13 @@ struct AppShellView: View {
         .environment(\.selectTab) { tab in
             selectedTab = tab
         }
+		.onChange(of: model.notificationNavigation, initial: true) { _, navigation in
+			guard let navigation else {
+				return
+			}
+			selectedTab = .incidents
+			incidentPath = [NotificationIncidentRoute(incidentID: navigation.incidentID)]
+		}
         // La barre de navigation etant a nouveau visible, la banniere se pose
         // sous elle plutot que de recouvrir le titre.
         .safeAreaInset(edge: .top, spacing: 0) {

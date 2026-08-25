@@ -31,7 +31,7 @@ struct EvidenceRow: View {
         guard let date = TimestampParser.date(from: signal.openedAt) else {
             return "--:--"
         }
-        return date.formatted(.dateTime.hour().minute().locale(Locale(identifier: "fr_FR")))
+        return date.formatted(.dateTime.hour().minute().locale(AppLanguage.currentLocale))
     }
 
     private var detail: String {

@@ -23,5 +23,7 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>CairnOps utilise la caméra uniquement pour scanner le QR code d’association affiché par votre instance.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>CairnOps utilise Face ID uniquement pour protéger l’état opérationnel conservé sur cet appareil.</string>
 </dict>
 </plist>

@@ -3,7 +3,9 @@ import SwiftUI
 struct AppRootView: View {
 	@Environment(\.scenePhase) private var scenePhase
 	@AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system
+	@AppStorage(AppLanguage.storageKey) private var appLanguage = AppLanguage.system
 	@State private var model = AppModel()
+	@State private var localLock = LocalAppLock()
 	let pushNotifications: PushNotificationDelegate
 
     var body: some View {
@@ -11,7 +13,9 @@ struct AppRootView: View {
             AppBackdrop()
 
             Group {
-                if showsIndicatorsPreview {
+                if localLock.isLocked && !showsShellPreview {
+                    LocalLockView()
+                } else if showsIndicatorsPreview {
                     NavigationStack {
                         IndicatorsPreviewView()
                     }
@@ -36,6 +40,8 @@ struct AppRootView: View {
             }
         }
         .environment(model)
+		.environment(localLock)
+		.environment(\.locale, appLanguage.locale)
         .tint(AppTheme.accent)
         .preferredColorScheme(appearance.colorScheme)
         .task {
@@ -80,6 +86,21 @@ struct AppRootView: View {
 			}
 			await model.registerForPush(deviceToken: deviceToken)
 		}
+		.task(id: "\(appLanguage.rawValue)#\(model.hasDeviceIdentity)") {
+			guard model.hasDeviceIdentity else {
+				return
+			}
+			await model.updateDeviceLocale(appLanguage.serverIdentifier)
+		}
+		.task(id: pushNotifications.latestActionResult?.id) {
+			guard let result = pushNotifications.latestActionResult else {
+				return
+			}
+			if result.authenticatedAction {
+				localLock.unlockFromAuthenticatedNotificationAction()
+			}
+			await model.handleNotificationActionResult(result)
+		}
         .onChange(of: scenePhase, initial: true) { _, phase in
             // Le passage au premier plan declenche une synchronisation
             // complete. En prévisualisation elle n'a aucune instance en face
@@ -88,6 +109,9 @@ struct AppRootView: View {
                 return
             }
             model.setScenePhaseActive(phase == .active)
+			if phase != .active {
+				localLock.lockWhenLeavingForeground()
+			}
         }
         .onOpenURL { url in
             model.acceptPairingURL(url)

@@ -28,7 +28,9 @@ final class NotificationService: UNNotificationServiceExtension {
 			let message = try PushEnvelopeDecryptor.decrypt(envelope, privateKey: privateKey)
 			content.title = message.presentation.title
 			content.body = message.presentation.body
-			content.categoryIdentifier = "CAIRNOPS_INCIDENT"
+			content.categoryIdentifier = message.eventKind == "firing"
+				? "CAIRNOPS_INCIDENT"
+				: ""
 			var userInfo = content.userInfo
 			userInfo["cairnops_incident_id"] = message.incidentID
 			userInfo["cairnops_instance_url"] = message.instanceURL

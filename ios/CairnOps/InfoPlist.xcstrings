@@ -1,0 +1,10 @@
+{
+  "sourceLanguage" : "fr",
+  "strings" : {
+    "CFBundleDisplayName" : { "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "CairnOps" } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "CairnOps" } } } },
+    "CFBundleName" : { "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "CairnOps" } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "CairnOps" } } } },
+    "NSCameraUsageDescription" : { "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "CairnOps utilise la caméra uniquement pour scanner le QR code d’association affiché par votre instance." } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "CairnOps uses the camera only to scan the pairing QR code displayed by your instance." } } } },
+    "NSFaceIDUsageDescription" : { "localizations" : { "fr" : { "stringUnit" : { "state" : "translated", "value" : "CairnOps utilise Face ID uniquement pour protéger l’état opérationnel conservé sur cet appareil." } }, "en" : { "stringUnit" : { "state" : "translated", "value" : "CairnOps uses Face ID only to protect the operational state stored on this device." } } } }
+  },
+  "version" : "1.2"
+}

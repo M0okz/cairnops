@@ -9,13 +9,13 @@ enum IncidentSeverity: String, Codable, CaseIterable, Sendable {
     var label: String {
         switch self {
         case .information:
-            "Information"
+            AppLanguage.localized("severity.information")
         case .warning:
-            "Avertissement"
+            AppLanguage.localized("severity.warning")
         case .major:
-            "Majeur"
+            AppLanguage.localized("severity.major")
         case .critical:
-            "Critique"
+            AppLanguage.localized("severity.critical")
         }
     }
 }

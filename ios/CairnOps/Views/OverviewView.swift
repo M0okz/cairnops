@@ -390,7 +390,7 @@ struct OverviewView: View {
         date: .complete,
         time: .shortened
     )
-    .locale(Locale(identifier: "fr_FR"))
+    .locale(AppLanguage.currentLocale)
     .year(.omitted)
 
     private var realtimeLabel: String {

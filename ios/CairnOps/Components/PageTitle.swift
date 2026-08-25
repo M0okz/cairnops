@@ -45,7 +45,7 @@ struct PageTitle<Trailing: View>: View {
     }
 
     private var titleText: some View {
-        Text(title)
+        Text(AppLanguage.localized(title))
             .font(AppTheme.pageTitleFont)
             .tracking(AppTheme.titleTracking)
             .foregroundStyle(AppTheme.ink)

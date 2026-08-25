@@ -27,15 +27,15 @@ struct TargetsView: View {
         var title: String {
             switch health {
             case .down:
-                "Indisponibles"
+                AppLanguage.localized("targets.health.down")
             case .degraded:
-                "Dégradées"
+                AppLanguage.localized("targets.health.degraded")
             case .maintenance:
-                "En maintenance"
+                AppLanguage.localized("targets.health.maintenance")
             case .unknown:
-                "Sans mesure"
+                AppLanguage.localized("targets.health.unknown")
             case .ok:
-                "Opérationnelles"
+                AppLanguage.localized("targets.health.ok")
             }
         }
     }
@@ -165,12 +165,20 @@ struct TargetsView: View {
     }
 
     private func countLabel(_ count: Int) -> String {
-        count == 1 ? "1 cible" : "\(count) cibles"
+        String(
+            format: AppLanguage.localized(count == 1 ? "targets.count.single" : "targets.count.multiple"),
+            count
+        )
     }
 
     private var supervisedLabel: String {
         let count = model.snapshot.targets.count
-        return count == 1 ? "1 supervisée" : "\(count) supervisées"
+        return String(
+            format: AppLanguage.localized(
+                count == 1 ? "targets.supervised.single" : "targets.supervised.multiple"
+            ),
+            count
+        )
     }
 
     private var emptyState: some View {

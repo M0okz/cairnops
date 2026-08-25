@@ -15,7 +15,7 @@ struct SectionLabel<Trailing: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(title.uppercased())
+            Text(AppLanguage.localized(title).uppercased(with: AppLanguage.currentLocale))
                 .font(AppTheme.sectionLabelFont)
                 .tracking(AppTheme.labelTracking)
                 .foregroundStyle(AppTheme.inkFaint)

@@ -64,14 +64,14 @@ struct NotificationSettingsView: View {
         Section {
             Picker("Alerte d’incident", selection: $preferences.incidentSound) {
                 ForEach(IncidentNotificationSound.allCases) { sound in
-                    Text(sound.label).tag(sound)
+                    Text(AppLanguage.localized(sound.label)).tag(sound)
                 }
             }
             .pickerStyle(.navigationLink)
 
             Picker("Rétablissement", selection: $preferences.recoverySound) {
                 ForEach(IncidentNotificationSound.allCases) { sound in
-                    Text(sound.label).tag(sound)
+                    Text(AppLanguage.localized(sound.label)).tag(sound)
                 }
             }
             .pickerStyle(.navigationLink)
@@ -128,13 +128,13 @@ struct NotificationSettingsView: View {
         Section {
             Picker("Politique de rappel", selection: $preferences.repeatPolicy) {
                 ForEach(NotificationRepeatPolicy.allCases) { policy in
-                    Text(policy.label).tag(policy)
+                    Text(AppLanguage.localized(policy.label)).tag(policy)
                 }
             }
             .pickerStyle(.navigationLink)
 
             LabeledContent("Séquence") {
-                Text(preferences.repeatPolicy.detail)
+                Text(AppLanguage.localized(preferences.repeatPolicy.detail))
                     .multilineTextAlignment(.trailing)
                     .foregroundStyle(.secondary)
             }

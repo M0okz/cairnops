@@ -10,9 +10,9 @@ enum IncidentNotificationSound: String, CaseIterable, Codable, Identifiable, Sen
     var label: String {
         switch self {
         case .system:
-            "Par défaut"
+            "notification.sound.system"
         case .silent:
-            "Silencieux"
+            "notification.sound.silent"
         }
     }
 }
@@ -62,18 +62,18 @@ enum NotificationRepeatPolicy: String, CaseIterable, Codable, Identifiable, Send
     var label: String {
         switch self {
         case .disabled:
-            "Aucun"
+            "notification.repeat.disabled"
         case .standard:
-            "Standard"
+            "notification.repeat.standard"
         }
     }
 
     var detail: String {
         switch self {
         case .disabled:
-            "Une seule notification par événement"
+            "notification.repeat.disabled.detail"
         case .standard:
-            "Immédiat → 5 min → 15 min → 1 h → 4 h (répété)"
+            "notification.repeat.standard.detail"
         }
     }
 

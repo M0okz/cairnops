@@ -2,8 +2,6 @@ import Foundation
 import Synchronization
 
 enum TimestampParser {
-    private static let interfaceLocale = Locale(identifier: "fr_FR")
-
     /// Les horodatages arrivent en ISO-8601 depuis l'API et sont reformates a
     /// chaque rendu de ligne. Les formatters Foundation sont couteux a allouer,
     /// on les conserve donc pour toute la duree de vie du processus et on
@@ -23,7 +21,6 @@ enum TimestampParser {
 
         let relative: RelativeDateTimeFormatter = {
             let formatter = RelativeDateTimeFormatter()
-            formatter.locale = TimestampParser.interfaceLocale
             formatter.unitsStyle = .short
             return formatter
         }()
@@ -36,21 +33,6 @@ enum TimestampParser {
     private static let formatters = Mutex(Formatters())
 
     private static let parseCacheLimit = 4_096
-
-    private static let absoluteStyle = Date.FormatStyle(date: .abbreviated, time: .shortened)
-        .locale(interfaceLocale)
-
-    private static let dayScaleStyle = Duration.UnitsFormatStyle(
-        allowedUnits: [.days, .hours],
-        width: .abbreviated
-    )
-    .locale(interfaceLocale)
-
-    private static let hourScaleStyle = Duration.UnitsFormatStyle(
-        allowedUnits: [.hours, .minutes],
-        width: .abbreviated
-    )
-    .locale(interfaceLocale)
 
     static func date(from value: String?) -> Date? {
         guard let value, !value.isEmpty else {
@@ -80,38 +62,48 @@ enum TimestampParser {
 
     static func absoluteString(from value: String?) -> String {
         guard let date = date(from: value) else {
-            return "Inconnue"
+            return AppLanguage.localized("time.unknown")
         }
 
-        return absoluteStyle.format(date)
+        return Date.FormatStyle(date: .abbreviated, time: .shortened)
+            .locale(AppLanguage.currentLocale)
+            .format(date)
     }
 
     static func relativeString(from value: String?) -> String {
         guard let date = date(from: value) else {
-            return "Jamais"
+            return AppLanguage.localized("time.never")
         }
 
         if abs(date.timeIntervalSinceNow) < 5 {
-            return "à l’instant"
+            return AppLanguage.localized("time.now")
         }
 
         let reference = Date.now
         return formatters.withLock { storage in
-            storage.relative.localizedString(for: date, relativeTo: reference)
+            storage.relative.locale = AppLanguage.currentLocale
+            return storage.relative.localizedString(for: date, relativeTo: reference)
         }
     }
 
     static func elapsedString(since value: String?) -> String {
         guard let date = date(from: value) else {
-            return "Inconnue"
+            return AppLanguage.localized("time.unknown")
         }
 
         let interval = max(0, Date.now.timeIntervalSince(date))
         if interval < 60 {
-            return "à l’instant"
+            return AppLanguage.localized("time.now")
         }
 
-        let style = interval >= 86_400 ? dayScaleStyle : hourScaleStyle
+        let allowedUnits: Set<Duration.UnitsFormatStyle.Unit> = interval >= 86_400
+            ? [.days, .hours]
+            : [.hours, .minutes]
+        let style = Duration.UnitsFormatStyle(
+            allowedUnits: allowedUnits,
+            width: .abbreviated
+        )
+        .locale(AppLanguage.currentLocale)
         return Duration.seconds(interval).formatted(style)
     }
 }

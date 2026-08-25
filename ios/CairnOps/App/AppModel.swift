@@ -5,6 +5,11 @@ import UIKit
 @MainActor
 @Observable
 final class AppModel {
+	struct NotificationNavigation: Equatable, Sendable {
+		let id: UUID
+		let incidentID: Incident.ID
+	}
+
     enum RealtimeState: Equatable {
         case offline
         case connecting
@@ -101,6 +106,7 @@ final class AppModel {
     var pairingTaskIdentity: UUID?
     var canRetryPairing = false
     var hasDeviceIdentity = false
+	var notificationNavigation: NotificationNavigation?
 
     @ObservationIgnored private let configurationStore: ServerConfigurationStore
     @ObservationIgnored private let credentialStore: DeviceCredentialStore
@@ -339,7 +345,7 @@ final class AppModel {
                 from: link,
                 deviceName: UIDevice.current.name,
                 appVersion: Self.appVersionLabel,
-                locale: Locale.current.language.languageCode?.identifier ?? "fr"
+				locale: AppLanguage.currentServerIdentifier
             )
             try credentialStore.save(pendingPairing: pending)
 
@@ -605,6 +611,30 @@ final class AppModel {
 		}
 	}
 
+	func updateDeviceLocale(_ locale: String) async {
+		guard let identity = try? credentialStore.load().identity else {
+			return
+		}
+
+		do {
+			let configuration = try ServerConfiguration(
+				baseURLString: identity.serverBaseURL
+			).validated()
+			try await apiFactory(configuration, identity.deviceToken).updateDeviceLocale(
+				deviceID: identity.deviceID,
+				locale: locale
+			)
+		} catch is CancellationError {
+			return
+		} catch {
+			statusMessage = String(
+				format: AppLanguage.localized("language.syncFailed"),
+				userFacingMessage(from: error)
+			)
+			bannerTone = .caution
+		}
+	}
+
     /// Repercute le cycle de vie de la scene sur le flux temps reel.
     func setScenePhaseActive(_ isActive: Bool) {
         guard isSceneActive != isActive else {
@@ -658,6 +688,25 @@ final class AppModel {
             bannerTone = .danger
         }
     }
+
+	func handleNotificationActionResult(_ result: NotificationActionResult) async {
+		notificationNavigation = NotificationNavigation(
+			id: result.id,
+			incidentID: result.request.incidentID
+		)
+
+		switch result.outcome {
+		case .opened:
+			return
+		case .acknowledged:
+			await refresh()
+			statusMessage = AppLanguage.localized("notification.action.acknowledged")
+			bannerTone = .neutral
+		case .failed(let message):
+			statusMessage = message
+			bannerTone = .danger
+		}
+	}
 
 	func logout() async {
 		let identity = (try? credentialStore.load().identity) ?? recoveredIdentity
