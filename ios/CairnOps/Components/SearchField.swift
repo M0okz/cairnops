@@ -46,27 +46,3 @@ struct SearchField: View {
         )
     }
 }
-
-/// Filtre secondaire en pastille, active ou non.
-struct FilterChip: View {
-    let title: String
-    let isActive: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Text(title)
-                if isActive {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .heavy))
-                }
-            }
-            .font(AppTheme.metaFont.weight(isActive ? .bold : .regular))
-            .foregroundStyle(isActive ? AppTheme.accent : AppTheme.inkMuted)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isActive ? [.isSelected, .isButton] : .isButton)
-    }
-}

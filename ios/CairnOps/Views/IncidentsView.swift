@@ -111,7 +111,16 @@ struct IncidentsView: View {
         let listing = makeListing()
 
         return BareScreen {
-            UnderlineTabs(
+            // La recherche ouvre l'ecran, comme sur la liste des Cibles, et le
+            // filtre de Gravite se replie dans son menu plutot que d'occuper
+            // une rangee entiere.
+            HStack(spacing: 10) {
+                SearchField(text: $query, prompt: "Cible ou nature")
+                severityMenu
+            }
+            .padding(.top, 8)
+
+            SegmentedBubble(
                 selection: $scope,
                 items: [
                     .init(Scope.active, "Actifs", count: listing.activeCount),
@@ -119,13 +128,7 @@ struct IncidentsView: View {
                     .init(Scope.all, "Tous", count: listing.totalCount),
                 ]
             )
-            .padding(.top, 4)
-
-            severityFilters
-                .padding(.vertical, 14)
-
-            SearchField(text: $query, prompt: "Cible ou nature")
-                .padding(.bottom, 4)
+            .padding(.top, 12)
 
             if listing.isEmpty {
                 emptyState
@@ -187,18 +190,14 @@ struct IncidentsView: View {
         return { await model.acknowledge(incidentID: identifier) }
     }
 
-    private var severityFilters: some View {
-        HStack(spacing: 14) {
-            ForEach([IncidentSeverity.critical, .major, .warning], id: \.self) { severity in
-                FilterChip(
-                    title: severity.label,
-                    isActive: severityFilter == severity
-                ) {
-                    severityFilter = severityFilter == severity ? nil : severity
+    private var severityMenu: some View {
+        FilterMenu(isActive: severityFilter != nil) {
+            Picker("Gravité", selection: $severityFilter) {
+                Text("Toutes les gravités").tag(IncidentSeverity?.none)
+                ForEach([IncidentSeverity.critical, .major, .warning, .information], id: \.self) { severity in
+                    Text(severity.label).tag(IncidentSeverity?.some(severity))
                 }
             }
-
-            Spacer(minLength: 0)
         }
     }
 

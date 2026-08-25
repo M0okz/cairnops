@@ -65,11 +65,11 @@ struct TargetIndicatorsPanel: View {
 
             Spacer(minLength: 8)
 
-            UnderlineTabs(
+            SegmentedBubble(
                 selection: $window,
-                items: [.init("24h", "24 h"), .init("7d", "7 j")]
+                items: [.init("24h", "24 h"), .init("7d", "7 j")],
+                isCompact: true
             )
-            .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.bottom, 2)
     }

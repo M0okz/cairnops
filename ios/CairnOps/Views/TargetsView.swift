@@ -109,7 +109,9 @@ struct TargetsView: View {
             SearchField(text: $query, prompt: "Nom ou description")
                 .padding(.top, 8)
 
-            UnderlineTabs(
+            // Le meme selecteur que sur les Incidents : passer d'une liste a
+            // l'autre ne doit rien faire reapprendre.
+            SegmentedBubble(
                 selection: $scope,
                 items: [
                     .init(Scope.all, "Toutes"),
@@ -117,7 +119,7 @@ struct TargetsView: View {
                     .init(Scope.down, "HS", count: listing.downCount),
                 ]
             )
-            .padding(.top, 16)
+            .padding(.top, 12)
 
             if listing.groups.isEmpty {
                 emptyState

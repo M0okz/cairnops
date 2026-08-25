@@ -62,10 +62,10 @@ struct SettingsView: View {
 
                 Spacer(minLength: 8)
 
-                UnderlineTabs(
+                SegmentedBubble(
                     selection: $appearance,
                     items: AppearancePreference.allCases.map { .init($0, $0.title) },
-                    isInline: true
+                    isCompact: true
                 )
             }
             .padding(.vertical, 15)
