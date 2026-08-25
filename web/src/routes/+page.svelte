@@ -13,6 +13,7 @@
   import { session } from '$lib/session.svelte';
   import {
     activeSignalRatio,
+    calendarDay,
     diverges,
     duration,
     inWindow,
@@ -79,6 +80,12 @@
    * vient du serveur : c'est lui qui date les jours, et deux écrans ouverts
    * racontent donc le même passé. */
   const openedDays = $derived(session.incidentDays.map((day) => day.opened));
+
+  const openedDayTooltips = $derived(
+    session.incidentDays.map((day) =>
+      plural('overview.fig.openedOnDay', day.opened, { date: calendarDay(day.day) })
+    )
+  );
 
   const openedTotal = $derived(
     session.incidentDays.length === 0
@@ -215,7 +222,11 @@
         </b>
         <span class="graph dim">
           {#if openedDays.length > 0}
-            <Bars values={openedDays} />
+            <Bars
+              values={openedDays}
+              tooltips={openedDayTooltips}
+              label={t('overview.fig.dailyHistory')}
+            />
           {:else}
             <Bars mode="rule" />
           {/if}

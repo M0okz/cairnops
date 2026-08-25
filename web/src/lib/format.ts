@@ -7,6 +7,7 @@
  * jamais dans celle du serveur. */
 
 import type { Incident, IncidentSeverity, Measure, MeasureWindow, Target } from './api';
+import { formatCalendarDay } from './calendar-day';
 import { localeTag, t } from './i18n.svelte';
 
 export type Tone = 'ok' | 'warn' | 'crit' | 'info' | 'idle';
@@ -84,6 +85,8 @@ const dayf = () =>
 export const percent = (ratio: number) => `${nf().format(ratio * 100)} %`;
 export const clock = (value: string | Date) => timef().format(new Date(value));
 export const stamp = (value: string | Date) => dtf().format(new Date(value));
+/** Un jour calendaire daté par le serveur garde son jour UTC dans tous les fuseaux. */
+export const calendarDay = (value: string | Date) => formatCalendarDay(value, localeTag());
 export const today = (value: Date = new Date()) =>
   `${dayf().format(value)} · ${timef().format(value)}`;
 
