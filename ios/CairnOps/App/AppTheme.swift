@@ -59,27 +59,24 @@ enum AppTheme {
 
     // MARK: - Etat de sante et Gravite
     //
-    // Deux registres distincts : une teinte de remplissage, assez saturee pour
-    // une pastille de 7 px, et une encre plus sombre en clair pour que le meme
-    // etat reste lisible en texte.
+    // Rouge, orange et vert, comme le prescrit la direction visuelle. Le
+    // camaieu cuivre de la maquette rendait un critique et un avertissement
+    // presque indiscernables, en particulier sur une pastille de 7 px.
+    //
+    // Deux registres par etat : un remplissage assez sature pour une pastille,
+    // et une encre assez contrastee pour rester lisible en texte sur son fond.
 
-    static let critical = Color(light: 0xC07434, dark: 0xC8813C)
-    static let criticalInk = Color(light: 0x96551F, dark: 0xC8813C)
+    static let critical = Color(light: 0xD62B31, dark: 0xE5484D)
+    static let criticalInk = Color(light: 0xA81E24, dark: 0xF2666B)
 
-    /// Teinte des tres grands nombres. Le cuivre sature reste lisible a 11 px
-    /// mais vibre a 56 px : la maquette y passe a une creme en sombre et a un
-    /// cuivre profond en clair.
-    static let criticalDisplay = Color(light: 0x96551F, dark: 0xF2DCBD)
+    /// Teinte des tres grands nombres. Une couleur saturee reste lisible a
+    /// 11 px mais vibre a 56 px : le sombre passe donc a un rouge adouci.
+    static let criticalDisplay = Color(light: 0xA81E24, dark: 0xF2A5A8)
 
-    /// En sombre, la maquette oppose un avertissement pale a un critique
-    /// sature. En clair elle rapproche les deux au point qu'une barre de flotte
-    /// ne les distingue plus : le remplissage clair reprend donc le meme ecart
-    /// pale/sature, la direction visuelle exigeant deux themes de qualite
-    /// equivalente. L'encre de texte, elle, reste inchangee.
-    static let warning = Color(light: 0xDDA96B, dark: 0xE7BD8E)
-    static let warningInk = Color(light: 0x7A5A1E, dark: 0xE7BD8E)
+    static let warning = Color(light: 0xE08A1E, dark: 0xF5A524)
+    static let warningInk = Color(light: 0x8A5300, dark: 0xF5B454)
 
-    static let ok = Color(hex: 0x5EC99B)
+    static let ok = Color(light: 0x2EA875, dark: 0x5EC99B)
     static let okInk = Color(light: 0x1B7C56, dark: 0x5EC99B)
 
     /// Etat neutralise : Incident acquitte, preuve invalidee.
