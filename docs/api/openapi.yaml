@@ -25,7 +25,9 @@ components:
       bearerFormat: CairnOps device token
       description: >
         Identité propre à un appareil, remise une seule fois après confirmation
-        Web et révocable sans fermer les autres appareils ni sessions Web.
+        Web et révocable sans fermer les autres appareils ni sessions Web. Une
+        identité inconnue ou révoquée produit 401 ; une vérification
+        temporairement indisponible produit 500 et ne révoque pas l'appareil.
     PairingBearer:
       type: http
       scheme: bearer
@@ -1148,6 +1150,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/SystemHealth' }
         '401': { description: Authentification requise }
+        '500': { description: Vérification temporaire de l’identité d’appareil indisponible }
         '503': { description: Projection de santé indisponible }
   /api/v1/device-pairings:
     post:
@@ -2201,6 +2204,7 @@ paths:
                 properties:
                   user: { $ref: '#/components/schemas/User' }
         '401': { description: Authentification requise }
+        '500': { description: Vérification temporaire de l’identité d’appareil indisponible }
     delete:
       operationId: deleteSession
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]

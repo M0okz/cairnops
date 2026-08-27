@@ -190,9 +190,12 @@ func (handler identityHandler) requireSession(next http.Handler) http.Handler {
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
-				if !errors.Is(authErr, devices.ErrInvalidDevice) {
-					handler.logger.Error("authenticate device", "error", authErr)
+				if errors.Is(authErr, devices.ErrInvalidDevice) {
+					unauthorizedSession(w)
+					return
 				}
+				handler.internalError(w, "authenticate device", authErr)
+				return
 			}
 		}
 		unauthorizedSession(w)

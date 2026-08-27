@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 type fakeDevices struct {
 	authenticated devices.AuthenticatedDevice
+	authError     error
 	claimInput    devices.ClaimInput
 	createFor     string
 	revoked       string
@@ -37,6 +39,9 @@ func (*fakeDevices) PairingResult(context.Context, string) (devices.PairingResul
 }
 func (*fakeDevices) CancelPairing(context.Context, string, string) error { return nil }
 func (fake *fakeDevices) Authenticate(_ context.Context, token string) (devices.AuthenticatedDevice, error) {
+	if fake.authError != nil {
+		return devices.AuthenticatedDevice{}, fake.authError
+	}
 	if token != "device-token" {
 		return devices.AuthenticatedDevice{}, devices.ErrInvalidDevice
 	}
@@ -55,6 +60,29 @@ func (fake *fakeDevices) Revoke(_ context.Context, _ identitymodel.Principal, de
 func (fake *fakeDevices) RevokeSelf(_ context.Context, deviceID string) error {
 	fake.revoked = deviceID
 	return nil
+}
+
+func TestDeviceAuthenticationFailureIsNotReportedAsRevocation(t *testing.T) {
+	t.Parallel()
+	fake := &fakeDevices{authError: errors.New("temporary database failure")}
+	server := NewServer(ServerOptions{
+		Identity:     &fakeIdentity{},
+		Devices:      fake,
+		SystemHealth: fakeSystemHealth{},
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/system/health", nil)
+	request.Header.Set("Authorization", "Bearer device-token")
+	response := httptest.NewRecorder()
+
+	server.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf(
+			"temporary authentication failure looked like a revoked device: status=%d body=%s",
+			response.Code,
+			response.Body,
+		)
+	}
 }
 
 func TestDeviceBearerAuthenticatesExistingAPI(t *testing.T) {
