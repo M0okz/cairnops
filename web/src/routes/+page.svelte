@@ -789,6 +789,10 @@
       align-items: start;
     }
 
+    .incident .hide-sm {
+      display: none;
+    }
+
     .incident .cell-name {
       grid-column: 1 / -1;
     }
