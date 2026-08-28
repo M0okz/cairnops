@@ -19,6 +19,7 @@ export const fr = {
   'common.search': 'Rechercher…',
   'common.retry': 'Réessayer',
   'common.copy': 'Copier',
+  'common.skipToContent': 'Aller au contenu',
   'common.requestFailed': 'La requête a échoué ({status}).',
 
   /* ── Rôles ────────────────────────────────────────────────────────────── */
@@ -109,7 +110,7 @@ export const fr = {
   'overview.verdict.allClear': 'Tout est opérationnel.',
   'overview.verdict.allClearSay':
     'Aucun Incident actif. Les Sources répondent et les preuves sont récentes.',
-  'overview.verdict.manyDown': '{count} services sont indisponibles',
+  'overview.verdict.manyDown': '{count} Cibles sont indisponibles',
   'overview.verdict.oneDown': '{target} est indisponible',
   'overview.verdict.downSay':
     'Une intervention est requise. Les preuves de chaque Source restent consultables dans le détail.',
@@ -683,6 +684,7 @@ export const fr = {
   'gate.passwordHint': '12 caractères minimum.',
   'gate.confirmPassword': 'Confirmer le mot de passe',
   'gate.confirmPasswordHint': 'Saisissez à nouveau le même mot de passe.',
+  'gate.passwordMismatch': 'Saisissez le même mot de passe dans les deux champs.',
   'gate.sessionNote':
     'La session ouverte après l’initialisation expirera après 12 h ou dès votre déconnexion.',
   'gate.sealing': 'Scellement…',

@@ -104,12 +104,18 @@
 
 <style>
   .odometer {
+    position: relative;
     display: inline-block;
     height: 1em;
     overflow: hidden;
     line-height: 1;
     vertical-align: -0.08em;
     white-space: nowrap;
+  }
+
+  .odometer > .visually-hidden {
+    inset-block-start: 0;
+    inset-inline-start: 0;
   }
 
   .wheels {

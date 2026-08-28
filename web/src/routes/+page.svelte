@@ -785,6 +785,26 @@
       grid-template-columns: minmax(0, 1fr);
     }
 
+    .incident {
+      align-items: start;
+    }
+
+    .incident .cell-name {
+      grid-column: 1 / -1;
+    }
+
+    .incident > .pill {
+      grid-column: 1;
+      grid-row: 2;
+      justify-self: start;
+    }
+
+    .incident > .btn {
+      grid-column: 2;
+      grid-row: 2;
+      justify-self: end;
+    }
+
     .cell {
       border-left: 0;
     }

@@ -388,4 +388,15 @@
     font-size: 0.6875rem;
     font-style: normal;
   }
+
+  @media (max-width: 48rem) {
+    /* Sur téléphone, le compte est dans l'en-tête : son menu s'ouvre donc
+       sous le déclencheur et reste calé sur le bord de l'écran. */
+    .menu {
+      inset-block-start: calc(100% + 0.375rem);
+      inset-inline-end: 0;
+      inset-block-end: auto;
+      inset-inline-start: auto;
+    }
+  }
 </style>

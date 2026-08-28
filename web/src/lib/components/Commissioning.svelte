@@ -57,7 +57,7 @@
     event.preventDefault();
     localError = '';
     if (password !== confirmation) {
-      localError = 'Les deux mots de passe ne correspondent pas.';
+      localError = t('gate.passwordMismatch');
       return;
     }
     await onsetup({
@@ -79,7 +79,7 @@
     event.preventDefault();
     localError = '';
     if (password !== confirmation) {
-      localError = 'Les deux saisies ne correspondent pas.';
+      localError = t('gate.passwordMismatch');
       return;
     }
     await onrecover({ bootstrap, username, password });
@@ -90,7 +90,7 @@
   <title>{mode === 'setup' ? t('gate.setupTab') : t('gate.loginTab')} — {instance}</title>
 </svelte:head>
 
-<div class="gate">
+<main class="gate">
   <div class="gate-card">
     <div class="gate-head">
       <span class="cairn" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -241,13 +241,14 @@
       {/if}
     {/if}
   </div>
-</div>
+</main>
 
 <style>
   .gate-head {
     display: flex;
     align-items: center;
     gap: 0.625rem;
+    min-width: 0;
     margin-bottom: var(--s4);
   }
 

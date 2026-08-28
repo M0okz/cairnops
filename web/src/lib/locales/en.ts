@@ -20,6 +20,7 @@ export const en: Record<MessageKey, string> = {
   'common.search': 'Search…',
   'common.retry': 'Try again',
   'common.copy': 'Copy',
+  'common.skipToContent': 'Skip to content',
   'common.requestFailed': 'The request failed ({status}).',
 
   /* ── Roles ────────────────────────────────────────────────────────────── */
@@ -110,7 +111,7 @@ export const en: Record<MessageKey, string> = {
   'overview.verdict.allClear': 'Everything is operational.',
   'overview.verdict.allClearSay':
     'No active Incident. The Sources are answering and the evidence is recent.',
-  'overview.verdict.manyDown': '{count} services are down',
+  'overview.verdict.manyDown': '{count} Targets are down',
   'overview.verdict.oneDown': '{target} is down',
   'overview.verdict.downSay':
     'This needs attention. The evidence from every Source stays readable in the detail view.',
@@ -677,6 +678,7 @@ export const en: Record<MessageKey, string> = {
   'gate.passwordHint': 'At least 12 characters.',
   'gate.confirmPassword': 'Confirm password',
   'gate.confirmPasswordHint': 'Enter the same password again.',
+  'gate.passwordMismatch': 'Enter the same password in both fields.',
   'gate.sessionNote':
     'The session opened after setup will expire after 12 hours or as soon as you sign out.',
   'gate.sealing': 'Sealing…',
