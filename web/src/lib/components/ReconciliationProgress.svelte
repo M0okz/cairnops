@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { page } from '$app/state';
   import { reconciliationState } from '$lib/reconciliation.svelte';
   import { startReconciliationPolling } from '$lib/reconciliation-polling';
+  import { showReconciliationReviewInTopbar } from '$lib/reconciliation-visibility';
   import { session } from '$lib/session.svelte';
   import type { ReconciliationStage } from '$lib/api';
   import { t, type MessageKey } from '$lib/i18n.svelte';
@@ -28,6 +30,7 @@
   });
 
   const active = $derived(reconciliationState.activeOperations[0] ?? null);
+  const showReview = $derived(showReconciliationReviewInTopbar(page.url.pathname));
 
   $effect(() => {
     for (const operation of reconciliationState.activeOperations) watched.add(operation.id);
@@ -49,7 +52,7 @@
     <i></i>
     <span>{t(stages[active.stage])}</span>
   </a>
-{:else if reconciliationState.actionable.length > 0}
+{:else if showReview && reconciliationState.actionable.length > 0}
   <a class="review" href="/cibles/rapprochements" title={t('reconciliation.reviewTitle')}>
     <span>{t('reconciliation.title')}</span><b>{reconciliationState.actionable.length}</b>
   </a>
