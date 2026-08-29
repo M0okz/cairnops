@@ -16,6 +16,7 @@ type Notifications interface {
 	CreateMattermost(context.Context, string, notifications.CreateMattermostInput) (notifications.Channel, error)
 	Inbox(ctx context.Context, userID string, limit int) (notifications.Inbox, error)
 	MarkRead(ctx context.Context, userID string, ids []int64) (int, error)
+	Dismiss(ctx context.Context, userID string) (int, error)
 }
 
 type notificationHandler struct {
@@ -91,6 +92,21 @@ func (handler notificationHandler) markRead(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"read": read})
+}
+
+func (handler notificationHandler) dismiss(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	principal, ok := r.Context().Value(principalContextKey{}).(identitymodel.Principal)
+	if !ok {
+		unauthorizedSession(w)
+		return
+	}
+	dismissed, err := handler.notifications.Dismiss(r.Context(), principal.ID)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"dismissed": dismissed})
 }
 
 func (handler notificationHandler) writeError(w http.ResponseWriter, err error) {

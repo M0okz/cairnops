@@ -588,6 +588,7 @@ export const fr = {
   'session.refreshIncidents': 'Impossible d’actualiser les Incidents : {error}',
   'session.refreshMaintenances': 'Impossible d’actualiser les Maintenances : {error}',
   'session.refreshNotifications': 'Impossible d’actualiser les notifications : {error}',
+  'session.dismissInboxFailed': 'Impossible de vider les notifications : {error}',
   'session.acknowledged': 'Incident acquitté et état partagé immédiatement.',
   'session.acknowledgedUnsynced':
     'Incident acquitté dans CairnOps ; Zabbix n’a pas confirmé la synchronisation.',
@@ -1143,6 +1144,8 @@ export const fr = {
   /* ── Boîte de réception ──────────────────────────────────────────────── */
   'inbox.title': 'Notifications',
   'inbox.note': 'ce que vous avez reçu',
+  'inbox.clear': 'Vider',
+  'inbox.cleared': 'Les notifications ont été vidées.',
   'inbox.unreadLabel_one': 'Notifications · {count} non lue',
   'inbox.unreadLabel_other': 'Notifications · {count} non lues',
   'inbox.opened': '{nature} · ouvert',

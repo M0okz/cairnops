@@ -17,6 +17,7 @@ func (*fakeChannelStore) List(context.Context) ([]Channel, error) { return nil, 
 func (*fakeChannelStore) Inbox(context.Context, string, int) (Inbox, error) { return Inbox{}, nil }
 
 func (*fakeChannelStore) MarkRead(context.Context, string, []int64) (int, error) { return 0, nil }
+func (*fakeChannelStore) Dismiss(context.Context, string) (int, error)           { return 0, nil }
 func (store *fakeChannelStore) CreateMattermost(_ context.Context, input PersistMattermostInput) (Channel, error) {
 	store.input = input
 	return Channel{Name: input.Name, Endpoint: input.Endpoint, Severities: input.Severities}, nil

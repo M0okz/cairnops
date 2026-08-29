@@ -12,11 +12,12 @@ import (
 )
 
 type fakeNotifications struct {
-	actor    string
-	input    notifications.CreateMattermostInput
-	inboxFor string
-	readFor  string
-	readIDs  []int64
+	actor        string
+	input        notifications.CreateMattermostInput
+	inboxFor     string
+	readFor      string
+	readIDs      []int64
+	dismissedFor string
 }
 
 func (*fakeNotifications) List(context.Context) ([]notifications.Channel, error) {
@@ -39,6 +40,11 @@ func (fake *fakeNotifications) Inbox(_ context.Context, userID string, _ int) (n
 func (fake *fakeNotifications) MarkRead(_ context.Context, userID string, ids []int64) (int, error) {
 	fake.readFor, fake.readIDs = userID, ids
 	return len(ids), nil
+}
+
+func (fake *fakeNotifications) Dismiss(_ context.Context, userID string) (int, error) {
+	fake.dismissedFor = userID
+	return 1, nil
 }
 
 func TestMattermostChannelCreationRequiresAdministratorAndDoesNotEchoWebhook(t *testing.T) {
@@ -160,5 +166,25 @@ func TestMarkReadRequiresSameOrigin(t *testing.T) {
 	server.Handler.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden || fake.readFor != "" {
 		t.Fatalf("a cross-origin request reached the service: status=%d for=%q", response.Code, fake.readFor)
+	}
+}
+
+// Une boîte consultée doit pouvoir être vidée sans désigner un compte : la
+// session reste l'unique propriétaire de ce geste.
+func TestDismissInboxCarriesTheSessionOwner(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeNotifications{}
+	server := NewServer(ServerOptions{Identity: &fakeIdentity{}, Notifications: fake})
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/notifications", nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("the inbox could not be cleared: status=%d body=%s", response.Code, response.Body)
+	}
+	if fake.dismissedFor != "user-id" {
+		t.Fatalf("the inbox was not cleared for the session owner: %q", fake.dismissedFor)
 	}
 }

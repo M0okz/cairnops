@@ -57,6 +57,7 @@ type Store interface {
 	CreateMattermost(context.Context, PersistMattermostInput) (Channel, error)
 	Inbox(ctx context.Context, userID string, limit int) (Inbox, error)
 	MarkRead(ctx context.Context, userID string, ids []int64) (int, error)
+	Dismiss(ctx context.Context, userID string) (int, error)
 }
 
 type Mattermost interface {
@@ -77,15 +78,19 @@ func (service *Service) List(ctx context.Context) ([]Channel, error) {
 	return service.store.List(ctx)
 }
 
-// Inbox et MarkRead ne portent que sur l'appelant : l'identifiant vient de la
-// session, jamais de la requête, si bien qu'aucun compte ne peut lire ni
-// marquer la boîte d'un autre.
+// Inbox, MarkRead et Dismiss ne portent que sur l'appelant : l'identifiant
+// vient de la session, jamais de la requête, si bien qu'aucun compte ne peut
+// lire ni modifier la boîte d'un autre.
 func (service *Service) Inbox(ctx context.Context, userID string, limit int) (Inbox, error) {
 	return service.store.Inbox(ctx, userID, limit)
 }
 
 func (service *Service) MarkRead(ctx context.Context, userID string, ids []int64) (int, error) {
 	return service.store.MarkRead(ctx, userID, ids)
+}
+
+func (service *Service) Dismiss(ctx context.Context, userID string) (int, error) {
+	return service.store.Dismiss(ctx, userID)
 }
 
 func (service *Service) CreateMattermost(ctx context.Context, actorID string, input CreateMattermostInput) (Channel, error) {

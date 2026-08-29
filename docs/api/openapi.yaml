@@ -2601,6 +2601,26 @@ paths:
                     items: { $ref: '#/components/schemas/InboxEntry' }
                   unread: { type: integer, minimum: 0 }
         '401': { description: Session absente }
+    delete:
+      operationId: dismissInbox
+      summary: Vider sa boîte de réception
+      description: >
+        Retire toutes les notifications du volet et remet son compteur à zéro
+        pour la personne connectée. La mémoire interne de livraison reste
+        disponible afin qu'une Résolution atteigne les mêmes destinataires que
+        l'ouverture, même si celle-ci a quitté le volet.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      responses:
+        '200':
+          description: Boîte vidée
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [dismissed]
+                properties:
+                  dismissed: { type: integer, minimum: 0 }
+        '401': { description: Session absente }
   /api/v1/notifications/read:
     post:
       operationId: markNotificationsRead

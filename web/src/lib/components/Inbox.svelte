@@ -5,9 +5,9 @@
    * conduit à l'endroit où l'on décide. Un Incident se traite sur sa Cible,
    * c'est donc là que chaque entrée mène.
    *
-   * Ouvrir la boîte marque son contenu comme lu. C'est le geste que l'on vient
-   * de faire — regarder — et le lui faire répéter par un bouton n'ajouterait
-   * rien. Lire n'efface pas : l'entrée reste, avec sa date. */
+   * Ouvrir la boîte marque son contenu comme lu. La vider est un geste séparé :
+   * il retire le bruit accumulé du volet sans perdre le routage d'une future
+   * Résolution. */
 
   import Icon from './Icon.svelte';
   import { session } from '$lib/session.svelte';
@@ -16,6 +16,8 @@
 
   let open = $state(false);
   let anchor = $state<HTMLDivElement | null>(null);
+  let clearing = $state(false);
+  let status = $state('');
 
   /* Le panneau se referme sur Échap et sur tout clic à l'extérieur, comme le
    * menu du compte. */
@@ -42,6 +44,15 @@
     if (open && session.unread > 0) void session.markInboxRead();
   }
 
+  async function clearInbox() {
+    if (clearing || (session.inbox.length === 0 && session.unread === 0)) return;
+    status = '';
+    clearing = true;
+    const cleared = await session.dismissInbox();
+    if (cleared) status = t('inbox.cleared');
+    clearing = false;
+  }
+
   /* Au-delà d'une centaine, le compte exact n'aide plus personne à décider. */
   const badge = $derived(session.unread > 99 ? '99+' : String(session.unread));
 </script>
@@ -64,8 +75,17 @@
   {#if open}
     <div class="panel" role="dialog" aria-modal="false" aria-label={t('inbox.title')}>
       <header>
-        <strong>{t('inbox.title')}</strong>
-        <span class="faint">{t('inbox.note')}</span>
+        <span class="heading">
+          <strong>{t('inbox.title')}</strong>
+          <span class="faint">{t('inbox.note')}</span>
+        </span>
+        <button
+          class="btn sm quiet clear"
+          type="button"
+          disabled={clearing || (session.inbox.length === 0 && session.unread === 0)}
+          aria-busy={clearing}
+          onclick={clearInbox}
+        >{t('inbox.clear')}</button>
       </header>
 
       <div class="entries">
@@ -100,6 +120,7 @@
       </div>
     </div>
   {/if}
+  <span class="visually-hidden" role="status">{status}</span>
 </div>
 
 <style>
@@ -160,11 +181,19 @@
   }
 
   header {
-    display: flex;
-    align-items: baseline;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
     gap: var(--s3);
     padding: 0.625rem 0.75rem;
     border-bottom: 1px solid var(--line);
+  }
+
+  .heading {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s3);
+    min-width: 0;
   }
 
   header strong {
@@ -174,6 +203,13 @@
 
   header .faint {
     font-size: 0.6875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .clear {
+    flex: none;
   }
 
   .entries {

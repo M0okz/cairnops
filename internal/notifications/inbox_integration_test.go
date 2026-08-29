@@ -132,6 +132,79 @@ func TestPostgresInAppDeliveryReachesEveryActiveAccount(t *testing.T) {
 	}
 }
 
+// Vider retire le bruit du volet, mais l'ouverture reste une mémoire de
+// routage : sa Résolution doit encore revenir à la même personne.
+func TestPostgresDismissedInboxStillRoutesTheResolution(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	store := notifications.NewPostgresStore(pool)
+
+	actor := seedAccount(t, pool, "operator")
+	neighbor := seedAccount(t, pool, "observer")
+	targetID, incidentID := seedActiveIncident(t, pool, "major")
+	for _, userID := range []string{actor, neighbor} {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO cairnops_notification_inbox (
+				user_id, incident_id, target_id, event_kind, target_name,
+				nature_label, severity, occurred_at
+			) VALUES ($1::uuid, $2::uuid, $3::uuid, 'firing', 'Cible intégrée',
+				'Indisponibilité', 'major', now())
+		`, userID, incidentID, targetID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	dismissed, err := store.Dismiss(ctx, actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dismissed != 1 {
+		t.Fatalf("une entrée devait quitter le volet : %d", dismissed)
+	}
+	actorInbox, err := store.Inbox(ctx, actor, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	neighborInbox, err := store.Inbox(ctx, neighbor, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actorInbox.Unread != 0 || len(actorInbox.Entries) != 0 {
+		t.Fatalf("le volet vidé contient encore l'ouverture : %+v", actorInbox)
+	}
+	if neighborInbox.Unread != 1 || len(neighborInbox.Entries) != 1 {
+		t.Fatalf("vider un volet a touché celui d'un autre compte : %+v", neighborInbox)
+	}
+
+	resolvedAt := time.Now().UTC()
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_incidents
+		SET status = 'resolved', resolved_at = $2
+		WHERE id = $1::uuid
+	`, incidentID, resolvedAt); err != nil {
+		t.Fatal(err)
+	}
+	delivered, err := store.Deliver(ctx, notifications.Delivery{
+		IncidentID: incidentID, ChannelID: inAppChannel(t, pool),
+		ChannelKind: notifications.KindInApp, EventKind: "resolved",
+		TargetName: "Cible intégrée", NatureLabel: "Indisponibilité",
+		Severity: "major", OpenedAt: resolvedAt.Add(-time.Hour), ResolvedAt: &resolvedAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivered != 2 {
+		t.Fatalf("la Résolution n'a pas retrouvé les deux destinataires : %d", delivered)
+	}
+	actorInbox, err = store.Inbox(ctx, actor, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actorInbox.Unread != 1 || len(actorInbox.Entries) != 1 || actorInbox.Entries[0].EventKind != "resolved" {
+		t.Fatalf("la Résolution n'est pas revenue dans le volet vidé : %+v", actorInbox)
+	}
+}
+
 func TestPostgresInAppResolutionReachesTheOpeningRecipientsOnly(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)

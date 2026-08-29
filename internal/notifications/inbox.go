@@ -49,7 +49,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		       inbox.nature_label, inbox.severity, inbox.occurred_at, inbox.read_at
 		FROM cairnops_notification_inbox inbox
 		JOIN cairnops_incidents incident ON incident.id = inbox.incident_id
-		WHERE inbox.user_id = $1::uuid
+		WHERE inbox.user_id = $1::uuid AND inbox.dismissed_at IS NULL
 		ORDER BY inbox.occurred_at DESC, inbox.id DESC
 		LIMIT $2
 	`, userID, limit)
@@ -76,7 +76,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 
 	if err := store.pool.QueryRow(ctx, `
 		SELECT count(*) FROM cairnops_notification_inbox
-		WHERE user_id = $1::uuid AND read_at IS NULL
+		WHERE user_id = $1::uuid AND read_at IS NULL AND dismissed_at IS NULL
 	`, userID).Scan(&inbox.Unread); err != nil {
 		return Inbox{}, fmt.Errorf("count unread notifications: %w", err)
 	}
@@ -92,7 +92,7 @@ func (store *PostgresStore) MarkRead(ctx context.Context, userID string, ids []i
 	query := `
 		UPDATE cairnops_notification_inbox
 		SET read_at = now()
-		WHERE user_id = $1::uuid AND read_at IS NULL
+		WHERE user_id = $1::uuid AND read_at IS NULL AND dismissed_at IS NULL
 	`
 	args := []any{userID}
 	if len(ids) > 0 {
@@ -102,6 +102,22 @@ func (store *PostgresStore) MarkRead(ctx context.Context, userID string, ids []i
 	result, err := store.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return 0, fmt.Errorf("mark notifications read: %w", err)
+	}
+	return int(result.RowsAffected()), nil
+}
+
+// Dismiss vide le volet d'une personne sans effacer la mémoire de livraison.
+// Les ouvertures retirées restent donc disponibles au routage d'une future
+// Résolution vers les mêmes destinataires, mais ne réapparaissent plus dans la
+// boîte et ne participent plus à son compteur.
+func (store *PostgresStore) Dismiss(ctx context.Context, userID string) (int, error) {
+	result, err := store.pool.Exec(ctx, `
+		UPDATE cairnops_notification_inbox
+		SET dismissed_at = now(), read_at = coalesce(read_at, now())
+		WHERE user_id = $1::uuid AND dismissed_at IS NULL
+	`, userID)
+	if err != nil {
+		return 0, fmt.Errorf("dismiss notification inbox: %w", err)
 	}
 	return int(result.RowsAffected()), nil
 }

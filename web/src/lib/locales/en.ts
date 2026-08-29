@@ -584,6 +584,7 @@ export const en: Record<MessageKey, string> = {
   'session.refreshIncidents': 'The Incidents could not be refreshed: {error}',
   'session.refreshMaintenances': 'The Maintenances could not be refreshed: {error}',
   'session.refreshNotifications': 'The notifications could not be refreshed: {error}',
+  'session.dismissInboxFailed': 'The notifications could not be cleared: {error}',
   'session.acknowledged': 'Incident acknowledged and the state shared at once.',
   'session.acknowledgedUnsynced':
     'Incident acknowledged in CairnOps; Zabbix has not confirmed the synchronisation.',
@@ -1133,6 +1134,8 @@ export const en: Record<MessageKey, string> = {
   /* ── Inbox ───────────────────────────────────────────────────────────── */
   'inbox.title': 'Notifications',
   'inbox.note': 'what reached you',
+  'inbox.clear': 'Clear',
+  'inbox.cleared': 'The notifications were cleared.',
   'inbox.unreadLabel_one': 'Notifications · {count} unread',
   'inbox.unreadLabel_other': 'Notifications · {count} unread',
   'inbox.opened': '{nature} · opened',

@@ -173,6 +173,7 @@ func NewServer(options ServerOptions) *http.Server {
 		// La boîte de réception n'est pas une administration : chacun lit la
 		// sienne, quel que soit son rôle.
 		mux.Handle("GET /api/v1/notifications", identityHTTP.requireSession(http.HandlerFunc(handler.inbox)))
+		mux.Handle("DELETE /api/v1/notifications", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(handler.dismiss))))
 		mux.Handle("POST /api/v1/notifications/read", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(handler.markRead))))
 	}
 	if options.Events != nil && options.Identity != nil {

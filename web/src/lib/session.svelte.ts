@@ -601,6 +601,28 @@ class Session {
     }
   }
 
+  /* Vider retire toute la boîte visible, y compris ce qui dépassait la page
+   * chargée. Le serveur conserve séparément la mémoire indispensable au
+   * routage d'une future Résolution. */
+  async dismissInbox(): Promise<boolean> {
+    if (this.inbox.length === 0 && this.unread === 0) return true;
+    const previousEntries = this.inbox;
+    const previousUnread = this.unread;
+    this.inbox = [];
+    this.unread = 0;
+    try {
+      await api<{ dismissed: number }>('/api/v1/notifications', { method: 'DELETE' });
+      await this.loadInbox();
+      return true;
+    } catch (cause) {
+      if (this.#expired(cause)) return false;
+      this.inbox = previousEntries;
+      this.unread = previousUnread;
+      this.showNotice(t('session.dismissInboxFailed', { error: messageFrom(cause) }));
+      return false;
+    }
+  }
+
   async loadMeasures() {
     try {
       const response = await api<{ targets: TargetMeasures[] }>('/api/v1/metrics/targets');
