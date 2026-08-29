@@ -16,6 +16,18 @@
   const insetX = 4;
   const insetY = $derived(compact ? 5 : 12);
   let selected = $state<number | null>(null);
+  let chart = $state<SVGSVGElement | null>(null);
+  let renderedWidth = $state(width);
+
+  $effect(() => {
+    if (!chart) return;
+    const measure = () => (renderedWidth = chart?.getBoundingClientRect().width || width);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(chart);
+    return () => observer.disconnect();
+  });
 
   const geometry = $derived.by(() => {
     if (points.length === 0) return { line: '', area: '', coordinates: [] as Array<{ x: number; y: number }> };
@@ -42,10 +54,11 @@
   const pickedCoordinate = $derived(selected === null ? null : geometry.coordinates[selected]);
   const markerIndex = $derived(marker ? incidentMarkerIndex(points, marker.at) : null);
   const markerCoordinate = $derived(markerIndex === null ? null : geometry.coordinates[markerIndex]);
+  const markerHorizontalScale = $derived(renderedWidth > 0 ? width / renderedWidth : 1);
   const accessibleLabel = $derived(marker && markerCoordinate ? `${label}. Repère : ${marker.label}.` : label);
 </script>
 
-<svg class="area-chart" class:compact viewBox="0 0 {width} {height}" role="img" aria-label={accessibleLabel} preserveAspectRatio="none" onpointermove={pick} onpointerleave={() => (selected = null)}>
+<svg bind:this={chart} class="area-chart" class:compact viewBox="0 0 {width} {height}" role="img" aria-label={accessibleLabel} preserveAspectRatio="none" onpointermove={pick} onpointerleave={() => (selected = null)}>
   <title>{accessibleLabel}</title>
   {#if geometry.line}
     <path class="fill" d={geometry.area} />
@@ -55,11 +68,12 @@
   {/if}
   {#if marker && markerCoordinate}
     {@const labelWidth = 104}
-    {@const labelX = Math.min(width - labelWidth - 4, Math.max(4, markerCoordinate.x - labelWidth / 2))}
+    {@const labelHalfWidth = (labelWidth / 2 + 4) * markerHorizontalScale}
+    {@const labelCenterX = Math.min(width - labelHalfWidth, Math.max(labelHalfWidth, markerCoordinate.x))}
     <g class="marker {marker.tone}" aria-hidden="true">
       <line class="marker-guide" x1={markerCoordinate.x} x2={markerCoordinate.x} y1="25" y2={height - insetY} vector-effect="non-scaling-stroke" />
-      <circle class="marker-point" cx={markerCoordinate.x} cy={markerCoordinate.y} r="3.25" vector-effect="non-scaling-stroke" />
-      <g class="marker-label" transform={`translate(${labelX},3)`}>
+      <circle class="marker-point" cx="0" cy="0" r="3.25" transform={`translate(${markerCoordinate.x},${markerCoordinate.y}) scale(${markerHorizontalScale},1)`} vector-effect="non-scaling-stroke" />
+      <g class="marker-label" transform={`translate(${labelCenterX},3) scale(${markerHorizontalScale},1) translate(${-labelWidth / 2},0)`}>
         <rect width={labelWidth} height="20" rx="4" vector-effect="non-scaling-stroke" />
         <text x={labelWidth / 2} y="13.5" text-anchor="middle">{marker.label}</text>
       </g>
