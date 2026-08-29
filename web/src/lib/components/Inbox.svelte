@@ -16,6 +16,7 @@
 
   let open = $state(false);
   let anchor = $state<HTMLDivElement | null>(null);
+  let triggerElement = $state<HTMLButtonElement | null>(null);
   let clearing = $state(false);
   let status = $state('');
 
@@ -28,7 +29,10 @@
       if (anchor && !anchor.contains(event.target as Node)) open = false;
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') open = false;
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      open = false;
+      requestAnimationFrame(() => triggerElement?.focus());
     };
 
     document.addEventListener('pointerdown', away);
@@ -66,6 +70,7 @@
     aria-label={session.unread > 0
       ? plural('inbox.unreadLabel', session.unread)
       : t('inbox.title')}
+    bind:this={triggerElement}
     onclick={toggle}
   >
     <Icon name="bell" size={14} />
