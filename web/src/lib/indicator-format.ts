@@ -39,3 +39,33 @@ export function indicatorBounds(points: IndicatorPoint[], unit: IndicatorUnit): 
   const padding = (high - low) * .08;
   return [unit === 'days' ? 0 : Math.max(0, low - padding), high + padding];
 }
+
+export function incidentMarkerIndex(points: IndicatorPoint[], openedAt: string): number | null {
+  const opened = new Date(openedAt).getTime();
+  if (!Number.isFinite(opened) || points.length === 0) return null;
+
+  let closest: number | null = null;
+  let distance = Number.POSITIVE_INFINITY;
+  points.forEach((point, index) => {
+    const observed = new Date(point.at).getTime();
+    if (!Number.isFinite(observed)) return;
+    const candidate = Math.abs(observed - opened);
+    if (candidate < distance) {
+      closest = index;
+      distance = candidate;
+    }
+  });
+  return closest;
+}
+
+export function incidentMarkerIsVisible(
+  openedAt: string,
+  generatedAt: string,
+  window: '24h' | '7d'
+): boolean {
+  const opened = new Date(openedAt).getTime();
+  const generated = new Date(generatedAt).getTime();
+  if (!Number.isFinite(opened) || !Number.isFinite(generated)) return false;
+  const duration = window === '24h' ? 24 * 60 * 60 * 1_000 : 7 * 24 * 60 * 60 * 1_000;
+  return opened >= generated - duration && opened <= generated;
+}

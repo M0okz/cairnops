@@ -1,13 +1,14 @@
 <script lang="ts">
   import type { IndicatorPoint, IndicatorUnit } from '$lib/api';
-  import { formatIndicator, indicatorBounds } from '$lib/indicator-format';
+  import { formatIndicator, incidentMarkerIndex, indicatorBounds } from '$lib/indicator-format';
 
-  let { points, unit, interactive = false, compact = false, label = 'Courbe de l’Indicateur' }: {
+  let { points, unit, interactive = false, compact = false, label = 'Courbe de l’Indicateur', marker = null }: {
     points: IndicatorPoint[];
     unit: IndicatorUnit;
     interactive?: boolean;
     compact?: boolean;
     label?: string;
+    marker?: { at: string; label: string; tone: 'info' | 'warn' | 'crit' } | null;
   } = $props();
 
   const width = 640;
@@ -39,15 +40,30 @@
 
   const picked = $derived(selected === null ? null : points[selected]);
   const pickedCoordinate = $derived(selected === null ? null : geometry.coordinates[selected]);
+  const markerIndex = $derived(marker ? incidentMarkerIndex(points, marker.at) : null);
+  const markerCoordinate = $derived(markerIndex === null ? null : geometry.coordinates[markerIndex]);
+  const accessibleLabel = $derived(marker && markerCoordinate ? `${label}. Repère : ${marker.label}.` : label);
 </script>
 
-<svg class="area-chart" class:compact viewBox="0 0 {width} {height}" role="img" aria-label={label} preserveAspectRatio="none" onpointermove={pick} onpointerleave={() => (selected = null)}>
-  <title>{label}</title>
+<svg class="area-chart" class:compact viewBox="0 0 {width} {height}" role="img" aria-label={accessibleLabel} preserveAspectRatio="none" onpointermove={pick} onpointerleave={() => (selected = null)}>
+  <title>{accessibleLabel}</title>
   {#if geometry.line}
     <path class="fill" d={geometry.area} />
     <path class="line" d={geometry.line} vector-effect="non-scaling-stroke" />
   {:else}
     <path class="empty" d="M4,{height / 2}H636" vector-effect="non-scaling-stroke" />
+  {/if}
+  {#if marker && markerCoordinate}
+    {@const labelWidth = 104}
+    {@const labelX = Math.min(width - labelWidth - 4, Math.max(4, markerCoordinate.x - labelWidth / 2))}
+    <g class="marker {marker.tone}" aria-hidden="true">
+      <line class="marker-guide" x1={markerCoordinate.x} x2={markerCoordinate.x} y1="25" y2={height - insetY} vector-effect="non-scaling-stroke" />
+      <circle class="marker-point" cx={markerCoordinate.x} cy={markerCoordinate.y} r="3.25" vector-effect="non-scaling-stroke" />
+      <g class="marker-label" transform={`translate(${labelX},3)`}>
+        <rect width={labelWidth} height="20" rx="4" vector-effect="non-scaling-stroke" />
+        <text x={labelWidth / 2} y="13.5" text-anchor="middle">{marker.label}</text>
+      </g>
+    </g>
   {/if}
   {#if picked && pickedCoordinate}
     <line class="guide" x1={pickedCoordinate.x} x2={pickedCoordinate.x} y1={insetY} y2={height - insetY} vector-effect="non-scaling-stroke" />
@@ -67,6 +83,14 @@
   .empty { fill: none; stroke: currentColor; stroke-width: 1; stroke-dasharray: 4 5; opacity: .35; }
   .guide { stroke: var(--line-strong); stroke-width: 1; }
   circle { fill: var(--surface); stroke: currentColor; stroke-width: 1.5; }
+  .marker.info { color: var(--info); }
+  .marker.warn { color: var(--warn); }
+  .marker.crit { color: var(--crit); }
+  .marker-guide { stroke: currentColor; stroke-width: 1; stroke-dasharray: 3 3; opacity: .8; }
+  .marker-point { fill: var(--surface); stroke: currentColor; stroke-width: 1.75; }
+  .marker-label rect { fill: var(--surface); stroke: currentColor; }
+  .marker-label text { fill: var(--ink); font-family: var(--font); font-size: 9px; font-weight: var(--weight-semibold); }
   .tooltip rect { fill: var(--surface-3); stroke: var(--line-strong); }
   .tooltip text { fill: var(--ink); font-family: var(--font-num); font-size: 9px; }
+  @media (max-width: 48rem) { .marker-label { display: none; } }
 </style>

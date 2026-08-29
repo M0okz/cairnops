@@ -59,10 +59,10 @@ La fiche d'une Cible affiche tous ses Indicateurs. Chaque personne peut en
 serveur et suit donc son compte sur mobile. La liste compacte n'en montre qu'un
 par Cible.
 
-La fiche d'un Incident affiche les valeurs contemporaines de son ouverture et
-une courte courbe environnante. La mention « corrélation temporelle uniquement »
-reste visible : ce rapprochement aide le diagnostic, mais ne prouve pas une
-cause.
+Lorsqu'une Cible porte un Incident actif, sa fiche conserve une seule section
+**Indicateurs** et place l'ouverture de l'Incident comme repère directement sur
+chaque courbe de la fenêtre affichée. Le libellé rappelle que ce rapprochement
+est seulement temporel et ne prouve pas une cause.
 
 Une panne de la seule capacité Indicateurs n'abaisse pas artificiellement le
 Connecteur entier. L'interface distingue par exemple « Incidents synchronisés ·

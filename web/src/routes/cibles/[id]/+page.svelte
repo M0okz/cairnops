@@ -11,7 +11,6 @@
   import Odometer from '$lib/components/Odometer.svelte';
   import MaintenanceWorkshop from '$lib/components/MaintenanceWorkshop.svelte';
   import TargetIndicators from '$lib/components/TargetIndicators.svelte';
-  import IncidentIndicatorContext from '$lib/components/IncidentIndicatorContext.svelte';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
   import ReconciliationWorkshop from '$lib/components/ReconciliationWorkshop.svelte';
   import { reconciliationState } from '$lib/reconciliation.svelte';
@@ -421,9 +420,7 @@
         </div>
       </div>
 
-      <TargetIndicators targetId={target.id} />
-
-      {#if lead}<IncidentIndicatorContext incidentId={lead.id} />{/if}
+      <TargetIndicators targetId={target.id} incident={lead} />
 
       <div class="split">
         <section>

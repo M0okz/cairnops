@@ -22,7 +22,6 @@ import {
   type TargetMeasureDetail,
   type TargetMeasures,
   type TargetIndicators,
-  type IncidentIndicators,
   type ContextIndicator,
   type User
 } from './api';
@@ -94,7 +93,6 @@ class Session {
    * dans le même objet rendrait trop facile de les faire participer à la santé. */
   indicatorOverview = $state<Record<string, TargetIndicators>>({});
   indicatorDetails = $state<Record<string, TargetIndicators>>({});
-  incidentIndicatorDetails = $state<Record<string, IncidentIndicators>>({});
 
   /* Les Observations brutes d'une Cible, sous le Journal qui les résume. Elles
    * ne sont chargées que lorsqu'on demande à les voir : ce sont des milliers de
@@ -398,7 +396,6 @@ class Session {
       this.measureDetails = {};
       this.indicatorOverview = {};
       this.indicatorDetails = {};
-      this.incidentIndicatorDetails = {};
       this.connectors = [];
       this.incidents = [];
       this.incidentHistoryTarget = '';
@@ -655,17 +652,6 @@ class Session {
     }
   }
 
-  async loadIncidentIndicators(incidentId: string) {
-    try {
-      const detail = await api<IncidentIndicators>(`/api/v1/incidents/${incidentId}/indicators`);
-      this.incidentIndicatorDetails = { ...this.incidentIndicatorDetails, [incidentId]: detail };
-      return detail;
-    } catch (cause) {
-      if (this.#expired(cause)) return null;
-      return null;
-    }
-  }
-
   async toggleIndicatorPin(indicator: ContextIndicator) {
     const current = Object.values(this.indicatorOverview)
       .flatMap((target) => target.indicators)
@@ -803,7 +789,6 @@ class Session {
           const [targetId, window] = key.split(':') as [string, '24h' | '7d'];
           void this.loadTargetIndicators(targetId, window);
         }
-        for (const incidentId of Object.keys(this.incidentIndicatorDetails)) void this.loadIncidentIndicators(incidentId);
       }
       this.#dirty.clear();
     }, 90);
