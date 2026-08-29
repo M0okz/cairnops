@@ -11,6 +11,7 @@
   import ZabbixConnector from '$lib/components/ZabbixConnector.svelte';
   import UptimeKumaConnector from '$lib/components/UptimeKumaConnector.svelte';
   import PatchMonConnector from '$lib/components/PatchMonConnector.svelte';
+  import ArgusConnector from '$lib/components/ArgusConnector.svelte';
   import GenericWebhookConnector from '$lib/components/GenericWebhookConnector.svelte';
   import { session } from '$lib/session.svelte';
   import type { ConnectorImportResult } from '$lib/api';
@@ -19,6 +20,7 @@
     zabbix: 'Zabbix',
     'uptime-kuma': 'Uptime Kuma',
     patchmon: 'PatchMon',
+    argus: 'Argus',
     'generic-webhook': t('connector.genericWebhook')
   } as const;
 
@@ -42,7 +44,9 @@
           ? 'connectorPage.kumaImported'
           : result.connector.kind === 'patchmon'
             ? 'connectorPage.patchmonImported'
-            : 'connectorPage.zabbixImported',
+            : result.connector.kind === 'argus'
+              ? 'connectorPage.argusImported'
+              : 'connectorPage.zabbixImported',
         result.targets.length
       )
     );
@@ -77,6 +81,8 @@
   <UptimeKumaConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else if kind === 'patchmon'}
   <PatchMonConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
+{:else if kind === 'argus'}
+  <ArgusConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else}
   <GenericWebhookConnector
     onclose={leave}

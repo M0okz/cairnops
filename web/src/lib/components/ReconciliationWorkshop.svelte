@@ -4,6 +4,7 @@
   import { reconciliationState } from '$lib/reconciliation.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { t } from '$lib/i18n.svelte';
+  import { natureLabel } from '$lib/format';
   import Checkbox from './ui/Checkbox.svelte';
 
   let {
@@ -198,7 +199,7 @@
           <div class="warnings">{#each preview.warnings as warning}<p><i></i>{warning}</p>{/each}</div>
         {/if}
         {#if preview.incident_conflicts.length > 0}
-          <section class="conflicts"><strong>{t('reconciliation.incidentsCombined')}</strong>{#each preview.incident_conflicts as conflict}<span>{conflict.nature_label}</span>{/each}</section>
+          <section class="conflicts"><strong>{t('reconciliation.incidentsCombined')}</strong>{#each preview.incident_conflicts as conflict}<span>{natureLabel(conflict)}</span>{/each}</section>
         {/if}
 
         {#if source && preview.secondary.source_count === 1}

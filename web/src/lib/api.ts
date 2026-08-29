@@ -143,7 +143,7 @@ export type TargetMeasures = {
 export type SourceMeasures = {
   source_id: string;
   name: string;
-  kind: SourceKind | 'zabbix' | 'uptime_kuma' | 'patchmon' | 'generic_webhook';
+  kind: SourceKind | 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'generic_webhook';
   origin: 'native' | 'integration';
   measures_availability: boolean;
   latest_outcome?: Outcome;
@@ -201,7 +201,7 @@ export type SystemHealth = {
 
 export type Connector = {
   id: string;
-  kind: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'generic_webhook';
+  kind: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'generic_webhook';
   name: string;
   endpoint: string;
   status: 'connected' | 'degraded' | 'disabled';
@@ -580,6 +580,44 @@ export type PatchMonPreview = {
 
 export type PatchMonImportResult = ConnectorImportResult;
 
+export type ArgusServicePreview = {
+  external_id: string;
+  name: string;
+  active: boolean;
+  importable: boolean;
+  ineligibility?: 'inactive' | 'deployed_version_not_configured';
+  deployed_version?: string;
+  latest_version?: string;
+  last_checked?: string;
+  approved: boolean;
+  skipped: boolean;
+  unknown: boolean;
+  unknown_reason?: string;
+  deployment_state: 0 | 1 | 2 | 3 | 4;
+  version_url?: string;
+  candidate_targets?: TargetMatch[];
+  suggested_target?: TargetReference;
+  already_imported_to?: TargetReference;
+};
+
+export type ArgusPreview = {
+  kind: 'argus';
+  name: string;
+  endpoint: string;
+  version: string;
+  compatibility: 'supported';
+  compatibility_label: string;
+  encrypted_transport: boolean;
+  importable_count: number;
+  pending_update_count: number;
+  services: ArgusServicePreview[];
+  available_targets: TargetReference[];
+  receipt: string;
+  expires_at: string;
+};
+
+export type ArgusImportResult = ConnectorImportResult;
+
 export type GenericWebhookCreated = {
   connector: Connector;
   endpoint: string;
@@ -614,7 +652,7 @@ export type IncidentSeverity = 'information' | 'warning' | 'major' | 'critical';
 
 export type IncidentSignal = {
   id: string;
-  origin: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'webhook' | 'native';
+  origin: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'webhook' | 'native';
   connector_id?: string;
   connector_name?: string;
   external_event_id?: string;
@@ -709,6 +747,7 @@ export type InboxEntry = {
   target_id?: string;
   event_kind: 'firing' | 'resolved';
   target_name: string;
+  nature_key: string;
   nature_label: string;
   severity: IncidentSeverity;
   occurred_at: string;

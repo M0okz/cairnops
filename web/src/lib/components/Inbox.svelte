@@ -11,7 +11,7 @@
 
   import Icon from './Icon.svelte';
   import { session } from '$lib/session.svelte';
-  import { severityTone, since, stamp } from '$lib/format';
+  import { natureLabel, severityTone, since, stamp } from '$lib/format';
   import { plural, t } from '$lib/i18n.svelte';
 
   let open = $state(false);
@@ -83,8 +83,8 @@
               <strong>{entry.target_name}</strong>
               <small class="faint">
                 {entry.event_kind === 'resolved'
-                  ? t('inbox.resolved', { nature: entry.nature_label })
-                  : t('inbox.opened', { nature: entry.nature_label })}
+                  ? t('inbox.resolved', { nature: natureLabel(entry) })
+                  : t('inbox.opened', { nature: natureLabel(entry) })}
               </small>
             </span>
             <span class="when num faint" title={stamp(entry.occurred_at)}>

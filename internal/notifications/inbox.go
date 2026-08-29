@@ -22,6 +22,7 @@ type InboxEntry struct {
 	TargetID    string             `json:"target_id,omitempty"`
 	EventKind   string             `json:"event_kind"`
 	TargetName  string             `json:"target_name"`
+	NatureKey   string             `json:"nature_key"`
 	NatureLabel string             `json:"nature_label"`
 	Severity    incidents.Severity `json:"severity"`
 	OccurredAt  time.Time          `json:"occurred_at"`
@@ -43,11 +44,13 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 	}
 
 	rows, err := store.pool.Query(ctx, `
-		SELECT id, incident_id::text, coalesce(target_id::text, ''), event_kind,
-		       target_name, nature_label, severity, occurred_at, read_at
-		FROM cairnops_notification_inbox
-		WHERE user_id = $1::uuid
-		ORDER BY occurred_at DESC, id DESC
+		SELECT inbox.id, inbox.incident_id::text, coalesce(inbox.target_id::text, ''),
+		       inbox.event_kind, inbox.target_name, incident.nature_key,
+		       inbox.nature_label, inbox.severity, inbox.occurred_at, inbox.read_at
+		FROM cairnops_notification_inbox inbox
+		JOIN cairnops_incidents incident ON incident.id = inbox.incident_id
+		WHERE inbox.user_id = $1::uuid
+		ORDER BY inbox.occurred_at DESC, inbox.id DESC
 		LIMIT $2
 	`, userID, limit)
 	if err != nil {
@@ -60,7 +63,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		var entry InboxEntry
 		if err := rows.Scan(
 			&entry.ID, &entry.IncidentID, &entry.TargetID, &entry.EventKind,
-			&entry.TargetName, &entry.NatureLabel, &entry.Severity,
+			&entry.TargetName, &entry.NatureKey, &entry.NatureLabel, &entry.Severity,
 			&entry.OccurredAt, &entry.ReadAt,
 		); err != nil {
 			return Inbox{}, fmt.Errorf("scan notification inbox: %w", err)

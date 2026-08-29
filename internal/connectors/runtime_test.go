@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
@@ -16,11 +17,12 @@ import (
 )
 
 type runtimeStore struct {
-	connectors   []RuntimeConnector
-	completed    bool
-	failed       string
-	claimedKind  string
-	observations []IntegrationObservation
+	connectors    []RuntimeConnector
+	completed     bool
+	failed        string
+	claimedKind   string
+	observations  []IntegrationObservation
+	argusBindings []ArgusBindingSnapshot
 }
 
 func (store *runtimeStore) ClaimDueConnector(_ context.Context, kind, _ string, _ int, _ time.Duration) ([]RuntimeConnector, error) {
@@ -42,6 +44,11 @@ func (store *runtimeStore) RecordIntegrationObservations(_ context.Context, _ ti
 	return nil
 }
 
+func (store *runtimeStore) UpdateArgusBindings(_ context.Context, _ string, bindings []ArgusBindingSnapshot) error {
+	store.argusBindings = bindings
+	return nil
+}
+
 type problemClient struct {
 	problems []zabbix.Problem
 	err      error
@@ -55,6 +62,7 @@ type incidentReconciler struct {
 	input         incidents.ReconcileZabbixInput
 	kumaInput     incidents.ReconcileUptimeKumaInput
 	patchMonInput incidents.ReconcilePatchMonInput
+	argusInput    incidents.ReconcileArgusInput
 }
 
 func (reconciler *incidentReconciler) ReconcileZabbix(_ context.Context, input incidents.ReconcileZabbixInput) error {
@@ -69,6 +77,11 @@ func (reconciler *incidentReconciler) ReconcileUptimeKuma(_ context.Context, inp
 
 func (reconciler *incidentReconciler) ReconcilePatchMon(_ context.Context, input incidents.ReconcilePatchMonInput) error {
 	reconciler.patchMonInput = input
+	return nil
+}
+
+func (reconciler *incidentReconciler) ReconcileArgus(_ context.Context, input incidents.ReconcileArgusInput) error {
+	reconciler.argusInput = input
 	return nil
 }
 
@@ -108,6 +121,75 @@ func TestPatchMonSynchronizerProjectsPostureWithoutAvailabilitySemantics(t *test
 	}
 	if len(store.observations) != 1 || store.observations[0].Outcome != "unhealthy" || store.observations[0].LatencyMilliseconds != nil {
 		t.Fatalf("unexpected posture observation: %#v", store.observations)
+	}
+}
+
+type argusInspectionClient struct {
+	inspection argus.Inspection
+	err        error
+}
+
+func (client argusInspectionClient) Inspect(context.Context, string, argus.Credentials) (argus.Inspection, error) {
+	return client.inspection, client.err
+}
+
+func TestArgusSynchronizerKeepsValidServicesAndDegradesPartialFailures(t *testing.T) {
+	t.Parallel()
+	box, _ := secretbox.New(bytes.Repeat([]byte{0x7a}, 32))
+	credential, _ := json.Marshal(argus.Credentials{Username: "reader", Password: "secret"})
+	sealed, _ := box.Seal(credential, "connector:argus:https://argus.example.net")
+	store := &runtimeStore{connectors: []RuntimeConnector{{
+		ID: "connector-argus", Endpoint: "https://argus.example.net", CredentialSealed: sealed,
+		Bindings: []RuntimeBinding{
+			{ID: "binding-api", TargetID: "target-api", ExternalID: "api"},
+			{ID: "binding-skip", TargetID: "target-skip", ExternalID: "skipped"},
+			{ID: "binding-broken", TargetID: "target-broken", ExternalID: "broken"},
+			{ID: "binding-removed", TargetID: "target-removed", ExternalID: "removed", ExternalName: "Removed", Metadata: map[string]any{
+				"deployed_version": "4.0.0", "latest_version": "4.1.0", "approved": false,
+				"skipped": false, "last_checked": "2026-08-28T08:00:00Z",
+			}},
+		},
+	}}}
+	reconciler := &incidentReconciler{}
+	synchronizer := NewArgusSynchronizer(store, reconciler, argusInspectionClient{inspection: argus.Inspection{
+		Endpoint: "https://argus.example.net", Version: "0.35.0", Compatibility: "supported",
+		Services: []argus.Service{
+			{ID: "api", Name: "Public API", Active: true, Importable: true, DeployedVersion: "1.2.2", LatestVersion: "1.2.3", LastChecked: "2026-08-29T08:00:00Z", Approved: true, DeploymentState: argus.DeploymentStateApproved, LatestQueryOK: true, DeployedQueryOK: true, VersionURL: "https://releases.example/1.2.3"},
+			{ID: "skipped", Name: "Skipped", Active: true, Importable: true, DeployedVersion: "2.0.0", LatestVersion: "2.1.0", Skipped: true, DeploymentState: argus.DeploymentStateSkipped, LatestQueryOK: true, DeployedQueryOK: true},
+			{ID: "broken", Name: "Broken", Active: true, Importable: true, DeployedVersion: "3.0.0", LatestVersion: "3.1.0", Unknown: true, UnknownReason: "latest_version_query_failed", DeploymentState: argus.DeploymentStateUnactioned, DeployedQueryOK: true},
+		},
+	}}, box, "server-one", nil)
+	synchronizer.now = func() time.Time { return time.Date(2026, 8, 29, 10, 0, 0, 0, time.UTC) }
+
+	if err := synchronizer.tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if store.claimedKind != "argus" || store.completed || store.failed != "2 Sources Argus inconnues" {
+		t.Fatalf("partial Argus failure should degrade after processing valid services: %#v", store)
+	}
+	if len(store.observations) != 4 {
+		t.Fatalf("expected an observation for every imported Argus service: %#v", store.observations)
+	}
+	if len(store.argusBindings) != 3 || store.argusBindings[0].ExternalName != "Public API" {
+		t.Fatalf("Argus service labels and snapshots must stay mutable: %#v", store.argusBindings)
+	}
+	outcomes := map[string]string{}
+	for _, observation := range store.observations {
+		outcomes[observation.BindingID] = observation.Outcome
+	}
+	if outcomes["binding-api"] != "unhealthy" || outcomes["binding-skip"] != "healthy" || outcomes["binding-broken"] != "unknown" || outcomes["binding-removed"] != "unknown" {
+		t.Fatalf("unexpected Argus observation outcomes: %#v", outcomes)
+	}
+	for _, observation := range store.observations {
+		if observation.BindingID == "binding-removed" && (observation.Details["deployed_version"] != "4.0.0" || observation.Details["last_checked"] != "2026-08-28T08:00:00Z") {
+			t.Fatalf("a missing Argus service must keep its last posture details: %#v", observation)
+		}
+	}
+	if len(reconciler.argusInput.Signals) != 1 || reconciler.argusInput.Signals[0].LatestVersion != "1.2.3" || reconciler.argusInput.Signals[0].NatureKey != "software-update-available" {
+		t.Fatalf("expected one active software update signal: %#v", reconciler.argusInput)
+	}
+	if len(reconciler.argusInput.ObservedBindings) != 2 {
+		t.Fatalf("only valid update and skipped states may resolve incidents: %#v", reconciler.argusInput)
 	}
 }
 

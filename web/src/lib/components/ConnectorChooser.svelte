@@ -8,7 +8,7 @@
     onselect
   }: {
     onclose: () => void;
-    onselect: (kind: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'generic_webhook') => void;
+    onselect: (kind: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'generic_webhook') => void;
   } = $props();
 
   const choices = [
@@ -35,6 +35,14 @@
       name: 'PatchMon',
       note: t('chooser.patchmon'),
       access: t('chooser.readApiToken')
+    },
+    {
+      kind: 'argus' as const,
+      icon: null,
+      brand: 'argus' as BrandName,
+      name: 'Argus',
+      note: t('chooser.argus'),
+      access: t('chooser.optionalBasicAuth')
     },
     {
       kind: 'generic_webhook' as const,

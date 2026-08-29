@@ -919,6 +919,242 @@ func (store *PostgresStore) ReconcilePatchMon(ctx context.Context, input Reconci
 	return nil
 }
 
+func (store *PostgresStore) ReconcileArgus(ctx context.Context, input ReconcileArgusInput) error {
+	observedAt := input.ObservedAt.UTC()
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin Argus incident reconciliation: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	seen := make(map[string]struct{}, len(input.Signals))
+	observedBindings := make(map[string]struct{}, len(input.ObservedBindings))
+	for _, bindingID := range input.ObservedBindings {
+		observedBindings[bindingID] = struct{}{}
+	}
+	impacted := make(map[string]struct{})
+	for _, signal := range input.Signals {
+		if _, duplicate := seen[signal.BindingID]; duplicate {
+			continue
+		}
+		seen[signal.BindingID] = struct{}{}
+		details := make(map[string]any, len(signal.Details)+2)
+		for key, value := range signal.Details {
+			details[key] = value
+		}
+		details["deployed_version"] = signal.DeployedVersion
+		details["latest_version"] = signal.LatestVersion
+		metadata, err := json.Marshal(details)
+		if err != nil {
+			return fmt.Errorf("encode Argus signal details: %w", err)
+		}
+
+		var signalID, incidentID, previousDeployed, previousLatest string
+		var previousApproved, previousSkipped bool
+		err = tx.QueryRow(ctx, `
+			SELECT id::text, incident_id::text,
+			       coalesce(metadata->>'deployed_version', ''),
+			       coalesce(metadata->>'latest_version', ''),
+			       coalesce((metadata->>'approved')::boolean, false),
+			       coalesce((metadata->>'skipped')::boolean, false)
+			FROM cairnops_incident_signals
+			WHERE origin = 'argus' AND connector_id = $1::uuid
+			  AND connector_binding_id = $2::uuid
+			  AND external_object_id = 'software_update' AND active
+			FOR UPDATE
+		`, input.ConnectorID, signal.BindingID).Scan(
+			&signalID, &incidentID,
+			&previousDeployed, &previousLatest, &previousApproved, &previousSkipped,
+		)
+		if err == nil {
+			if _, err := tx.Exec(ctx, `
+				UPDATE cairnops_incident_signals
+				SET name = $2, severity = $3, metadata = $4::jsonb,
+				    last_seen_at = $5, updated_at = now()
+				WHERE id = $1::uuid
+			`, signalID, signal.Name, signal.Severity, metadata, observedAt); err != nil {
+				return fmt.Errorf("refresh Argus incident signal: %w", err)
+			}
+			approved, _ := details["approved"].(bool)
+			skipped, _ := details["skipped"].(bool)
+			if previousDeployed != signal.DeployedVersion || previousLatest != signal.LatestVersion || previousApproved != approved || previousSkipped != skipped {
+				if err := insertActivity(ctx, tx, incidentID, "signal_updated", "argus", "", "Version Argus actualisée", map[string]any{
+					"service_id":                signal.ExternalService,
+					"previous_deployed_version": previousDeployed, "deployed_version": signal.DeployedVersion,
+					"previous_latest_version": previousLatest, "latest_version": signal.LatestVersion,
+					"previous_approved": previousApproved, "approved": approved,
+					"previous_skipped": previousSkipped, "skipped": skipped,
+				}); err != nil {
+					return err
+				}
+			}
+			impacted[incidentID] = struct{}{}
+			continue
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("find active Argus incident signal: %w", err)
+		}
+
+		var invalidatedSignalID string
+		err = tx.QueryRow(ctx, `
+			SELECT id::text
+			FROM cairnops_incident_signals
+			WHERE origin = 'argus' AND connector_id = $1::uuid
+			  AND connector_binding_id = $2::uuid
+			  AND external_object_id = 'software_update'
+			  AND invalidated_at IS NOT NULL AND rearmed_at IS NULL
+			ORDER BY invalidated_at DESC
+			LIMIT 1
+			FOR UPDATE
+		`, input.ConnectorID, signal.BindingID).Scan(&invalidatedSignalID)
+		if err == nil {
+			if _, err := tx.Exec(ctx, `
+				UPDATE cairnops_incident_signals
+				SET name = $2, severity = $3, metadata = $4::jsonb,
+				    last_seen_at = $5, updated_at = now()
+				WHERE id = $1::uuid
+			`, invalidatedSignalID, signal.Name, signal.Severity, metadata, observedAt); err != nil {
+				return fmt.Errorf("refresh invalidated Argus signal: %w", err)
+			}
+			continue
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("find invalidated Argus signal: %w", err)
+		}
+
+		incidentID, created, err := ensureActiveIncident(
+			ctx, tx, signal.TargetID, signal.NatureKey, signal.NatureLabel, signal.Severity, observedAt,
+		)
+		if errors.Is(err, ErrTargetArchived) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		impacted[incidentID] = struct{}{}
+		if created {
+			if err := insertActivity(ctx, tx, incidentID, "opened", "argus", "", "Incident ouvert depuis Argus", details); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO cairnops_incident_signals (
+				incident_id, target_id, origin, connector_id, connector_binding_id,
+				external_event_id, external_object_id, name, active, severity,
+				opened_at, upstream_acknowledged, last_seen_at, metadata
+			) VALUES ($1::uuid, $2::uuid, 'argus', $3::uuid, $4::uuid,
+			          $5 || ':' || gen_random_uuid()::text, 'software_update', $6, true, $7,
+			          $8, false, $8, $9::jsonb)
+		`, incidentID, signal.TargetID, input.ConnectorID, signal.BindingID,
+			signal.LatestVersion, signal.Name, signal.Severity, observedAt, metadata); err != nil {
+			return fmt.Errorf("insert Argus incident signal: %w", err)
+		}
+		if err := insertActivity(ctx, tx, incidentID, "signal_added", "argus", "", signal.Name, details); err != nil {
+			return err
+		}
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT id::text, incident_id::text, connector_binding_id::text, name, external_event_id
+		FROM cairnops_incident_signals
+		WHERE connector_id = $1::uuid AND origin = 'argus' AND active
+		FOR UPDATE
+	`, input.ConnectorID)
+	if err != nil {
+		return fmt.Errorf("list active Argus incident signals: %w", err)
+	}
+	type activeArgusSignal struct{ id, incidentID, bindingID, name, eventID string }
+	active := make([]activeArgusSignal, 0)
+	for rows.Next() {
+		var signal activeArgusSignal
+		if err := rows.Scan(&signal.id, &signal.incidentID, &signal.bindingID, &signal.name, &signal.eventID); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan active Argus incident signal: %w", err)
+		}
+		active = append(active, signal)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate active Argus incident signals: %w", err)
+	}
+	rows.Close()
+	for _, signal := range active {
+		if _, observed := observedBindings[signal.bindingID]; !observed {
+			continue
+		}
+		if _, stillActive := seen[signal.bindingID]; stillActive {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE cairnops_incident_signals
+			SET active = false, resolved_at = $2, last_seen_at = $2, updated_at = now()
+			WHERE id = $1::uuid
+		`, signal.id, observedAt); err != nil {
+			return fmt.Errorf("resolve Argus incident signal: %w", err)
+		}
+		impacted[signal.incidentID] = struct{}{}
+		if err := insertActivity(ctx, tx, signal.incidentID, "signal_resolved", "argus", "", signal.name, map[string]any{
+			"event_id": signal.eventID, "reason": "deployed_or_skipped_upstream",
+		}); err != nil {
+			return err
+		}
+	}
+
+	rearmRows, err := tx.Query(ctx, `
+		SELECT id::text, connector_binding_id::text
+		FROM cairnops_incident_signals
+		WHERE connector_id = $1::uuid AND origin = 'argus'
+		  AND invalidated_at IS NOT NULL AND rearmed_at IS NULL
+		FOR UPDATE
+	`, input.ConnectorID)
+	if err != nil {
+		return fmt.Errorf("list invalidated Argus signals: %w", err)
+	}
+	type invalidatedArgusSignal struct{ id, bindingID string }
+	invalidated := make([]invalidatedArgusSignal, 0)
+	for rearmRows.Next() {
+		var signal invalidatedArgusSignal
+		if err := rearmRows.Scan(&signal.id, &signal.bindingID); err != nil {
+			rearmRows.Close()
+			return fmt.Errorf("scan invalidated Argus signal: %w", err)
+		}
+		invalidated = append(invalidated, signal)
+	}
+	if err := rearmRows.Err(); err != nil {
+		rearmRows.Close()
+		return fmt.Errorf("iterate invalidated Argus signals: %w", err)
+	}
+	rearmRows.Close()
+	for _, signal := range invalidated {
+		if _, observed := observedBindings[signal.bindingID]; !observed {
+			continue
+		}
+		if _, stillActive := seen[signal.bindingID]; stillActive {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE cairnops_incident_signals
+			SET rearmed_at = greatest($2, invalidated_at), last_seen_at = $2, updated_at = now()
+			WHERE id = $1::uuid AND rearmed_at IS NULL
+		`, signal.id, observedAt); err != nil {
+			return fmt.Errorf("rearm invalidated Argus signal: %w", err)
+		}
+	}
+
+	for incidentID := range impacted {
+		if err := recomputeIncident(ctx, tx, incidentID, observedAt); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit Argus incident reconciliation: %w", err)
+	}
+	return nil
+}
+
 func (store *PostgresStore) ApplyWebhook(ctx context.Context, signal WebhookSignal) error {
 	observedAt := signal.ObservedAt.UTC()
 	if observedAt.IsZero() {

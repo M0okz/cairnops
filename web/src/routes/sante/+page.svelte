@@ -41,7 +41,8 @@
   const kindBrands: Partial<Record<string, BrandName>> = {
     zabbix: 'zabbix',
     uptime_kuma: 'uptime_kuma',
-    patchmon: 'patchmon'
+    patchmon: 'patchmon',
+    argus: 'argus'
   };
 
   const statusLabels = $derived<Record<string, { label: string; tone: string }>>({

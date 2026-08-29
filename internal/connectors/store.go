@@ -945,6 +945,132 @@ func (store *PostgresStore) ImportPatchMon(ctx context.Context, input PersistPat
 	return result, nil
 }
 
+func (store *PostgresStore) ImportArgus(ctx context.Context, input PersistArgusInput) (ArgusImport, error) {
+	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return ArgusImport{}, fmt.Errorf("begin Argus import: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	connector, err := scanConnector(tx.QueryRow(ctx, `
+		INSERT INTO cairnops_connectors (
+			kind, name, endpoint, credential_sealed, status,
+			remote_version, compatibility, encrypted_transport,
+			last_checked_at, last_error, created_by, sync_interval_seconds
+		) VALUES ('argus', $1, $2, $3, 'connected', $4, 'supported', $5, now(), '', $6::uuid, 300)
+		ON CONFLICT (kind, (lower(endpoint))) DO UPDATE SET
+			name = EXCLUDED.name,
+			credential_sealed = EXCLUDED.credential_sealed,
+			status = 'connected',
+			remote_version = EXCLUDED.remote_version,
+			compatibility = 'supported',
+			encrypted_transport = EXCLUDED.encrypted_transport,
+			last_checked_at = now(),
+			last_error = '',
+			next_sync_at = now(),
+			lease_owner = NULL,
+			lease_until = NULL,
+			updated_at = now()
+		RETURNING id::text, kind, name, endpoint, status, remote_version,
+		          compatibility, encrypted_transport,
+		          (SELECT count(*)::integer FROM cairnops_connector_bindings WHERE connector_id = cairnops_connectors.id), 0,
+		          last_checked_at, last_error, created_at, updated_at
+	`, input.Name, input.Endpoint, input.CredentialSealed, input.Version, input.EncryptedTransport, input.ActorID))
+	if err != nil {
+		return ArgusImport{}, fmt.Errorf("save Argus connector: %w", err)
+	}
+
+	result := ArgusImport{Connector: connector, Targets: make([]ImportedTarget, 0, len(input.Services))}
+	for _, service := range input.Services {
+		var targetID, targetName string
+		assignedTargetID := input.TargetAssignments[service.ID]
+		err := tx.QueryRow(ctx, `
+			SELECT target.id::text, target.name
+			FROM cairnops_connector_bindings binding
+			JOIN cairnops_targets target ON target.id = binding.target_id
+			WHERE binding.connector_id = $1::uuid AND binding.external_id = $2
+		`, connector.ID, service.ID).Scan(&targetID, &targetName)
+		disposition := "already_imported"
+		if err == nil && assignedTargetID != "" && assignedTargetID != targetID {
+			return ArgusImport{}, fmt.Errorf("%w: Argus service %s is already linked to another target", ErrInvalidInput, service.ID)
+		}
+		if err == nil {
+			bindingID, enableErr := enableIntegrationBinding(ctx, tx, connector.ID, service.ID)
+			if enableErr != nil {
+				return ArgusImport{}, enableErr
+			}
+			if sourceErr := ensureIntegrationSource(ctx, tx, bindingID, false); sourceErr != nil {
+				return ArgusImport{}, sourceErr
+			}
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			disposition = "reused"
+			if assignedTargetID != "" {
+				err = selectAssignedTarget(ctx, tx, assignedTargetID, &targetID, &targetName)
+			} else {
+				err = tx.QueryRow(ctx, `
+					SELECT id::text, name
+					FROM cairnops_targets
+					WHERE archived_at IS NULL AND lower(btrim(name)) = lower(btrim($1))
+					ORDER BY created_at, id
+					LIMIT 1
+				`, service.Name).Scan(&targetID, &targetName)
+			}
+			if errors.Is(err, pgx.ErrNoRows) && assignedTargetID == "" {
+				description := fmt.Sprintf("Découvert par le Connecteur %s.", input.Name)
+				err = tx.QueryRow(ctx, `
+					INSERT INTO cairnops_targets (name, description)
+					VALUES ($1, $2)
+					RETURNING id::text, name
+				`, service.Name, description).Scan(&targetID, &targetName)
+				disposition = "created"
+			}
+			if errors.Is(err, pgx.ErrNoRows) && assignedTargetID != "" {
+				return ArgusImport{}, fmt.Errorf("%w: assigned target does not exist or is archived", ErrInvalidInput)
+			}
+			if err != nil {
+				return ArgusImport{}, fmt.Errorf("resolve target for Argus service %s: %w", service.ID, err)
+			}
+			metadata, err := json.Marshal(map[string]any{
+				"deployed_version": service.DeployedVersion, "latest_version": service.LatestVersion,
+				"approved": service.Approved, "skipped": service.Skipped,
+				"last_checked": service.LastChecked, "version_url": service.VersionURL,
+			})
+			if err != nil {
+				return ArgusImport{}, fmt.Errorf("encode Argus service %s metadata: %w", service.ID, err)
+			}
+			var bindingID string
+			if err := tx.QueryRow(ctx, `
+				INSERT INTO cairnops_connector_bindings (
+					connector_id, target_id, external_id, external_name, metadata
+				) VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb)
+				ON CONFLICT (connector_id, external_id) DO UPDATE SET
+					target_id = EXCLUDED.target_id,
+					external_name = EXCLUDED.external_name,
+					metadata = EXCLUDED.metadata,
+					integration_enabled = true,
+					updated_at = now()
+				RETURNING id::text
+			`, connector.ID, targetID, service.ID, service.Name, metadata).Scan(&bindingID); err != nil {
+				return ArgusImport{}, fmt.Errorf("bind Argus service %s: %w", service.ID, err)
+			}
+			if err := ensureIntegrationSource(ctx, tx, bindingID, false); err != nil {
+				return ArgusImport{}, err
+			}
+		} else if err != nil {
+			return ArgusImport{}, fmt.Errorf("find existing Argus service %s: %w", service.ID, err)
+		}
+		result.Targets = append(result.Targets, ImportedTarget{
+			ExternalID: service.ID, TargetID: targetID, TargetName: targetName, Disposition: disposition,
+		})
+	}
+	result.Connector.BindingCount += countNewBindings(result.Targets)
+	if err := tx.Commit(ctx); err != nil {
+		return ArgusImport{}, fmt.Errorf("commit Argus import: %w", err)
+	}
+	return result, nil
+}
+
 func (store *PostgresStore) ImportZabbix(ctx context.Context, input PersistZabbixInput) (ZabbixImport, error) {
 	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -1110,7 +1236,7 @@ func (store *PostgresStore) ClaimDueConnector(ctx context.Context, kind, owner s
 
 	for index := range connectors {
 		bindingRows, err := store.pool.Query(ctx, `
-			SELECT id::text, target_id::text, external_id
+			SELECT id::text, target_id::text, external_id, external_name, metadata
 			FROM cairnops_connector_bindings
 			WHERE connector_id = $1::uuid AND integration_enabled
 			ORDER BY external_id, id
@@ -1121,9 +1247,14 @@ func (store *PostgresStore) ClaimDueConnector(ctx context.Context, kind, owner s
 		connectors[index].Bindings = make([]RuntimeBinding, 0)
 		for bindingRows.Next() {
 			var binding RuntimeBinding
-			if err := bindingRows.Scan(&binding.ID, &binding.TargetID, &binding.ExternalID); err != nil {
+			var metadata []byte
+			if err := bindingRows.Scan(&binding.ID, &binding.TargetID, &binding.ExternalID, &binding.ExternalName, &metadata); err != nil {
 				bindingRows.Close()
 				return nil, fmt.Errorf("scan %s runtime binding: %w", kind, err)
+			}
+			if err := json.Unmarshal(metadata, &binding.Metadata); err != nil {
+				bindingRows.Close()
+				return nil, fmt.Errorf("decode %s runtime binding metadata: %w", kind, err)
 			}
 			connectors[index].Bindings = append(connectors[index].Bindings, binding)
 		}
@@ -1205,6 +1336,39 @@ func (store *PostgresStore) RecordIntegrationObservations(ctx context.Context, o
 	for range observations {
 		if _, err := results.Exec(); err != nil {
 			return fmt.Errorf("record integration observation: %w", err)
+		}
+	}
+	return nil
+}
+
+func (store *PostgresStore) UpdateArgusBindings(ctx context.Context, connectorID string, snapshots []ArgusBindingSnapshot) error {
+	if len(snapshots) == 0 {
+		return nil
+	}
+	batch := &pgx.Batch{}
+	for _, snapshot := range snapshots {
+		metadata, err := json.Marshal(snapshot.Metadata)
+		if err != nil {
+			return fmt.Errorf("encode Argus binding snapshot: %w", err)
+		}
+		batch.Queue(`
+			WITH refreshed AS (
+				UPDATE cairnops_connector_bindings
+				SET external_name = $3, metadata = $4::jsonb, updated_at = now()
+				WHERE id = $1::uuid AND connector_id = $2::uuid AND integration_enabled
+				RETURNING id
+			)
+			UPDATE cairnops_signal_sources source
+			SET name = $3, updated_at = now()
+			FROM refreshed
+			WHERE source.connector_binding_id = refreshed.id
+		`, snapshot.BindingID, connectorID, snapshot.ExternalName, metadata)
+	}
+	results := store.pool.SendBatch(ctx, batch)
+	defer results.Close()
+	for range snapshots {
+		if _, err := results.Exec(); err != nil {
+			return fmt.Errorf("update Argus binding snapshot: %w", err)
 		}
 	}
 	return nil

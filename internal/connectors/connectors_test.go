@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
@@ -30,6 +31,7 @@ type fakeStore struct {
 	persisted         PersistZabbixInput
 	persistedKuma     PersistUptimeKumaInput
 	persistedPatchMon PersistPatchMonInput
+	persistedArgus    PersistArgusInput
 	statusID          string
 	status            string
 	deletedID         string
@@ -77,6 +79,15 @@ func (fake *fakeStore) ImportPatchMon(_ context.Context, input PersistPatchMonIn
 	return PatchMonImport{Connector: Connector{ID: "connector-patchmon", Kind: "patchmon", Name: input.Name, Endpoint: input.Endpoint}, Targets: targets}, nil
 }
 
+func (fake *fakeStore) ImportArgus(_ context.Context, input PersistArgusInput) (ArgusImport, error) {
+	fake.persistedArgus = input
+	targets := make([]ImportedTarget, 0, len(input.Services))
+	for _, service := range input.Services {
+		targets = append(targets, ImportedTarget{ExternalID: service.ID, TargetID: "target-" + service.ID, TargetName: service.Name, Disposition: "created"})
+	}
+	return ArgusImport{Connector: Connector{ID: "connector-argus", Kind: "argus", Name: input.Name, Endpoint: input.Endpoint}, Targets: targets}, nil
+}
+
 type fakeUptimeKuma struct {
 	inspection uptimekuma.Inspection
 	err        error
@@ -88,6 +99,19 @@ type fakePatchMon struct {
 	err         error
 	calls       int
 	credentials patchmon.Credentials
+}
+
+type fakeArgus struct {
+	inspection  argus.Inspection
+	err         error
+	calls       int
+	credentials argus.Credentials
+}
+
+func (fake *fakeArgus) Inspect(_ context.Context, _ string, credentials argus.Credentials) (argus.Inspection, error) {
+	fake.calls++
+	fake.credentials = credentials
+	return fake.inspection, fake.err
 }
 
 func (fake *fakePatchMon) Inspect(_ context.Context, _ string, credentials patchmon.Credentials) (patchmon.Inspection, error) {
@@ -125,7 +149,7 @@ func TestPreviewAndImportZabbixUseSealedShortLivedReceipt(t *testing.T) {
 		TargetsByName:        map[string]TargetReference{"database": {ID: "target-db", Name: "Database"}},
 		ImportedByExternalID: map[string]TargetReference{},
 	}}
-	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box)
+	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box, nil)
 	service.now = func() time.Time { return time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC) }
 
 	preview, err := service.PreviewZabbix(context.Background(), ZabbixPreviewInput{
@@ -178,7 +202,7 @@ func TestPreviewExistingConnectorReusesSealedCredentialWithoutExposingIt(t *test
 		Endpoint: endpoint, Version: "7.4.2", Compatibility: "supported",
 		EncryptedTransport: true, Hosts: []zabbix.Host{{ID: "10084", Name: "Authentik"}},
 	}}
-	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box)
+	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box, nil)
 
 	result, err := service.PreviewExisting(context.Background(), "connector-one")
 	if err != nil {
@@ -198,7 +222,7 @@ func TestImportRejectsExpiredOrTamperedPreview(t *testing.T) {
 		Compatibility: "supported", Hosts: []zabbix.Host{{ID: "1", Name: "One"}},
 	}}
 	store := &fakeStore{state: PreviewState{TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{}}}
-	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box)
+	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box, nil)
 	now := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 	preview, err := service.PreviewZabbix(context.Background(), ZabbixPreviewInput{Address: "https://zabbix.example.net", APIToken: "token"})
@@ -226,7 +250,7 @@ func TestPreviewAndImportUptimeKumaUseMetricsAPIKeyReceipt(t *testing.T) {
 		Monitors: []uptimekuma.Monitor{{ID: "12", Name: "Database", Type: "tcp", Hostname: "db.internal", Port: "5432", Status: 0}},
 	}}
 	store := &fakeStore{state: PreviewState{TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{}}}
-	service := NewService(store, &fakeZabbix{}, remote, &fakePatchMon{}, box)
+	service := NewService(store, &fakeZabbix{}, remote, &fakePatchMon{}, box, nil)
 	service.now = func() time.Time { return time.Date(2026, 8, 14, 14, 0, 0, 0, time.UTC) }
 
 	preview, err := service.PreviewUptimeKuma(context.Background(), UptimeKumaPreviewInput{
@@ -271,7 +295,7 @@ func TestPreviewAndImportPatchMonUseReadOnlyScopedReceipt(t *testing.T) {
 		Targets:       []TargetIdentity{{TargetReference: TargetReference{ID: targetID, Name: "Database"}, Identifiers: []string{"machine-db"}}},
 		TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{},
 	}}
-	service := NewService(store, &fakeZabbix{}, &fakeUptimeKuma{}, remote, box)
+	service := NewService(store, &fakeZabbix{}, &fakeUptimeKuma{}, remote, box, nil)
 	service.now = func() time.Time { return time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC) }
 
 	preview, err := service.PreviewPatchMon(context.Background(), PatchMonPreviewInput{
@@ -297,6 +321,58 @@ func TestPreviewAndImportPatchMonUseReadOnlyScopedReceipt(t *testing.T) {
 	}
 }
 
+func TestPreviewAndImportArgusPreparesEligibleServicesAndSealsBasicAuth(t *testing.T) {
+	t.Parallel()
+	const targetID = "12345678-1234-4234-8234-123456789012"
+	box, err := secretbox.New(bytes.Repeat([]byte{0x72}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := &fakeArgus{inspection: argus.Inspection{
+		Endpoint: "https://argus.example.net/argus", EncryptedTransport: true,
+		Version: "0.35.0", Compatibility: "supported",
+		Services: []argus.Service{
+			{ID: "api", Name: "Public API", Active: true, Importable: true, DeployedVersion: "1.2.2", LatestVersion: "1.2.3", Approved: true, DeploymentState: argus.DeploymentStateApproved, LatestQueryOK: true, DeployedQueryOK: true, VersionURL: "https://releases.example/1.2.3"},
+			{ID: "disabled", Name: "Disabled", Active: false, Importable: false, Ineligibility: argus.IneligibilityInactive},
+		},
+	}}
+	store := &fakeStore{state: PreviewState{
+		Targets:       []TargetIdentity{{TargetReference: TargetReference{ID: targetID, Name: "Public API"}, Names: []string{"Public API"}}},
+		TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{},
+	}}
+	service := NewService(store, &fakeZabbix{}, &fakeUptimeKuma{}, &fakePatchMon{}, box, remote)
+	service.now = func() time.Time { return time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC) }
+
+	preview, err := service.PreviewArgus(context.Background(), ArgusPreviewInput{
+		Name: "Versions", Address: "https://argus.example.net/argus", Username: "reader", Password: " secret ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Receipt == "" || preview.Receipt == "secret" || preview.Version != "0.35.0" || preview.ImportableCount != 1 || preview.PendingUpdateCount != 1 || len(preview.Services) != 2 {
+		t.Fatalf("unexpected Argus preview: %#v", preview)
+	}
+	if preview.Services[0].SuggestedTarget == nil || preview.Services[0].SuggestedTarget.ID != targetID || !preview.Services[0].Importable {
+		t.Fatalf("expected explicit target suggestion for importable service: %#v", preview.Services[0])
+	}
+	if preview.Services[1].Importable || preview.Services[1].Ineligibility != argus.IneligibilityInactive {
+		t.Fatalf("expected disabled service to remain visible and ineligible: %#v", preview.Services[1])
+	}
+
+	result, err := service.ImportArgus(context.Background(), "administrator-one", ArgusImportInput{
+		Receipt: preview.Receipt, ServiceIDs: []string{"api"}, TargetAssignments: map[string]string{"api": targetID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if remote.calls != 2 || remote.credentials.Password != " secret " || len(store.persistedArgus.Services) != 1 || store.persistedArgus.CredentialSealed == " secret " {
+		t.Fatalf("expected fresh Argus discovery with sealed credentials: calls=%d persisted=%#v", remote.calls, store.persistedArgus)
+	}
+	if store.persistedArgus.Version != "0.35.0" || len(result.Targets) != 1 || result.Targets[0].ExternalID != "api" {
+		t.Fatalf("unexpected Argus import: %#v", result)
+	}
+}
+
 func TestPreviewSuggestsCrossConnectorTargetWithEvidence(t *testing.T) {
 	t.Parallel()
 	box, err := secretbox.New(bytes.Repeat([]byte{0x73}, 32))
@@ -315,7 +391,7 @@ func TestPreviewSuggestsCrossConnectorTargetWithEvidence(t *testing.T) {
 		Endpoint: "https://zabbix.example.net/api_jsonrpc.php", Version: "7.4.2", Compatibility: "supported",
 		Hosts: []zabbix.Host{{ID: "42", Name: "gw-prod", Interfaces: []zabbix.Interface{{Address: "192.0.2.42", Main: true}}}},
 	}}
-	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box)
+	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box, nil)
 
 	preview, err := service.PreviewZabbix(context.Background(), ZabbixPreviewInput{Address: "https://zabbix.example.net", APIToken: "token"})
 	if err != nil {
@@ -337,7 +413,7 @@ func TestImportRejectsAssignmentForUnselectedObject(t *testing.T) {
 		Hosts: []zabbix.Host{{ID: "1", Name: "One"}, {ID: "2", Name: "Two"}},
 	}}
 	store := &fakeStore{state: PreviewState{TargetsByName: map[string]TargetReference{}, ImportedByExternalID: map[string]TargetReference{}}}
-	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box)
+	service := NewService(store, remote, &fakeUptimeKuma{}, &fakePatchMon{}, box, nil)
 	preview, err := service.PreviewZabbix(context.Background(), ZabbixPreviewInput{Address: "https://zabbix.example.net", APIToken: "token"})
 	if err != nil {
 		t.Fatal(err)

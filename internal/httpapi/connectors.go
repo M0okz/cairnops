@@ -25,6 +25,8 @@ type Connectors interface {
 	ImportUptimeKuma(context.Context, string, connectors.UptimeKumaImportInput) (connectors.UptimeKumaImport, error)
 	PreviewPatchMon(context.Context, connectors.PatchMonPreviewInput) (connectors.PatchMonPreview, error)
 	ImportPatchMon(context.Context, string, connectors.PatchMonImportInput) (connectors.PatchMonImport, error)
+	PreviewArgus(context.Context, connectors.ArgusPreviewInput) (connectors.ArgusPreview, error)
+	ImportArgus(context.Context, string, connectors.ArgusImportInput) (connectors.ArgusImport, error)
 }
 
 type connectorHandler struct {
@@ -105,6 +107,39 @@ func (handler connectorHandler) importPatchMon(w http.ResponseWriter, r *http.Re
 		return
 	}
 	result, err := handler.connectors.ImportPatchMon(r.Context(), principal.ID, input)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (handler connectorHandler) previewArgus(w http.ResponseWriter, r *http.Request) {
+	var input connectors.ArgusPreviewInput
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	preview, err := handler.connectors.PreviewArgus(r.Context(), input)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func (handler connectorHandler) importArgus(w http.ResponseWriter, r *http.Request) {
+	principal, ok := r.Context().Value(principalContextKey{}).(identitymodel.Principal)
+	if !ok {
+		unauthorizedSession(w)
+		return
+	}
+	var input connectors.ArgusImportInput
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	result, err := handler.connectors.ImportArgus(r.Context(), principal.ID, input)
 	if err != nil {
 		handler.writeError(w, err)
 		return

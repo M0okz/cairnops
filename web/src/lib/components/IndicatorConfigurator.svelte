@@ -27,7 +27,7 @@
   let activeExternal = $state('');
   let bulkNotice = $state('');
 
-  const brands: Record<Exclude<Connector['kind'], 'generic_webhook'>, BrandName> = { zabbix: 'zabbix', uptime_kuma: 'uptime_kuma', patchmon: 'patchmon' };
+  const brands: Record<Exclude<Connector['kind'], 'generic_webhook' | 'argus'>, BrandName> = { zabbix: 'zabbix', uptime_kuma: 'uptime_kuma', patchmon: 'patchmon' };
   $effect(() => { void load(); });
 
   async function load() {
@@ -145,7 +145,7 @@
 <div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && !saving && onclose()}>
   <div class="modal indicator-modal" class:maximized role="dialog" aria-modal="true" aria-labelledby="indicator-config-title">
     <header>
-      {#if connector.kind !== 'generic_webhook'}<BrandMark name={brands[connector.kind]} size={32} />{/if}
+      {#if connector.kind !== 'generic_webhook' && connector.kind !== 'argus'}<BrandMark name={brands[connector.kind]} size={32} />{/if}
       <div><h2 id="indicator-config-title">Indicateurs · {connector.name}</h2><p>Choisissez le contexte utile au quotidien. Les seuils et alertes restent dans le produit d’origine.</p></div>
       <button class="window-control" type="button" onclick={() => (maximized = !maximized)} aria-label={maximized ? 'Réduire la modale' : 'Agrandir la modale'} title={maximized ? 'Réduire' : 'Agrandir'}>{maximized ? '⊡' : '□'}</button>
       <button class="close" type="button" onclick={onclose} disabled={saving} aria-label="Fermer"><Icon name="close" size={14} /></button>

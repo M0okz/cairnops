@@ -137,6 +137,8 @@ Endpoints utiles :
 - `POST /api/v1/connectors/uptime-kuma/import` : import explicite des moniteurs sélectionnés ;
 - `POST /api/v1/connectors/patchmon/preview` : vérification en lecture seule et aperçu de la posture des hôtes ;
 - `POST /api/v1/connectors/patchmon/import` : import explicite des hôtes, hors calcul de disponibilité ;
+- `POST /api/v1/connectors/argus/preview` : vérification en lecture seule d’Argus 0.29.0+ et aperçu des services ;
+- `POST /api/v1/connectors/argus/import` : import explicite des services de posture logicielle, hors disponibilité ;
 - `POST /api/v1/connectors/generic-webhook` : création et affichage unique du secret entrant ;
 - `POST /api/v1/webhooks/{publicID}` : réception authentifiée, autorisée ou mise en quarantaine ;
 - `GET /api/v1/connectors/{connectorID}/quarantine` : identités inconnues en attente ;

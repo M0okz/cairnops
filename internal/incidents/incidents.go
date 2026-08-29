@@ -131,6 +131,26 @@ type ReconcilePatchMonInput struct {
 	Signals          []PatchMonSignal
 }
 
+type ArgusSignal struct {
+	TargetID        string
+	BindingID       string
+	ExternalService string
+	NatureKey       string
+	NatureLabel     string
+	Name            string
+	Severity        Severity
+	DeployedVersion string
+	LatestVersion   string
+	Details         map[string]any
+}
+
+type ReconcileArgusInput struct {
+	ConnectorID      string
+	ObservedAt       time.Time
+	ObservedBindings []string
+	Signals          []ArgusSignal
+}
+
 type WebhookSignal struct {
 	ConnectorID      string
 	BindingID        string

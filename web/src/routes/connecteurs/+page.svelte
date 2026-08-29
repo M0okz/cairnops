@@ -66,15 +66,17 @@
     zabbix: t('connectors.contract.zabbix'),
     uptime_kuma: t('connectors.contract.uptimeKuma'),
     patchmon: t('connectors.contract.patchmon'),
+    argus: t('connectors.contract.argus'),
     generic_webhook: t('connectors.contract.genericWebhook')
   });
 
-  /* Zabbix et Uptime Kuma portent leur propre marque ; le webhook générique
+  /* Les intégrations tierces portent leur marque ; le webhook générique
    * n'est le produit de personne et garde le trait maison. */
   const kindBrands: Partial<Record<Connector['kind'], BrandName>> = {
     zabbix: 'zabbix',
     uptime_kuma: 'uptime_kuma',
-    patchmon: 'patchmon'
+    patchmon: 'patchmon',
+    argus: 'argus'
   };
 
   function sourceManagementRoute(connector: Connector) {
@@ -204,7 +206,7 @@
 
           <p class="contract">{contracts[connector.kind]}</p>
 
-          {#if connector.kind !== 'generic_webhook'}
+          {#if connector.kind !== 'generic_webhook' && connector.kind !== 'argus'}
             <section class="indicator-section">
               <span><strong>Indicateurs</strong><small>Métriques contextuelles importées depuis le Connecteur</small></span>
               {#if isAdministrator}<button class="btn sm" type="button" onclick={() => (indicatorFor = connector)}>Configurer</button>{/if}

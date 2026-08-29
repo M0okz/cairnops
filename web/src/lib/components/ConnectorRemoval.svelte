@@ -25,6 +25,7 @@
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon',
+    argus: 'Argus',
     generic_webhook: t('suspension.webhookSender')
   };
 

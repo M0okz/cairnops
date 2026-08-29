@@ -12,6 +12,7 @@ import (
 
 	"github.com/M0okz/cairnops/internal/config"
 	"github.com/M0okz/cairnops/internal/connectors"
+	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
@@ -71,8 +72,9 @@ func run(logger *slog.Logger) error {
 	zabbixClient := zabbix.NewClient()
 	uptimeKumaClient := uptimekuma.NewClient()
 	patchMonClient := patchmon.NewClient()
+	argusClient := argus.NewClient()
 	incidentStore := incidents.NewPostgresStore(pool)
-	connectorService := connectors.NewService(connectorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets)
+	connectorService := connectors.NewService(connectorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets, argusClient)
 	webhookService := connectors.NewWebhookService(connectorStore, incidentStore, secrets, cfg.PublicURL)
 	incidentService := incidents.NewService(incidentStore, connectors.NewAcknowledger(connectorStore, zabbixClient, secrets))
 	maintenanceService := maintenance.NewService(maintenance.NewPostgresStore(pool))
@@ -89,6 +91,7 @@ func run(logger *slog.Logger) error {
 	connectorSync := connectors.NewSynchronizer(connectorStore, incidentStore, zabbixClient, secrets, "server:"+hostname, logger)
 	uptimeKumaSync := connectors.NewUptimeKumaSynchronizer(connectorStore, incidentStore, uptimeKumaClient, secrets, "server:"+hostname, logger)
 	patchMonSync := connectors.NewPatchMonSynchronizer(connectorStore, incidentStore, patchMonClient, secrets, "server:"+hostname, logger)
+	argusSync := connectors.NewArgusSynchronizer(connectorStore, incidentStore, argusClient, secrets, "server:"+hostname, logger)
 	indicatorStore := indicators.NewStore(pool)
 	indicatorService := indicators.NewService(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets)
 	indicatorCollector := indicators.NewCollector(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets, logger)
@@ -117,7 +120,7 @@ func run(logger *slog.Logger) error {
 		Reconciliations: reconciliationStore,
 	})
 
-	errCh := make(chan error, 5)
+	errCh := make(chan error, 6)
 	go func() {
 		logger.Info("server listening", "address", cfg.HTTPAddress, "version", version.Version)
 		errCh <- server.ListenAndServe()
@@ -134,6 +137,11 @@ func run(logger *slog.Logger) error {
 	}()
 	go func() {
 		if err := patchMonSync.Run(ctx); err != nil {
+			errCh <- err
+		}
+	}()
+	go func() {
+		if err := argusSync.Run(ctx); err != nil {
 			errCh <- err
 		}
 	}()

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/testsupport"
@@ -68,6 +69,57 @@ func TestPostgresZabbixImportIsIdempotent(t *testing.T) {
 	}
 	if targetCount != 2 || connectorEvents == 0 {
 		t.Fatalf("unexpected persisted state: targets=%d connector_events=%d", targetCount, connectorEvents)
+	}
+}
+
+func TestPostgresArgusImportCreatesPostureSourceOutsideAvailability(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+
+	var actorID, targetID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_users (username, display_name, password_hash, role)
+		VALUES ('argus-import', 'Argus Import', 'not-used', 'administrator')
+		RETURNING id::text
+	`).Scan(&actorID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO cairnops_targets (name) VALUES ('API Argus') RETURNING id::text`).Scan(&targetID); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := NewPostgresStore(pool).ImportArgus(ctx, PersistArgusInput{
+		ActorID: actorID, Name: "Versions", Endpoint: "https://argus-import.example.net",
+		CredentialSealed: "sealed-argus-credential-with-sufficient-length", Version: "0.35.0",
+		EncryptedTransport: true,
+		Services: []argus.Service{{
+			ID: "api", Name: "API", Importable: true,
+			DeployedVersion: "1.2.2", LatestVersion: "1.2.3",
+		}},
+		TargetAssignments: map[string]string{"api": targetID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Targets) != 1 || result.Targets[0].TargetID != targetID || result.Targets[0].Disposition != "reused" {
+		t.Fatalf("explicit Argus assignment was not used: %#v", result)
+	}
+
+	var kind, origin, remoteVersion string
+	var measuresAvailability bool
+	var connectorInterval, sourceInterval int
+	if err := pool.QueryRow(ctx, `
+		SELECT connector.kind, connector.remote_version, connector.sync_interval_seconds,
+		       source.origin, source.measures_availability, source.interval_seconds
+		FROM cairnops_connectors connector
+		JOIN cairnops_connector_bindings binding ON binding.connector_id = connector.id
+		JOIN cairnops_signal_sources source ON source.connector_binding_id = binding.id
+		WHERE connector.id = $1::uuid AND binding.external_id = 'api'
+	`, result.Connector.ID).Scan(&kind, &remoteVersion, &connectorInterval, &origin, &measuresAvailability, &sourceInterval); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "argus" || remoteVersion != "0.35.0" || connectorInterval != 300 || origin != "integration" || measuresAvailability || sourceInterval != 300 {
+		t.Fatalf("unexpected Argus posture source: kind=%s version=%s connector_interval=%d origin=%s availability=%t source_interval=%d", kind, remoteVersion, connectorInterval, origin, measuresAvailability, sourceInterval)
 	}
 }
 

@@ -68,13 +68,14 @@ components:
         Une notification reçue par la personne connectée. Elle appartient à un
         compte : cette API ne rend jamais la boîte de quelqu'un d'autre.
       type: object
-      required: [id, incident_id, event_kind, target_name, nature_label, severity, occurred_at, read_at]
+      required: [id, incident_id, event_kind, target_name, nature_key, nature_label, severity, occurred_at, read_at]
       properties:
         id: { type: integer, format: int64 }
         incident_id: { type: string, format: uuid }
         target_id: { type: string, format: uuid }
         event_kind: { type: string, enum: [firing, resolved] }
         target_name: { type: string }
+        nature_key: { type: string }
         nature_label: { type: string }
         severity: { type: string, enum: [information, warning, major, critical] }
         occurred_at: { type: string, format: date-time }
@@ -274,7 +275,7 @@ components:
         name: { type: string }
         kind:
           type: string
-          enum: [http, tcp, dns, icmp, heartbeat, zabbix, uptime_kuma, patchmon, generic_webhook]
+          enum: [http, tcp, dns, icmp, heartbeat, zabbix, uptime_kuma, patchmon, argus, generic_webhook]
         origin:
           type: string
           enum: [native, integration]
@@ -285,7 +286,7 @@ components:
         measures_availability:
           type: boolean
           description: >-
-            Faux pour une Source de posture telle que PatchMon : ses Observations
+            Faux pour une Source de posture telle que PatchMon ou Argus : ses Observations
             restent consultables mais n'entrent ni dans la Disponibilité, ni dans
             la Couverture, ni dans le SLA.
         latest_outcome:
@@ -424,7 +425,7 @@ components:
       required: [id, kind, name, endpoint, status, remote_version, compatibility, encrypted_transport, binding_count, quarantine_count, last_checked_at, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [zabbix, uptime_kuma, patchmon, generic_webhook] }
+        kind: { type: string, enum: [zabbix, uptime_kuma, patchmon, argus, generic_webhook] }
         name: { type: string, minLength: 1, maxLength: 160 }
         endpoint: { type: string, format: uri, maxLength: 2048 }
         status: { type: string, enum: [connected, degraded, disabled] }
@@ -653,7 +654,7 @@ components:
       required: [id, kind, name, bindings, quarantined, resolved_incidents]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [zabbix, uptime_kuma, patchmon, generic_webhook] }
+        kind: { type: string, enum: [zabbix, uptime_kuma, patchmon, argus, generic_webhook] }
         name: { type: string }
         bindings: { type: integer, minimum: 0, description: Sources externes déliées. Les Cibles correspondantes sont conservées. }
         quarantined: { type: integer, minimum: 0, description: Identités en quarantaine emportées sans décision. }
@@ -663,7 +664,7 @@ components:
       required: [id, origin, name, active, severity, opened_at, upstream_acknowledged]
       properties:
         id: { type: string, format: uuid }
-        origin: { type: string, enum: [native, zabbix, uptime_kuma, patchmon, webhook] }
+        origin: { type: string, enum: [native, zabbix, uptime_kuma, patchmon, argus, webhook] }
         connector_id: { type: string, format: uuid }
         connector_name: { type: string }
         external_event_id: { type: string }
@@ -940,6 +941,77 @@ components:
           description: Reçu opaque chiffré, valable quinze minutes et requis par la confirmation d'import.
         expires_at: { type: string, format: date-time }
     PatchMonImport:
+      type: object
+      required: [connector, targets]
+      properties:
+        connector: { $ref: '#/components/schemas/Connector' }
+        targets:
+          type: array
+          items:
+            type: object
+            required: [external_id, target_id, target_name, disposition]
+            properties:
+              external_id: { type: string }
+              target_id: { type: string, format: uuid }
+              target_name: { type: string }
+              disposition: { type: string, enum: [created, reused, already_imported] }
+    ArgusServicePreview:
+      type: object
+      required: [external_id, name, active, importable, approved, skipped, unknown, deployment_state]
+      properties:
+        external_id:
+          type: string
+          description: Identifiant stable du service dans Argus ; le nom reste un libellé mutable.
+        name: { type: string }
+        active: { type: boolean }
+        importable: { type: boolean }
+        ineligibility:
+          type: string
+          enum: [inactive, deployed_version_not_configured]
+        deployed_version: { type: string }
+        latest_version: { type: string }
+        last_checked: { type: string }
+        approved: { type: boolean }
+        skipped: { type: boolean }
+        unknown:
+          type: boolean
+          description: Vrai lorsqu'une requête latest/deployed ou l'état métrique ne permet pas de conclure.
+        unknown_reason: { type: string }
+        deployment_state:
+          type: integer
+          enum: [0, 1, 2, 3, 4]
+          description: Non traité, déployé, approuvé, ignoré ou inconnu selon la métrique Argus officielle.
+        version_url: { type: string, format: uri }
+        candidate_targets:
+          type: array
+          items: { $ref: '#/components/schemas/TargetMatch' }
+        suggested_target: { $ref: '#/components/schemas/TargetReference' }
+        already_imported_to: { $ref: '#/components/schemas/TargetReference' }
+    ArgusPreview:
+      type: object
+      required: [kind, name, endpoint, version, compatibility, compatibility_label, encrypted_transport, importable_count, pending_update_count, services, available_targets, receipt, expires_at]
+      properties:
+        kind: { type: string, const: argus }
+        name: { type: string }
+        endpoint: { type: string, format: uri }
+        version: { type: string }
+        compatibility: { type: string, const: supported }
+        compatibility_label: { type: string }
+        encrypted_transport: { type: boolean }
+        importable_count: { type: integer, minimum: 0 }
+        pending_update_count: { type: integer, minimum: 0 }
+        services:
+          type: array
+          items: { $ref: '#/components/schemas/ArgusServicePreview' }
+        available_targets:
+          type: array
+          items: { $ref: '#/components/schemas/TargetReference' }
+        receipt:
+          type: string
+          writeOnly: true
+          description: Reçu opaque chiffré, valable quinze minutes et requis par la confirmation d'import.
+        expires_at: { type: string, format: date-time }
+    ArgusImport:
       type: object
       required: [connector, targets]
       properties:
@@ -1441,6 +1513,7 @@ paths:
                   - $ref: '#/components/schemas/ZabbixPreview'
                   - $ref: '#/components/schemas/UptimeKumaPreview'
                   - $ref: '#/components/schemas/PatchMonPreview'
+                  - $ref: '#/components/schemas/ArgusPreview'
         '400': { description: Type de Connecteur sans inventaire découvrable }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
@@ -1650,6 +1723,83 @@ paths:
         '403': { description: Rôle Administrateur requis }
         '410': { description: Aperçu expiré }
         '422': { description: La revalidation PatchMon a échoué }
+  /api/v1/connectors/argus/preview:
+    post:
+      operationId: previewArgusConnector
+      description: >-
+        Vérifie la version Argus (0.29.0 minimum), TLS, la configuration censurée,
+        les décomptes et les métriques officielles. Les services inactifs ou sans
+        deployed_version restent visibles mais ne peuvent pas être sélectionnés.
+        Toutes les requêtes distantes sont des GET et les redirections sont refusées.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160, default: Argus }
+                address: { type: string, format: uri, maxLength: 2048 }
+                username:
+                  type: string
+                  maxLength: 4096
+                  writeOnly: true
+                  description: Facultatif ; username et password doivent être fournis ensemble.
+                password:
+                  type: string
+                  maxLength: 4096
+                  writeOnly: true
+                  description: Facultatif ; Argus ne propose pas de jeton limité à la lecture.
+      responses:
+        '200':
+          description: Aperçu temporaire des services, versions, états et rapprochements proposés
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArgusPreview' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '422': { description: Argus inaccessible, incompatible, invalide ou identifiants refusés }
+  /api/v1/connectors/argus/import:
+    post:
+      operationId: importArgusConnector
+      description: >-
+        Revalide l'aperçu, scelle le Basic Auth facultatif et importe uniquement
+        les services choisis. Le premier cycle peut ouvrir immédiatement des
+        Incidents et appliquer les politiques de notification normales.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receipt, service_ids]
+              properties:
+                receipt: { type: string, writeOnly: true }
+                service_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 5000
+                  uniqueItems: true
+                  items: { type: string }
+                target_assignments:
+                  type: object
+                  description: Affectations explicites des identifiants Argus vers des Cibles actives.
+                  additionalProperties: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Connecteur enregistré et Cibles créées, réutilisées ou déjà liées
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArgusImport' }
+        '400': { description: Sélection, éligibilité ou reçu invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '410': { description: Aperçu expiré }
+        '422': { description: La revalidation Argus a échoué }
   /api/v1/connectors/{connectorID}/suspension:
     post:
       operationId: suspendConnector

@@ -100,6 +100,9 @@ func TestPostgresInAppDeliveryReachesEveryActiveAccount(t *testing.T) {
 		if inbox.Entries[0].IncidentID != incidentID || inbox.Entries[0].EventKind != "firing" {
 			t.Fatalf("entrée inattendue : %+v", inbox.Entries[0])
 		}
+		if inbox.Entries[0].NatureKey != "native:http" {
+			t.Fatalf("la clé stable de Nature manque : %+v", inbox.Entries[0])
+		}
 		if inbox.Entries[0].ReadAt != nil {
 			t.Fatalf("une entrée fraîche est déjà lue : %+v", inbox.Entries[0])
 		}

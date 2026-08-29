@@ -205,6 +205,125 @@ func TestPostgresZabbixIncidentLifecycleAndAcknowledgement(t *testing.T) {
 	}
 }
 
+func TestPostgresArgusIncidentTracksVersionChangesAndSkippedRearms(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+
+	var targetID, connectorID, bindingID string
+	if err := pool.QueryRow(ctx, `INSERT INTO cairnops_targets (name) VALUES ('Argus API') RETURNING id::text`).Scan(&targetID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_connectors (
+			kind, name, endpoint, credential_sealed, status, encrypted_transport
+		) VALUES ('argus', 'Argus incident test', $1,
+		          'sealed-credential-with-sufficient-length', 'connected', true)
+		RETURNING id::text
+		`, "https://argus.example").Scan(&connectorID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_connector_bindings (connector_id, target_id, external_id, external_name)
+		VALUES ($1::uuid, $2::uuid, 'api', 'Public API')
+		RETURNING id::text
+	`, connectorID, targetID).Scan(&bindingID); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewPostgresStore(pool)
+	observedAt := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	signal := ArgusSignal{
+		TargetID: targetID, BindingID: bindingID, ExternalService: "api",
+		NatureKey: "software-update-available", NatureLabel: "Mise à jour logicielle disponible",
+		Name: "Public API · Version 1.1.0 disponible, 1.0.0 déployée", Severity: SeverityWarning,
+		DeployedVersion: "1.0.0", LatestVersion: "1.1.0",
+		Details: map[string]any{"deployed_version": "1.0.0", "latest_version": "1.1.0", "approved": false},
+	}
+	if err := store.ReconcileArgus(ctx, ReconcileArgusInput{
+		ConnectorID: connectorID, ObservedAt: observedAt,
+		ObservedBindings: []string{bindingID}, Signals: []ArgusSignal{signal},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	active := activeIncidents(t, ctx, store)
+	if len(active) != 1 || active[0].NatureKey != "software-update-available" || active[0].SourceSeverity != SeverityWarning {
+		t.Fatalf("unexpected Argus incident: %#v", active)
+	}
+	firstIncidentID := active[0].ID
+
+	signal.LatestVersion = "1.2.0"
+	signal.Name = "Public API · Version 1.2.0 disponible, 1.0.0 déployée"
+	signal.Details["latest_version"] = "1.2.0"
+	if err := store.ReconcileArgus(ctx, ReconcileArgusInput{
+		ConnectorID: connectorID, ObservedAt: observedAt.Add(time.Minute),
+		ObservedBindings: []string{bindingID}, Signals: []ArgusSignal{signal},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	active = activeIncidents(t, ctx, store)
+	if len(active) != 1 || active[0].ID != firstIncidentID || active[0].Signals[0].Name != signal.Name {
+		t.Fatalf("a newer version must update the same incident: %#v", active)
+	}
+	var changedActivities int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)::integer FROM cairnops_incident_activity
+		WHERE incident_id = $1::uuid AND kind = 'signal_updated'
+	`, firstIncidentID).Scan(&changedActivities); err != nil {
+		t.Fatal(err)
+	}
+	if changedActivities != 1 {
+		t.Fatalf("expected exactly one version-change activity, got %d", changedActivities)
+	}
+	if err := store.ReconcileArgus(ctx, ReconcileArgusInput{
+		ConnectorID: connectorID, ObservedAt: observedAt.Add(2 * time.Minute),
+		ObservedBindings: []string{bindingID}, Signals: []ArgusSignal{signal},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)::integer FROM cairnops_incident_activity
+		WHERE incident_id = $1::uuid AND kind = 'signal_updated'
+	`, firstIncidentID).Scan(&changedActivities); err != nil {
+		t.Fatal(err)
+	}
+	if changedActivities != 1 {
+		t.Fatalf("an unchanged poll must not append activity, got %d", changedActivities)
+	}
+
+	// skipped est une décision Argus concluante : elle résout. Si cette même
+	// version redevient ensuite disponible, elle constitue un nouvel Incident.
+	if err := store.ReconcileArgus(ctx, ReconcileArgusInput{
+		ConnectorID: connectorID, ObservedAt: observedAt.Add(3 * time.Minute),
+		ObservedBindings: []string{bindingID}, Signals: nil,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if active = activeIncidents(t, ctx, store); len(active) != 0 {
+		t.Fatalf("skipped state should resolve the incident: %#v", active)
+	}
+	if err := store.ReconcileArgus(ctx, ReconcileArgusInput{
+		ConnectorID: connectorID, ObservedAt: observedAt.Add(4 * time.Minute),
+		ObservedBindings: []string{bindingID}, Signals: []ArgusSignal{signal},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	active = activeIncidents(t, ctx, store)
+	if len(active) != 1 || active[0].ID == firstIncidentID {
+		t.Fatalf("an unskipped version must open a new incident: %#v", active)
+	}
+
+	// Une Source Inconnue ne conclut rien et ne peut donc pas rétablir.
+	if err := store.ReconcileArgus(ctx, ReconcileArgusInput{
+		ConnectorID: connectorID, ObservedAt: observedAt.Add(5 * time.Minute),
+		ObservedBindings: nil, Signals: nil,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if active = activeIncidents(t, ctx, store); len(active) != 1 {
+		t.Fatalf("an unknown Argus state must preserve the active incident: %#v", active)
+	}
+}
+
 func TestPostgresUptimeKumaDownRecoveryAndNewFailure(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)

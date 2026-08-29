@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
@@ -18,9 +19,11 @@ import (
 )
 
 type RuntimeBinding struct {
-	ID         string
-	TargetID   string
-	ExternalID string
+	ID           string
+	TargetID     string
+	ExternalID   string
+	ExternalName string
+	Metadata     map[string]any
 }
 
 type RuntimeConnector struct {
@@ -48,11 +51,18 @@ type IntegrationObservation struct {
 	Details             map[string]any
 }
 
+type ArgusBindingSnapshot struct {
+	BindingID    string
+	ExternalName string
+	Metadata     map[string]any
+}
+
 type RuntimeStore interface {
 	ClaimDueConnector(context.Context, string, string, int, time.Duration) ([]RuntimeConnector, error)
 	CompleteConnectorSync(context.Context, string, string, time.Time) error
 	FailConnectorSync(context.Context, string, string, time.Time, string) error
 	RecordIntegrationObservations(context.Context, time.Time, []IntegrationObservation) error
+	UpdateArgusBindings(context.Context, string, []ArgusBindingSnapshot) error
 }
 
 type IncidentReconciler interface {
@@ -406,6 +416,227 @@ func patchMonObservation(bindingID string, host patchmon.Host, details map[strin
 		observation.Reason = "patchmon_attention_required"
 	}
 	return observation
+}
+
+type ArgusIncidentReconciler interface {
+	ReconcileArgus(context.Context, incidents.ReconcileArgusInput) error
+}
+
+type ArgusInspectionClient interface {
+	Inspect(context.Context, string, argus.Credentials) (argus.Inspection, error)
+}
+
+type ArgusSynchronizer struct {
+	store        RuntimeStore
+	incidents    ArgusIncidentReconciler
+	client       ArgusInspectionClient
+	secrets      *secretbox.Box
+	owner        string
+	logger       *slog.Logger
+	pollInterval time.Duration
+	lease        time.Duration
+	batchSize    int
+	parallelism  int
+	now          func() time.Time
+}
+
+func NewArgusSynchronizer(store RuntimeStore, incidentStore ArgusIncidentReconciler, client ArgusInspectionClient, secrets *secretbox.Box, owner string, logger *slog.Logger) *ArgusSynchronizer {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &ArgusSynchronizer{
+		store: store, incidents: incidentStore, client: client, secrets: secrets,
+		owner: owner, logger: logger, pollInterval: 2 * time.Second,
+		lease: time.Minute, batchSize: 8, parallelism: 4, now: time.Now,
+	}
+}
+
+func (synchronizer *ArgusSynchronizer) Run(ctx context.Context) error {
+	if err := synchronizer.tick(ctx); err != nil {
+		return err
+	}
+	ticker := time.NewTicker(synchronizer.pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			if err := synchronizer.tick(ctx); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (synchronizer *ArgusSynchronizer) tick(ctx context.Context) error {
+	claimed, err := synchronizer.store.ClaimDueConnector(ctx, "argus", synchronizer.owner, synchronizer.batchSize, synchronizer.lease)
+	if err != nil {
+		return fmt.Errorf("claim due Argus connectors: %w", err)
+	}
+	semaphore := make(chan struct{}, synchronizer.parallelism)
+	var waitGroup sync.WaitGroup
+	for _, connector := range claimed {
+		connector := connector
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			select {
+			case semaphore <- struct{}{}:
+				defer func() { <-semaphore }()
+			case <-ctx.Done():
+				return
+			}
+			synchronizer.syncOne(ctx, connector)
+		}()
+	}
+	waitGroup.Wait()
+	return nil
+}
+
+func (synchronizer *ArgusSynchronizer) syncOne(ctx context.Context, connector RuntimeConnector) {
+	fail := func(at time.Time, cause error) {
+		message := strings.TrimSpace(cause.Error())
+		if len(message) > 500 {
+			message = message[:500]
+		}
+		if err := synchronizer.store.FailConnectorSync(ctx, connector.ID, synchronizer.owner, at, message); err != nil {
+			synchronizer.logger.Error("record Argus synchronization failure", "connector_id", connector.ID, "error", err)
+		}
+		synchronizer.logger.Warn("Argus synchronization degraded", "connector_id", connector.ID, "error", cause)
+	}
+	credential, err := synchronizer.secrets.Open(connector.CredentialSealed, "connector:argus:"+connector.Endpoint)
+	if err != nil {
+		fail(synchronizer.now().UTC(), fmt.Errorf("open connector credential: %w", err))
+		return
+	}
+	var credentials argus.Credentials
+	if err := json.Unmarshal(credential, &credentials); err != nil {
+		fail(synchronizer.now().UTC(), fmt.Errorf("decode connector credential: %w", err))
+		return
+	}
+	inspection, err := synchronizer.client.Inspect(ctx, connector.Endpoint, credentials)
+	if err != nil {
+		fail(synchronizer.now().UTC(), err)
+		return
+	}
+	serviceByID := make(map[string]argus.Service, len(inspection.Services))
+	for _, discoveredService := range inspection.Services {
+		serviceByID[discoveredService.ID] = discoveredService
+	}
+	observedAt := synchronizer.now().UTC()
+	observations := make([]IntegrationObservation, 0, len(connector.Bindings))
+	bindingSnapshots := make([]ArgusBindingSnapshot, 0, len(connector.Bindings))
+	observedBindings := make([]string, 0, len(connector.Bindings))
+	signals := make([]incidents.ArgusSignal, 0, len(connector.Bindings))
+	unknownCount := 0
+	for _, binding := range connector.Bindings {
+		discoveredService, found := serviceByID[binding.ExternalID]
+		if !found {
+			unknownCount++
+			details := argusMissingDetails(inspection.Endpoint, binding)
+			observations = append(observations, IntegrationObservation{
+				BindingID: binding.ID, Outcome: "unknown", Reason: "argus_service_missing",
+				Message: "Service absent de la configuration Argus active",
+				Details: details,
+			})
+			continue
+		}
+		details := argusDetails(inspection.Endpoint, discoveredService)
+		bindingSnapshots = append(bindingSnapshots, ArgusBindingSnapshot{
+			BindingID: binding.ID, ExternalName: discoveredService.Name, Metadata: details,
+		})
+		if !discoveredService.Importable || discoveredService.Unknown {
+			unknownCount++
+			reason := discoveredService.UnknownReason
+			if reason == "" {
+				reason = "argus_service_" + discoveredService.Ineligibility
+			}
+			observations = append(observations, IntegrationObservation{
+				BindingID: binding.ID, Outcome: "unknown", Reason: reason,
+				Message: "État de version Argus inconnu", Details: details,
+			})
+			continue
+		}
+		observedBindings = append(observedBindings, binding.ID)
+		pending := !discoveredService.Skipped && discoveredService.DeployedVersion != discoveredService.LatestVersion
+		outcome, reason, message := "healthy", "", "Version déployée à jour"
+		if discoveredService.Skipped {
+			message = "Version ignorée dans Argus"
+		} else if pending {
+			outcome, reason = "unhealthy", "argus_update_available"
+			message = fmt.Sprintf("Version %s disponible, %s déployée", discoveredService.LatestVersion, discoveredService.DeployedVersion)
+			signals = append(signals, incidents.ArgusSignal{
+				TargetID: binding.TargetID, BindingID: binding.ID, ExternalService: discoveredService.ID,
+				NatureKey: "software-update-available", NatureLabel: "Mise à jour logicielle disponible",
+				Name: discoveredService.Name + " · " + message, Severity: incidents.SeverityWarning,
+				DeployedVersion: discoveredService.DeployedVersion, LatestVersion: discoveredService.LatestVersion,
+				Details: details,
+			})
+		}
+		observations = append(observations, IntegrationObservation{
+			BindingID: binding.ID, Outcome: outcome, Reason: reason, Message: message, Details: details,
+		})
+	}
+	if err := synchronizer.store.UpdateArgusBindings(ctx, connector.ID, bindingSnapshots); err != nil {
+		fail(observedAt, err)
+		return
+	}
+	if err := synchronizer.incidents.ReconcileArgus(ctx, incidents.ReconcileArgusInput{
+		ConnectorID: connector.ID, ObservedAt: observedAt,
+		ObservedBindings: observedBindings, Signals: signals,
+	}); err != nil {
+		fail(observedAt, err)
+		return
+	}
+	if err := synchronizer.store.RecordIntegrationObservations(ctx, observedAt, observations); err != nil {
+		synchronizer.logger.Warn("record Argus observations", "connector_id", connector.ID, "error", err)
+	}
+	if unknownCount > 0 {
+		label := "Sources Argus inconnues"
+		if unknownCount == 1 {
+			label = "Source Argus inconnue"
+		}
+		fail(observedAt, fmt.Errorf("%d %s", unknownCount, label))
+		return
+	}
+	if err := synchronizer.store.CompleteConnectorSync(ctx, connector.ID, synchronizer.owner, observedAt); err != nil {
+		synchronizer.logger.Error("complete Argus synchronization", "connector_id", connector.ID, "error", err)
+		return
+	}
+	synchronizer.logger.Info("Argus synchronization completed", "connector_id", connector.ID, "services", len(connector.Bindings))
+}
+
+func argusMissingDetails(endpoint string, binding RuntimeBinding) map[string]any {
+	details := make(map[string]any, len(binding.Metadata)+11)
+	for key, value := range binding.Metadata {
+		details[key] = value
+	}
+	details["service_id"] = binding.ExternalID
+	details["service_name"] = binding.ExternalName
+	details["argus_url"] = endpoint
+	for key, fallback := range map[string]any{
+		"deployed_version": "", "latest_version": "", "approved": false, "skipped": false,
+		"last_checked": "", "latest_version_query_ok": false, "deployed_version_query_ok": false,
+		"version_url": "",
+	} {
+		if _, exists := details[key]; !exists {
+			details[key] = fallback
+		}
+	}
+	return details
+}
+
+func argusDetails(endpoint string, service argus.Service) map[string]any {
+	return map[string]any{
+		"service_id": service.ID, "service_name": service.Name,
+		"deployed_version": service.DeployedVersion, "latest_version": service.LatestVersion,
+		"approved": service.Approved, "skipped": service.Skipped,
+		"last_checked": service.LastChecked, "deployment_state": service.DeploymentState,
+		"latest_version_query_ok":   service.LatestQueryOK,
+		"deployed_version_query_ok": service.DeployedQueryOK,
+		"argus_url":                 endpoint, "version_url": service.VersionURL,
+	}
 }
 
 type UptimeKumaSynchronizer struct {

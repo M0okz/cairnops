@@ -10,6 +10,7 @@
   import {
     activeSignalRatio,
     diverges,
+    natureLabel,
     severityLabel,
     severityTone,
     since,
@@ -126,7 +127,7 @@
           <i class="dot {scope === 'resolved' ? 'ok' : severityTone(incident.effective_severity)}"></i>
           <span>
             <strong>{incident.target_name}</strong>
-            <small class="nature">{incident.nature_label}</small>
+            <small class="nature">{natureLabel(incident)}</small>
           </span>
         </span>
 

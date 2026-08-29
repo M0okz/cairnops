@@ -73,11 +73,17 @@
   --source-zabbix: #e34a3f;
   --source-uptime-kuma: #5cdd8b;
   --source-patchmon: #60a5fa;
+  --source-argus: #0eabff;
   --source-webhook: #a78bfa;
 
   /* Typographie */
   --font: system-ui, -apple-system, 'Segoe UI', 'IBM Plex Sans', sans-serif;
   --font-num: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-md: 0.8125rem;
+  --weight-medium: 500;
+  --weight-semibold: 600;
 
   /* Échelle d'espacement — 7 crans, rien entre les deux. */
   --s1: 2px;
@@ -117,6 +123,15 @@
   --choice-icon-blur: 4px;
   --choice-pressed-scale: 0.96;
   --choice-ease: cubic-bezier(0.2, 0, 0, 1);
+  --choice-locked-surface: color-mix(in srgb, var(--surface-2) 35%, transparent);
+
+  /* Inventaires de Connecteurs */
+  --connector-modal-max: 52rem;
+  --connector-field-min: 13rem;
+  --connector-filter-min: 10rem;
+  --connector-rack-max: 27rem;
+  --connector-summary-min: 18rem;
+  --connector-summary-max: 23rem;
 
   /* Mouvement */
   --d1: 120ms;
@@ -170,11 +185,34 @@
   --source-zabbix: #c52f25;
   --source-uptime-kuma: #16834c;
   --source-patchmon: #2563eb;
+  --source-argus: #0074ad;
   --source-webhook: #7650bd;
 
   --shadow: 0 12px 32px rgba(54, 48, 36, 0.1);
 
   color-scheme: light;
+}
+
+@media (max-width: 48rem) {
+  .argus-modal .argus-rack li {
+    grid-template-columns: 1fr;
+    padding: 0 var(--s3) var(--s3);
+  }
+
+  .argus-modal .argus-rack .argus-service-choice {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .argus-modal .argus-rack .argus-service-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .argus-modal .argus-rack .argus-versions {
+    grid-row: auto;
+    grid-column: 1;
+    justify-self: start;
+  }
 }
 
 /* ── Base ───────────────────────────────────────────────────────────────── */

@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
@@ -197,6 +198,60 @@ type PatchMonImport struct {
 	Targets   []ImportedTarget `json:"targets"`
 }
 
+type ArgusServicePreview struct {
+	ExternalID        string                `json:"external_id"`
+	Name              string                `json:"name"`
+	Active            bool                  `json:"active"`
+	Importable        bool                  `json:"importable"`
+	Ineligibility     string                `json:"ineligibility,omitempty"`
+	DeployedVersion   string                `json:"deployed_version,omitempty"`
+	LatestVersion     string                `json:"latest_version,omitempty"`
+	LastChecked       string                `json:"last_checked,omitempty"`
+	Approved          bool                  `json:"approved"`
+	Skipped           bool                  `json:"skipped"`
+	Unknown           bool                  `json:"unknown"`
+	UnknownReason     string                `json:"unknown_reason,omitempty"`
+	DeploymentState   argus.DeploymentState `json:"deployment_state"`
+	VersionURL        string                `json:"version_url,omitempty"`
+	CandidateTargets  []TargetMatch         `json:"candidate_targets,omitempty"`
+	SuggestedTarget   *TargetReference      `json:"suggested_target,omitempty"`
+	AlreadyImportedTo *TargetReference      `json:"already_imported_to,omitempty"`
+}
+
+type ArgusPreviewInput struct {
+	Name     string `json:"name"`
+	Address  string `json:"address"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type ArgusPreview struct {
+	Kind               string                `json:"kind"`
+	Name               string                `json:"name"`
+	Endpoint           string                `json:"endpoint"`
+	Version            string                `json:"version"`
+	Compatibility      string                `json:"compatibility"`
+	CompatibilityLabel string                `json:"compatibility_label"`
+	EncryptedTransport bool                  `json:"encrypted_transport"`
+	ImportableCount    int                   `json:"importable_count"`
+	PendingUpdateCount int                   `json:"pending_update_count"`
+	Services           []ArgusServicePreview `json:"services"`
+	AvailableTargets   []TargetReference     `json:"available_targets"`
+	Receipt            string                `json:"receipt"`
+	ExpiresAt          time.Time             `json:"expires_at"`
+}
+
+type ArgusImportInput struct {
+	Receipt           string            `json:"receipt"`
+	ServiceIDs        []string          `json:"service_ids"`
+	TargetAssignments map[string]string `json:"target_assignments,omitempty"`
+}
+
+type ArgusImport struct {
+	Connector Connector        `json:"connector"`
+	Targets   []ImportedTarget `json:"targets"`
+}
+
 type PreviewState struct {
 	TargetsByName        map[string]TargetReference
 	Targets              []TargetIdentity
@@ -235,6 +290,17 @@ type PersistPatchMonInput struct {
 	TargetAssignments  map[string]string
 }
 
+type PersistArgusInput struct {
+	ActorID            string
+	Name               string
+	Endpoint           string
+	CredentialSealed   string
+	Version            string
+	EncryptedTransport bool
+	Services           []argus.Service
+	TargetAssignments  map[string]string
+}
+
 type Store interface {
 	List(context.Context) ([]Connector, error)
 	SetStatus(context.Context, string, string) (Connector, error)
@@ -243,6 +309,7 @@ type Store interface {
 	ImportZabbix(context.Context, PersistZabbixInput) (ZabbixImport, error)
 	ImportUptimeKuma(context.Context, PersistUptimeKumaInput) (UptimeKumaImport, error)
 	ImportPatchMon(context.Context, PersistPatchMonInput) (PatchMonImport, error)
+	ImportArgus(context.Context, PersistArgusInput) (ArgusImport, error)
 }
 
 type ZabbixClient interface {
@@ -257,11 +324,16 @@ type PatchMonClient interface {
 	Inspect(context.Context, string, patchmon.Credentials) (patchmon.Inspection, error)
 }
 
+type ArgusClient interface {
+	Inspect(context.Context, string, argus.Credentials) (argus.Inspection, error)
+}
+
 type Service struct {
 	store      Store
 	zabbix     ZabbixClient
 	uptimeKuma UptimeKumaClient
 	patchMon   PatchMonClient
+	argus      ArgusClient
 	secrets    *secretbox.Box
 	now        func() time.Time
 }
@@ -287,8 +359,18 @@ type patchMonReceipt struct {
 	ExpiresAt   time.Time            `json:"expires_at"`
 }
 
-func NewService(store Store, zabbixClient ZabbixClient, uptimeKumaClient UptimeKumaClient, patchMonClient PatchMonClient, secrets *secretbox.Box) *Service {
-	return &Service{store: store, zabbix: zabbixClient, uptimeKuma: uptimeKumaClient, patchMon: patchMonClient, secrets: secrets, now: time.Now}
+type argusReceipt struct {
+	Name        string            `json:"name"`
+	Endpoint    string            `json:"endpoint"`
+	Credentials argus.Credentials `json:"credentials"`
+	ExpiresAt   time.Time         `json:"expires_at"`
+}
+
+func NewService(store Store, zabbixClient ZabbixClient, uptimeKumaClient UptimeKumaClient, patchMonClient PatchMonClient, secrets *secretbox.Box, argusClient ArgusClient) *Service {
+	return &Service{
+		store: store, zabbix: zabbixClient, uptimeKuma: uptimeKumaClient,
+		patchMon: patchMonClient, argus: argusClient, secrets: secrets, now: time.Now,
+	}
 }
 
 func (service *Service) List(ctx context.Context) ([]Connector, error) {
@@ -343,6 +425,15 @@ func (service *Service) PreviewExisting(ctx context.Context, connectorID string)
 		return service.PreviewPatchMon(ctx, PatchMonPreviewInput{
 			Name: name, Address: credential.Endpoint,
 			TokenKey: patchCredentials.Key, TokenSecret: patchCredentials.Secret,
+		})
+	case "argus":
+		var credentials argus.Credentials
+		if err := json.Unmarshal(plaintext, &credentials); err != nil {
+			return nil, fmt.Errorf("decode Argus inventory credential: %w", err)
+		}
+		return service.PreviewArgus(ctx, ArgusPreviewInput{
+			Name: name, Address: credential.Endpoint,
+			Username: credentials.Username, Password: credentials.Password,
 		})
 	default:
 		return nil, fmt.Errorf("%w: connector does not expose a discoverable inventory", ErrInvalidInput)
@@ -567,6 +658,87 @@ func (service *Service) PreviewPatchMon(ctx context.Context, input PatchMonPrevi
 	}, nil
 }
 
+func (service *Service) PreviewArgus(ctx context.Context, input ArgusPreviewInput) (ArgusPreview, error) {
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Name == "" {
+		input.Name = "Argus"
+	}
+	if !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) > 160 {
+		return ArgusPreview{}, fmt.Errorf("%w: connector name must contain between 1 and 160 characters", ErrInvalidInput)
+	}
+	if service.argus == nil {
+		return ArgusPreview{}, fmt.Errorf("%w: Argus client is unavailable", ErrConnection)
+	}
+	credentials := argus.Credentials{Username: input.Username, Password: input.Password}
+	inspection, err := service.argus.Inspect(ctx, input.Address, credentials)
+	if err != nil {
+		return ArgusPreview{}, fmt.Errorf("%w: %v", ErrConnection, err)
+	}
+	names := make([]string, 0, len(inspection.Services))
+	for _, discoveredService := range inspection.Services {
+		names = append(names, discoveredService.Name)
+	}
+	state, err := service.store.PreviewState(ctx, "argus", inspection.Endpoint, names)
+	if err != nil {
+		return ArgusPreview{}, fmt.Errorf("prepare Argus preview: %w", err)
+	}
+	services := make([]ArgusServicePreview, 0, len(inspection.Services))
+	importableCount, pendingUpdateCount := 0, 0
+	for _, discoveredService := range inspection.Services {
+		discovered := ArgusServicePreview{
+			ExternalID: discoveredService.ID, Name: discoveredService.Name,
+			Active: discoveredService.Active, Importable: discoveredService.Importable,
+			Ineligibility:   discoveredService.Ineligibility,
+			DeployedVersion: discoveredService.DeployedVersion, LatestVersion: discoveredService.LatestVersion,
+			LastChecked: discoveredService.LastChecked, Approved: discoveredService.Approved,
+			Skipped: discoveredService.Skipped, Unknown: discoveredService.Unknown,
+			UnknownReason: discoveredService.UnknownReason, DeploymentState: discoveredService.DeploymentState,
+			VersionURL: discoveredService.VersionURL,
+		}
+		discovered.CandidateTargets = matchTargets(DiscoveredIdentity{Names: []string{discoveredService.Name}}, state.Targets)
+		discovered.SuggestedTarget = suggestedTarget(discovered.CandidateTargets)
+		if discovered.SuggestedTarget == nil && len(discovered.CandidateTargets) == 0 {
+			if target, ok := state.TargetsByName[normalizeName(discoveredService.Name)]; ok {
+				targetCopy := target
+				discovered.SuggestedTarget = &targetCopy
+			}
+		}
+		if target, ok := state.ImportedByExternalID[discoveredService.ID]; ok {
+			targetCopy := target
+			discovered.AlreadyImportedTo = &targetCopy
+		}
+		if discoveredService.Importable {
+			importableCount++
+			if !discoveredService.Unknown && !discoveredService.Skipped && discoveredService.DeployedVersion != discoveredService.LatestVersion {
+				pendingUpdateCount++
+			}
+		}
+		services = append(services, discovered)
+	}
+	expiresAt := service.now().UTC().Add(previewLifetime)
+	receiptPayload, err := json.Marshal(argusReceipt{
+		Name: input.Name, Endpoint: inspection.Endpoint,
+		Credentials: argus.Credentials{Username: strings.TrimSpace(input.Username), Password: input.Password},
+		ExpiresAt:   expiresAt,
+	})
+	if err != nil {
+		return ArgusPreview{}, fmt.Errorf("encode Argus preview: %w", err)
+	}
+	receipt, err := service.secrets.Seal(receiptPayload, "argus-preview-v1")
+	if err != nil {
+		return ArgusPreview{}, fmt.Errorf("seal Argus preview: %w", err)
+	}
+	return ArgusPreview{
+		Kind: "argus", Name: input.Name, Endpoint: inspection.Endpoint,
+		Version: inspection.Version, Compatibility: inspection.Compatibility,
+		CompatibilityLabel: "Argus " + inspection.Version + " · API en lecture seule",
+		EncryptedTransport: inspection.EncryptedTransport,
+		ImportableCount:    importableCount, PendingUpdateCount: pendingUpdateCount,
+		Services: services, AvailableTargets: availableTargets(state.Targets),
+		Receipt: receipt, ExpiresAt: expiresAt,
+	}, nil
+}
+
 func (service *Service) ImportZabbix(ctx context.Context, actorID string, input ZabbixImportInput) (ZabbixImport, error) {
 	if strings.TrimSpace(actorID) == "" {
 		return ZabbixImport{}, fmt.Errorf("%w: administrator identity is required", ErrInvalidInput)
@@ -766,6 +938,84 @@ func (service *Service) ImportPatchMon(ctx context.Context, actorID string, inpu
 	})
 	if err != nil {
 		return PatchMonImport{}, fmt.Errorf("import PatchMon hosts: %w", err)
+	}
+	return result, nil
+}
+
+func (service *Service) ImportArgus(ctx context.Context, actorID string, input ArgusImportInput) (ArgusImport, error) {
+	if strings.TrimSpace(actorID) == "" {
+		return ArgusImport{}, fmt.Errorf("%w: administrator identity is required", ErrInvalidInput)
+	}
+	if len(input.Receipt) < 32 || len(input.Receipt) > 32768 {
+		return ArgusImport{}, fmt.Errorf("%w: invalid preview receipt", ErrInvalidInput)
+	}
+	if len(input.ServiceIDs) < 1 || len(input.ServiceIDs) > 5000 {
+		return ArgusImport{}, fmt.Errorf("%w: select between 1 and 5000 services", ErrInvalidInput)
+	}
+	selection := make(map[string]struct{}, len(input.ServiceIDs))
+	for _, id := range input.ServiceIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return ArgusImport{}, fmt.Errorf("%w: selected service identity must not be empty", ErrInvalidInput)
+		}
+		if _, duplicate := selection[id]; duplicate {
+			return ArgusImport{}, fmt.Errorf("%w: selected services must be unique", ErrInvalidInput)
+		}
+		selection[id] = struct{}{}
+	}
+	assignments, err := validateTargetAssignments(selection, input.TargetAssignments)
+	if err != nil {
+		return ArgusImport{}, err
+	}
+	plaintext, err := service.secrets.Open(input.Receipt, "argus-preview-v1")
+	if err != nil {
+		return ArgusImport{}, fmt.Errorf("%w: invalid preview receipt", ErrInvalidInput)
+	}
+	var receipt argusReceipt
+	if err := json.Unmarshal(plaintext, &receipt); err != nil {
+		return ArgusImport{}, fmt.Errorf("%w: invalid preview receipt", ErrInvalidInput)
+	}
+	if !service.now().UTC().Before(receipt.ExpiresAt) {
+		return ArgusImport{}, ErrPreviewExpired
+	}
+	if service.argus == nil {
+		return ArgusImport{}, fmt.Errorf("%w: Argus client is unavailable", ErrConnection)
+	}
+	inspection, err := service.argus.Inspect(ctx, receipt.Endpoint, receipt.Credentials)
+	if err != nil {
+		return ArgusImport{}, fmt.Errorf("%w: %v", ErrConnection, err)
+	}
+	selected := make([]argus.Service, 0, len(selection))
+	for _, discoveredService := range inspection.Services {
+		if _, ok := selection[discoveredService.ID]; !ok {
+			continue
+		}
+		if !discoveredService.Importable {
+			return ArgusImport{}, fmt.Errorf("%w: Argus service %s is no longer eligible for import", ErrInvalidInput, discoveredService.ID)
+		}
+		selected = append(selected, discoveredService)
+		delete(selection, discoveredService.ID)
+	}
+	if len(selection) != 0 {
+		return ArgusImport{}, fmt.Errorf("%w: one or more selected services are no longer available", ErrInvalidInput)
+	}
+	sort.SliceStable(selected, func(i, j int) bool { return selected[i].ID < selected[j].ID })
+	encodedCredential, err := json.Marshal(receipt.Credentials)
+	if err != nil {
+		return ArgusImport{}, fmt.Errorf("encode Argus credential: %w", err)
+	}
+	credential, err := service.secrets.Seal(encodedCredential, "connector:argus:"+inspection.Endpoint)
+	if err != nil {
+		return ArgusImport{}, fmt.Errorf("seal Argus credential: %w", err)
+	}
+	result, err := service.store.ImportArgus(ctx, PersistArgusInput{
+		ActorID: actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
+		CredentialSealed: credential, Version: inspection.Version,
+		EncryptedTransport: inspection.EncryptedTransport,
+		Services:           selected, TargetAssignments: assignments,
+	})
+	if err != nil {
+		return ArgusImport{}, fmt.Errorf("import Argus services: %w", err)
 	}
 	return result, nil
 }

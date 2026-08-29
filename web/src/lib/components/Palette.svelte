@@ -15,7 +15,7 @@
   import Icon, { type IconName } from './Icon.svelte';
   import { palette } from '$lib/palette.svelte';
   import { session } from '$lib/session.svelte';
-  import { severityLabel, severityTone, since, stateLabel, stateTones, type Tone } from '$lib/format';
+  import { natureLabel, severityLabel, severityTone, since, stateLabel, stateTones, type Tone } from '$lib/format';
   import { i18n, plural, t } from '$lib/i18n.svelte';
 
   type Hit = {
@@ -78,6 +78,7 @@
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon',
+    argus: 'Argus',
     generic_webhook: t('connector.genericWebhook')
   });
 
@@ -137,13 +138,13 @@
         session.actionable.map((incident) => ({
           key: `incident:${incident.id}`,
           href: `/cibles/${incident.target_id}`,
-          label: `${incident.target_name} · ${incident.nature_label}`,
+          label: `${incident.target_name} · ${natureLabel(incident)}`,
           detail: `${t('palette.openedFor', { duration: since(incident.opened_at) })} · ${
             incident.acknowledged_at ? t('incident.acknowledged') : t('incident.unacknowledged')
           }`,
           badge: severityLabel(incident.effective_severity),
           tone: severityTone(incident.effective_severity),
-          score: score(incident.target_name, [incident.nature_label])
+          score: score(incident.target_name, [natureLabel(incident), incident.nature_label])
         }))
       )
     };

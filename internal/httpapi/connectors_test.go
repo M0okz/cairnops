@@ -23,6 +23,9 @@ type fakeConnectors struct {
 	patchMonPreviewInput connectors.PatchMonPreviewInput
 	patchMonImportActor  string
 	patchMonImportInput  connectors.PatchMonImportInput
+	argusPreviewInput    connectors.ArgusPreviewInput
+	argusImportActor     string
+	argusImportInput     connectors.ArgusImportInput
 	suspendedID          string
 	resumedID            string
 	deletedID            string
@@ -43,6 +46,17 @@ func (fake *fakeConnectors) ImportPatchMon(_ context.Context, actorID string, in
 	fake.patchMonImportActor = actorID
 	fake.patchMonImportInput = input
 	return connectors.PatchMonImport{Connector: connectors.Connector{ID: "connector-patchmon", Kind: "patchmon"}}, nil
+}
+
+func (fake *fakeConnectors) PreviewArgus(_ context.Context, input connectors.ArgusPreviewInput) (connectors.ArgusPreview, error) {
+	fake.argusPreviewInput = input
+	return connectors.ArgusPreview{Kind: "argus", Name: input.Name, Endpoint: "https://argus.example.net", Receipt: "opaque-argus-preview-receipt"}, nil
+}
+
+func (fake *fakeConnectors) ImportArgus(_ context.Context, actorID string, input connectors.ArgusImportInput) (connectors.ArgusImport, error) {
+	fake.argusImportActor = actorID
+	fake.argusImportInput = input
+	return connectors.ArgusImport{Connector: connectors.Connector{ID: "connector-argus", Kind: "argus"}}, nil
 }
 
 func (fake *fakeConnectors) Suspend(_ context.Context, connectorID string) (connectors.Connector, error) {
@@ -231,6 +245,29 @@ func TestPatchMonPreviewAndImportKeepCredentialsOutOfResponses(t *testing.T) {
 	server.Handler.ServeHTTP(response, request)
 	if response.Code != http.StatusCreated || fake.patchMonImportActor != "user-id" || fake.patchMonImportInput.TargetAssignments["host-12"] == "" {
 		t.Fatalf("unexpected PatchMon import status=%d actor=%q body=%s", response.Code, fake.patchMonImportActor, response.Body.String())
+	}
+}
+
+func TestArgusPreviewAndImportKeepBasicAuthOutOfResponses(t *testing.T) {
+	t.Parallel()
+	fake := &fakeConnectors{}
+	server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "administrator"}, Connectors: fake})
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/connectors/argus/preview", bytes.NewBufferString(`{"name":"Versions","address":"https://argus.example.net","username":"reader","password":"secret"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || fake.argusPreviewInput.Password != "secret" || bytes.Contains(response.Body.Bytes(), []byte("secret")) {
+		t.Fatalf("unexpected Argus preview status=%d body=%s input=%#v", response.Code, response.Body.String(), fake.argusPreviewInput)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/connectors/argus/import", bytes.NewBufferString(`{"receipt":"opaque-argus-preview-receipt-with-enough-characters","service_ids":["api"],"target_assignments":{"api":"12345678-1234-4234-8234-123456789012"}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response = httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || fake.argusImportActor != "user-id" || fake.argusImportInput.TargetAssignments["api"] == "" {
+		t.Fatalf("unexpected Argus import status=%d actor=%q body=%s", response.Code, fake.argusImportActor, response.Body.String())
 	}
 }
 

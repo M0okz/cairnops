@@ -30,6 +30,13 @@ export const severityLabel = (severity: IncidentSeverity) => t(`severity.${sever
 export const severityTone = (severity: IncidentSeverity): Tone => severityTones[severity];
 export const severityWeight = (severity: IncidentSeverity) => severityRank[severity];
 
+export function natureLabel(nature: { nature_key: string; nature_label: string }): string {
+  if (nature.nature_key === 'software-update-available') {
+    return t('nature.softwareUpdateAvailable');
+  }
+  return nature.nature_label;
+}
+
 export type TargetState = 'down' | 'degraded' | 'maintenance' | 'unknown' | 'ok';
 
 export const stateLabel = (state: TargetState) => t(`state.${state}`);

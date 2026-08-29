@@ -23,6 +23,7 @@
     lastObserved,
     latency,
     leadIncident,
+    natureLabel,
     ratio,
     severityLabel,
     severityTone,
@@ -181,6 +182,7 @@
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon',
+    argus: 'Argus',
     generic_webhook: 'Webhook'
   };
 
@@ -189,6 +191,7 @@
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon',
+    argus: 'Argus',
     webhook: 'Webhook'
   };
 
@@ -245,6 +248,30 @@
     if (!target) return;
     observationsOpen = true;
     await session.loadObservations(target.id);
+  }
+
+  function httpURL(value: unknown): string {
+    if (typeof value !== 'string') return '';
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function argusPosture(details: Record<string, unknown>) {
+    const instanceURL = httpURL(details.argus_url);
+    if (typeof details.service_id !== 'string' || !instanceURL) return null;
+    return {
+      deployed: typeof details.deployed_version === 'string' ? details.deployed_version : '',
+      latest: typeof details.latest_version === 'string' ? details.latest_version : '',
+      approved: details.approved === true,
+      skipped: details.skipped === true,
+      lastChecked: typeof details.last_checked === 'string' ? details.last_checked : '',
+      instanceURL,
+      versionURL: httpURL(details.version_url)
+    };
   }
 
   const checkKinds = $derived(
@@ -345,7 +372,7 @@
           <i class="dot {severityTone(lead.effective_severity)}"></i>
           <div class="banner-copy">
             <strong>
-              {t('target.ongoingIncident')} · {lead.nature_label} ·
+              {t('target.ongoingIncident')} · {natureLabel(lead)} ·
               {severityLabel(lead.effective_severity)} ·
               {lead.acknowledged_at
                 ? t('target.acknowledgedBy', {
@@ -422,7 +449,7 @@
                   <i class="dot {dead ? 'idle' : proof.signal.active ? severityTone(proof.signal.severity) : 'ok'}"></i>
                   <span>
                     <strong>{proof.signal.name}</strong>
-                    <small class="nature">{proof.incident.nature_label}</small>
+                    <small class="nature">{natureLabel(proof.incident)}</small>
                   </span>
                 </span>
 
@@ -483,6 +510,7 @@
             <div class="card-body log">
               {#if observationsOpen}
                 {#each observations as observation (observation.id)}
+                  {@const argus = argusPosture(observation.details)}
                   <div class="entry">
                     <span class="when num">{clock(observation.observed_at)}</span>
                     <span class="what">
@@ -491,6 +519,18 @@
                         {observation.latency_milliseconds} ms
                         {#if observation.message}· {observation.message}{:else if observation.reason}· {observation.reason}{/if}
                       </small>
+                      {#if argus}
+                        <small class="faint posture">
+                          {t('argus.observationVersions', { deployed: argus.deployed || '—', latest: argus.latest || '—' })}
+                          {#if argus.approved}· {t('argus.observationApproved')}{/if}
+                          {#if argus.skipped}· {t('argus.observationSkipped')}{/if}
+                          {#if argus.lastChecked}· {t('argus.lastChecked', { time: clock(argus.lastChecked) })}{/if}
+                        </small>
+                        <span class="observation-links">
+                          <a href={argus.instanceURL} target="_blank" rel="noreferrer">{t('argus.openInstance')} <span aria-hidden="true">↗</span></a>
+                          {#if argus.versionURL}<a href={argus.versionURL} target="_blank" rel="noreferrer">{t('argus.viewVersion')} <span aria-hidden="true">↗</span></a>{/if}
+                        </span>
+                      {/if}
                     </span>
                     <i class="dot {observation.outcome === 'healthy' ? 'ok' : observation.outcome === 'unhealthy' ? 'crit' : 'idle'}"></i>
                   </div>
@@ -504,7 +544,7 @@
                     <span class="what">
                       <strong>{item.entry.message}</strong>
                       <small class="faint">
-                        {item.incident.nature_label} · {t('target.origin', { origin: item.entry.origin })}
+                        {natureLabel(item.incident)} · {t('target.origin', { origin: item.entry.origin })}
                         {#if item.entry.actor_name}· {item.entry.actor_name}{/if}
                       </small>
                     </span>
@@ -757,7 +797,7 @@
               <span class="what">
                 <strong>{item.entry.message}</strong>
                 <small class="faint">
-                  {item.incident.nature_label} · {t('target.origin', { origin: item.entry.origin })}
+                  {natureLabel(item.incident)} · {t('target.origin', { origin: item.entry.origin })}
                   {#if item.entry.actor_name}· {item.entry.actor_name}{/if}
                 </small>
               </span>
@@ -1016,7 +1056,7 @@
   .kpi span {
     display: block;
     color: var(--faint);
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
   }
 
   .kpi b {
@@ -1271,6 +1311,27 @@
 
   .what {
     min-width: 0;
+  }
+
+  .posture {
+    margin-top: var(--s1);
+  }
+
+  .observation-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s3);
+    margin-top: var(--s1);
+    font-size: var(--text-xs);
+  }
+
+  .observation-links a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .observation-links a:hover {
+    text-decoration: underline;
   }
 
   /* Dans la lecture par Observation, le verdict se lit en bout de ligne. */

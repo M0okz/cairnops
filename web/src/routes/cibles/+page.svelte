@@ -14,6 +14,7 @@
     inWindow,
     latency,
     leadIncident,
+    natureLabel,
     ratio,
     severityLabel,
     severityTone,
@@ -39,6 +40,7 @@
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon',
+    argus: 'Argus',
     generic_webhook: 'Webhook'
   };
 
@@ -224,7 +226,7 @@
 
         <span class="muted hide-sm nature">
           {#if row.lead}
-            {row.lead.nature_label} · <span class={severityTone(row.lead.effective_severity)}>{severityLabel(row.lead.effective_severity)}</span>
+            {natureLabel(row.lead)} · <span class={severityTone(row.lead.effective_severity)}>{severityLabel(row.lead.effective_severity)}</span>
           {:else}
             {t('common.none')}
           {/if}
@@ -420,6 +422,7 @@
   .source-dot.zabbix { background: var(--source-zabbix) }
   .source-dot.uptime_kuma { background: var(--source-uptime-kuma) }
   .source-dot.patchmon { background: var(--source-patchmon) }
+  .source-dot.argus { background: var(--source-argus) }
   .source-dot.generic_webhook { background: var(--source-webhook) }
   .source-dot.pending { background: var(--dim) }
 
