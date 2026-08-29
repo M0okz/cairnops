@@ -2,6 +2,7 @@
   import Icon from './Icon.svelte';
   import ReconciliationSummary from './ReconciliationSummary.svelte';
   import TargetDecision from './TargetDecision.svelte';
+  import Checkbox from './ui/Checkbox.svelte';
   import { onMount } from 'svelte';
   import { api, type UptimeKumaImportResult, type UptimeKumaMonitorPreview, type UptimeKumaPreview } from '$lib/api';
   import { clock } from '$lib/format';
@@ -280,14 +281,13 @@
           {#each filteredMonitors() as monitor (monitor.external_id)}
             {@const locked = Boolean(monitor.already_imported_to)}
             <li class:picked={selected.includes(monitor.external_id)} class:locked>
-              <label class="rack-select">
-                <input type="checkbox" checked={selected.includes(monitor.external_id)}
-                  onchange={() => toggleMonitor(monitor.external_id)} disabled={locked} />
+              <Checkbox variant="row" checked={selected.includes(monitor.external_id)}
+                onCheckedChange={() => toggleMonitor(monitor.external_id)} disabled={locked}>
                 <span class="rack-name">
                   <strong>{monitor.name}</strong>
                   <small class="faint mono">{monitor.address || statusLabel(monitor.status)}</small>
                 </span>
-              </label>
+              </Checkbox>
               <div class="rack-decision">
                 {#if locked}
                   <span class="pill">{t('wizard.alreadyBound')}</span>
@@ -612,23 +612,8 @@
     border-bottom: 0;
   }
 
-  .rack label {
-    display: flex;
-    align-items: center;
-    gap: var(--s4);
-    padding: var(--s3) var(--s4);
-    cursor: pointer;
-    flex: 1;
-    min-width: 0;
-  }
-
   .rack li.picked {
     background: var(--surface-2);
-  }
-
-  .rack li.locked label {
-    cursor: default;
-    opacity: 0.55;
   }
 
   .rack-name {
@@ -651,10 +636,6 @@
     font-size: 0.6875rem;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .rack-select {
-    min-width: 0;
   }
 
   .rack-decision {

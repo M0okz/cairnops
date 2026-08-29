@@ -11,6 +11,7 @@
   import Icon from './Icon.svelte';
   import ReconciliationSummary from './ReconciliationSummary.svelte';
   import TargetDecision from './TargetDecision.svelte';
+  import Checkbox from './ui/Checkbox.svelte';
 
   let {
     onclose,
@@ -216,14 +217,13 @@
           {#each filteredHosts() as host (host.external_id)}
             {@const locked = Boolean(host.already_imported_to)}
             <li class:picked={selected.includes(host.external_id)} class:locked>
-              <label>
-                <input type="checkbox" checked={selected.includes(host.external_id)} onchange={() => toggleHost(host.external_id)} disabled={locked} />
+              <Checkbox class="patchmon-host-choice" variant="row" checked={selected.includes(host.external_id)} onCheckedChange={() => toggleHost(host.external_id)} disabled={locked}>
                 <span class="host">
                   <strong>{host.name}</strong>
                   <small class="faint mono">{host.hostname}{host.ip ? ` · ${host.ip}` : ''}</small>
                   <small class:warn={host.security_updates_count > 0 || host.needs_reboot} class="posture">{posture(host)}</small>
                 </span>
-              </label>
+              </Checkbox>
               <div>
                 {#if locked}
                   <span class="pill">{t('wizard.alreadyBound')}</span> <small class="faint">{host.already_imported_to?.name}</small>
@@ -293,8 +293,6 @@
   .rack li { display: grid; grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr); align-items: center; gap: var(--s3); padding-right: var(--s4); border-bottom: 1px solid var(--line-row); }
   .rack li:last-child { border-bottom: 0; }
   .rack li.picked { background: var(--surface-2); }
-  .rack li.locked label { cursor: default; opacity: .55; }
-  .rack label { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4); cursor: pointer; min-width: 0; }
   .host { min-width: 0; }
   .host strong, .host small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .host strong { font-size: .75rem; }
@@ -302,5 +300,5 @@
   .posture { color: var(--ok); }
   .posture.warn { color: var(--warn); }
   .none { display: block !important; padding: var(--s5) !important; text-align: center; }
-  @media (max-width: 40rem) { .rack li { grid-template-columns: 1fr; padding: 0 var(--s3) var(--s3); } .rack label { padding-left: 0; padding-right: 0; } }
+  @media (max-width: 40rem) { .rack li { grid-template-columns: 1fr; padding: 0 var(--s3) var(--s3); } :global(.patchmon-host-choice) { padding-left: 0; padding-right: 0; } }
 </style>

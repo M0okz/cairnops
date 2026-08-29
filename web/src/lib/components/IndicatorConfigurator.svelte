@@ -5,6 +5,8 @@
   import { session, messageFrom } from '$lib/session.svelte';
   import { stamp } from '$lib/format';
   import { addSystemIndicators, indicatorSelectionKey, setBindingsEnabled } from '$lib/indicator-bulk';
+  import Checkbox from './ui/Checkbox.svelte';
+  import SwitchControl from './ui/Switch.svelte';
 
   let { connector, onclose, onsuccess }: { connector: Connector; onclose: () => void; onsuccess: () => Promise<void> | void } = $props();
   type Section = 'scope' | 'indicators' | 'capabilities' | 'history';
@@ -175,7 +177,7 @@
           <div class="scope-table">
             {#each visibleBindings as binding (binding.source.external_id)}
               <div class="scope-row" class:pending={!binding.source.imported}>
-                <label class="switch"><input type="checkbox" bind:checked={binding.enabled} /><span></span></label>
+                <SwitchControl bind:checked={binding.enabled} label={`Activer le périmètre pour ${binding.source.external_name}`} />
                 <button class="scope-name" type="button" onclick={() => { activeExternal = binding.source.external_id; section = 'indicators'; }}><strong>{binding.source.external_name}</strong><small>{binding.source.imported ? binding.source.target_name ?? 'Cible liée' : 'Nouvelle découverte · confirmation requise'}</small></button>
                 <select bind:value={binding.targetId} disabled={!binding.enabled || binding.source.imported} aria-label={`Cible CairnOps pour ${binding.source.external_name}`}>
                   <option value="">Choisir une Cible…</option>
@@ -204,13 +206,12 @@
               </div>
               <div class="candidate-list">
                 {#each active.source.candidates as candidate (indicatorSelectionKey(candidate))}
-                  <label class="candidate" class:unavailable={!candidate.available}>
-                    <input type="checkbox" checked={active.selected.has(indicatorSelectionKey(candidate))} disabled={!candidate.available} onchange={() => toggleCandidate(active, candidate)} />
-                    <span><strong>{candidate.label}</strong><small>{candidate.dimension || candidate.semantic_key}</small></span>
+                  <Checkbox variant="selection" checked={active.selected.has(indicatorSelectionKey(candidate))} disabled={!candidate.available} onCheckedChange={() => toggleCandidate(active, candidate)}>
+                    <span class="candidate-main"><strong>{candidate.label}</strong><small>{candidate.dimension || candidate.semantic_key}</small></span>
                     {#if candidate.recommended}<span class="recommended">Recommandé</span>{/if}
-                    <code>{candidate.external_id}</code>
+                    <code class="candidate-code">{candidate.external_id}</code>
                     {#if !candidate.available}<small class="why">{candidate.reason || 'À vérifier'}</small>{/if}
-                  </label>
+                  </Checkbox>
                 {:else}<div class="empty"><strong>Aucun Indicateur permis</strong>Ce produit ne publie rien du catalogue court pour cette Cible.</div>{/each}
               </div>
             {:else}<div class="empty"><strong>Aucun périmètre actif</strong>Activez une Cible dans la section Périmètre.</div>{/if}
@@ -252,14 +253,10 @@
   .scope-actions .btn span { margin-left: var(--s1); color: var(--faint); }
   .search input, .profile-strip input { min-width: 0; width: 100%; border: 0; outline: 0; background: none; color: var(--ink); font: inherit; }
   .scope-table, .candidate-list, .capabilities, .activity { border: 1px solid var(--line-strong); border-radius: var(--r-l); background: var(--surface); overflow: hidden; }
+  .candidate-list { --choice-selection-columns: var(--choice-hit-area) minmax(10rem, 1fr) 6rem minmax(7rem, .8fr); }
   .scope-row { display: grid; grid-template-columns: 2.5rem minmax(12rem, 1fr) minmax(12rem, .8fr) 3rem; align-items: center; min-height: 3.5rem; padding: 0 var(--s4); border-bottom: 1px solid var(--line-row); }
   .scope-row:last-child { border-bottom: 0; }
   .scope-row.pending { background: var(--surface-2); }
-  .switch input { position: absolute; opacity: 0; pointer-events: none; }
-  .switch span { display: block; width: 1.75rem; height: 1rem; padding: 2px; border-radius: var(--r-pill); background: var(--surface-3); transition: background var(--d1) var(--ease); }
-  .switch span::after { content: ''; display: block; width: .75rem; height: .75rem; border-radius: 50%; background: var(--muted); transition: transform var(--d1) var(--ease), background var(--d1) var(--ease); }
-  .switch input:checked + span { background: var(--accent); }
-  .switch input:checked + span::after { transform: translateX(.75rem); background: var(--accent-ink); }
   .scope-name { min-width: 0; border: 0; background: none; text-align: left; }
   .scope-name strong, .scope-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .scope-name strong { font-size: .75rem; }
@@ -278,15 +275,12 @@
   .profile-strip { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s4); flex-wrap: wrap; }
   .profile-strip > span { flex: 1; }
   .profile-strip input { width: 12rem; }
-  .candidate { display: grid; grid-template-columns: 1.25rem minmax(10rem, 1fr) 6rem minmax(7rem, .8fr); align-items: center; gap: var(--s3); min-height: 3.25rem; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line-row); }
-  .candidate:last-child { border-bottom: 0; }
-  .candidate > span:nth-of-type(1) strong, .candidate > span:nth-of-type(1) small { display: block; }
-  .candidate strong { font-size: .75rem; }
-  .candidate small { color: var(--faint); font-size: .625rem; }
-  .candidate code { color: var(--faint); font-family: var(--font-num); font-size: .625rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .candidate.unavailable { opacity: .65; }
+  .candidate-main strong, .candidate-main small { display: block; }
+  .candidate-main strong { font-size: .75rem; }
+  .candidate-main small { color: var(--faint); font-size: .625rem; }
+  .candidate-code { color: var(--faint); font-family: var(--font-num); font-size: .625rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .recommended { color: var(--accent); font-size: .625rem; }
-  .candidate .why { grid-column: 2 / -1; color: var(--warn); }
+  .why { grid-column: 2 / -1; color: var(--warn); }
   .capabilities article { display: flex; align-items: center; gap: var(--s3); min-height: 3.75rem; padding: 0 var(--s4); border-bottom: 1px solid var(--line-row); }
   .capabilities article span { min-width: 0; flex: 1; }
   .capabilities strong, .capabilities small { display: block; }
@@ -305,5 +299,5 @@
   .retention { grid-column: 2; padding: var(--s4); border-left: 2px solid var(--accent); background: var(--surface); }
   .retention strong { font-size: .75rem; }
   .retention p { font-size: .6875rem; }
-  @media (max-width: 48rem) { .scrim { padding: 0; } .indicator-modal, .indicator-modal.maximized { width: 100vw; max-width: none; height: 100dvh; max-height: none; border: 0; border-radius: 0; } .window-control { display: none; } .section-head { align-items: flex-start; flex-direction: column; } .scope-actions { width: 100%; flex-wrap: wrap; } .search { flex: 1; } .indicator-workbench { grid-template-columns: 8rem minmax(0, 1fr); } .scope-row { grid-template-columns: 2.5rem minmax(0, 1fr) 3rem; padding: var(--s3); } .scope-row select { grid-column: 2 / -1; width: 100%; } .candidate { grid-template-columns: 1.25rem minmax(0, 1fr); } .candidate .recommended, .candidate code { grid-column: 2; } .review { grid-template-columns: 1fr; margin: var(--s4) 0; } .review-mark { grid-row: auto; } .review dl, .retention { grid-column: 1; } }
+  @media (max-width: 48rem) { .scrim { padding: 0; } .indicator-modal, .indicator-modal.maximized { width: 100vw; max-width: none; height: 100dvh; max-height: none; border: 0; border-radius: 0; } .window-control { display: none; } .section-head { align-items: flex-start; flex-direction: column; } .scope-actions { width: 100%; flex-wrap: wrap; } .search { flex: 1; } .indicator-workbench { grid-template-columns: 8rem minmax(0, 1fr); } .scope-row { grid-template-columns: 2.5rem minmax(0, 1fr) 3rem; padding: var(--s3); } .scope-row select { grid-column: 2 / -1; width: 100%; } .candidate-list { --choice-selection-columns: var(--choice-hit-area) minmax(0, 1fr); } .recommended, .candidate-code { grid-column: 2; } .review { grid-template-columns: 1fr; margin: var(--s4) 0; } .review-mark { grid-row: auto; } .review dl, .retention { grid-column: 1; } }
 </style>

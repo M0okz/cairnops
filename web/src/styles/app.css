@@ -93,6 +93,7 @@
   --r-m: 0.375rem;
   --r-l: 0.5rem;
   --r-pill: 1.25rem;
+  --line-width: 1px;
 
   /* Ossature */
   --rail-w: 14rem;
@@ -101,6 +102,21 @@
   --ctl-h-lg: 2rem;
   --counter-slot-w: 1.75rem;
   --counter-pill-h: 1.125rem;
+
+  /* Contrôles de choix — le hit area reste plus grand que leur dessin. */
+  --choice-hit-area: var(--ctl-h);
+  --choice-row-min-height: 3.25rem;
+  --choice-disabled-opacity: 0.55;
+  --checkbox-size: 1rem;
+  --switch-width: 1.75rem;
+  --switch-height: 1rem;
+  --switch-thumb-size: 0.75rem;
+  --switch-thumb-travel: 0.75rem;
+  --choice-icon-stroke: 1.75;
+  --choice-icon-hidden-scale: 0.25;
+  --choice-icon-blur: 4px;
+  --choice-pressed-scale: 0.96;
+  --choice-ease: cubic-bezier(0.2, 0, 0, 1);
 
   /* Mouvement */
   --d1: 120ms;

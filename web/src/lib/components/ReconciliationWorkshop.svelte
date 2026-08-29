@@ -4,6 +4,7 @@
   import { reconciliationState } from '$lib/reconciliation.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { t } from '$lib/i18n.svelte';
+  import Checkbox from './ui/Checkbox.svelte';
 
   let {
     primaryTargetId = '',
@@ -201,7 +202,7 @@
         {/if}
 
         {#if source && preview.secondary.source_count === 1}
-          <label class="archive-option"><input type="checkbox" bind:checked={archiveOrigin} /> {t('reconciliation.archiveEmpty', { name: preview.secondary.name })}</label>
+          <div class="archive-option"><Checkbox bind:checked={archiveOrigin}>{t('reconciliation.archiveEmpty', { name: preview.secondary.name })}</Checkbox></div>
         {/if}
 
         <div class="field">
@@ -259,7 +260,7 @@
   .conflicts strong { font-size: .6875rem; }
   .conflicts span { padding: var(--s1) var(--s2); border-radius: var(--r-pill); background: var(--surface-2); color: var(--muted); font-size: .625rem; }
   .archive-option { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s4); color: var(--muted); font-size: .6875rem; }
-  .archive-option input, .comparison input { width: auto; height: auto; }
+  .comparison input { width: auto; height: auto; }
   .confirmation { margin-top: var(--s4); }
   .confirmation small { color: var(--crit); font-size: .625rem; }
   .error { margin-top: var(--s4); color: var(--crit); font-size: .6875rem; }

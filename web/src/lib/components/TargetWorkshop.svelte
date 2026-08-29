@@ -3,6 +3,7 @@
   import Icon from './Icon.svelte';
   import { onMount } from 'svelte';
   import { api, type CreatedSource, type IncidentSeverity, type SourceKind, type Target } from '$lib/api';
+  import Checkbox from './ui/Checkbox.svelte';
 
   let {
     onclose,
@@ -216,10 +217,7 @@
                 </div>
               {:else if kind === 'tcp'}
                 <div class="field wide">
-                  <label class="inline" for="tls">
-                    <input id="tls" type="checkbox" bind:checked={tls} />
-                    {t('workshop.negotiateTls')}
-                  </label>
+                  <Checkbox id="tls" bind:checked={tls}>{t('workshop.negotiateTls')}</Checkbox>
                 </div>
                 {#if tls}
                   <div class="field">
@@ -355,18 +353,6 @@
 
   .kinds button {
     flex: 1;
-  }
-
-  label.inline {
-    display: flex;
-    align-items: center;
-    gap: var(--s3);
-    color: var(--muted);
-  }
-
-  label.inline input {
-    width: auto;
-    height: auto;
   }
 
   .note {
