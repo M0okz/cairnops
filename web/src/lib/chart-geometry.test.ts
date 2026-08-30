@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   chartCoordinates,
+  chartHoverState,
   chartSegments,
   monotoneChartPath,
   nearestChartPoint
@@ -44,6 +45,20 @@ test('selects the proof closest to the pointer', () => {
 
   assert.equal(nearestChartPoint(coordinates, 43)?.index, 1);
   assert.equal(nearestChartPoint([], 43), null);
+});
+
+test('keeps the cursor under the pointer while selecting the nearest proof', () => {
+  const coordinates = [
+    { at: 'a', value: 10, index: 0, x: 10, y: 20 },
+    { at: 'b', value: 20, index: 1, x: 60, y: 15 },
+    { at: 'c', value: 30, index: 2, x: 110, y: 10 }
+  ];
+
+  assert.deepEqual(chartHoverState(coordinates, 43, [10, 110]), {
+    cursorX: 43,
+    point: coordinates[1]
+  });
+  assert.equal(chartHoverState([], 43, [10, 110]), null);
 });
 
 test('keeps missing hourly evidence as a visible gap', () => {

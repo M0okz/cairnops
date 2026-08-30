@@ -3,9 +3,9 @@
   import {
     chartAreaPath,
     chartCoordinates,
+    chartHoverState,
     chartSegments,
-    monotoneChartPath,
-    nearestChartPoint
+    monotoneChartPath
   } from '$lib/chart-geometry';
   import {
     formatIndicator,
@@ -46,8 +46,8 @@
   const insetX = $derived(compact ? 3 : 8);
   const insetTop = $derived(compact ? 4 : 10);
   const insetBottom = $derived(compact ? 4 : 20);
-  const tooltipWidth = $derived(compact ? 132 : 156);
-  const tooltipHeight = $derived(compact ? 31 : 36);
+  const tooltipWidth = $derived(compact ? 148 : 188);
+  const tooltipHeight = $derived(compact ? 36 : 46);
   let selected = $state<number | null>(null);
   let pointerX = $state<number | null>(null);
   let chart = $state<SVGSVGElement | null>(null);
@@ -98,13 +98,13 @@
     if (!interactive || points.length === 0) return;
     const svg = event.currentTarget as SVGSVGElement;
     const rect = svg.getBoundingClientRect();
-    const localX = Math.min(
-      geometry.width - insetX,
-      Math.max(insetX, ((event.clientX - rect.left) / rect.width) * geometry.width)
+    const hover = chartHoverState(
+      geometry.coordinates,
+      ((event.clientX - rect.left) / rect.width) * geometry.width,
+      [insetX, geometry.width - insetX]
     );
-    const closest = nearestChartPoint(geometry.coordinates, localX);
-    selected = closest?.index ?? null;
-    pointerX = localX;
+    selected = hover?.point.index ?? null;
+    pointerX = hover?.cursorX ?? null;
   }
 
   function moveSelection(event: KeyboardEvent) {
@@ -275,12 +275,20 @@
 
   {#if interactive && picked && pickedCoordinate}
     <g class="selection" role="tooltip" aria-label={pickedLabel}>
-      <line class="cursor-guide" x1={pickedCoordinate.x} x2={pickedCoordinate.x} y1={insetTop} y2={height - insetBottom} vector-effect="non-scaling-stroke" />
+      <rect
+        class="cursor-band"
+        x={(pointerX ?? pickedCoordinate.x) - (compact ? 2.5 : 4)}
+        y={insetTop}
+        width={compact ? 5 : 8}
+        height={height - insetTop - insetBottom}
+      />
+      <line class="cursor-guide" x1={pointerX ?? pickedCoordinate.x} x2={pointerX ?? pickedCoordinate.x} y1={insetTop} y2={height - insetBottom} vector-effect="non-scaling-stroke" />
+      <circle class="selected-halo" cx={pickedCoordinate.x} cy={pickedCoordinate.y} r={compact ? 5 : 6} />
       <circle class="selected-point" cx={pickedCoordinate.x} cy={pickedCoordinate.y} r="3.25" vector-effect="non-scaling-stroke" />
       <g class="tooltip" transform={`translate(${tooltipX},${tooltipY})`}>
-        <rect width={tooltipWidth} height={tooltipHeight} rx="5" vector-effect="non-scaling-stroke" />
-        <text class="tooltip-time" x="8" y={compact ? 12 : 14}>{timestamp(picked.at)}</text>
-        <text class="tooltip-value" x="8" y={compact ? 25 : 29}>{formatIndicator(picked.value, unit)}</text>
+        <rect width={tooltipWidth} height={tooltipHeight} rx="6" vector-effect="non-scaling-stroke" />
+        <text class="tooltip-time" x="10" y={compact ? 14 : 17}>{timestamp(picked.at)}</text>
+        <text class="tooltip-value" x="10" y={compact ? 29 : 36}>{formatIndicator(picked.value, unit)}</text>
       </g>
     </g>
   {/if}
@@ -323,25 +331,26 @@
     stop-color: currentColor;
   }
 
-  .fill-start { stop-opacity: 0.3; }
-  .fill-middle { stop-opacity: 0.12; }
+  .fill-start { stop-opacity: 0.38; }
+  .fill-middle { stop-opacity: 0.16; }
   .fill-end { stop-opacity: 0.015; }
 
   .grid line {
-    stroke: var(--line-row);
+    stroke: var(--line-strong);
     stroke-width: 1;
+    opacity: 0.65;
   }
 
   .line {
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.5;
+    stroke-width: 1.75;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
 
   .compact .line {
-    stroke-width: 1.35;
+    stroke-width: 1.5;
   }
 
   .single-point,
@@ -367,9 +376,19 @@
   }
 
   .cursor-guide {
-    stroke: var(--line-strong);
+    stroke: currentColor;
     stroke-width: 1;
-    stroke-dasharray: 2 3;
+    opacity: 0.5;
+  }
+
+  .cursor-band {
+    fill: currentColor;
+    opacity: 0.055;
+  }
+
+  .selected-halo {
+    fill: currentColor;
+    opacity: 0.18;
   }
 
   .marker.info { color: var(--info); }
@@ -383,6 +402,7 @@
   .tooltip rect {
     fill: var(--surface-3);
     stroke: var(--line-strong);
+    filter: drop-shadow(var(--chart-tooltip-shadow));
   }
 
   .tooltip text {
@@ -393,13 +413,13 @@
   .tooltip-time {
     fill: var(--faint);
     font-family: var(--font);
-    font-size: 8px;
+    font-size: 9px;
   }
 
   .tooltip-value {
     fill: var(--ink);
     font-family: var(--font-num);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: var(--weight-semibold);
   }
 

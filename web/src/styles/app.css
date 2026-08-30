@@ -139,6 +139,7 @@
   --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
 
   --shadow: 0 12px 32px rgba(0, 0, 0, 0.34);
+  --chart-tooltip-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
 
   color-scheme: dark;
 }
@@ -189,6 +190,7 @@
   --source-webhook: #7650bd;
 
   --shadow: 0 12px 32px rgba(54, 48, 36, 0.1);
+  --chart-tooltip-shadow: 0 6px 12px rgba(54, 48, 36, 0.16);
 
   color-scheme: light;
 }

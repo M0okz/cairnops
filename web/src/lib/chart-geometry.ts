@@ -129,6 +129,25 @@ export function nearestChartPoint(
   );
 }
 
+/**
+ * Le filet suit la souris sans saut, tandis que la valeur reste rattachée à
+ * la preuve réellement collectée la plus proche.
+ */
+export function chartHoverState(
+  points: ChartCoordinate[],
+  pointerX: number,
+  bounds: [number, number]
+): { cursorX: number; point: ChartCoordinate } | null {
+  const point = nearestChartPoint(points, pointerX);
+  if (!point) return null;
+  const low = Math.min(bounds[0], bounds[1]);
+  const high = Math.max(bounds[0], bounds[1]);
+  return {
+    cursorX: Math.min(high, Math.max(low, pointerX)),
+    point
+  };
+}
+
 export function chartSegments(
   points: ChartCoordinate[],
   gapThresholdMilliseconds: number | null
