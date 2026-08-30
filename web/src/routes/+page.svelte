@@ -1,7 +1,8 @@
 <script lang="ts">
   /* Écran 4g — Vue d'ensemble, orientée exceptions.
-   * L'ordre est celui des Écrans : verdict global, Incidents à traiter, Cibles
-   * à surveiller, puis Santé. Rien ne s'affiche en vert sans preuve récente. */
+   * Le verdict donne l'urgence ; la situation des Cibles et les repères
+   * contextuels enrichissent ensuite naturellement la lecture. Rien ne
+   * s'affiche en vert sans preuve récente. */
 
   import Topbar from '$lib/components/Topbar.svelte';
   import Spark from '$lib/components/Spark.svelte';
@@ -9,20 +10,16 @@
   import Uptime from '$lib/components/Uptime.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import IndicatorOverview from '$lib/components/IndicatorOverview.svelte';
+  import FleetOverview from '$lib/components/FleetOverview.svelte';
   import { coverageWindow } from '$lib/overview';
   import { session } from '$lib/session.svelte';
   import {
-    activeSignalRatio,
     calendarDay,
-    diverges,
     duration,
     inWindow,
     lastObserved,
     leadIncident,
-    natureLabel,
     ratio,
-    severityLabel,
-    severityTone,
     since,
     stateLabel,
     stateTones,
@@ -165,13 +162,6 @@
     };
   });
 
-  const toTreat = $derived(
-    [...session.actionable].sort((a, b) => {
-      if (Boolean(a.acknowledged_at) !== Boolean(b.acknowledged_at)) return a.acknowledged_at ? 1 : -1;
-      return new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime();
-    })
-  );
-
   const componentLabels = $derived<Record<string, string>>({
     server: t('component.server'),
     worker: t('component.worker'),
@@ -184,18 +174,6 @@
     postgresql: t('component.postgresqlNote')
   });
 
-  let acknowledging = $state('');
-
-  async function acknowledge(incidentId: string) {
-    const incident = session.incidents.find((item) => item.id === incidentId);
-    if (!incident) return;
-    acknowledging = incidentId;
-    try {
-      await session.acknowledge(incident);
-    } finally {
-      acknowledging = '';
-    }
-  }
 </script>
 
 <svelte:head><title>{t('overview.title')} — {session.instanceLabel}</title></svelte:head>
@@ -291,70 +269,9 @@
     </div>
   </div>
 
+  <FleetOverview />
+
   <IndicatorOverview />
-
-  <div class="band">
-    <h2>{t('overview.toTreat')}</h2>
-    {#if session.actionable.length > 0}<span class="tally"><Odometer value={session.actionable.length} /></span>{/if}
-    <a class="more" href="/incidents">{t('overview.allIncidents')} →</a>
-  </div>
-
-  <div class="card cols-incident">
-    {#each toTreat as incident (incident.id)}
-      <div class="trow incident">
-        <span class="cell-name">
-          <i class="dot {severityTone(incident.effective_severity)}"></i>
-          <span>
-            <strong>{incident.target_name}</strong>
-            <small class="nature">{natureLabel(incident)}</small>
-          </span>
-        </span>
-
-        <span class="pill {severityTone(incident.effective_severity)}">
-          {severityLabel(incident.effective_severity)}
-        </span>
-
-        <span class="hide-sm">
-          {#if incident.acknowledged_at}
-            <span class="ack"
-              ><i class="mark">✓</i>{incident.acknowledged_by ?? t('overview.acknowledgedShort')}</span
-            >
-          {:else}
-            <span class="crit">{t('overview.fig.unacknowledged')}</span>
-          {/if}
-        </span>
-
-        <span class="num hide-sm"><Odometer value={since(incident.opened_at, now)} /></span>
-
-        <span class="num hide-sm sources">
-          <Odometer value={activeSignalRatio(incident)} />
-          {#if diverges(incident)}<span class="crit" title={t('overview.divergence')}>≠</span>{/if}
-        </span>
-
-        <span class="faint log hide-sm">
-          {incident.activity.at(-1)?.message ?? t('overview.opened')}
-        </span>
-
-        {#if incident.acknowledged_at}
-          <a class="btn sm" href="/cibles/{incident.target_id}">{t('common.open')}</a>
-        {:else}
-          <button
-            class="btn primary sm"
-            type="button"
-            disabled={acknowledging === incident.id}
-            onclick={() => acknowledge(incident.id)}
-          >
-            {acknowledging === incident.id ? t('incident.acknowledging') : t('incident.acknowledge')}
-          </button>
-        {/if}
-      </div>
-    {:else}
-      <div class="empty">
-        <strong>{t('overview.emptyTitle')}</strong>
-        {t('overview.emptyHint')}
-      </div>
-    {/each}
-  </div>
 
   <div class="split">
     <section>
@@ -587,20 +504,6 @@
     font-weight: 600;
   }
 
-  .tally {
-    min-width: var(--counter-pill-h);
-    height: var(--counter-pill-h);
-    padding: 0 calc(var(--s3) - var(--s1));
-    display: inline-grid;
-    place-items: center;
-    border-radius: var(--r-pill);
-    background: var(--surface-2);
-    color: var(--faint);
-    font-family: var(--font-num);
-    font-size: 0.625rem;
-    line-height: 1;
-  }
-
   .more {
     margin-left: auto;
     color: var(--muted);
@@ -611,55 +514,8 @@
     color: var(--accent);
   }
 
-  .cols-incident {
-    --cols: minmax(0, 1.3fr) 6.75rem 8.125rem 3.875rem 4.25rem minmax(0, 1fr) auto;
-  }
-
   .cols-watch {
     --cols: minmax(0, 1fr) 9.375rem 5.125rem 5.75rem 1.25rem;
-  }
-
-  .incident {
-    cursor: default;
-  }
-
-  .nature {
-    font-family: var(--font);
-    color: var(--faint);
-    font-size: 0.6875rem;
-  }
-
-  .ack {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3125rem;
-    color: var(--muted);
-    font-size: 0.75rem;
-  }
-
-  .mark {
-    width: 0.875rem;
-    height: 0.875rem;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: var(--surface-3);
-    color: var(--ok);
-    font-size: 0.5625rem;
-    font-style: normal;
-  }
-
-  .sources {
-    display: flex;
-    align-items: center;
-    gap: 0.3125rem;
-  }
-
-  .log {
-    font-size: 0.75rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .state {
@@ -784,30 +640,6 @@
   @media (max-width: 48rem) {
     .verdict-cells {
       grid-template-columns: minmax(0, 1fr);
-    }
-
-    .incident {
-      align-items: start;
-    }
-
-    .incident .hide-sm {
-      display: none;
-    }
-
-    .incident .cell-name {
-      grid-column: 1 / -1;
-    }
-
-    .incident > .pill {
-      grid-column: 1;
-      grid-row: 2;
-      justify-self: start;
-    }
-
-    .incident > .btn {
-      grid-column: 2;
-      grid-row: 2;
-      justify-self: end;
     }
 
     .cell {

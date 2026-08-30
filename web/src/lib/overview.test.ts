@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { InstanceHour } from './api.ts';
-import { coverageWindow } from './overview.ts';
+import { coverageWindow, healthyEvidenceWindow } from './overview.ts';
 
 const hour = (
   at: string,
@@ -33,4 +33,22 @@ test('keeps missing and unmeasured hours neutral in the coverage window', () => 
 
 test('does not fabricate a window without a server timestamp', () => {
   assert.deepEqual(coverageWindow([], undefined), []);
+});
+
+test('aligns healthy evidence and leaves silent hours neutral', () => {
+  const values = healthyEvidenceWindow(
+    [
+      { ...hour('2026-08-20T12:00:00Z', 10, 5), healthy_observations: 4 },
+      { ...hour('2026-08-20T13:00:00Z', 10, 0), healthy_observations: 0 },
+      { ...hour('2026-08-20T14:00:00Z', 10, 12), healthy_observations: 15 }
+    ],
+    '2026-08-20T14:37:00Z',
+    4
+  );
+
+  assert.deepEqual(values, [null, 0.8, null, 1]);
+});
+
+test('does not fabricate healthy evidence without a server timestamp', () => {
+  assert.deepEqual(healthyEvidenceWindow([], undefined), []);
 });

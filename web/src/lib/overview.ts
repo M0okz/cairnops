@@ -32,3 +32,34 @@ export function coverageWindow(
 
   return values;
 }
+
+/**
+ * Aligne la part de preuves saines sur la même fenêtre horaire. Seules les
+ * Observations qui ont conclu entrent au dénominateur : une heure silencieuse
+ * reste inconnue au lieu de devenir artificiellement saine ou défaillante.
+ */
+export function healthyEvidenceWindow(
+  hours: InstanceHour[],
+  checkedAt: string | undefined,
+  slots = 24
+): Array<number | null> {
+  const checkedAtMilliseconds = checkedAt ? new Date(checkedAt).getTime() : Number.NaN;
+  if (!Number.isFinite(checkedAtMilliseconds) || slots < 1) return [];
+
+  const currentHour = Math.floor(checkedAtMilliseconds / hourMilliseconds) * hourMilliseconds;
+  const firstHour = currentHour - (slots - 1) * hourMilliseconds;
+  const values = Array.from<number | null>({ length: slots }).fill(null);
+
+  for (const hour of hours) {
+    const timestamp = new Date(hour.hour).getTime();
+    if (!Number.isFinite(timestamp)) continue;
+    const index = Math.round((timestamp - firstHour) / hourMilliseconds);
+    if (index < 0 || index >= slots || hour.conclusive_observations <= 0) continue;
+    values[index] = Math.max(
+      0,
+      Math.min(1, hour.healthy_observations / hour.conclusive_observations)
+    );
+  }
+
+  return values;
+}
