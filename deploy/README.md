@@ -19,6 +19,20 @@ ajoute son numéro de build, croissant, à chaque publication. Le tag SHA reste
 disponible pour un retour arrière manuel et le déploiement automatique suit
 `latest`.
 
+## Releases GitHub
+
+Après la publication réussie des trois images, le même workflow crée une
+Release GitHub `v<majeure>.<mineure>.<build>` sur le commit exact de `main`.
+La première Release présente le périmètre initial de CairnOps ; les suivantes
+classent les changements utiles depuis le tag précédent et écartent les
+modifications purement internes. Chaque note rappelle les images immuables, la
+sauvegarde recommandée, le traitement des migrations et les incompatibilités
+déclarées.
+
+Une Release prouve que les contrôles et la publication des images ont réussi.
+Elle ne prouve pas que Watchtower a déjà remplacé les conteneurs de production :
+le SHA de `/api/v1/version` reste la référence du déploiement réellement servi.
+
 ## Première publication GHCR
 
 GHCR crée normalement un nouveau package avec une visibilité privée, même si

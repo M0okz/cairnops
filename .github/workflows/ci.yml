@@ -53,6 +53,9 @@ jobs:
       - name: Check the build version
         run: sh scripts/build-version.sh 42 | grep -Eq '^[0-9]+\.[0-9]+\.42$'
 
+      - name: Test release-note generation
+        run: sh scripts/release-notes-test.sh
+
   images:
     name: Build ${{ matrix.target }} image
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -110,3 +113,43 @@ jobs:
             BUILD_DATE=${{ steps.build.outputs.date }}
           cache-from: type=gha,scope=${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+
+  release:
+    name: Publish GitHub release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the repository and tags
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Prepare release notes
+        id: release
+        run: |
+          version="$(sh scripts/build-version.sh "$GITHUB_RUN_NUMBER")"
+          tag="v${version}"
+          previous_tag="$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --abbrev=0 2>/dev/null || true)"
+          sh scripts/release-notes.sh "$version" "$previous_tag" "$GITHUB_SHA" > release-notes.md
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists"
+            exit 0
+          fi
+          gh release create "$RELEASE_TAG" \
+            --target "$GITHUB_SHA" \
+            --title "CairnOps $RELEASE_VERSION" \
+            --notes-file release-notes.md \
+            --fail-on-no-commits
