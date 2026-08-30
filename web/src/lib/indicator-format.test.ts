@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   formatIndicator,
   incidentMarkerIndex,
+  incidentMarkerLabelY,
   incidentMarkerIsVisible,
   indicatorBounds
 } from './indicator-format.ts';
@@ -41,4 +42,27 @@ test('shows the incident marker only inside the selected indicator window', () =
   assert.equal(incidentMarkerIsVisible('2026-08-28T09:43:00Z', generatedAt, '24h'), false);
   assert.equal(incidentMarkerIsVisible('2026-08-28T09:43:00Z', generatedAt, '7d'), true);
   assert.equal(incidentMarkerIsVisible('2026-08-30T12:01:00Z', generatedAt, '7d'), false);
+});
+
+test('keeps the incident label clear of high and low points in compact charts', () => {
+  const labelHeight = 20;
+  const markerRadius = 3.25;
+  const assertClear = (markerY: number) => {
+    const labelY = incidentMarkerLabelY(markerY, 54, labelHeight);
+    const labelBottom = labelY + labelHeight;
+    assert.ok(
+      labelBottom <= markerY - markerRadius || labelY >= markerY + markerRadius,
+      `label ${labelY}-${labelBottom} overlaps marker ${markerY - markerRadius}-${markerY + markerRadius}`
+    );
+  };
+
+  // Exact SVG coordinates and nearby curve envelopes measured on the reported snapshots.
+  const memoryLabelY = incidentMarkerLabelY(21.56438344, 54, labelHeight);
+  const cpuLabelY = incidentMarkerLabelY(45.61678236, 54, labelHeight);
+  assertClear(21.56438344);
+  assertClear(45.61678236);
+  assert.equal(memoryLabelY, 31);
+  assert.equal(cpuLabelY, 3);
+  assert.ok(memoryLabelY > 21.88);
+  assert.ok(cpuLabelY + labelHeight < 38.95);
 });

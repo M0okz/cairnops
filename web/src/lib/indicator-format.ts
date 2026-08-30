@@ -58,6 +58,20 @@ export function incidentMarkerIndex(points: IndicatorPoint[], openedAt: string):
   return closest;
 }
 
+export function incidentMarkerLabelY(
+  markerY: number,
+  chartHeight: number,
+  labelHeight: number,
+  inset = 3
+): number {
+  const markerRadius = 3.25;
+  const top = inset;
+  const bottom = Math.max(top, chartHeight - inset - labelHeight);
+  const clearanceAbove = markerY - markerRadius - (top + labelHeight);
+  const clearanceBelow = bottom - (markerY + markerRadius);
+  return clearanceBelow > clearanceAbove ? bottom : top;
+}
+
 export function incidentMarkerIsVisible(
   openedAt: string,
   generatedAt: string,

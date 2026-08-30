@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { IndicatorPoint, IndicatorUnit } from '$lib/api';
-  import { formatIndicator, incidentMarkerIndex, indicatorBounds } from '$lib/indicator-format';
+  import { formatIndicator, incidentMarkerIndex, incidentMarkerLabelY, indicatorBounds } from '$lib/indicator-format';
 
   let { points, unit, interactive = false, compact = false, label = 'Courbe de l’Indicateur', marker = null }: {
     points: IndicatorPoint[];
@@ -68,13 +68,15 @@
   {/if}
   {#if marker && markerCoordinate}
     {@const labelWidth = 104}
+    {@const labelHeight = 20}
     {@const labelHalfWidth = (labelWidth / 2 + 4) * markerHorizontalScale}
     {@const labelCenterX = Math.min(width - labelHalfWidth, Math.max(labelHalfWidth, markerCoordinate.x))}
+    {@const labelY = incidentMarkerLabelY(markerCoordinate.y, height, labelHeight)}
     <g class="marker {marker.tone}" aria-hidden="true">
       <line class="marker-guide" x1={markerCoordinate.x} x2={markerCoordinate.x} y1="25" y2={height - insetY} vector-effect="non-scaling-stroke" />
       <circle class="marker-point" cx="0" cy="0" r="3.25" transform={`translate(${markerCoordinate.x},${markerCoordinate.y}) scale(${markerHorizontalScale},1)`} vector-effect="non-scaling-stroke" />
-      <g class="marker-label" transform={`translate(${labelCenterX},3) scale(${markerHorizontalScale},1) translate(${-labelWidth / 2},0)`}>
-        <rect width={labelWidth} height="20" rx="4" vector-effect="non-scaling-stroke" />
+      <g class="marker-label" transform={`translate(${labelCenterX},${labelY}) scale(${markerHorizontalScale},1) translate(${-labelWidth / 2},0)`}>
+        <rect width={labelWidth} height={labelHeight} rx="4" vector-effect="non-scaling-stroke" />
         <text x={labelWidth / 2} y="13.5" text-anchor="middle">{marker.label}</text>
       </g>
     </g>
