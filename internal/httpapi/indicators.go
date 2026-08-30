@@ -17,6 +17,7 @@ type Indicators interface {
 	Preview(context.Context, string) (indicators.Configuration, error)
 	Apply(context.Context, string, string, indicators.ApplyInput) (indicators.Configuration, error)
 	Overview(context.Context, string) ([]indicators.TargetProjection, error)
+	Catalog(context.Context, string) ([]indicators.TargetProjection, error)
 	Target(context.Context, string, string, string) (indicators.TargetProjection, error)
 	Incident(context.Context, string, string) (indicators.IncidentProjection, error)
 	Pins(context.Context, string) ([]indicators.Pin, error)
@@ -89,6 +90,20 @@ func (handler indicatorHandler) overview(w http.ResponseWriter, r *http.Request)
 	projections, err := handler.indicators.Overview(r.Context(), principal.ID)
 	if err != nil {
 		handler.writeError(w, "read overview indicators", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"targets": projections, "limit": 4})
+}
+
+func (handler indicatorHandler) catalog(w http.ResponseWriter, r *http.Request) {
+	principal, ok := r.Context().Value(principalContextKey{}).(identity.Principal)
+	if !ok {
+		unauthorizedSession(w)
+		return
+	}
+	projections, err := handler.indicators.Catalog(r.Context(), principal.ID)
+	if err != nil {
+		handler.writeError(w, "read indicator catalog", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"targets": projections, "limit": 4})

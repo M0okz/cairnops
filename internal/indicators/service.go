@@ -202,6 +202,9 @@ func (service *Service) Apply(ctx context.Context, actorID, connectorID string, 
 func (service *Service) Overview(ctx context.Context, userID string) ([]TargetProjection, error) {
 	return service.store.Overview(ctx, userID)
 }
+func (service *Service) Catalog(ctx context.Context, userID string) ([]TargetProjection, error) {
+	return service.store.Catalog(ctx, userID)
+}
 func (service *Service) Target(ctx context.Context, userID, targetID, window string) (TargetProjection, error) {
 	return service.store.Target(ctx, userID, targetID, window)
 }

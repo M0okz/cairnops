@@ -45,22 +45,23 @@ type Candidate struct {
 }
 
 type Indicator struct {
-	ID             string         `json:"id"`
-	ConnectorID    string         `json:"connector_id"`
-	BindingID      string         `json:"binding_id"`
-	TargetID       string         `json:"target_id"`
-	SemanticKey    string         `json:"semantic_key"`
-	Label          string         `json:"label"`
-	ExternalID     string         `json:"external_id"`
-	Dimension      string         `json:"dimension,omitempty"`
-	Unit           string         `json:"unit"`
-	Enabled        bool           `json:"enabled"`
-	Metadata       map[string]any `json:"metadata"`
-	LastValue      *float64       `json:"last_value,omitempty"`
-	LastObservedAt *time.Time     `json:"last_observed_at,omitempty"`
-	LastError      string         `json:"last_error,omitempty"`
-	Pinned         bool           `json:"pinned"`
-	PinPosition    *int           `json:"pin_position,omitempty"`
+	ID               string         `json:"id"`
+	ConnectorID      string         `json:"connector_id"`
+	BindingID        string         `json:"binding_id"`
+	TargetID         string         `json:"target_id"`
+	SemanticKey      string         `json:"semantic_key"`
+	Label            string         `json:"label"`
+	ExternalID       string         `json:"external_id"`
+	Dimension        string         `json:"dimension,omitempty"`
+	Unit             string         `json:"unit"`
+	Enabled          bool           `json:"enabled"`
+	Metadata         map[string]any `json:"metadata"`
+	LastValue        *float64       `json:"last_value,omitempty"`
+	LastObservedAt   *time.Time     `json:"last_observed_at,omitempty"`
+	LastError        string         `json:"last_error,omitempty"`
+	Pinned           bool           `json:"pinned"`
+	PinPosition      *int           `json:"pin_position,omitempty"`
+	OverviewPosition *int           `json:"overview_position,omitempty"`
 }
 
 type Binding struct {

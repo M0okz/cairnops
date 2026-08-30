@@ -476,6 +476,11 @@ components:
         last_error: { type: string }
         pinned: { type: boolean }
         pin_position: { type: integer, minimum: 0, maximum: 3 }
+        overview_position:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Position dans la sélection de la Vue d’ensemble, qu’elle provienne d’une épingle ou d’une suggestion.
     IndicatorBinding:
       type: object
       required: [external_id, external_name, enabled, imported, indicators, candidates]
@@ -3163,8 +3168,8 @@ paths:
         '401': { description: Authentification requise }
   /api/v1/indicators/targets:
     get:
-      operationId: listPinnedTargetIndicators
-      description: Rend au plus les quatre Indicateurs personnels épinglés, regroupés par Cible, avec leur tendance de 24 heures.
+      operationId: listOverviewIndicators
+      description: Rend au plus quatre Indicateurs regroupés par Cible, avec leur tendance de 24 heures. Les épingles personnelles passent en premier et les places restantes sont complétées par des repères observés pertinents, sans créer de nouvelle épingle.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       responses:
         '200':
@@ -3176,6 +3181,25 @@ paths:
                 required: [targets, limit]
                 properties:
                   targets: { type: array, items: { $ref: '#/components/schemas/TargetIndicators' } }
+                  limit: { type: integer, const: 4 }
+        '401': { description: Authentification requise }
+  /api/v1/indicators/catalog:
+    get:
+      operationId: listAvailableIndicators
+      description: Rend le catalogue des Indicateurs contextuels activés afin que chaque utilisateur puisse choisir jusqu’à quatre épingles personnelles.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      responses:
+        '200':
+          description: Catalogue regroupé par Cible
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [targets, limit]
+                properties:
+                  targets:
+                    type: array
+                    items: { $ref: '#/components/schemas/TargetIndicators' }
                   limit: { type: integer, const: 4 }
         '401': { description: Authentification requise }
   /api/v1/targets/{targetID}/indicators:

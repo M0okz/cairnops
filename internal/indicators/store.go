@@ -573,10 +573,27 @@ func (store *Store) Target(ctx context.Context, userID, targetID, window string)
 }
 
 func (store *Store) Overview(ctx context.Context, userID string) ([]TargetProjection, error) {
-	indicators, err := store.listIndicators(ctx, userID, "", "pinned")
+	all, err := store.listIndicators(ctx, userID, "", "")
 	if err != nil {
 		return nil, err
 	}
+	selected := selectOverviewIndicators(all, 4)
+	for index := range selected {
+		position := index
+		selected[index].OverviewPosition = &position
+	}
+	return store.overviewProjections(ctx, selected, true)
+}
+
+func (store *Store) Catalog(ctx context.Context, userID string) ([]TargetProjection, error) {
+	all, err := store.listIndicators(ctx, userID, "", "")
+	if err != nil {
+		return nil, err
+	}
+	return store.overviewProjections(ctx, all, false)
+}
+
+func (store *Store) overviewProjections(ctx context.Context, indicators []Indicator, withSeries bool) ([]TargetProjection, error) {
 	projections := []TargetProjection{}
 	byTarget := map[string]int{}
 	for _, indicator := range indicators {
@@ -587,6 +604,9 @@ func (store *Store) Overview(ctx context.Context, userID string) ([]TargetProjec
 			projections = append(projections, TargetProjection{TargetID: indicator.TargetID, GeneratedAt: store.now().UTC(), Indicators: []Indicator{}, Series: map[string][]Point{}})
 		}
 		projections[index].Indicators = append(projections[index].Indicators, indicator)
+		if !withSeries {
+			continue
+		}
 		points, err := store.series(ctx, indicator.ID, WindowDay, time.Time{}, time.Time{})
 		if err != nil {
 			return nil, err

@@ -36,6 +36,11 @@ func (fake *fakeIndicators) Overview(_ context.Context, userID string) ([]indica
 	return []indicators.TargetProjection{{TargetID: "target-one", Indicators: []indicators.Indicator{}}}, nil
 }
 
+func (fake *fakeIndicators) Catalog(_ context.Context, userID string) ([]indicators.TargetProjection, error) {
+	fake.userID = userID
+	return []indicators.TargetProjection{{TargetID: "target-one", Indicators: []indicators.Indicator{{ID: "indicator-one"}}}}, nil
+}
+
 func (*fakeIndicators) Target(context.Context, string, string, string) (indicators.TargetProjection, error) {
 	return indicators.TargetProjection{Indicators: []indicators.Indicator{}}, nil
 }
@@ -97,5 +102,18 @@ func TestIndicatorOverviewAndPinsArePersonal(t *testing.T) {
 	server.Handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || fake.userID != "user-id" || len(fake.pinInput.IndicatorIDs) != 1 || fake.pinInput.IndicatorIDs[0] != "indicator-one" {
 		t.Fatalf("unexpected pins: status=%d user=%q input=%#v body=%s", response.Code, fake.userID, fake.pinInput, response.Body.String())
+	}
+}
+
+func TestIndicatorCatalogIsAvailableToObservers(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIndicators{}
+	server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "observer"}, Indicators: fake})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/indicators/catalog", nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || fake.userID != "user-id" || !bytes.Contains(response.Body.Bytes(), []byte(`"id":"indicator-one"`)) {
+		t.Fatalf("unexpected catalog: status=%d user=%q body=%s", response.Code, fake.userID, response.Body.String())
 	}
 }

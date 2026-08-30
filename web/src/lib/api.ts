@@ -268,6 +268,7 @@ export type ContextIndicator = {
   last_error?: string;
   pinned: boolean;
   pin_position?: number;
+  overview_position?: number;
 };
 
 export type IndicatorBinding = {

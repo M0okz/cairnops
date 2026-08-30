@@ -122,6 +122,7 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("POST /api/v1/connectors/{connectorID}/indicator-configuration/preview", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.preview)))))
 		mux.Handle("PUT /api/v1/connectors/{connectorID}/indicator-configuration", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.apply)))))
 		mux.Handle("GET /api/v1/indicators/targets", identityHTTP.requireSession(http.HandlerFunc(handler.overview)))
+		mux.Handle("GET /api/v1/indicators/catalog", identityHTTP.requireSession(http.HandlerFunc(handler.catalog)))
 		mux.Handle("GET /api/v1/targets/{targetID}/indicators", identityHTTP.requireSession(http.HandlerFunc(handler.target)))
 		mux.Handle("GET /api/v1/incidents/{incidentID}/indicators", identityHTTP.requireSession(http.HandlerFunc(handler.incident)))
 		mux.Handle("GET /api/v1/me/indicator-pins", identityHTTP.requireSession(http.HandlerFunc(handler.pins)))

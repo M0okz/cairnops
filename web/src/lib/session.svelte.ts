@@ -26,6 +26,7 @@ import {
   type User
 } from './api';
 import { i18n, t } from './i18n.svelte';
+import { pinnedIndicatorIDs } from './overview';
 import { absorbObservedVersion } from './version-state';
 
 export type GateState = 'loading' | 'setup' | 'login' | 'unavailable' | 'app';
@@ -92,6 +93,7 @@ class Session {
   /* Les Indicateurs restent une projection distincte des mesures : les placer
    * dans le même objet rendrait trop facile de les faire participer à la santé. */
   indicatorOverview = $state<Record<string, TargetIndicators>>({});
+  indicatorCatalog = $state<Record<string, TargetIndicators>>({});
   indicatorDetails = $state<Record<string, TargetIndicators>>({});
 
   /* Les Observations brutes d'une Cible, sous le Journal qui les résume. Elles
@@ -395,6 +397,7 @@ class Session {
       this.measures = {};
       this.measureDetails = {};
       this.indicatorOverview = {};
+      this.indicatorCatalog = {};
       this.indicatorDetails = {};
       this.connectors = [];
       this.incidents = [];
@@ -641,6 +644,19 @@ class Session {
     }
   }
 
+  async loadIndicatorCatalog() {
+    try {
+      const response = await api<{ targets: TargetIndicators[] }>('/api/v1/indicators/catalog');
+      this.indicatorCatalog = Object.fromEntries(
+        response.targets.map((target) => [target.target_id, target])
+      );
+      return true;
+    } catch (cause) {
+      if (this.#expired(cause)) return false;
+      return false;
+    }
+  }
+
   async loadTargetIndicators(targetId: string, window: '24h' | '7d' = '24h') {
     try {
       const detail = await api<TargetIndicators>(`/api/v1/targets/${targetId}/indicators?window=${window}`);
@@ -653,10 +669,9 @@ class Session {
   }
 
   async toggleIndicatorPin(indicator: ContextIndicator) {
-    const current = Object.values(this.indicatorOverview)
-      .flatMap((target) => target.indicators)
-      .sort((left, right) => (left.pin_position ?? 99) - (right.pin_position ?? 99))
-      .map((item) => item.id);
+    const current = pinnedIndicatorIDs(
+      Object.values(this.indicatorOverview).flatMap((target) => target.indicators)
+    );
     if (!indicator.pinned && current.length >= 4) {
       this.showNotice('Quatre épingles sont déjà affichées. Désépinglez-en une avant d’en ajouter une autre.');
       return false;
@@ -664,9 +679,24 @@ class Session {
     const next = indicator.pinned
       ? current.filter((id) => id !== indicator.id)
       : [...current, indicator.id];
+    return this.setIndicatorPins(next, indicator.target_id);
+  }
+
+  async setIndicatorPins(indicatorIDs: string[], targetID = '') {
+    if (indicatorIDs.length > 4) {
+      this.showNotice('Quatre épingles peuvent être affichées au maximum.');
+      return false;
+    }
     try {
-      await api('/api/v1/me/indicator-pins', { method: 'PUT', body: JSON.stringify({ indicator_ids: next }) });
-      await Promise.all([this.loadIndicatorOverview(), this.loadTargetIndicators(indicator.target_id, '24h')]);
+      await api('/api/v1/me/indicator-pins', {
+        method: 'PUT',
+        body: JSON.stringify({ indicator_ids: indicatorIDs })
+      });
+      await Promise.all([
+        this.loadIndicatorOverview(),
+        this.loadIndicatorCatalog(),
+        targetID ? this.loadTargetIndicators(targetID, '24h') : Promise.resolve(null)
+      ]);
       return true;
     } catch (cause) {
       if (this.#expired(cause)) return false;
@@ -785,6 +815,7 @@ class Session {
       }
       if (this.#dirty.has('indicators')) {
         void this.loadIndicatorOverview();
+        if (Object.keys(this.indicatorCatalog).length > 0) void this.loadIndicatorCatalog();
         for (const key of Object.keys(this.indicatorDetails)) {
           const [targetId, window] = key.split(':') as [string, '24h' | '7d'];
           void this.loadTargetIndicators(targetId, window);

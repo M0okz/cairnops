@@ -1,6 +1,15 @@
-import type { InstanceHour } from './api';
+import type { ContextIndicator, InstanceHour } from './api';
 
 const hourMilliseconds = 60 * 60 * 1000;
+
+export function pinnedIndicatorIDs(
+  indicators: Array<Pick<ContextIndicator, 'id' | 'pinned' | 'pin_position'>>
+): string[] {
+  return indicators
+    .filter((indicator) => indicator.pinned)
+    .sort((left, right) => (left.pin_position ?? 99) - (right.pin_position ?? 99))
+    .map((indicator) => indicator.id);
+}
 
 /**
  * Aligne la couverture reçue du serveur sur une vraie fenêtre horaire.

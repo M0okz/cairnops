@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { InstanceHour } from './api.ts';
-import { coverageWindow, healthyEvidenceWindow } from './overview.ts';
+import { coverageWindow, healthyEvidenceWindow, pinnedIndicatorIDs } from './overview.ts';
 
 const hour = (
   at: string,
@@ -51,4 +51,15 @@ test('aligns healthy evidence and leaves silent hours neutral', () => {
 
 test('does not fabricate healthy evidence without a server timestamp', () => {
   assert.deepEqual(healthyEvidenceWindow([], undefined), []);
+});
+
+test('keeps automatic suggestions out of personal indicator pins', () => {
+  assert.deepEqual(
+    pinnedIndicatorIDs([
+      { id: 'suggested-disk', pinned: false },
+      { id: 'second-pin', pinned: true, pin_position: 1 },
+      { id: 'first-pin', pinned: true, pin_position: 0 }
+    ]),
+    ['first-pin', 'second-pin']
+  );
 });
