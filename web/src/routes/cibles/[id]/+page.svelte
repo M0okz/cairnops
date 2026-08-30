@@ -14,6 +14,7 @@
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
   import ReconciliationWorkshop from '$lib/components/ReconciliationWorkshop.svelte';
   import { reconciliationState } from '$lib/reconciliation.svelte';
+  import { incidentHref } from '$lib/incident-detail';
   import { incidentTimelineForTarget } from '$lib/incident-timeline';
   import { session } from '$lib/session.svelte';
   import {
@@ -288,7 +289,7 @@
   }
 
   async function confirmInvalidation() {
-    if (!invalidationFor || invalidationReason.trim().length < 3) return;
+    if (!invalidationFor || invalidationReason.trim().length < 8) return;
     invalidating = invalidationFor.signal.id;
     const done = await session.invalidate(
       invalidationFor.incidentId,
@@ -389,7 +390,7 @@
               {/if}
             </p>
           </div>
-          <a class="btn" href="/incidents">{t('target.openIncident')}</a>
+          <a class="btn" href={incidentHref(lead.id)}>{t('target.openIncident')}</a>
         </div>
       {/if}
 
@@ -874,7 +875,7 @@
       <div class="modal-body">
         <div class="field">
           <label for="reason">{t('target.reason')}</label>
-          <textarea id="reason" bind:value={invalidationReason} rows="3" required minlength="3"
+          <textarea id="reason" bind:value={invalidationReason} rows="3" required minlength="8"
             placeholder={t('target.reasonPlaceholder')}></textarea>
           <small>{t('target.reasonHint')}</small>
         </div>
@@ -884,7 +885,7 @@
         <button
           class="btn primary"
           type="button"
-          disabled={invalidationReason.trim().length < 3 || invalidating !== ''}
+          disabled={invalidationReason.trim().length < 8 || invalidating !== ''}
           onclick={confirmInvalidation}
         >{invalidating ? t('common.saving') : t('target.invalidateConfirm')}</button>
       </footer>

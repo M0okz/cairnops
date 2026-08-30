@@ -13,6 +13,7 @@
 
   import { goto } from '$app/navigation';
   import Icon, { type IconName } from './Icon.svelte';
+  import { incidentHref } from '$lib/incident-detail';
   import { palette } from '$lib/palette.svelte';
   import { session } from '$lib/session.svelte';
   import { natureLabel, severityLabel, severityTone, since, stateLabel, stateTones, type Tone } from '$lib/format';
@@ -128,8 +129,8 @@
       )
     };
 
-    /* Aucun écran de détail d'Incident n'existe : un Incident se lit sur sa
-     * Cible, c'est donc là que la Palette conduit. */
+    /* Le détail garde l'adresse de l'Incident : la recherche ne perd ni sa
+     * Nature ni sa chronologie en passant par la Cible. */
     const incidents: Group = {
       key: 'incidents',
       label: t('nav.incidents'),
@@ -137,7 +138,7 @@
       hits: best(
         session.actionable.map((incident) => ({
           key: `incident:${incident.id}`,
-          href: `/cibles/${incident.target_id}`,
+          href: incidentHref(incident.id),
           label: `${incident.target_name} · ${natureLabel(incident)}`,
           detail: `${t('palette.openedFor', { duration: since(incident.opened_at) })} · ${
             incident.acknowledged_at ? t('incident.acknowledged') : t('incident.unacknowledged')

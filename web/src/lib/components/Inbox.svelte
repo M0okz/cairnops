@@ -2,14 +2,15 @@
   /* La boîte de réception.
    *
    * Elle ne décide de rien : elle dit ce qui est arrivé à cette personne, et
-   * conduit à l'endroit où l'on décide. Un Incident se traite sur sa Cible,
-   * c'est donc là que chaque entrée mène.
+   * conduit à l'endroit où l'on décide. Chaque entrée garde l'identité de son
+   * Incident et ouvre donc son détail, sans le diluer dans la Cible.
    *
    * Ouvrir la boîte marque son contenu comme lu. La vider est un geste séparé :
    * il retire le bruit accumulé du volet sans perdre le routage d'une future
    * Résolution. */
 
   import Icon from './Icon.svelte';
+  import { incidentHref } from '$lib/incident-detail';
   import { session } from '$lib/session.svelte';
   import { natureLabel, severityTone, since, stamp } from '$lib/format';
   import { plural, t } from '$lib/i18n.svelte';
@@ -98,7 +99,7 @@
           <a
             class="entry"
             class:fresh={!entry.read_at}
-            href="/cibles/{entry.target_id ?? ''}"
+            href={incidentHref(entry.incident_id)}
             onclick={() => (open = false)}
           >
             <i

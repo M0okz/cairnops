@@ -3,10 +3,14 @@
    * Un Incident par Cible et par Nature. Les Résolus sont chargés à part : la
    * projection partagée ne retient que les actifs. */
 
+  import { afterNavigate, goto } from '$app/navigation';
+  import { page } from '$app/state';
+  import IncidentDetailModal from '$lib/components/IncidentDetailModal.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Incident } from '$lib/api';
+  import { incidentHref } from '$lib/incident-detail';
   import {
     activeSignalRatio,
     diverges,
@@ -24,6 +28,12 @@
   let resolvedError = $state('');
   let acknowledging = $state('');
   let now = $state(new Date());
+  const incidentIDFrom = (url: URL) => url.searchParams.get('incident')?.trim() ?? '';
+  let selectedIncidentID = $state(incidentIDFrom(page.url));
+
+  afterNavigate(({ to }) => {
+    selectedIncidentID = to ? incidentIDFrom(to.url) : '';
+  });
 
   $effect(() => {
     const timer = setInterval(() => (now = new Date()), 30_000);
@@ -58,6 +68,9 @@
         ? active.filter((incident) => !incident.acknowledged_at)
         : active
   );
+  const selectedIncident = $derived(
+    [...session.incidents, ...resolved].find((incident) => incident.id === selectedIncidentID) ?? null
+  );
 
   async function acknowledge(incident: Incident) {
     acknowledging = incident.id;
@@ -70,6 +83,21 @@
 
   function lastEntry(incident: Incident) {
     return incident.activity.at(-1)?.message ?? t('common.none');
+  }
+
+  async function dismissIncident() {
+    const dismissedIncidentID = selectedIncidentID;
+    const url = new URL(page.url);
+    url.searchParams.delete('incident');
+    await goto(`${url.pathname}${url.search}${url.hash}`, {
+      replaceState: true,
+      noScroll: true,
+      keepFocus: true
+    });
+    const trigger = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-incident-trigger]')
+    ).find((candidate) => candidate.dataset.incidentTrigger === dismissedIncidentID);
+    (trigger ?? document.getElementById('main-content'))?.focus();
   }
 </script>
 
@@ -126,8 +154,14 @@
         <span class="cell-name">
           <i class="dot {scope === 'resolved' ? 'ok' : severityTone(incident.effective_severity)}"></i>
           <span>
-            <strong>{incident.target_name}</strong>
-            <small class="nature">{natureLabel(incident)}</small>
+            <a
+              class="incident-link"
+              href={incidentHref(incident.id)}
+              data-incident-trigger={incident.id}
+            >
+              <strong>{incident.target_name}</strong>
+              <small class="nature">{natureLabel(incident)}</small>
+            </a>
           </span>
         </span>
 
@@ -165,7 +199,7 @@
 
         <span class="faint log hide-sm">{lastEntry(incident)}</span>
 
-        {#if scope !== 'resolved' && !incident.acknowledged_at}
+        {#if scope !== 'resolved' && !incident.acknowledged_at && session.user?.role !== 'observer'}
           <button
             class="btn primary sm"
             type="button"
@@ -175,7 +209,11 @@
             {acknowledging === incident.id ? '…' : t('incident.acknowledge')}
           </button>
         {:else}
-          <a class="btn sm" href="/cibles/{incident.target_id}">{t('common.open')}</a>
+          <a
+            class="btn sm"
+            href={incidentHref(incident.id)}
+            data-incident-trigger={incident.id}
+          >{t('incidents.detail.open')}</a>
         {/if}
       </div>
     {:else}
@@ -205,6 +243,16 @@
   {/if}
 </div>
 
+{#if selectedIncidentID}
+  {#key selectedIncidentID}
+    <IncidentDetailModal
+      incidentId={selectedIncidentID}
+      seed={selectedIncident}
+      ondismiss={dismissIncident}
+    />
+  {/key}
+{/if}
+
 <style>
   .cols {
     --cols: minmax(0, 1.4fr) 7.25rem 8.75rem 4.125rem 4.375rem minmax(0, 1.1fr) auto;
@@ -214,6 +262,16 @@
     font-family: var(--font);
     color: var(--faint);
     font-size: 0.6875rem;
+  }
+
+  .incident-link {
+    display: block;
+    min-width: 0;
+    border-radius: var(--r-s);
+  }
+
+  .incident-link:hover strong {
+    color: var(--accent);
   }
 
   .ack-cell {
