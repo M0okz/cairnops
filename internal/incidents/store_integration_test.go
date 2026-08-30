@@ -71,6 +71,49 @@ func TestOpenedByDayKeepsDaysContainingOnlyArchivedTargets(t *testing.T) {
 	}
 }
 
+func TestResolvedIncidentListPrioritizesLatestResolution(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+
+	var targetID, latestResolutionID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_targets (name)
+		VALUES ('Resolved incident ordering target')
+		RETURNING id::text
+	`).Scan(&targetID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_incidents (
+			target_id, nature_key, nature_label, status,
+			source_severity, effective_severity, opened_at, resolved_at
+		) VALUES
+			($1::uuid, 'older-opening', 'Older opening', 'resolved',
+			 'warning', 'warning', '2026-08-01T10:00:00Z', '2026-08-31T10:00:00Z')
+		RETURNING id::text
+	`, targetID).Scan(&latestResolutionID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO cairnops_incidents (
+			target_id, nature_key, nature_label, status,
+			source_severity, effective_severity, opened_at, resolved_at
+		) VALUES
+			($1::uuid, 'newer-opening', 'Newer opening', 'resolved',
+			 'warning', 'warning', '2026-08-30T10:00:00Z', '2026-08-30T11:00:00Z')
+	`, targetID); err != nil {
+		t.Fatal(err)
+	}
+
+	listed, err := NewPostgresStore(pool).List(ctx, "resolved", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0].ID != latestResolutionID {
+		t.Fatalf("latest resolution must remain visible at the list limit, got %#v", listed)
+	}
+}
+
 func TestPostgresZabbixIncidentLifecycleAndAcknowledgement(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)

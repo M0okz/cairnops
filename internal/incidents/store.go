@@ -38,6 +38,7 @@ func (store *PostgresStore) list(ctx context.Context, status, targetID string, l
 		  AND ($3::uuid IS NULL OR incident.target_id = $3::uuid)
 		ORDER BY
 			CASE incident.status WHEN 'active' THEN 0 ELSE 1 END,
+			CASE WHEN incident.status = 'resolved' THEN incident.resolved_at END DESC NULLS LAST,
 			CASE incident.effective_severity WHEN 'critical' THEN 0 WHEN 'major' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END,
 			incident.opened_at DESC, incident.id
 		LIMIT $2

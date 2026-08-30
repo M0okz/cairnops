@@ -11,6 +11,7 @@
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Incident } from '$lib/api';
   import { incidentHref } from '$lib/incident-detail';
+  import { shouldLoadResolvedIncidents, type IncidentScope } from '$lib/resolved-incidents';
   import {
     activeSignalRatio,
     diverges,
@@ -22,9 +23,10 @@
   } from '$lib/format';
   import { plural, t } from '$lib/i18n.svelte';
 
-  let scope = $state<'active' | 'unacknowledged' | 'resolved'>('active');
+  let scope = $state<IncidentScope>('active');
   let resolved = $state<Incident[]>([]);
-  let resolvedLoaded = $state(false);
+  let resolvedRevision = $state(-1);
+  let resolvedRequest = 0;
   let resolvedError = $state('');
   let acknowledging = $state('');
   let now = $state(new Date());
@@ -40,18 +42,27 @@
     return () => clearInterval(timer);
   });
 
-  /* Les Résolus ne sont demandés qu'une fois, à la première consultation. */
+  async function loadResolved(revision: number) {
+    const request = ++resolvedRequest;
+    resolvedError = '';
+    try {
+      const response = await api<{ incidents: Incident[] }>('/api/v1/incidents?status=resolved&limit=100');
+      if (request !== resolvedRequest) return;
+      resolved = response.incidents;
+      resolvedRevision = revision;
+    } catch (cause) {
+      if (request !== resolvedRequest) return;
+      resolvedError = messageFrom(cause);
+    }
+  }
+
+  /* La projection reste paresseuse, puis tout changement d'Incident la rend
+   * périmée. Une Résolution reçue pendant que la route reste montée apparaît
+   * ainsi dès l'ouverture du filtre, ou immédiatement s'il est déjà ouvert. */
   $effect(() => {
-    if (resolvedLoaded) return;
-    resolvedLoaded = true;
-    void (async () => {
-      try {
-        const response = await api<{ incidents: Incident[] }>('/api/v1/incidents?status=resolved&limit=100');
-        resolved = response.incidents;
-      } catch (cause) {
-        resolvedError = messageFrom(cause);
-      }
-    })();
+    const revision = session.incidentRevision;
+    if (!shouldLoadResolvedIncidents(scope, resolvedRevision, revision)) return;
+    void loadResolved(revision);
   });
 
   const active = $derived(

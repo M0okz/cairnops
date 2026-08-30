@@ -27,6 +27,7 @@ import {
 } from './api';
 import { i18n, t } from './i18n.svelte';
 import { pinnedIndicatorIDs } from './overview';
+import { incidentMembershipChanged } from './resolved-incidents';
 import { absorbObservedVersion } from './version-state';
 
 export type GateState = 'loading' | 'setup' | 'login' | 'unavailable' | 'app';
@@ -103,6 +104,10 @@ class Session {
 
   realtime = $state<RealtimeState>('offline');
   lastEventAt = $state<Date | null>(null);
+  /* Les Résolus restent chargés à la demande par leur écran. Ce compteur les
+   * invalide seulement lorsqu'un Incident change, sans imposer leur projection
+   * lourde au reste de l'application. */
+  incidentRevision = $state(0);
 
   lightTheme = $state(false);
   identityBusy = $state(false);
@@ -504,6 +509,7 @@ class Session {
   async loadIncidents() {
     try {
       const response = await api<{ incidents: Incident[] }>('/api/v1/incidents?status=active&limit=200');
+      if (incidentMembershipChanged(this.incidents, response.incidents)) this.incidentRevision += 1;
       this.incidents = response.incidents;
     } catch (cause) {
       if (this.#expired(cause)) return;

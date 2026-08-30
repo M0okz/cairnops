@@ -1988,7 +1988,10 @@ paths:
   /api/v1/incidents:
     get:
       operationId: listIncidents
-      description: Retourne la projection ordonnée des Incidents et leurs preuves. Les Incidents actifs non acquittés sont prioritaires.
+      description: >-
+        Retourne la projection ordonnée des Incidents et leurs preuves. Les
+        Incidents actifs sont prioritaires ; les Incidents résolus sont
+        présentés du rétablissement le plus récent au plus ancien.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: query
