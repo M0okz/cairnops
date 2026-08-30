@@ -237,11 +237,11 @@
   .indicator-modal.maximized { width: calc(100vw - 2 * var(--s5)); max-width: none; height: calc(100dvh - 2 * var(--s5)); max-height: none; }
   .window-control { margin-left: auto; width: 1.625rem; height: 1.625rem; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: var(--r-m); background: none; color: var(--muted); }
   .modal header .close { margin-left: 0; }
-  .config-nav { display: flex; gap: var(--s1); padding: 0 var(--s5); border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .config-nav { display: flex; flex: none; gap: var(--s1); padding: 0 var(--s5); border-bottom: 1px solid var(--line); overflow-x: auto; }
   .config-nav button { min-height: 2.5rem; padding: 0 var(--s3); border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); white-space: nowrap; }
   .config-nav button.active { color: var(--ink); border-color: var(--accent); }
   .config-nav span { margin-left: var(--s2); color: var(--faint); font-family: var(--font-num); font-size: .625rem; }
-  .modal-body { background: var(--bg); }
+  .modal-body { flex: 1 1 auto; background: var(--bg); }
   .readonly-note { margin: var(--s4) 0 0; padding: var(--s3); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); border-radius: var(--r-m); color: var(--warn); background: color-mix(in srgb, var(--warn) 7%, transparent); font-size: .6875rem; }
   .section-head { display: flex; align-items: center; gap: var(--s4); margin-bottom: var(--s4); }
   .section-head > div { min-width: 0; flex: 1; }
