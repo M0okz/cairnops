@@ -374,7 +374,10 @@
 
 <style>
   .cols {
-    --cols: minmax(0, 1.5fr) 7.25rem 8.5rem 5.25rem 7.25rem 5.5rem 5.125rem 1.25rem;
+    /* Le nom garde assez de place pour son origine sans devenir le seul
+       réceptacle de toute la largeur libre. Nature et Tendance absorbent le
+       reste là où cet espace aide réellement la lecture. */
+    --cols: minmax(0, 24rem) 7.25rem minmax(8.5rem, 1fr) 5.25rem 7.25rem 5.5rem minmax(5.125rem, 0.5fr) 1.25rem;
     /* L'infobulle des Sources doit pouvoir sortir de la dalle. Les deux bords
        qui vivaient du rognage — le fond de l'en-tête et celui de la dernière
        ligne survolée — reprennent l'arrondi à leur compte. */
