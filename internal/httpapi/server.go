@@ -25,6 +25,7 @@ type ServerOptions struct {
 	Service         string
 	BootstrapToken  string
 	Identity        Identity
+	OIDC            OIDC
 	ControlPlane    ControlPlane
 	Metrics         Metrics
 	Indicators      Indicators
@@ -72,17 +73,27 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("DELETE /api/v1/session", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(identityHTTP.logout))))
 		mux.Handle("PUT /api/v1/session/password", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(identityHTTP.changeOwnPassword))))
 		mux.Handle("GET /api/v1/users", identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(identityHTTP.listAccounts))))
-		mux.Handle("POST /api/v1/users", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(identityHTTP.createAccount)))))
-		mux.Handle("PATCH /api/v1/users/{userID}", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(identityHTTP.updateAccount)))))
-		mux.Handle("POST /api/v1/users/{userID}/password", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(identityHTTP.setUserPassword)))))
+		mux.Handle("POST /api/v1/users", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireLocalAdministrator(http.HandlerFunc(identityHTTP.createAccount)))))
+		mux.Handle("PATCH /api/v1/users/{userID}", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireLocalAdministrator(http.HandlerFunc(identityHTTP.updateAccount)))))
+		mux.Handle("POST /api/v1/users/{userID}/password", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireLocalAdministrator(http.HandlerFunc(identityHTTP.setUserPassword)))))
 		// Désactiver et réactiver empruntent la même route, comme la
 		// suspension d'un Connecteur : c'est un état que l'on pose et retire.
-		mux.Handle("POST /api/v1/users/{userID}/deactivation", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(identityHTTP.deactivateAccount)))))
-		mux.Handle("DELETE /api/v1/users/{userID}/deactivation", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(identityHTTP.reactivateAccount)))))
+		mux.Handle("POST /api/v1/users/{userID}/deactivation", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireLocalAdministrator(http.HandlerFunc(identityHTTP.deactivateAccount)))))
+		mux.Handle("DELETE /api/v1/users/{userID}/deactivation", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireLocalAdministrator(http.HandlerFunc(identityHTTP.reactivateAccount)))))
 		// Porte de secours : sans session, puisqu'elle sert quand plus personne
 		// ne peut en ouvrir. Le Jeton d'amorçage tient lieu de preuve, comme
 		// pour la mise en service.
 		mux.Handle("POST /api/v1/recovery", identityHTTP.requireSameOrigin(bootstrap.require(http.HandlerFunc(identityHTTP.recoverPassword))))
+		if options.OIDC != nil {
+			oidcHTTP := oidcHandler{oidc: options.OIDC, identity: identityHTTP}
+			mux.HandleFunc("GET /api/v1/oidc/status", oidcHTTP.status)
+			mux.HandleFunc("GET /api/v1/oidc/login", oidcHTTP.login)
+			mux.HandleFunc("GET /api/v1/oidc/callback", oidcHTTP.callback)
+			mux.Handle("GET /api/v1/oidc/configuration", identityHTTP.requireSession(identityHTTP.requireLocalAdministrator(http.HandlerFunc(oidcHTTP.configurations))))
+			mux.Handle("PUT /api/v1/oidc/configuration", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireLocalAdministrator(http.HandlerFunc(oidcHTTP.saveDraft)))))
+			mux.Handle("GET /api/v1/oidc/configuration/test", identityHTTP.requireBrowserSession(identityHTTP.requireLocalAdministrator(http.HandlerFunc(oidcHTTP.test))))
+			mux.Handle("POST /api/v1/oidc/configuration/activation", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireLocalAdministrator(http.HandlerFunc(oidcHTTP.activate)))))
+		}
 	}
 	if options.Devices != nil && options.Identity != nil {
 		handler := deviceHandler{devices: options.Devices, logger: logger}

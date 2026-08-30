@@ -27,6 +27,7 @@ import (
 	"github.com/M0okz/cairnops/internal/metrics"
 	"github.com/M0okz/cairnops/internal/migrations"
 	"github.com/M0okz/cairnops/internal/notifications"
+	"github.com/M0okz/cairnops/internal/oidcauth"
 	"github.com/M0okz/cairnops/internal/realtime"
 	"github.com/M0okz/cairnops/internal/reconciliation"
 	"github.com/M0okz/cairnops/internal/secretbox"
@@ -96,6 +97,9 @@ func run(logger *slog.Logger) error {
 	indicatorService := indicators.NewService(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets)
 	indicatorCollector := indicators.NewCollector(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets, logger)
 	reconciliationStore := reconciliation.NewStore(pool)
+	identityStore := identity.NewStore(pool)
+	oidcService := oidcauth.NewService(pool, secrets, identityStore, cfg.PublicURL, &http.Client{Timeout: 15 * time.Second})
+	oidcSync := oidcauth.NewSynchronizer(oidcService, "server:"+hostname, logger)
 
 	server := httpapi.NewServer(httpapi.ServerOptions{
 		Address:         cfg.HTTPAddress,
@@ -105,7 +109,8 @@ func run(logger *slog.Logger) error {
 		Logger:          logger,
 		Service:         "server",
 		BootstrapToken:  cfg.BootstrapToken,
-		Identity:        identity.NewStore(pool),
+		Identity:        identityStore,
+		OIDC:            oidcService,
 		ControlPlane:    controlplane.NewStore(pool),
 		Metrics:         metrics.NewStore(pool),
 		Indicators:      indicatorService,
@@ -120,7 +125,7 @@ func run(logger *slog.Logger) error {
 		Reconciliations: reconciliationStore,
 	})
 
-	errCh := make(chan error, 6)
+	errCh := make(chan error, 7)
 	go func() {
 		logger.Info("server listening", "address", cfg.HTTPAddress, "version", version.Version)
 		errCh <- server.ListenAndServe()
@@ -147,6 +152,11 @@ func run(logger *slog.Logger) error {
 	}()
 	go func() {
 		if err := indicatorCollector.Run(ctx); err != nil {
+			errCh <- err
+		}
+	}()
+	go func() {
+		if err := oidcSync.Run(ctx); err != nil {
 			errCh <- err
 		}
 	}()

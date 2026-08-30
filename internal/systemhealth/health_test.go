@@ -61,6 +61,20 @@ func TestPushComponentStatus(t *testing.T) {
 	}
 }
 
+func TestOIDCComponentDistinguishesGraceAndSuspension(t *testing.T) {
+	t.Parallel()
+	lastSeen := time.Now().UTC()
+	if got := summarizeOIDC(2, 0, 1, &lastSeen); got.Status != StatusStale {
+		t.Fatalf("a transient failure inside the grace period should be stale, got %q", got.Status)
+	}
+	if got := summarizeOIDC(2, 1, 1, &lastSeen); got.Status != StatusUnavailable {
+		t.Fatalf("a suspended external access should be unavailable, got %q", got.Status)
+	}
+	if got := summarizeOIDC(0, 0, 0, nil); got.Status != StatusOperational {
+		t.Fatalf("a tested configuration without Users should be operational, got %q", got.Status)
+	}
+}
+
 // La fenêtre de latence garde les dernières mesures, jamais davantage, et son
 // maximum est celui de ce qu'elle garde encore — une pointe sortie de la
 // fenêtre ne hante pas la page indéfiniment.

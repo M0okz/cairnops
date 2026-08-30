@@ -43,12 +43,13 @@ components:
   schemas:
     User:
       type: object
-      required: [id, username, display_name, role]
+      required: [id, username, display_name, role, authorization_regime]
       properties:
         id: { type: string, format: uuid }
         username: { type: string, pattern: '^[a-z0-9][a-z0-9._-]{2,63}$' }
         display_name: { type: string, minLength: 1, maxLength: 100 }
         role: { type: string, enum: [administrator, operator, observer] }
+        authorization_regime: { type: string, enum: [local, external] }
     Account:
       description: >
         Un compte vu depuis l'écran qui les administre. Il ajoute au User ce qui
@@ -59,10 +60,60 @@ components:
       allOf:
         - $ref: '#/components/schemas/User'
         - type: object
-          required: [created_at, deactivated_at]
+          required:
+            [created_at, deactivated_at, external_suspended_at,
+             external_suspension_reason, active_sessions, last_seen_at]
           properties:
             created_at: { type: string, format: date-time }
             deactivated_at: { type: string, format: date-time, nullable: true }
+            external_suspended_at: { type: string, format: date-time, nullable: true }
+            external_suspension_reason: { type: string }
+            active_sessions: { type: integer, minimum: 0 }
+            last_seen_at: { type: string, format: date-time, nullable: true }
+    OIDCGroupMappings:
+      type: object
+      required: [administrator, operator, observer]
+      properties:
+        administrator:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 512 }
+        operator:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 512 }
+        observer:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 512 }
+    OIDCConfigurationInput:
+      type: object
+      required: [label, issuer, client_id, groups_claim, groups]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 80 }
+        issuer: { type: string, format: uri }
+        client_id: { type: string, minLength: 1, maxLength: 255 }
+        client_secret:
+          type: string
+          maxLength: 4096
+          description: Obligatoire au premier brouillon ; vide, conserve le secret déjà scellé.
+        groups_claim: { type: string, default: groups, maxLength: 128 }
+        groups: { $ref: '#/components/schemas/OIDCGroupMappings' }
+    OIDCConfiguration:
+      type: object
+      required:
+        [id, state, label, issuer, client_id, client_secret_configured,
+         groups_claim, groups, tested_at, activated_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [draft, active] }
+        label: { type: string }
+        issuer: { type: string, format: uri }
+        client_id: { type: string }
+        client_secret_configured: { type: boolean }
+        groups_claim: { type: string }
+        groups: { $ref: '#/components/schemas/OIDCGroupMappings' }
+        tested_at: { type: string, format: date-time, nullable: true }
+        activated_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     InboxEntry:
       description: >
         Une notification reçue par la personne connectée. Elle appartient à un
@@ -373,7 +424,7 @@ components:
       type: object
       required: [name, status, instances]
       properties:
-        name: { type: string, enum: [server, worker, postgresql, push] }
+        name: { type: string, enum: [server, worker, postgresql, push, oidc] }
         status: { type: string, enum: [operational, stale, unavailable] }
         instances: { type: integer, minimum: 0 }
         last_seen_at: { type: string, format: date-time }
@@ -2253,6 +2304,121 @@ paths:
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
         '422': { description: Mattermost n’a pas confirmé le message de contrôle }
+  /api/v1/oidc/status:
+    get:
+      operationId: readPublicOIDCStatus
+      summary: Savoir si la connexion OIDC est proposée
+      responses:
+        '200':
+          description: État public minimal, sans secret ni mapping
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled]
+                properties:
+                  enabled: { type: boolean }
+                  label: { type: string }
+  /api/v1/oidc/login:
+    get:
+      operationId: beginOIDCLogin
+      summary: Commencer une connexion OIDC avec Authorization Code et PKCE S256
+      description: Lie le state au navigateur dans un cookie transitoire HttpOnly et SameSite=Lax.
+      parameters:
+        - in: query
+          name: return_to
+          schema: { type: string, default: / }
+      responses:
+        '302': { description: Redirection vers le fournisseur actif }
+        '409': { description: Aucun fournisseur actif }
+  /api/v1/oidc/callback:
+    get:
+      operationId: completeOIDCFlow
+      summary: Terminer une connexion ou un test OIDC
+      description: >
+        Vérifie le state et sa liaison au navigateur, nonce, PKCE, l'ID Token et
+        UserInfo. Un premier accès exige un refresh token et au moins un groupe
+        exactement associé à un rôle.
+      parameters:
+        - in: query
+          name: state
+          schema: { type: string }
+        - in: query
+          name: code
+          schema: { type: string }
+        - in: query
+          name: error
+          schema: { type: string }
+      responses:
+        '302': { description: Session ouverte, test enregistré ou refus renvoyé à l'interface }
+  /api/v1/oidc/configuration:
+    get:
+      operationId: readOIDCConfiguration
+      summary: Lire la version active et le brouillon OIDC
+      description: Réservé à un Administrateur local, indépendant du fournisseur configuré.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      responses:
+        '200':
+          description: Configurations sans secret client
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [active, draft]
+                properties:
+                  active: { $ref: '#/components/schemas/OIDCConfiguration', nullable: true }
+                  draft: { $ref: '#/components/schemas/OIDCConfiguration', nullable: true }
+        '403': { description: Administrateur local requis }
+    put:
+      operationId: saveOIDCDraft
+      summary: Enregistrer un brouillon OIDC complet
+      description: Réservé à un Administrateur local. Toute modification crée une nouvelle version non testée sans toucher à la version active.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OIDCConfigurationInput' }
+      responses:
+        '200':
+          description: Brouillon enregistré
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [draft]
+                properties:
+                  draft: { $ref: '#/components/schemas/OIDCConfiguration' }
+        '400': { description: Configuration invalide }
+        '403': { description: Administrateur local requis }
+        '409': { description: Issuer verrouillé par des Utilisateurs externes }
+  /api/v1/oidc/configuration/test:
+    get:
+      operationId: beginOIDCConfigurationTest
+      summary: Tester interactivement le brouillon sans créer d'Utilisateur
+      security: [{ SessionCookie: [] }]
+      responses:
+        '302': { description: Redirection vers le fournisseur du brouillon }
+        '403': { description: Session navigateur d'un Administrateur local requise }
+        '409': { description: Aucun brouillon }
+  /api/v1/oidc/configuration/activation:
+    post:
+      operationId: activateOIDCConfiguration
+      summary: Activer atomiquement le dernier brouillon testé
+      description: Réservé à un Administrateur local, afin qu'OIDC ne gouverne pas sa propre configuration.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      responses:
+        '200':
+          description: Version active remplacée
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [active]
+                properties:
+                  active: { $ref: '#/components/schemas/OIDCConfiguration' }
+        '403': { description: Administrateur local requis }
+        '409': { description: Brouillon absent, non testé ou issuer verrouillé }
   /api/v1/setup/status:
     get:
       operationId: getSetupStatus
@@ -2374,9 +2540,9 @@ paths:
       operationId: changeOwnPassword
       summary: Remplacer son propre mot de passe
       description: >
-        Vérifie le mot de passe actuel, puis révoque toutes les sessions du compte.
-        La session porteuse est immédiatement rouverte afin de ne pas éjecter
-        l'opérateur après un geste réussi.
+        Pour un compte local, vérifie le mot de passe actuel, puis révoque toutes
+        les sessions du compte. La session porteuse est immédiatement rouverte
+        afin de ne pas éjecter l'opérateur après un geste réussi.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
@@ -2400,6 +2566,7 @@ paths:
                   session: { type: string, enum: [renewed, ended] }
         '400': { description: Mot de passe hors bornes, ou identique à l'actuel }
         '401': { description: Mot de passe actuel incorrect, ou session absente }
+        '404': { description: Le compte connecté n'est pas un compte local }
   /api/v1/users:
     get:
       operationId: listUsers
@@ -2425,9 +2592,9 @@ paths:
       operationId: createAccount
       summary: Ouvrir un compte
       description: >
-        Réservé aux Administrateurs. CairnOps n'envoie pas de courrier en V1 :
-        l'Administrateur choisit le premier mot de passe et le transmet hors de
-        CairnOps. L'identifiant est normalisé en minuscules et ne changera plus.
+        Réservé aux Administrateurs locaux. CairnOps n'envoie pas de courrier en
+        V1 : l'Administrateur choisit le premier mot de passe et le transmet hors
+        de CairnOps. L'identifiant est normalisé en minuscules et ne changera plus.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
@@ -2452,14 +2619,14 @@ paths:
                 properties:
                   user: { $ref: '#/components/schemas/Account' }
         '400': { description: Identifiant, nom, rôle ou mot de passe hors bornes }
-        '403': { description: Rôle insuffisant }
+        '403': { description: Administrateur local requis }
         '409': { description: Identifiant déjà pris }
   /api/v1/users/{userID}:
     patch:
       operationId: updateAccount
       summary: Corriger un nom d'affichage ou changer un rôle
       description: >
-        Réservé aux Administrateurs. Un champ absent reste inchangé.
+        Réservé aux Administrateurs locaux. Un champ absent reste inchangé.
         L'identifiant, lui, ne se corrige pas : il désigne la personne dans les
         sessions et dans le Journal d'activité. Changer un rôle révoque les
         sessions ouvertes du compte visé, car un rôle décide de ce qui est permis
@@ -2492,7 +2659,7 @@ paths:
                 properties:
                   user: { $ref: '#/components/schemas/Account' }
         '400': { description: Nom ou rôle hors bornes, ou requête sans rien à modifier }
-        '403': { description: Rôle insuffisant }
+        '403': { description: Administrateur local requis }
         '404': { description: Compte introuvable }
         '409': { description: Propre rôle, ou dernier Administrateur actif }
   /api/v1/users/{userID}/deactivation:
@@ -2500,7 +2667,7 @@ paths:
       operationId: deactivateAccount
       summary: Retirer l'accès d'un compte
       description: >
-        Réservé aux Administrateurs. Un compte ne se supprime pas : ses
+        Réservé aux Administrateurs locaux. Un compte ne se supprime pas : ses
         acquittements, ses invalidations et ses entrées au Journal d'activité
         restent à son nom. La désactivation révoque ses sessions ouvertes, ferme
         la connexion et ferme aussi la porte de secours ; elle ne touche ni son
@@ -2523,15 +2690,15 @@ paths:
                 required: [user]
                 properties:
                   user: { $ref: '#/components/schemas/Account' }
-        '403': { description: Rôle insuffisant }
+        '403': { description: Administrateur local requis }
         '404': { description: Compte introuvable }
         '409': { description: Propre compte, ou dernier Administrateur actif }
     delete:
       operationId: reactivateAccount
       summary: Rendre l'accès d'un compte
       description: >
-        Réservé aux Administrateurs. Le compte retrouve son accès avec le mot de
-        passe qu'il avait, inchangé depuis la désactivation.
+        Réservé aux Administrateurs locaux. Le compte retrouve son accès avec le
+        mot de passe qu'il avait, inchangé depuis la désactivation.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
@@ -2548,14 +2715,14 @@ paths:
                 required: [user]
                 properties:
                   user: { $ref: '#/components/schemas/Account' }
-        '403': { description: Rôle insuffisant }
+        '403': { description: Administrateur local requis }
         '404': { description: Compte introuvable }
   /api/v1/users/{userID}/password:
     post:
       operationId: setUserPassword
       summary: Réinitialiser le mot de passe d'un compte
       description: >
-        Réservé aux Administrateurs. Ne demande pas l'ancien mot de passe et
+        Réservé aux Administrateurs locaux. Ne demande pas l'ancien mot de passe et
         révoque les sessions ouvertes du compte visé.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
@@ -2582,7 +2749,7 @@ paths:
                 required: [user]
                 properties:
                   user: { $ref: '#/components/schemas/User' }
-        '403': { description: Rôle insuffisant }
+        '403': { description: Administrateur local requis }
         '404': { description: Compte introuvable }
   /api/v1/notifications:
     get:

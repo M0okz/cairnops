@@ -17,9 +17,12 @@
     lightTheme,
     error,
     busy,
+    oidcEnabled,
+    oidcLabel,
     ontoggletheme,
     onsetup,
     onlogin,
+    onoidc,
     onrecover
   }: {
     mode: Mode;
@@ -29,6 +32,8 @@
     lightTheme: boolean;
     error: string;
     busy: boolean;
+    oidcEnabled: boolean;
+    oidcLabel: string;
     ontoggletheme: () => void;
     onsetup: (input: {
       bootstrap: string;
@@ -38,6 +43,7 @@
       password: string;
     }) => Promise<User | void>;
     onlogin: (input: { username: string; password: string }) => Promise<User | void>;
+    onoidc: () => void;
     onrecover: (input: { bootstrap: string; username: string; password: string }) => Promise<User | void>;
   } = $props();
 
@@ -216,6 +222,12 @@
       {:else}
       <h1>{t('gate.loginTitle')}</h1>
       <p>{t('gate.loginSay')}</p>
+      {#if oidcEnabled}
+        <button class="btn primary oidc" type="button" onclick={onoidc}>
+          {t('gate.oidcContinue', { provider: oidcLabel })}
+        </button>
+        <div class="gate-divider"><span>{t('gate.localFallback')}</span></div>
+      {/if}
       <form onsubmit={submitLogin}>
         <div class="field">
           <label for="login-username">{t('gate.username')}</label>
@@ -278,6 +290,32 @@
 
   form {
     margin-top: var(--s6);
+  }
+
+  .oidc {
+    justify-content: center;
+    width: 100%;
+    margin-top: var(--s6);
+  }
+
+  .gate-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    margin-top: var(--s5);
+    color: var(--faint);
+    font-size: 0.75rem;
+  }
+
+  .gate-divider::before,
+  .gate-divider::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid var(--line);
+  }
+
+  .gate-divider + form {
+    margin-top: var(--s5);
   }
 
   .field-label {

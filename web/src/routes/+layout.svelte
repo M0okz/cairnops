@@ -41,9 +41,12 @@
     lightTheme={session.lightTheme}
     error={session.identityError}
     busy={session.identityBusy}
+    oidcEnabled={session.oidcEnabled}
+    oidcLabel={session.oidcLabel}
     ontoggletheme={() => session.toggleTheme()}
     onsetup={(input) => session.setup(input)}
     onlogin={(input) => session.login(input)}
+    onoidc={() => session.startOIDC()}
     onrecover={(input) => session.recover(input)}
   />
 {/if}

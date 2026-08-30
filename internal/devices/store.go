@@ -38,7 +38,7 @@ func (store *Store) CreatePairing(ctx context.Context, userID string) (Invitatio
 		INSERT INTO cairnops_device_pairings (user_id, token_digest, expires_at)
 		SELECT id, $2, $3
 		FROM cairnops_users
-		WHERE id = $1::uuid AND deactivated_at IS NULL
+		WHERE id = $1::uuid AND deactivated_at IS NULL AND external_suspended_at IS NULL
 		RETURNING id::text, created_at
 	`, userID, digest[:], expiresAt).Scan(&pairing.ID, &pairing.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -310,15 +310,16 @@ func (store *Store) Authenticate(ctx context.Context, token string) (Authenticat
 	var authenticated AuthenticatedDevice
 	err = store.pool.QueryRow(ctx, `
 		SELECT device.id::text, users.id::text, users.username,
-		       users.display_name, users.role
+		       users.display_name, users.role, users.authorization_regime
 		FROM cairnops_devices device
 		JOIN cairnops_users users ON users.id = device.user_id
 		WHERE device.token_digest = $1 AND device.revoked_at IS NULL
 		  AND users.deactivated_at IS NULL
+		  AND users.external_suspended_at IS NULL
 	`, digest[:]).Scan(
 		&authenticated.DeviceID, &authenticated.Principal.ID,
 		&authenticated.Principal.Username, &authenticated.Principal.DisplayName,
-		&authenticated.Principal.Role,
+		&authenticated.Principal.Role, &authenticated.Principal.AuthorizationRegime,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return AuthenticatedDevice{}, ErrInvalidDevice

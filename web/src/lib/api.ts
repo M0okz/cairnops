@@ -7,6 +7,7 @@ export type User = {
   username: string;
   display_name: string;
   role: Role;
+  authorization_regime: 'local' | 'external';
 };
 
 /* Un compte vu depuis l'écran qui les administre. La session, elle, n'en connaît
@@ -14,10 +15,38 @@ export type User = {
 export type Account = User & {
   created_at: string;
   deactivated_at: string | null;
+  external_suspended_at: string | null;
+  external_suspension_reason: string;
   /* La présence du compte : combien de sessions il tient ouvertes, et quand il
    * s'est manifesté pour la dernière fois. Jamais venu, jamais vu : null. */
   active_sessions: number;
   last_seen_at: string | null;
+};
+
+export type OIDCGroupMappings = {
+  administrator: string[];
+  operator: string[];
+  observer: string[];
+};
+
+export type OIDCConfiguration = {
+  id: string;
+  state: 'draft' | 'active';
+  label: string;
+  issuer: string;
+  client_id: string;
+  client_secret_configured: boolean;
+  groups_claim: string;
+  groups: OIDCGroupMappings;
+  tested_at: string | null;
+  activated_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OIDCConfigurationSet = {
+  active: OIDCConfiguration | null;
+  draft: OIDCConfiguration | null;
 };
 
 export type DevicePlatform = 'ios' | 'android';
@@ -164,7 +193,7 @@ export type TargetMeasureDetail = {
 export type ComponentStatus = 'operational' | 'stale' | 'unavailable';
 
 export type SystemComponent = {
-  name: 'server' | 'worker' | 'postgresql' | 'push';
+  name: 'server' | 'worker' | 'postgresql' | 'push' | 'oidc';
   status: ComponentStatus;
   instances: number;
   last_seen_at?: string;

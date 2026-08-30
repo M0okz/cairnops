@@ -64,7 +64,7 @@ func (fake *fakeIdentity) Logout(_ context.Context, token string) error {
 
 func testAuthenticatedSession() identitymodel.AuthenticatedSession {
 	return identitymodel.AuthenticatedSession{
-		Principal: identitymodel.Principal{ID: "user-id", Username: "gregory", DisplayName: "Gregory", Role: "administrator"},
+		Principal: identitymodel.Principal{ID: "user-id", Username: "gregory", DisplayName: "Gregory", Role: "administrator", AuthorizationRegime: "local"},
 		ExpiresAt: time.Now().Add(time.Hour), Token: testSessionToken,
 	}
 }

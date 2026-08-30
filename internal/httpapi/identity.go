@@ -226,6 +226,24 @@ func (handler identityHandler) requireRole(role string, next http.Handler) http.
 	return handler.requireAnyRole([]string{role}, next)
 }
 
+// La configuration de l'autorité externe reste sous le contrôle d'un accès
+// qui ne dépend pas d'elle. Cela évite qu'un rôle reçu par OIDC puisse changer
+// sa propre source d'autorisation ou activer un brouillon déjà testé.
+func (handler identityHandler) requireLocalAdministrator(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := r.Context().Value(principalContextKey{}).(identitymodel.Principal)
+		if !ok {
+			unauthorizedSession(w)
+			return
+		}
+		if principal.Role != "administrator" || principal.AuthorizationRegime != "local" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "local administrator required"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (handler identityHandler) requireAnyRole(roles []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		principal, ok := r.Context().Value(principalContextKey{}).(identitymodel.Principal)

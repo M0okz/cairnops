@@ -18,6 +18,11 @@ import (
 
 const sessionLifetime = 12 * time.Hour
 
+// Une session externe n'est pas l'autorité : la synchronisation OIDC peut la
+// révoquer à tout instant. Sa longue échéance évite donc de réimposer une
+// authentification interactive périodique aux navigateurs et aux appareils.
+const externalSessionLifetime = 10 * 365 * 24 * time.Hour
+
 var (
 	ErrAlreadyInitialized = errors.New("installation already initialized")
 	ErrNotInitialized     = errors.New("installation not initialized")
@@ -35,10 +40,11 @@ type Status struct {
 }
 
 type Principal struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-	Role        string `json:"role"`
+	ID                  string `json:"id"`
+	Username            string `json:"username"`
+	DisplayName         string `json:"display_name"`
+	Role                string `json:"role"`
+	AuthorizationRegime string `json:"authorization_regime"`
 }
 
 type InitializeInput struct {
@@ -139,7 +145,7 @@ func (store *Store) Initialize(ctx context.Context, input InitializeInput) (Auth
 		return AuthenticatedSession{}, ErrAlreadyInitialized
 	}
 
-	principal := Principal{Username: input.Username, DisplayName: input.DisplayName, Role: "administrator"}
+	principal := Principal{Username: input.Username, DisplayName: input.DisplayName, Role: "administrator", AuthorizationRegime: "local"}
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO cairnops_users (username, display_name, password_hash, role)
 		VALUES ($1, $2, $3, $4)
@@ -175,10 +181,11 @@ func (store *Store) Login(ctx context.Context, input LoginInput) (AuthenticatedS
 	// Un compte désactivé n'ouvre plus de session, et le vérifier ici plutôt
 	// qu'après la comparaison lui vaut la même réponse qu'un compte absent.
 	err := store.pool.QueryRow(ctx, `
-		SELECT id::text, username, display_name, role, password_hash
+		SELECT id::text, username, display_name, role, authorization_regime, password_hash
 		FROM cairnops_users
 		WHERE lower(username) = $1 AND deactivated_at IS NULL
-	`, input.Username).Scan(&principal.ID, &principal.Username, &principal.DisplayName, &principal.Role, &passwordHash)
+		  AND authorization_regime = 'local'
+	`, input.Username).Scan(&principal.ID, &principal.Username, &principal.DisplayName, &principal.Role, &principal.AuthorizationRegime, &passwordHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		_, _ = verifyPassword(input.Password, dummyPasswordHash)
 		return AuthenticatedSession{}, ErrInvalidCredentials
@@ -193,11 +200,39 @@ func (store *Store) Login(ctx context.Context, input LoginInput) (AuthenticatedS
 	if !valid {
 		return AuthenticatedSession{}, ErrInvalidCredentials
 	}
+	return store.createSession(ctx, principal)
+}
+
+// NewSession ouvre une session pour une identité externe déjà prouvée par
+// OIDC. Elle relit l'Utilisateur pour ne jamais faire confiance à un rôle ou
+// un état fourni par l'appelant, ni ouvrir par erreur un compte local.
+func (store *Store) NewSession(ctx context.Context, userID string) (AuthenticatedSession, error) {
+	var principal Principal
+	err := store.pool.QueryRow(ctx, `
+		SELECT id::text, username, display_name, role, authorization_regime
+		FROM cairnops_users
+		WHERE id = $1::uuid AND authorization_regime = 'external'
+		  AND deactivated_at IS NULL AND external_suspended_at IS NULL
+	`, userID).Scan(&principal.ID, &principal.Username, &principal.DisplayName, &principal.Role, &principal.AuthorizationRegime)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return AuthenticatedSession{}, ErrInvalidCredentials
+	}
+	if err != nil {
+		return AuthenticatedSession{}, fmt.Errorf("find session user: %w", err)
+	}
+	return store.createSession(ctx, principal)
+}
+
+func (store *Store) createSession(ctx context.Context, principal Principal) (AuthenticatedSession, error) {
 	token, digest, err := newSessionToken()
 	if err != nil {
 		return AuthenticatedSession{}, err
 	}
-	expiresAt := store.now().UTC().Add(sessionLifetime)
+	lifetime := sessionLifetime
+	if principal.AuthorizationRegime == "external" {
+		lifetime = externalSessionLifetime
+	}
+	expiresAt := store.now().UTC().Add(lifetime)
 	if _, err := store.pool.Exec(ctx, `
 		INSERT INTO cairnops_sessions (user_id, token_digest, expires_at)
 		VALUES ($1::uuid, $2, $3)
@@ -214,14 +249,16 @@ func (store *Store) Authenticate(ctx context.Context, token string) (Principal, 
 	}
 	var principal Principal
 	err = store.pool.QueryRow(ctx, `
-		SELECT users.id::text, users.username, users.display_name, users.role
+		SELECT users.id::text, users.username, users.display_name, users.role,
+		       users.authorization_regime
 		FROM cairnops_sessions sessions
 		JOIN cairnops_users users ON users.id = sessions.user_id
 		WHERE sessions.token_digest = $1
 		  AND sessions.revoked_at IS NULL
 		  AND sessions.expires_at > now()
 		  AND users.deactivated_at IS NULL
-	`, digest[:]).Scan(&principal.ID, &principal.Username, &principal.DisplayName, &principal.Role)
+		  AND users.external_suspended_at IS NULL
+	`, digest[:]).Scan(&principal.ID, &principal.Username, &principal.DisplayName, &principal.Role, &principal.AuthorizationRegime)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Principal{}, ErrInvalidSession
 	}

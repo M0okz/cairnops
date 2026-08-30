@@ -23,7 +23,8 @@
     server: { name: t('component.server'), note: t('health.serverNote') },
     worker: { name: t('component.worker'), note: t('health.workerNote') },
     postgresql: { name: 'PostgreSQL', note: t('component.postgresqlNote') },
-    push: { name: t('component.push'), note: t('component.pushNote') }
+    push: { name: t('component.push'), note: t('component.pushNote') },
+    oidc: { name: t('component.oidc'), note: t('component.oidcNote') }
   });
 
   /* Chaque composant porte le geste qu'il fait : le serveur répond, le worker
@@ -33,7 +34,8 @@
     server: 'server',
     worker: 'worker',
     postgresql: 'database',
-    push: 'bell'
+    push: 'bell',
+    oidc: 'health'
   };
 
   /* Les Connecteurs reprennent la marque montrée sur leur propre écran : un

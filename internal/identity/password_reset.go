@@ -45,7 +45,8 @@ func (store *Store) ChangePassword(ctx context.Context, userID, current, next st
 
 	var hash string
 	err = tx.QueryRow(ctx, `
-		SELECT password_hash FROM cairnops_users WHERE id = $1::uuid FOR UPDATE
+		SELECT password_hash FROM cairnops_users
+		WHERE id = $1::uuid AND authorization_regime = 'local' FOR UPDATE
 	`, userID).Scan(&hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
@@ -77,7 +78,7 @@ func (store *Store) ChangePassword(ctx context.Context, userID, current, next st
 // SetPassword remplace le mot de passe d'un compte sans connaître l'ancien.
 // L'appelant est responsable d'exiger le rôle Administrateur.
 func (store *Store) SetPassword(ctx context.Context, userID, next string) (Principal, error) {
-	return store.replacePassword(ctx, `id = $1::uuid`, userID, next, ErrNotFound)
+	return store.replacePassword(ctx, `id = $1::uuid AND authorization_regime = 'local'`, userID, next, ErrNotFound)
 }
 
 // RecoverPassword est la porte de secours : elle vise un compte par son
@@ -90,7 +91,7 @@ func (store *Store) SetPassword(ctx context.Context, userID, next string) (Princ
 // L'instance garde de toute façon un Administrateur actif, à qui cette porte
 // reste ouverte.
 func (store *Store) RecoverPassword(ctx context.Context, username, next string) (Principal, error) {
-	return store.replacePassword(ctx, `lower(username) = $1 AND deactivated_at IS NULL`, normalizeUsername(username), next, ErrInvalidCredentials)
+	return store.replacePassword(ctx, `lower(username) = $1 AND deactivated_at IS NULL AND authorization_regime = 'local'`, normalizeUsername(username), next, ErrInvalidCredentials)
 }
 
 func (store *Store) replacePassword(ctx context.Context, predicate, key, next string, absent error) (Principal, error) {
@@ -106,9 +107,9 @@ func (store *Store) replacePassword(ctx context.Context, predicate, key, next st
 
 	var principal Principal
 	err = tx.QueryRow(ctx, `
-		SELECT id::text, username, display_name, role
+		SELECT id::text, username, display_name, role, authorization_regime
 		FROM cairnops_users WHERE `+predicate+` FOR UPDATE
-	`, key).Scan(&principal.ID, &principal.Username, &principal.DisplayName, &principal.Role)
+	`, key).Scan(&principal.ID, &principal.Username, &principal.DisplayName, &principal.Role, &principal.AuthorizationRegime)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Principal{}, absent
 	}

@@ -17,6 +17,7 @@ import (
 type accountIdentity struct {
 	*fakeIdentity
 	role       string
+	regime     string
 	created    identitymodel.CreateAccountInput
 	updated    identitymodel.UpdateAccountInput
 	actorID    string
@@ -31,6 +32,9 @@ func (identity *accountIdentity) Authenticate(_ context.Context, token string) (
 	}
 	principal := testAuthenticatedSession().Principal
 	principal.Role = identity.role
+	if identity.regime != "" {
+		principal.AuthorizationRegime = identity.regime
+	}
 	return principal, nil
 }
 
@@ -183,6 +187,26 @@ func TestAccountListingReportsWhoIsDeactivated(t *testing.T) {
 	}
 	if len(payload.Users) != 2 || payload.Users[0].DeactivatedAt != nil || payload.Users[1].DeactivatedAt == nil {
 		t.Fatalf("the listing does not say who is deactivated: %+v", payload.Users)
+	}
+}
+
+func TestExternalAdministratorCanAuditAccountsButCannotGovernLocalIdentity(t *testing.T) {
+	t.Parallel()
+	server, identity := accountServer("administrator")
+	identity.regime = "external"
+
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, accountRequest(http.MethodGet, "/api/v1/users", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("the external administrator could not audit accounts: status=%d body=%s", response.Code, response.Body)
+	}
+
+	response = httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, accountRequest(http.MethodPost, "/api/v1/users", identitymodel.CreateAccountInput{
+		Username: "local-backdoor", DisplayName: "Local backdoor", Role: "administrator", Password: "a-local-password-2026",
+	}))
+	if response.Code != http.StatusForbidden || identity.created.Username != "" {
+		t.Fatalf("the external administrator governed local identity: status=%d created=%+v", response.Code, identity.created)
 	}
 }
 

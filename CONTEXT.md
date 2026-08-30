@@ -8,9 +8,41 @@ CairnOps centralise la supervision continue de cibles et la coordination des inc
 Ensemble isolé des Cibles, Sources de signal, Incidents, utilisateurs et appareils appartenant à une unique installation CairnOps. Une installation ne contient qu'un Espace opérationnel.
 _Éviter_ : Tenant, organisation, workspace
 
+**Utilisateur** :
+Personne autorisée à accéder à l'Espace opérationnel, porteuse d'un rôle, d'un historique d'actions et de préférences propres. Ses moyens d'authentification peuvent évoluer sans changer son identité CairnOps.
+_Éviter_ : Compte OIDC, Session
+
+**Fournisseur d'identité** :
+Service externe configuré auquel CairnOps délègue l'authentification de certaines Identités externes par OpenID Connect. Ses Groupes d'accès externes ne déterminent l'accès et le rôle CairnOps qu'après leur mise en correspondance explicite par un Administrateur.
+_Éviter_ : IdP, annuaire CairnOps, autorité des rôles
+
+**Identité externe** :
+Identité reconnue par le Fournisseur d'identité et associable à un Utilisateur comme moyen de connexion. Elle ne crée pas à elle seule un Utilisateur et ne porte aucun rôle CairnOps.
+_Éviter_ : Utilisateur, Compte OIDC
+
+**Groupe d'accès externe** :
+Groupe déclaré par le Fournisseur d'identité et explicitement mis en correspondance avec un rôle CairnOps. Une appartenance reconnue autorise le premier accès ; lorsque plusieurs correspondances s'appliquent, la plus puissante détermine le rôle.
+_Éviter_ : Groupe de notification, rôle CairnOps
+
+**Régime d'autorisation** :
+Autorité exclusive qui gouverne l'accès et le rôle d'un Utilisateur : CairnOps en régime local, ou les Groupes d'accès externes en régime externe. Un Utilisateur ne relève jamais simultanément des deux.
+_Éviter_ : Méthode de connexion, double autorité
+
+**Désactivation d'un Utilisateur** :
+Décision administrative qui retire tout accès à un Utilisateur sans effacer son identité ni son historique. Elle reste prioritaire sur son Régime d'autorisation et seule une nouvelle décision administrative peut la lever.
+_Éviter_ : Suppression, Suspension d'accès externe
+
+**Suspension d'accès externe** :
+Retrait automatique et réversible de l'accès d'un Utilisateur externe lorsque ses groupes ne l'autorisent plus ou que leur vérification a dépassé sa grâce. Elle préserve son identité, son historique et ses appareils, et ne peut jamais annuler une Désactivation d'Utilisateur.
+_Éviter_ : Désactivation d'un Utilisateur, révocation d'un appareil
+
 **Administrateur** :
 Utilisateur habilité à configurer l'Espace opérationnel, ses utilisateurs, appareils, intégrations, Cibles et Sources de signal. Il possède également tous les pouvoirs d'un Opérateur.
 _Éviter_ : Super-utilisateur, propriétaire
+
+**Administrateur local de secours** :
+Administrateur actif qui dispose d'un moyen de connexion local indépendant du Fournisseur d'identité. L'Espace opérationnel doit toujours en conserver au moins un.
+_Éviter_ : Jeton d'amorçage, Administrateur du fournisseur
 
 **Jeton d'amorçage** :
 Secret temporaire défini lors du déploiement qui autorise exclusivement l'initialisation sécurisée du premier Administrateur et des réglages indispensables. Il cesse d'être un moyen d'accès dès que l'Espace opérationnel est initialisé.

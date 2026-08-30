@@ -10,6 +10,7 @@
   import AccountCreation from '$lib/components/AccountCreation.svelte';
   import AccountDeactivation from '$lib/components/AccountDeactivation.svelte';
   import DeviceManagement from '$lib/components/DeviceManagement.svelte';
+  import OIDCSettings from '$lib/components/OIDCSettings.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Account, type Role } from '$lib/api';
   import { i18n, locales, plural, t } from '$lib/i18n.svelte';
@@ -118,6 +119,9 @@
   let loaded = $state(false);
 
   const isAdministrator = $derived(session.user?.role === 'administrator');
+  const isLocalAdministrator = $derived(
+    isAdministrator && session.user?.authorization_regime === 'local'
+  );
 
   $effect(() => {
     if (!isAdministrator || loaded) return;
@@ -405,6 +409,7 @@
       <button class="act btn sm" type="button" onclick={() => session.logout()}>{t('rail.logout')}</button>
     </div>
 
+    {#if session.user?.authorization_regime === 'local'}
     <form class="card-body" onsubmit={changePassword}>
       <h3>{t('settings.changePassword')}</h3>
       <p class="lead faint">{t('settings.changePasswordHint')}</p>
@@ -438,16 +443,28 @@
         {/if}
       </div>
     </form>
+    {:else}
+      <div class="card-body">
+        <h3>{t('settings.externalAccount')}</h3>
+        <p class="lead faint">{t('settings.externalAccountHint')}</p>
+      </div>
+    {/if}
   </div>
 
   <DeviceManagement />
 
   {#if isAdministrator}
+    {#if isLocalAdministrator}
+      <OIDCSettings />
+    {/if}
+
     <div class="band-row">
       <h2 class="band">{t('settings.accounts')}</h2>
-      <button class="btn primary sm" type="button" onclick={() => { creating = true; createError = ''; }}>
-        {t('settings.openAccount')}
-      </button>
+      {#if isLocalAdministrator}
+        <button class="btn primary sm" type="button" onclick={() => { creating = true; createError = ''; }}>
+          {t('settings.openAccount')}
+        </button>
+      {/if}
     </div>
 
     <div class="card accounts">
@@ -468,6 +485,7 @@
         {#each users as user (user.id)}
           {@const self = user.id === session.user?.id}
           {@const off = user.deactivated_at !== null}
+          {@const suspended = user.external_suspended_at !== null}
           <div class="trow" class:off>
             <span class="id who">
               <span class="avatar">{initials(user.display_name)}</span>
@@ -481,6 +499,12 @@
                  refuserait le geste, autant ne pas l'offrir. -->
             {#if off}
               <span class="pill">{t('settings.accessWithdrawn')}</span>
+            {:else if suspended}
+              <span class="pill warn">{t('settings.externalSuspended')}</span>
+            {:else if user.authorization_regime === 'external'}
+              <span class="pill">{roleLabels[user.role]}</span>
+            {:else if !isLocalAdministrator}
+              <span class="pill">{roleLabels[user.role]}</span>
             {:else if self}
               <span class="pill">{roleLabels[user.role]}</span>
             {:else}
@@ -506,14 +530,16 @@
             <span class="actions">
               {#if self}
                 <span class="faint self">{t('common.you')}</span>
-              {:else}
-                <button
-                  class="btn sm"
-                  type="button"
-                  onclick={() => { resetFor = user; resetPassword = ''; resetError = ''; }}
-                >
-                  {t('settings.reset')}
-                </button>
+              {:else if isLocalAdministrator}
+                {#if user.authorization_regime === 'local'}
+                  <button
+                    class="btn sm"
+                    type="button"
+                    onclick={() => { resetFor = user; resetPassword = ''; resetError = ''; }}
+                  >
+                    {t('settings.reset')}
+                  </button>
+                {/if}
                 {#if off}
                   <button class="btn sm" type="button" onclick={() => reactivate(user)}>
                     {t('settings.reactivate')}

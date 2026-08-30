@@ -127,8 +127,12 @@ func (store *Store) Snapshot(ctx context.Context) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
+	oidc, err := store.oidcComponent(ctx)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	overall := "operational"
-	if worker.Status != StatusOperational || push.Status != StatusOperational {
+	if worker.Status != StatusOperational || push.Status != StatusOperational || (oidc != nil && oidc.Status != StatusOperational) {
 		overall = "degraded"
 	}
 
@@ -139,18 +143,56 @@ func (store *Store) Snapshot(ctx context.Context) (Snapshot, error) {
 		hours = []metrics.Hour{}
 	}
 
+	components := []Component{
+		{Name: "server", Status: StatusOperational, Instances: 1},
+		worker,
+		{Name: "postgresql", Status: StatusOperational, Instances: 1},
+		push,
+	}
+	if oidc != nil {
+		components = append(components, *oidc)
+	}
+
 	return Snapshot{
-		Status:    overall,
-		CheckedAt: checkedAt,
-		Components: []Component{
-			{Name: "server", Status: StatusOperational, Instances: 1},
-			worker,
-			{Name: "postgresql", Status: StatusOperational, Instances: 1},
-			push,
-		},
-		Database: database,
-		Hours:    hours,
+		Status:     overall,
+		CheckedAt:  checkedAt,
+		Components: components,
+		Database:   database,
+		Hours:      hours,
 	}, nil
+}
+
+func (store *Store) oidcComponent(ctx context.Context) (*Component, error) {
+	var configured bool
+	var users, suspended, failures int
+	var lastVerifiedAt *time.Time
+	if err := store.pool.QueryRow(ctx, `
+		SELECT
+			EXISTS (SELECT 1 FROM cairnops_oidc_configurations WHERE state = 'active'),
+			count(identities.user_id),
+			count(*) FILTER (WHERE users.external_suspended_at IS NOT NULL),
+			count(*) FILTER (WHERE identities.last_sync_error <> ''),
+			max(identities.last_verified_at)
+		FROM cairnops_oidc_identities identities
+		JOIN cairnops_users users ON users.id = identities.user_id
+	`).Scan(&configured, &users, &suspended, &failures, &lastVerifiedAt); err != nil {
+		return nil, fmt.Errorf("read OIDC health: %w", err)
+	}
+	if !configured {
+		return nil, nil
+	}
+	component := summarizeOIDC(users, suspended, failures, lastVerifiedAt)
+	return &component, nil
+}
+
+func summarizeOIDC(_ int, suspended, failures int, lastVerifiedAt *time.Time) Component {
+	component := Component{Name: "oidc", Status: StatusOperational, Instances: 1, LastSeenAt: lastVerifiedAt}
+	if suspended > 0 {
+		component.Status = StatusUnavailable
+	} else if failures > 0 {
+		component.Status = StatusStale
+	}
+	return component
 }
 
 func (store *Store) pushComponent(ctx context.Context, checkedAt time.Time) (Component, error) {

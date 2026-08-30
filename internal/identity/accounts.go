@@ -27,8 +27,10 @@ var roles = []string{"administrator", "operator", "observer"}
 // et depuis quand il ne sert plus.
 type Account struct {
 	Principal
-	CreatedAt     time.Time  `json:"created_at"`
-	DeactivatedAt *time.Time `json:"deactivated_at"`
+	CreatedAt                time.Time  `json:"created_at"`
+	DeactivatedAt            *time.Time `json:"deactivated_at"`
+	ExternalSuspendedAt      *time.Time `json:"external_suspended_at"`
+	ExternalSuspensionReason string     `json:"external_suspension_reason"`
 	// La présence tient en deux nombres : combien de sessions le compte tient
 	// ouvertes, et quand il s'est manifesté pour la dernière fois. La dernière
 	// activité regarde toutes les sessions, même révoquées : un compte
@@ -53,7 +55,9 @@ type UpdateAccountInput struct {
 }
 
 const accountColumns = `account.id::text, account.username, account.display_name, account.role,
-	account.created_at, account.deactivated_at, presence.active_sessions, presence.last_seen_at`
+	account.authorization_regime, account.created_at, account.deactivated_at,
+	account.external_suspended_at, account.external_suspension_reason,
+	presence.active_sessions, presence.last_seen_at`
 
 // Toute lecture d'un compte passe par la même source : la ligne du compte et,
 // à côté, ce que ses sessions racontent de lui.
@@ -128,8 +132,9 @@ func (store *Store) CreateAccount(ctx context.Context, input CreateAccountInput)
 	row := store.pool.QueryRow(ctx, `
 		INSERT INTO cairnops_users (username, display_name, password_hash, role)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id::text, username, display_name, role, created_at, deactivated_at,
-		          0, NULL::timestamptz`,
+		RETURNING id::text, username, display_name, role, authorization_regime,
+		          created_at, deactivated_at, external_suspended_at,
+		          external_suspension_reason, 0, NULL::timestamptz`,
 		input.Username, input.DisplayName, passwordHash, input.Role)
 	account, err := scanAccount(row)
 	var violation *pgconn.PgError
@@ -168,6 +173,15 @@ func (store *Store) UpdateAccount(ctx context.Context, actorID, userID string, i
 	}
 
 	return store.mutateAccount(ctx, userID, func(ctx context.Context, tx pgx.Tx) error {
+		if input.Role != nil {
+			var regime string
+			if err := tx.QueryRow(ctx, `SELECT authorization_regime FROM cairnops_users WHERE id = $1::uuid`, userID).Scan(&regime); err != nil {
+				return fmt.Errorf("read authorization regime: %w", err)
+			}
+			if regime == "external" {
+				return fmt.Errorf("%w: le rôle d'un Utilisateur externe vient des groupes OIDC", ErrConflict)
+			}
+		}
 		_, err := tx.Exec(ctx, `
 			UPDATE cairnops_users
 			SET display_name = COALESCE($2, display_name),
@@ -239,6 +253,7 @@ func (store *Store) mutateAccount(ctx context.Context, userID string, apply func
 	if err := tx.QueryRow(ctx, `
 		SELECT count(*) FROM cairnops_users
 		WHERE role = 'administrator' AND deactivated_at IS NULL
+		  AND authorization_regime = 'local' AND password_hash IS NOT NULL
 	`).Scan(&administrators); err != nil {
 		return Account{}, fmt.Errorf("count administrators: %w", err)
 	}
@@ -264,7 +279,9 @@ type scanner interface {
 func scanAccount(row scanner) (Account, error) {
 	var account Account
 	err := row.Scan(&account.ID, &account.Username, &account.DisplayName, &account.Role,
-		&account.CreatedAt, &account.DeactivatedAt, &account.ActiveSessions, &account.LastSeenAt)
+		&account.AuthorizationRegime, &account.CreatedAt, &account.DeactivatedAt,
+		&account.ExternalSuspendedAt, &account.ExternalSuspensionReason,
+		&account.ActiveSessions, &account.LastSeenAt)
 	if err != nil {
 		return Account{}, err
 	}

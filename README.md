@@ -37,7 +37,11 @@ dans les listes, puis sur 7 et 30 jours dans le détail, à partir d'agrégats
 horaires consolidés par le worker. Une instance ne vit plus avec le seul compte
 né de sa mise en service : un Administrateur ouvre des comptes Opérateur et
 Observateur, change un rôle et retire un accès, sans jamais effacer un compte ni
-laisser l'instance sans Administrateur actif. Le backend mobile sait désormais
+laisser l'instance sans Administrateur actif. Un fournisseur OpenID Connect
+facultatif peut désormais devenir la porte d'entrée principale : les groupes
+Authentik ou Keycloak gouvernent les rôles externes, leur retrait suspend les
+Sessions et appareils, et un Administrateur local de secours reste indépendant
+du fournisseur. Le backend mobile sait désormais
 associer et révoquer chaque appareil, chiffrer sa projection Push et la remettre
 au Relais officiel avec reprise par appareil. Le compagnon iOS sait scanner ou
 recevoir le lien d'appairage, attendre la confirmation Web, conserver son
@@ -88,6 +92,7 @@ ne concluent jamais qu'une cible va bien faute de preuve récente.
 - [Périmètre fonctionnel de la V1](docs/V1-SCOPE.md)
 - [Direction de design](docs/DESIGN-DIRECTION.md)
 - [Décisions d'architecture](docs/adr/)
+- [Configurer OpenID Connect avec Authentik ou Keycloak](docs/guides/openid-connect.md)
 - [Contrat du Relais Push](docs/api/push-relay.yaml)
 - [Format de chiffrement Push](docs/api/push-encryption.md)
 
@@ -125,7 +130,8 @@ Endpoints utiles :
 
 - `GET /api/v1/health/live` : processus serveur actif ;
 - `GET /api/v1/health/ready` : serveur prêt et PostgreSQL joignable ;
-- `GET /api/v1/system/health` : état authentifié du serveur, des workers, de PostgreSQL et du Push ;
+- `GET /api/v1/system/health` : état authentifié du serveur, des workers, de PostgreSQL, du Push et d'OIDC lorsqu'il est actif ;
+- `GET /api/v1/oidc/status` : présence publique minimale d'un fournisseur OIDC actif ;
 - `POST /api/v1/device-pairings` : invitation Web à usage unique pour associer un appareil ;
 - `POST /api/v1/device-pairings/claim` : revendication mobile avant confirmation Web ;
 - `GET /api/v1/devices` : appareils individuels actifs ou révoqués, sans leurs secrets ;

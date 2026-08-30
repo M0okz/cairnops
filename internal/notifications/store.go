@@ -302,7 +302,8 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	recipients := `
-		SELECT id FROM cairnops_users WHERE deactivated_at IS NULL
+		SELECT id FROM cairnops_users
+		WHERE deactivated_at IS NULL AND external_suspended_at IS NULL
 	`
 	if delivery.EventKind == "resolved" {
 		recipients = `
@@ -343,6 +344,7 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 			  AND device.revoked_at IS NULL AND device.push_disabled_at IS NULL
 			  AND device.push_recipient_sealed IS NOT NULL
 			  AND users.deactivated_at IS NULL
+			  AND users.external_suspended_at IS NULL
 			ON CONFLICT (device_id, inbox_id) DO NOTHING
 		`, delivery.IncidentID, delivery.EventKind); err != nil {
 			return 0, fmt.Errorf("schedule device push notifications: %w", err)

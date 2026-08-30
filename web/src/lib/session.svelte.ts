@@ -58,6 +58,8 @@ class Session {
    * la porte d'entrée doit déjà dire où l'on frappe ; vide, il laisse le
    * produit se nommer lui-même. */
   instanceName = $state('');
+  oidcEnabled = $state(false);
+  oidcLabel = $state('');
 
   /* Combien de fois le compte courant est ouvert, cette session comprise. Les
    * Réglages le disent avant de proposer de refermer. */
@@ -287,8 +289,13 @@ class Session {
   async loadIdentity() {
     this.identityError = '';
     try {
-      const status = await api<{ initialized: boolean; name: string }>('/api/v1/setup/status');
+      const [status, oidc] = await Promise.all([
+        api<{ initialized: boolean; name: string }>('/api/v1/setup/status'),
+        api<{ enabled: boolean; label?: string }>('/api/v1/oidc/status')
+      ]);
       this.instanceName = status.name;
+      this.oidcEnabled = oidc.enabled;
+      this.oidcLabel = oidc.label ?? '';
       if (!status.initialized) {
         this.gate = 'setup';
         return;
@@ -301,6 +308,10 @@ class Session {
       } catch (cause) {
         if (cause instanceof APIError && cause.status === 401) {
           this.gate = 'login';
+          if (new URLSearchParams(location.search).has('oidc_error')) {
+            this.identityError = t('gate.oidcRefused');
+            history.replaceState({}, '', location.pathname);
+          }
           return;
         }
         throw cause;
@@ -363,6 +374,11 @@ class Session {
     } finally {
       this.identityBusy = false;
     }
+  }
+
+  startOIDC() {
+    this.identityError = '';
+    location.assign('/api/v1/oidc/login?return_to=/');
   }
 
   /* Porte de secours : aucune session n'existe encore, la preuve est le Jeton
