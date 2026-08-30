@@ -97,6 +97,8 @@
           </div>
           <IndicatorAreaChart
             compact
+            interactive
+            focusable={false}
             points={row.target.series?.[row.indicator.id] ?? []}
             unit={row.indicator.unit}
             label={t('overview.indicators.chartLabel', { indicator: label })}

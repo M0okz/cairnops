@@ -1,4 +1,5 @@
 <script lang="ts">
+  import IndicatorAreaChart from './IndicatorAreaChart.svelte';
   import Odometer from './Odometer.svelte';
   import { session } from '$lib/session.svelte';
   import { healthyEvidenceWindow } from '$lib/overview';
@@ -8,10 +9,7 @@
   const states: TargetState[] = ['ok', 'degraded', 'down', 'maintenance', 'unknown'];
   const ringRadius = 47;
   const ringCircumference = 2 * Math.PI * ringRadius;
-  const chartWidth = 640;
-  const chartHeight = 112;
-  const chartInsetX = 8;
-  const chartInsetY = 10;
+  const hourMilliseconds = 60 * 60 * 1_000;
 
   const distribution = $derived.by(() =>
     states.map((state) => ({
@@ -48,50 +46,41 @@
   );
 
   const trend = $derived.by(() => {
+    const checkedAt = session.system?.checked_at
+      ? new Date(session.system.checked_at).getTime()
+      : Number.NaN;
+    const currentHour = Number.isFinite(checkedAt)
+      ? Math.floor(checkedAt / hourMilliseconds) * hourMilliseconds
+      : Number.NaN;
+    const firstHour = currentHour - Math.max(0, healthyHours.length - 1) * hourMilliseconds;
     const points = healthyHours
-      .map((value, index) => (value === null ? null : { value, index }))
-      .filter((point): point is { value: number; index: number } => point !== null);
+      .map((value, index) =>
+        value === null || !Number.isFinite(firstHour)
+          ? null
+          : {
+              at: new Date(firstHour + index * hourMilliseconds).toISOString(),
+              value: value * 100
+            }
+      )
+      .filter((point): point is { at: string; value: number } => point !== null);
 
     if (points.length === 0) {
       return {
-        paths: [] as string[],
-        points: [] as Array<{ x: number; y: number; value: number; index: number }>,
+        points,
         current: null as number | null,
-        low: null as number | null
+        low: null as number | null,
+        bounds: null as [number, number] | null
       };
     }
 
-    const low = Math.min(...points.map((point) => point.value));
-    const lowerBound = Math.max(0, low - 0.05);
-    const span = Math.max(0.05, 1 - lowerBound);
-    const slots = Math.max(2, healthyHours.length);
-    const coordinates = points.map((point) => ({
-      ...point,
-      x: chartInsetX + (point.index / (slots - 1)) * (chartWidth - chartInsetX * 2),
-      y:
-        chartHeight -
-        chartInsetY -
-        ((point.value - lowerBound) / span) * (chartHeight - chartInsetY * 2)
-    }));
-
-    const groups: typeof coordinates[] = [];
-    for (const point of coordinates) {
-      const group = groups.at(-1);
-      if (!group || point.index !== group.at(-1)!.index + 1) groups.push([point]);
-      else group.push(point);
-    }
+    const values = points.map((point) => point.value / 100);
+    const low = Math.min(...values);
 
     return {
-      paths: groups.map((group) =>
-        group
-          .map((point, index) =>
-            `${index === 0 ? 'M' : 'L'}${point.x.toFixed(2)},${point.y.toFixed(2)}`
-          )
-          .join('')
-      ),
-      points: coordinates,
-      current: coordinates.at(-1)?.value ?? null,
-      low
+      points,
+      current: values.at(-1) ?? null,
+      low,
+      bounds: [Math.max(0, low * 100 - 5), 100] as [number, number]
     };
   });
 
@@ -164,34 +153,17 @@
         </b>
       </div>
 
-      <svg
-        class="evidence-chart"
-        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-        role="img"
-        aria-label={trendLabel}
-        preserveAspectRatio="none"
-      >
-        <title>{trendLabel}</title>
-        <path class="guide" d={`M${chartInsetX},${chartInsetY}H${chartWidth - chartInsetX}`} />
-        <path
-          class="guide lower"
-          d={`M${chartInsetX},${chartHeight - chartInsetY}H${chartWidth - chartInsetX}`}
+      <div class="evidence-chart">
+        <IndicatorAreaChart
+          interactive
+          points={trend.points}
+          unit="percent"
+          label={trendLabel}
+          tone="ok"
+          bounds={trend.bounds}
+          gapThresholdMilliseconds={90 * 60 * 1_000}
         />
-        {#if trend.paths.length > 0}
-          {#each trend.paths as path, index (`${index}-${path}`)}
-            <path class="trend-line" class:sparse={path.indexOf('L') === -1} d={path} />
-          {/each}
-          {#if trend.points.length > 0}
-            {@const point = trend.points.at(-1)!}
-            <circle class="current-point" cx={point.x} cy={point.y} r="3" />
-          {/if}
-        {:else}
-          <path
-            class="empty-line"
-            d={`M${chartInsetX},${chartHeight / 2}H${chartWidth - chartInsetX}`}
-          />
-        {/if}
-      </svg>
+      </div>
 
       <div class="trend-meta">
         <span>
@@ -347,51 +319,7 @@
   }
 
   .evidence-chart {
-    display: block;
-    width: 100%;
-    height: 7rem;
     margin-top: var(--s3);
-    overflow: visible;
-    color: var(--ok);
-  }
-
-  .guide {
-    fill: none;
-    stroke: var(--line-row);
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .guide.lower {
-    stroke: var(--line);
-  }
-
-  .trend-line {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.5;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .trend-line.sparse {
-    stroke-dasharray: 3 4;
-  }
-
-  .current-point {
-    fill: var(--surface);
-    stroke: currentColor;
-    stroke-width: 1.75;
-    vector-effect: non-scaling-stroke;
-  }
-
-  .empty-line {
-    fill: none;
-    stroke: var(--dim);
-    stroke-width: 1;
-    stroke-dasharray: 4 5;
-    vector-effect: non-scaling-stroke;
   }
 
   .trend-meta {
