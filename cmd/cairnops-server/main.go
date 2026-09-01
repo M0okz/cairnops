@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/bursts"
 	"github.com/M0okz/cairnops/internal/config"
 	"github.com/M0okz/cairnops/internal/connectors"
 	"github.com/M0okz/cairnops/internal/connectors/argus"
@@ -78,6 +79,8 @@ func run(logger *slog.Logger) error {
 	connectorService := connectors.NewService(connectorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets, argusClient)
 	webhookService := connectors.NewWebhookService(connectorStore, incidentStore, secrets, cfg.PublicURL)
 	incidentService := incidents.NewService(incidentStore, connectors.NewAcknowledger(connectorStore, zabbixClient, secrets))
+	burstService := bursts.NewService(bursts.NewPostgresStore(pool), incidentService)
+	burstAcknowledgements := bursts.NewAcknowledgementSynchronizer(pool, incidentService, logger)
 	maintenanceService := maintenance.NewService(maintenance.NewPostgresStore(pool))
 	notificationService := notifications.NewService(
 		notifications.NewPostgresStore(pool),
@@ -117,6 +120,7 @@ func run(logger *slog.Logger) error {
 		Connectors:      connectorService,
 		Webhooks:        webhookService,
 		Incidents:       incidentService,
+		Bursts:          burstService,
 		Maintenances:    maintenanceService,
 		Notifications:   notificationService,
 		Devices:         deviceStore,
@@ -125,7 +129,7 @@ func run(logger *slog.Logger) error {
 		Reconciliations: reconciliationStore,
 	})
 
-	errCh := make(chan error, 7)
+	errCh := make(chan error, 8)
 	go func() {
 		logger.Info("server listening", "address", cfg.HTTPAddress, "version", version.Version)
 		errCh <- server.ListenAndServe()
@@ -157,6 +161,11 @@ func run(logger *slog.Logger) error {
 	}()
 	go func() {
 		if err := oidcSync.Run(ctx); err != nil {
+			errCh <- err
+		}
+	}()
+	go func() {
+		if err := burstAcknowledgements.Run(ctx); err != nil {
 			errCh <- err
 		}
 	}()

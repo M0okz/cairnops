@@ -197,7 +197,9 @@ func (synchronizer *Synchronizer) syncOne(ctx context.Context, connector Runtime
 			signals = append(signals, incidents.ZabbixSignal{
 				TargetID: binding.TargetID, BindingID: binding.ID,
 				ExternalEventID: problem.EventID, ExternalObjectID: problem.TriggerID,
-				Name: problem.Name, Severity: zabbixSeverity(problem.Severity),
+				NatureFingerprint: problem.NatureFingerprint,
+				CanonicalNature:   problem.CanonicalNature,
+				Name:              problem.Name, Severity: zabbixSeverity(problem.Severity),
 				OpenedAt: problem.StartedAt, UpstreamAcknowledged: problem.Acknowledged,
 				Suppressed: problem.Suppressed,
 			})

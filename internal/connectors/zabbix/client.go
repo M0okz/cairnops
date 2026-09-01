@@ -3,6 +3,7 @@ package zabbix
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -48,14 +50,44 @@ type Inspection struct {
 }
 
 type Problem struct {
-	EventID      string
-	TriggerID    string
-	Name         string
-	Severity     int
-	Acknowledged bool
-	Suppressed   bool
-	StartedAt    time.Time
-	HostIDs      []string
+	EventID           string
+	TriggerID         string
+	NatureFingerprint string
+	CanonicalNature   string
+	Name              string
+	Severity          int
+	Acknowledged      bool
+	Suppressed        bool
+	StartedAt         time.Time
+	HostIDs           []string
+}
+
+type remoteTrigger struct {
+	TriggerID          string          `json:"triggerid"`
+	TemplateID         string          `json:"templateid"`
+	UUID               string          `json:"uuid"`
+	Description        string          `json:"description"`
+	Expression         string          `json:"expression"`
+	RecoveryExpression string          `json:"recovery_expression"`
+	CorrelationTag     string          `json:"correlation_tag"`
+	Flags              string          `json:"flags"`
+	DiscoveryData      json.RawMessage `json:"discoveryData"`
+	Hosts              []struct {
+		HostID string `json:"hostid"`
+	} `json:"hosts"`
+	Items []struct {
+		ItemID string `json:"itemid"`
+		Key    string `json:"key_"`
+	} `json:"items"`
+	Functions []struct {
+		ItemID    string `json:"itemid"`
+		Function  string `json:"function"`
+		Parameter string `json:"parameter"`
+	} `json:"functions"`
+	Tags []struct {
+		Tag   string `json:"tag"`
+		Value string `json:"value"`
+	} `json:"tags"`
 }
 
 // Item est la projection numérique minimale utilisée par les Indicateurs.
@@ -208,6 +240,22 @@ func (client *Client) Inspect(ctx context.Context, address, token string) (Inspe
 	}, &problemProbe); err != nil {
 		return Inspection{}, fmt.Errorf("verify Zabbix problem access: %w", err)
 	}
+	var natureProbe []remoteTrigger
+	if err := client.call(ctx, endpoint, token, "trigger.get", map[string]any{
+		"output": []string{
+			"triggerid", "templateid", "uuid", "description", "expression",
+			"recovery_expression", "correlation_tag", "flags",
+		},
+		"hostids":             hostIDs,
+		"monitored":           true,
+		"selectDiscoveryData": []string{"parent_triggerid"},
+		"selectItems":         []string{"itemid", "key_"},
+		"selectFunctions":     []string{"itemid", "function", "parameter"},
+		"selectTags":          []string{"tag", "value"},
+		"limit":               1,
+	}, &natureProbe); err != nil {
+		return Inspection{}, fmt.Errorf("verify stable Zabbix Nature metadata: %w", err)
+	}
 
 	compatibility, label := compatibility(version)
 	return Inspection{
@@ -281,20 +329,14 @@ func (client *Client) Problems(ctx context.Context, endpoint, token string, host
 			triggerIDs = append(triggerIDs, problem.ObjectID)
 		}
 	}
-	var remoteTriggers []struct {
-		TriggerID string `json:"triggerid"`
-		Hosts     []struct {
-			HostID string `json:"hostid"`
-		} `json:"hosts"`
-	}
-	if err := client.call(ctx, endpoint, token, "trigger.get", map[string]any{
-		"output": []string{"triggerid"}, "triggerids": triggerIDs,
-		"selectHosts": []string{"hostid"},
-	}, &remoteTriggers); err != nil {
+	remoteTriggers, detailed, err := client.triggers(ctx, endpoint, token, triggerIDs, true)
+	if err != nil {
 		return nil, fmt.Errorf("resolve Zabbix problem hosts: %w", err)
 	}
 	hostsByTrigger := make(map[string][]string, len(remoteTriggers))
+	triggerByID := make(map[string]remoteTrigger, len(remoteTriggers))
 	for _, trigger := range remoteTriggers {
+		triggerByID[trigger.TriggerID] = trigger
 		if _, expected := triggerSeen[trigger.TriggerID]; !expected {
 			continue
 		}
@@ -304,6 +346,14 @@ func (client *Client) Problems(ctx context.Context, endpoint, token string, host
 			}
 		}
 		sort.Strings(hostsByTrigger[trigger.TriggerID])
+	}
+	if detailed {
+		if err := client.loadTriggerAncestors(ctx, endpoint, token, triggerByID); err != nil {
+			// Une version Zabbix qui ne sait pas exposer les ancêtres continue de
+			// superviser. Sa Nature reste locale au trigger plutôt que déduite du
+			// libellé, donc sûre mais moins regroupante.
+			detailed = false
+		}
 	}
 
 	problems := make([]Problem, 0, len(remoteProblems))
@@ -325,12 +375,227 @@ func (client *Client) Problems(ctx context.Context, endpoint, token string, host
 			continue
 		}
 		problems = append(problems, Problem{
-			EventID: remote.EventID, TriggerID: remote.ObjectID, Name: name, Severity: severity,
+			EventID: remote.EventID, TriggerID: remote.ObjectID,
+			NatureFingerprint: triggerFingerprint(remote.ObjectID, triggerByID, detailed),
+			CanonicalNature:   triggerCanonicalNature(remote.ObjectID, triggerByID, detailed),
+			Name:              name, Severity: severity,
 			Acknowledged: remote.Acknowledged == "1", Suppressed: remote.Suppressed == "1",
 			StartedAt: time.Unix(clock, 0).UTC(), HostIDs: problemHosts,
 		})
 	}
 	return problems, nil
+}
+
+func (client *Client) triggers(ctx context.Context, endpoint, token string, triggerIDs []string, hosts bool) ([]remoteTrigger, bool, error) {
+	params := map[string]any{
+		"output": []string{
+			"triggerid", "templateid", "uuid", "description", "expression",
+			"recovery_expression", "correlation_tag", "flags",
+		},
+		"triggerids":          triggerIDs,
+		"selectDiscoveryData": []string{"parent_triggerid"},
+		"selectItems":         []string{"itemid", "key_"},
+		"selectFunctions":     []string{"itemid", "function", "parameter"},
+		"selectTags":          []string{"tag", "value"},
+	}
+	if hosts {
+		params["selectHosts"] = []string{"hostid"}
+	}
+	var result []remoteTrigger
+	if err := client.call(ctx, endpoint, token, "trigger.get", params, &result); err == nil {
+		return result, true, nil
+	}
+	// La V1 reste compatible avec les versions Zabbix qui ne connaissent pas
+	// encore tous les champs de description. L'identité se replie alors sur le
+	// trigger, toujours dans la portée stricte du Connecteur.
+	fallback := map[string]any{
+		"output": []string{"triggerid"}, "triggerids": triggerIDs,
+	}
+	if hosts {
+		fallback["selectHosts"] = []string{"hostid"}
+	}
+	result = nil
+	if err := client.call(ctx, endpoint, token, "trigger.get", fallback, &result); err != nil {
+		return nil, false, err
+	}
+	return result, false, nil
+}
+
+func (client *Client) loadTriggerAncestors(ctx context.Context, endpoint, token string, known map[string]remoteTrigger) error {
+	for depth := 0; depth < 32; depth++ {
+		missing := make([]string, 0)
+		seen := make(map[string]struct{})
+		for _, trigger := range known {
+			for _, parentID := range []string{strings.TrimSpace(trigger.TemplateID), discoveryParent(trigger.DiscoveryData)} {
+				if parentID == "" || parentID == "0" {
+					continue
+				}
+				if _, exists := known[parentID]; exists {
+					continue
+				}
+				if _, duplicate := seen[parentID]; !duplicate {
+					seen[parentID] = struct{}{}
+					missing = append(missing, parentID)
+				}
+			}
+		}
+		if len(missing) == 0 {
+			return nil
+		}
+		sort.Strings(missing)
+		ancestors, detailed, err := client.triggers(ctx, endpoint, token, missing, false)
+		if err != nil {
+			return err
+		}
+		if !detailed || len(ancestors) == 0 {
+			return fmt.Errorf("trigger ancestry is unavailable")
+		}
+		for _, ancestor := range ancestors {
+			known[ancestor.TriggerID] = ancestor
+		}
+	}
+	return fmt.Errorf("trigger ancestry exceeds 32 levels")
+}
+
+func discoveryParent(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var object struct {
+		ParentTriggerID string `json:"parent_triggerid"`
+	}
+	if json.Unmarshal(raw, &object) == nil && object.ParentTriggerID != "" {
+		return strings.TrimSpace(object.ParentTriggerID)
+	}
+	var list []struct {
+		ParentTriggerID string `json:"parent_triggerid"`
+	}
+	if json.Unmarshal(raw, &list) == nil && len(list) > 0 {
+		return strings.TrimSpace(list[0].ParentTriggerID)
+	}
+	return ""
+}
+
+func triggerFingerprint(triggerID string, known map[string]remoteTrigger, detailed bool) string {
+	if !detailed {
+		return "trigger:" + triggerID
+	}
+	root, exists := known[triggerID]
+	if !exists {
+		return "trigger:" + triggerID
+	}
+	visited := make(map[string]struct{})
+	for {
+		if _, loop := visited[root.TriggerID]; loop {
+			break
+		}
+		visited[root.TriggerID] = struct{}{}
+		parentID := discoveryParent(root.DiscoveryData)
+		if parentID == "" || parentID == "0" {
+			parentID = strings.TrimSpace(root.TemplateID)
+		}
+		parent, ok := known[parentID]
+		if parentID == "" || parentID == "0" || !ok {
+			break
+		}
+		root = parent
+	}
+	if uuid := strings.TrimSpace(root.UUID); uuid != "" {
+		return "uuid:" + strings.ToLower(uuid)
+	}
+	if root.TriggerID != "" && root.TriggerID != triggerID {
+		return "root:" + root.TriggerID
+	}
+	if strings.TrimSpace(root.Description) == "" && strings.TrimSpace(root.Expression) == "" &&
+		len(root.Items) == 0 && len(root.Functions) == 0 && len(root.Tags) == 0 {
+		return "trigger:" + triggerID
+	}
+
+	itemKeys := make(map[string]string, len(root.Items))
+	keys := make([]string, 0, len(root.Items))
+	for _, item := range root.Items {
+		key := strings.TrimSpace(item.Key)
+		itemKeys[item.ItemID] = key
+		if key != "" {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	functions := make([]string, 0, len(root.Functions))
+	for _, function := range root.Functions {
+		functions = append(functions, strings.Join([]string{
+			itemKeys[function.ItemID], strings.TrimSpace(function.Function),
+			strings.TrimSpace(function.Parameter),
+		}, "\x00"))
+	}
+	sort.Strings(functions)
+	tags := make([]string, 0, len(root.Tags))
+	for _, tag := range root.Tags {
+		tags = append(tags, strings.TrimSpace(tag.Tag)+"\x00"+strings.TrimSpace(tag.Value))
+	}
+	sort.Strings(tags)
+	canonical, _ := json.Marshal(struct {
+		Description        string   `json:"description"`
+		Expression         string   `json:"expression"`
+		RecoveryExpression string   `json:"recovery_expression"`
+		CorrelationTag     string   `json:"correlation_tag"`
+		Flags              string   `json:"flags"`
+		ItemKeys           []string `json:"item_keys"`
+		Functions          []string `json:"functions"`
+		Tags               []string `json:"tags"`
+	}{
+		strings.TrimSpace(root.Description), canonicalTriggerExpression(root.Expression),
+		canonicalTriggerExpression(root.RecoveryExpression), strings.TrimSpace(root.CorrelationTag),
+		strings.TrimSpace(root.Flags), keys, functions, tags,
+	})
+	digest := sha256.Sum256(canonical)
+	return fmt.Sprintf("rule:%x", digest[:16])
+}
+
+func triggerCanonicalNature(triggerID string, known map[string]remoteTrigger, detailed bool) string {
+	if !detailed {
+		return ""
+	}
+	root, exists := known[triggerID]
+	if !exists {
+		return ""
+	}
+	visited := make(map[string]struct{})
+	for {
+		if _, loop := visited[root.TriggerID]; loop {
+			return ""
+		}
+		visited[root.TriggerID] = struct{}{}
+		parentID := discoveryParent(root.DiscoveryData)
+		if parentID == "" || parentID == "0" {
+			parentID = strings.TrimSpace(root.TemplateID)
+		}
+		parent, ok := known[parentID]
+		if parentID == "" || parentID == "0" || !ok {
+			break
+		}
+		root = parent
+	}
+	for _, tag := range root.Tags {
+		if strings.EqualFold(strings.TrimSpace(tag.Tag), "cairnops.nature") &&
+			strings.EqualFold(strings.TrimSpace(tag.Value), "availability") {
+			return "availability"
+		}
+	}
+	return ""
+}
+
+var (
+	modernTriggerHost = regexp.MustCompile(`([[:alpha:]_][[:alnum:]_]*\s*\(\s*/)[^/(),\s]+(/)`)
+	legacyTriggerHost = regexp.MustCompile(`\{[^{}:]+:`)
+	functionIdentity  = regexp.MustCompile(`\{[0-9]+\}`)
+)
+
+func canonicalTriggerExpression(value string) string {
+	value = strings.TrimSpace(value)
+	value = modernTriggerHost.ReplaceAllString(value, `${1}*${2}`)
+	value = legacyTriggerHost.ReplaceAllString(value, `{*:`)
+	return functionIdentity.ReplaceAllString(value, `{function}`)
 }
 
 // Items découvre les items numériques actifs d'un périmètre d'hôtes et peut

@@ -22,9 +22,17 @@ type Delivery struct {
 	NotificationContent string
 	EventKind           string
 	IncidentID          string
+	BurstID             string
+	Revision            int
+	PresentationMode    string
 	TargetName          string
 	NatureLabel         string
 	Severity            string
+	IncidentCount       int
+	AffectedTargets     int
+	MaxAffected         int
+	BurstStatus         string
+	BurstExtended       bool
 	OccurredAt          time.Time
 }
 
@@ -68,8 +76,12 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		SELECT claimed.id, device.id::text, device.push_recipient_sealed,
 		       device.encryption_public_key, device.locale,
 		       device.notification_content, inbox.event_kind,
-		       inbox.incident_id::text, inbox.target_name, inbox.nature_label,
-		       inbox.severity, inbox.occurred_at
+		       inbox.incident_id::text, coalesce(inbox.burst_id::text, ''),
+		       claimed.revision, claimed.presentation,
+		       inbox.target_name, inbox.nature_label, inbox.severity,
+		       inbox.incident_count, inbox.affected_target_count,
+		       inbox.max_affected_targets, coalesce(inbox.burst_status, ''),
+		       inbox.burst_extended, inbox.occurred_at
 		FROM claimed
 		JOIN cairnops_devices device ON device.id = claimed.device_id
 		JOIN cairnops_notification_inbox inbox ON inbox.id = claimed.inbox_id
@@ -77,8 +89,11 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		&delivery.ID, &delivery.DeviceID, &delivery.RecipientSealed,
 		&delivery.EncryptionPublicKey, &delivery.Locale,
 		&delivery.NotificationContent, &delivery.EventKind,
-		&delivery.IncidentID, &delivery.TargetName, &delivery.NatureLabel,
-		&delivery.Severity, &delivery.OccurredAt,
+		&delivery.IncidentID, &delivery.BurstID, &delivery.Revision,
+		&delivery.PresentationMode, &delivery.TargetName, &delivery.NatureLabel,
+		&delivery.Severity, &delivery.IncidentCount, &delivery.AffectedTargets,
+		&delivery.MaxAffected, &delivery.BurstStatus, &delivery.BurstExtended,
+		&delivery.OccurredAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Delivery{}, ErrNoDelivery

@@ -424,20 +424,22 @@ func mergeActiveIncidents(ctx context.Context, tx pgx.Tx, targetID, leftID, righ
 		    lease_owner = NULL, lease_until = NULL, updated_at = now()
 		WHERE incident_id = $2::uuid AND status IN ('pending', 'failed');
 		INSERT INTO cairnops_notification_outbox (
-			incident_id, channel_id, event_kind, status, target_name, nature_label,
+			incident_id, channel_id, event_kind, event_key, status, target_name, nature_label,
 			severity, opened_at, resolved_at, last_error
 		)
-		SELECT $2::uuid, opening.channel_id, 'resolved', 'cancelled', opening.target_name,
+		SELECT $2::uuid, opening.channel_id, 'resolved', 'resolved', 'cancelled', opening.target_name,
 		       opening.nature_label, opening.severity, opening.opened_at, now(),
 		       'Résolution technique supprimée lors d’un rapprochement de Cibles'
 		FROM cairnops_notification_outbox opening
 		WHERE opening.incident_id = $2::uuid
 		  AND opening.event_kind = 'firing' AND opening.status = 'delivered'
-		ON CONFLICT (incident_id, channel_id, event_kind) DO NOTHING;
+		ON CONFLICT DO NOTHING;
 		UPDATE cairnops_incidents
 		SET status = 'resolved', resolved_at = now(), target_id = $3::uuid,
 		    updated_at = now()
 		WHERE id = $2::uuid;
+		UPDATE cairnops_incident_burst_members
+		SET target_id = $3::uuid WHERE incident_id IN ($1::uuid, $2::uuid);
 	`, keep.ID, absorbed.ID, targetID); err != nil {
 		return fmt.Errorf("consolidate active incident evidence: %w", err)
 	}
@@ -698,16 +700,16 @@ func recomputeOriginIncident(ctx context.Context, tx pgx.Tx, incidentID string) 
 			    lease_owner = NULL, lease_until = NULL, updated_at = now()
 			WHERE incident_id = $1::uuid AND status IN ('pending', 'failed');
 			INSERT INTO cairnops_notification_outbox (
-				incident_id, channel_id, event_kind, status, target_name, nature_label,
+				incident_id, channel_id, event_kind, event_key, status, target_name, nature_label,
 				severity, opened_at, resolved_at, last_error
 			)
-			SELECT $1::uuid, opening.channel_id, 'resolved', 'cancelled', opening.target_name,
+			SELECT $1::uuid, opening.channel_id, 'resolved', 'resolved', 'cancelled', opening.target_name,
 			       opening.nature_label, opening.severity, opening.opened_at, now(),
 			       'Résolution technique supprimée après correction du rattachement d’une Source'
 			FROM cairnops_notification_outbox opening
 			WHERE opening.incident_id = $1::uuid
 			  AND opening.event_kind = 'firing' AND opening.status = 'delivered'
-			ON CONFLICT (incident_id, channel_id, event_kind) DO NOTHING;
+			ON CONFLICT DO NOTHING;
 			UPDATE cairnops_incidents
 			SET status = 'resolved', resolved_at = coalesce(resolved_at, now()), updated_at = now()
 			WHERE id = $1::uuid AND status = 'active'

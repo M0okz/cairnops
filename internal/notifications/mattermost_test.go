@@ -36,3 +36,30 @@ func TestMattermostResolutionMessageKeepsOperationalContext(t *testing.T) {
 		}
 	}
 }
+
+func TestMattermostBurstLinkOpensThePersistentBurst(t *testing.T) {
+	t.Parallel()
+	var payload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Error(err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	client := NewMattermostClient(server.Client())
+	if err := client.Send(context.Background(), server.URL, Message{
+		EventKind: "resolved", IncidentID: "incident-anchor", BurstID: "burst-1",
+		TargetName: "7 Cibles affectées", NatureLabel: "Latence disque élevée",
+		Severity: incidents.SeverityCritical, MaxAffected: 7,
+		PublicURL: "https://cairnops.example.test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(payload)
+	for _, expected := range []string{"RÉSOLUE", "jusqu’à 7 Cibles", "https://cairnops.example.test/incidents?burst=burst-1"} {
+		if !strings.Contains(string(encoded), expected) {
+			t.Fatalf("Mattermost burst payload does not contain %q: %s", expected, encoded)
+		}
+	}
+}

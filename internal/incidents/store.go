@@ -418,9 +418,20 @@ func (store *PostgresStore) ReconcileZabbix(ctx context.Context, input Reconcile
 			}
 			continue
 		}
+		fingerprint := strings.TrimSpace(signal.NatureFingerprint)
+		if fingerprint == "" {
+			fingerprint = strings.TrimSpace(signal.ExternalObjectID)
+		}
+		nature := ConnectorNature(
+			input.ConnectorID, "zabbix:"+input.ConnectorID+":"+fingerprint,
+			signal.Name, fingerprint,
+		)
+		if signal.CanonicalNature == NatureAvailability {
+			nature = CanonicalNature(NatureAvailability, NatureAvailabilityLabel)
+		}
 		incidentID, created, err := ensureActiveIncident(
-			ctx, tx, signal.TargetID, "zabbix:trigger:"+signal.ExternalObjectID,
-			signal.Name, signal.Severity, signal.OpenedAt,
+			ctx, tx, signal.TargetID, nature,
+			signal.Severity, signal.OpenedAt,
 		)
 		if errors.Is(err, ErrTargetArchived) {
 			continue
@@ -590,10 +601,10 @@ func (store *PostgresStore) ReconcileUptimeKuma(ctx context.Context, input Recon
 			return fmt.Errorf("find invalidated Uptime Kuma signal: %w", err)
 		}
 
-		natureKey := "uptime-kuma:monitor:" + signal.ExternalMonitor
 		incidentID, created, err := ensureActiveIncident(
-			ctx, tx, signal.TargetID, natureKey,
-			"Moniteur Uptime Kuma indisponible", signal.Severity, observedAt,
+			ctx, tx, signal.TargetID,
+			CanonicalNature(NatureAvailability, NatureAvailabilityLabel),
+			signal.Severity, observedAt,
 		)
 		if errors.Is(err, ErrTargetArchived) {
 			continue
@@ -793,7 +804,9 @@ func (store *PostgresStore) ReconcilePatchMon(ctx context.Context, input Reconci
 		}
 
 		incidentID, created, err := ensureActiveIncident(
-			ctx, tx, signal.TargetID, signal.NatureKey, signal.NatureLabel, signal.Severity, observedAt,
+			ctx, tx, signal.TargetID,
+			ConnectorNature(input.ConnectorID, signal.NatureKey, signal.NatureLabel, signal.NatureKey),
+			signal.Severity, observedAt,
 		)
 		if errors.Is(err, ErrTargetArchived) {
 			continue
@@ -1027,7 +1040,9 @@ func (store *PostgresStore) ReconcileArgus(ctx context.Context, input ReconcileA
 		}
 
 		incidentID, created, err := ensureActiveIncident(
-			ctx, tx, signal.TargetID, signal.NatureKey, signal.NatureLabel, signal.Severity, observedAt,
+			ctx, tx, signal.TargetID,
+			ConnectorNature(input.ConnectorID, signal.NatureKey, signal.NatureLabel, signal.NatureKey),
+			signal.Severity, observedAt,
 		)
 		if errors.Is(err, ErrTargetArchived) {
 			continue
@@ -1264,7 +1279,9 @@ func (store *PostgresStore) ApplyWebhook(ctx context.Context, signal WebhookSign
 	}
 
 	incidentID, created, err := ensureActiveIncident(
-		ctx, tx, signal.TargetID, signal.NatureKey, signal.NatureLabel, signal.Severity, observedAt,
+		ctx, tx, signal.TargetID,
+		ConnectorNature(signal.ConnectorID, signal.NatureKey, signal.NatureLabel, signal.NatureKey),
+		signal.Severity, observedAt,
 	)
 	if errors.Is(err, ErrTargetArchived) {
 		return nil
@@ -1301,14 +1318,14 @@ func (store *PostgresStore) ApplyWebhook(ctx context.Context, signal WebhookSign
 	return nil
 }
 
-func ensureActiveIncident(ctx context.Context, tx pgx.Tx, targetID, natureKey, natureLabel string, severity Severity, openedAt time.Time) (string, bool, error) {
+func ensureActiveIncident(ctx context.Context, tx pgx.Tx, targetID string, nature NatureIdentity, severity Severity, openedAt time.Time) (string, bool, error) {
 	var incidentID string
 	err := tx.QueryRow(ctx, `
 		SELECT id::text
 		FROM cairnops_incidents
 		WHERE target_id = $1::uuid AND nature_key = $2 AND status = 'active'
 		FOR UPDATE
-	`, targetID, natureKey).Scan(&incidentID)
+	`, targetID, nature.Key).Scan(&incidentID)
 	if err == nil {
 		return incidentID, false, nil
 	}
@@ -1320,13 +1337,15 @@ func ensureActiveIncident(ctx context.Context, tx pgx.Tx, targetID, natureKey, n
 	err = tx.QueryRow(ctx, `
 		INSERT INTO cairnops_incidents (
 			target_id, nature_key, nature_label, status,
-			source_severity, effective_severity, opened_at
+			source_severity, effective_severity, opened_at,
+			nature_scope, nature_namespace, nature_fingerprint, burst_eligible
 		)
-		SELECT target.id, $2, $3, 'active', $4, $4, $5
+		SELECT target.id, $2, $3, 'active', $4, $4, $5, $6, $7, $8, $9
 		FROM cairnops_targets target
 		WHERE target.id = $1::uuid AND target.archived_at IS NULL
 		RETURNING id::text
-	`, targetID, natureKey, natureLabel, severity, openedAt).Scan(&incidentID)
+	`, targetID, nature.Key, nature.Label, severity, openedAt,
+		nature.Scope, nature.Namespace, nature.Fingerprint, nature.Eligible).Scan(&incidentID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", false, ErrTargetArchived
 	}
@@ -1466,6 +1485,9 @@ func insertActivity(ctx context.Context, tx pgx.Tx, incidentID, kind, origin, ac
 const incidentSelect = `
 	SELECT incident.id::text, incident.target_id::text, target.name,
 	       incident.nature_key, incident.nature_label, incident.status,
+	       incident.nature_scope, incident.nature_namespace,
+	       incident.nature_fingerprint, incident.burst_eligible,
+	       coalesce(member.burst_id::text, ''),
 	       incident.source_severity, incident.effective_severity,
 	       incident.opened_at, incident.resolved_at, incident.acknowledged_at,
 	       coalesce(actor.display_name, ''), coalesce(incident.acknowledgement_origin, ''),
@@ -1489,6 +1511,7 @@ const incidentSelect = `
 	       incident.created_at, incident.updated_at
 	FROM cairnops_incidents incident
 	JOIN cairnops_targets target ON target.id = incident.target_id
+	LEFT JOIN cairnops_incident_burst_members member ON member.incident_id = incident.id
 	LEFT JOIN cairnops_users actor ON actor.id = incident.acknowledged_by
 `
 
@@ -1501,6 +1524,8 @@ func scanIncident(row scanner) (Incident, error) {
 	if err := row.Scan(
 		&incident.ID, &incident.TargetID, &incident.TargetName,
 		&incident.NatureKey, &incident.NatureLabel, &incident.Status,
+		&incident.NatureScope, &incident.NatureNamespace,
+		&incident.NatureFingerprint, &incident.BurstEligible, &incident.BurstID,
 		&incident.SourceSeverity, &incident.EffectiveSeverity,
 		&incident.OpenedAt, &incident.ResolvedAt, &incident.AcknowledgedAt,
 		&incident.AcknowledgedBy, &incident.AcknowledgementOrigin,

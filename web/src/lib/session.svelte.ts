@@ -10,6 +10,7 @@ import {
   api,
   type Connector,
   type Incident,
+  type IncidentBurst,
   type IncidentDay,
   type Maintenance,
   type InboxEntry,
@@ -68,6 +69,7 @@ class Session {
   targets = $state<Target[]>([]);
   connectors = $state<Connector[]>([]);
   incidents = $state<Incident[]>([]);
+  bursts = $state<IncidentBurst[]>([]);
   incidentHistoryTarget = $state('');
   incidentHistory = $state<Incident[]>([]);
 
@@ -422,6 +424,7 @@ class Session {
       this.indicatorDetails = {};
       this.connectors = [];
       this.incidents = [];
+      this.bursts = [];
       this.incidentHistoryTarget = '';
       this.incidentHistory = [];
       this.incidentDays = [];
@@ -445,6 +448,7 @@ class Session {
     this.#refreshTimer = setInterval(() => {
       void this.loadSystemHealth();
       void this.loadIncidents();
+      void this.loadBursts();
       void this.loadIncidentDays();
       if (this.incidentHistoryTarget) void this.loadIncidentHistory(this.incidentHistoryTarget);
       void this.loadMaintenances();
@@ -470,6 +474,7 @@ class Session {
       this.loadIndicatorOverview(),
       this.loadConnectors(),
       this.loadIncidents(),
+      this.loadBursts(),
       this.loadIncidentDays(),
       this.loadMaintenances(),
       this.loadNotifications(),
@@ -530,6 +535,18 @@ class Session {
     } catch (cause) {
       if (this.#expired(cause)) return;
       this.showNotice(t('session.refreshIncidents', { error: messageFrom(cause) }));
+    }
+  }
+
+  async loadBursts() {
+    try {
+      const response = await api<{ bursts: IncidentBurst[] }>(
+        '/api/v1/incident-bursts?status=active&limit=200'
+      );
+      this.bursts = response.bursts;
+    } catch (cause) {
+      if (this.#expired(cause)) return;
+      this.showNotice(t('session.refreshBursts', { error: messageFrom(cause) }));
     }
   }
 
@@ -813,6 +830,7 @@ class Session {
     if (kind === 'component.heartbeat') this.#dirty.add('health');
     else if (kind === 'connector.changed') this.#dirty.add('connectors');
     else if (kind === 'incident.changed') this.#dirty.add('incidents');
+    else if (kind === 'burst.changed') this.#dirty.add('bursts');
     else if (kind === 'indicator.changed') this.#dirty.add('indicators');
     else if (kind === 'maintenance.changed') {
       this.#dirty.add('maintenances');
@@ -830,6 +848,7 @@ class Session {
         void this.loadIncidentDays();
         if (this.incidentHistoryTarget) void this.loadIncidentHistory(this.incidentHistoryTarget);
       }
+      if (this.#dirty.has('bursts')) void this.loadBursts();
       if (this.#dirty.has('maintenances')) void this.loadMaintenances();
       if (this.#dirty.has('notifications')) {
         void this.loadNotifications();
@@ -869,6 +888,20 @@ class Session {
       );
     } catch (cause) {
       this.showNotice(t('session.acknowledgeFailed', { error: messageFrom(cause) }));
+    }
+  }
+
+  async acknowledgeBurst(burst: IncidentBurst) {
+    try {
+      const acknowledged = await api<IncidentBurst>(
+        `/api/v1/incident-bursts/${burst.id}/acknowledgement`,
+        { method: 'POST' }
+      );
+      this.bursts = this.bursts.map((item) => (item.id === acknowledged.id ? acknowledged : item));
+      await this.loadIncidents();
+      this.showNotice(t('session.burstAcknowledged'));
+    } catch (cause) {
+      this.showNotice(t('session.burstAcknowledgeFailed', { error: messageFrom(cause) }));
     }
   }
 

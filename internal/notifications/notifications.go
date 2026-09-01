@@ -159,12 +159,20 @@ const KindInApp = "in_app"
 type Delivery struct {
 	ID               int64
 	IncidentID       string
+	BurstID          string
+	BurstRevision    int
 	ChannelID        string
 	ChannelKind      string
 	EventKind        string
+	Presentation     string
 	TargetName       string
 	NatureLabel      string
 	Severity         incidents.Severity
+	IncidentCount    int
+	AffectedTargets  int
+	MaxAffected      int
+	BurstStatus      string
+	BurstExtended    bool
 	OpenedAt         time.Time
 	ResolvedAt       *time.Time
 	CredentialSealed string
@@ -185,14 +193,20 @@ type Sender interface {
 }
 
 type Message struct {
-	EventKind   string
-	IncidentID  string
-	TargetName  string
-	NatureLabel string
-	Severity    incidents.Severity
-	OpenedAt    time.Time
-	ResolvedAt  *time.Time
-	PublicURL   string
+	EventKind       string
+	IncidentID      string
+	BurstID         string
+	TargetName      string
+	NatureLabel     string
+	Severity        incidents.Severity
+	IncidentCount   int
+	AffectedTargets int
+	MaxAffected     int
+	BurstStatus     string
+	BurstExtended   bool
+	OpenedAt        time.Time
+	ResolvedAt      *time.Time
+	PublicURL       string
 }
 
 type Dispatcher struct {
@@ -267,9 +281,11 @@ func (dispatcher *Dispatcher) deliver(ctx context.Context, delivery Delivery) er
 		return err
 	}
 	return dispatcher.sender.Send(ctx, string(webhook), Message{
-		EventKind: delivery.EventKind, IncidentID: delivery.IncidentID,
+		EventKind: delivery.EventKind, IncidentID: delivery.IncidentID, BurstID: delivery.BurstID,
 		TargetName: delivery.TargetName, NatureLabel: delivery.NatureLabel,
-		Severity: delivery.Severity, OpenedAt: delivery.OpenedAt,
-		ResolvedAt: delivery.ResolvedAt, PublicURL: dispatcher.publicURL,
+		Severity: delivery.Severity, IncidentCount: delivery.IncidentCount,
+		AffectedTargets: delivery.AffectedTargets, MaxAffected: delivery.MaxAffected,
+		BurstStatus: delivery.BurstStatus, BurstExtended: delivery.BurstExtended,
+		OpenedAt: delivery.OpenedAt, ResolvedAt: delivery.ResolvedAt, PublicURL: dispatcher.publicURL,
 	})
 }

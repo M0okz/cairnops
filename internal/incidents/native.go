@@ -133,7 +133,8 @@ func applyNativeTrigger(ctx context.Context, tx pgx.Tx, observation NativeObserv
 	}
 
 	incidentID, created, err := ensureActiveIncident(
-		ctx, tx, observation.TargetID, NatureAvailability, NatureAvailabilityLabel, severity, observedAt,
+		ctx, tx, observation.TargetID,
+		CanonicalNature(NatureAvailability, NatureAvailabilityLabel), severity, observedAt,
 	)
 	if errors.Is(err, ErrTargetArchived) {
 		return nil

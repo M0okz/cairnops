@@ -32,6 +32,7 @@ type ServerOptions struct {
 	Connectors      Connectors
 	Webhooks        Webhooks
 	Incidents       Incidents
+	Bursts          Bursts
 	Maintenances    Maintenances
 	Notifications   Notifications
 	Devices         DeviceManager
@@ -171,6 +172,12 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("GET /api/v1/incidents/{incidentID}", identityHTTP.requireSession(http.HandlerFunc(handler.get)))
 		mux.Handle("POST /api/v1/incidents/{incidentID}/acknowledgement", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireAnyRole([]string{"administrator", "operator"}, http.HandlerFunc(handler.acknowledge)))))
 		mux.Handle("POST /api/v1/incidents/{incidentID}/signals/{signalID}/invalidation", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireAnyRole([]string{"administrator", "operator"}, http.HandlerFunc(handler.invalidateSignal)))))
+	}
+	if options.Bursts != nil && options.Identity != nil {
+		handler := burstHandler{bursts: options.Bursts, logger: logger}
+		mux.Handle("GET /api/v1/incident-bursts", identityHTTP.requireSession(http.HandlerFunc(handler.list)))
+		mux.Handle("GET /api/v1/incident-bursts/{burstID}", identityHTTP.requireSession(http.HandlerFunc(handler.get)))
+		mux.Handle("POST /api/v1/incident-bursts/{burstID}/acknowledgement", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireAnyRole([]string{"administrator", "operator"}, http.HandlerFunc(handler.acknowledge)))))
 	}
 	if options.Maintenances != nil && options.Identity != nil {
 		handler := maintenanceHandler{maintenances: options.Maintenances, logger: logger}

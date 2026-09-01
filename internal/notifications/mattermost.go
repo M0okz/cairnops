@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -33,8 +34,14 @@ func (client *MattermostClient) Send(ctx context.Context, webhookURL string, mes
 	resolved := message.EventKind == "resolved"
 	color, label, icon := severityPresentation(string(message.Severity))
 	title := fmt.Sprintf("%s [%s] %s — %s", icon, label, message.TargetName, message.NatureLabel)
+	if message.BurstID != "" && !resolved {
+		title = fmt.Sprintf("%s [%s] Rafale — %s", icon, label, message.NatureLabel)
+	}
 	if resolved {
 		color, title = "#39d98a", fmt.Sprintf("✅ [RÉSOLU] %s — %s", message.TargetName, message.NatureLabel)
+		if message.BurstID != "" {
+			title = fmt.Sprintf("✅ [RÉSOLUE] Rafale — %s", message.NatureLabel)
+		}
 	}
 	fields := []map[string]any{
 		{"short": true, "title": "Gravité", "value": label},
@@ -43,15 +50,22 @@ func (client *MattermostClient) Send(ctx context.Context, webhookURL string, mes
 	text := "La supervision serveur conserve les preuves liées à cet Incident."
 	if resolved {
 		text = "L’Incident est résolu. Cette notification est envoyée au même canal que son ouverture."
+		if message.BurstID != "" {
+			text = fmt.Sprintf("La Rafale est résolue après avoir affecté jusqu’à %d Cibles. Les Incidents et leurs preuves restent distincts.", message.MaxAffected)
+		}
 	}
 	if message.PublicURL != "" {
-		text += " [Ouvrir CairnOps](" + message.PublicURL + "/#incidents)"
+		link := message.PublicURL + "/#incidents"
+		if message.BurstID != "" {
+			link = message.PublicURL + "/incidents?burst=" + url.QueryEscape(message.BurstID)
+		}
+		text += " [Ouvrir CairnOps](" + link + ")"
 	}
 	return client.post(ctx, webhookURL, map[string]any{
 		"username": "CairnOps",
 		"attachments": []map[string]any{{
 			"color": color, "title": title, "text": text, "fields": fields,
-			"footer": "Incident " + message.IncidentID,
+			"footer": map[bool]string{true: "Rafale " + message.BurstID, false: "Incident " + message.IncidentID}[message.BurstID != ""],
 		}},
 	})
 }

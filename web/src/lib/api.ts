@@ -715,6 +715,11 @@ export type Incident = {
   target_name: string;
   nature_key: string;
   nature_label: string;
+  nature_scope: 'canonical' | 'connector';
+  nature_namespace: string;
+  nature_fingerprint: string;
+  burst_eligible: boolean;
+  burst_id?: string;
   status: 'active' | 'resolved';
   source_severity: IncidentSeverity;
   effective_severity: IncidentSeverity;
@@ -729,6 +734,59 @@ export type Incident = {
   maintenance_ends_at?: string;
   signals: IncidentSignal[];
   activity: IncidentActivity[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type IncidentBurstMember = {
+  incident_id: string;
+  target_id: string;
+  target_name: string;
+  status: 'active' | 'resolved';
+  effective_severity: IncidentSeverity;
+  opened_at: string;
+  resolved_at?: string;
+  acknowledged_at?: string;
+  maintenance_active: boolean;
+  joined_at: string;
+};
+
+export type IncidentBurstActivity = {
+  id: number;
+  kind: string;
+  actor_name?: string;
+  message: string;
+  data: Record<string, unknown>;
+  occurred_at: string;
+};
+
+export type IncidentBurst = {
+  id: string;
+  anchor_incident_id: string;
+  nature_scope: 'canonical' | 'connector';
+  nature_namespace: string;
+  nature_fingerprint: string;
+  nature_label: string;
+  status: 'propagating' | 'sealed' | 'resolved';
+  severity: IncidentSeverity;
+  opened_at: string;
+  last_joined_at: string;
+  propagation_window_seconds: number;
+  propagation_ends_at: string;
+  sealed_at?: string;
+  resolved_at?: string;
+  acknowledged_at?: string;
+  acknowledged_by?: string;
+  extended: boolean;
+  active_incident_count: number;
+  incident_count: number;
+  affected_target_count: number;
+  target_count: number;
+  max_affected_targets: number;
+  revision: number;
+  explanation: string;
+  members: IncidentBurstMember[];
+  activity: IncidentBurstActivity[];
   created_at: string;
   updated_at: string;
 };
@@ -774,12 +832,19 @@ export type IncidentDay = {
 export type InboxEntry = {
   id: number;
   incident_id: string;
+  burst_id?: string;
+  revision: number;
   target_id?: string;
   event_kind: 'firing' | 'resolved';
   target_name: string;
   nature_key: string;
   nature_label: string;
   severity: IncidentSeverity;
+  incident_count: number;
+  affected_target_count: number;
+  max_affected_targets: number;
+  burst_status?: 'propagating' | 'sealed' | 'resolved';
+  burst_extended: boolean;
   occurred_at: string;
   read_at: string | null;
 };
@@ -787,8 +852,8 @@ export type InboxEntry = {
 export type RealtimeMessage = {
   type: 'ready' | 'event';
   version: number;
-  kind?: 'target.changed' | 'source.changed' | 'observation.created' | 'component.heartbeat' | 'connector.changed' | 'incident.changed' | 'maintenance.changed' | 'notification.changed' | 'device.changed' | 'indicator.changed' | 'reconciliation.changed';
-  entity_type?: 'target' | 'source' | 'component' | 'connector' | 'incident' | 'maintenance' | 'notification' | 'device' | 'indicator' | 'reconciliation';
+  kind?: 'target.changed' | 'source.changed' | 'observation.created' | 'component.heartbeat' | 'connector.changed' | 'incident.changed' | 'maintenance.changed' | 'notification.changed' | 'device.changed' | 'indicator.changed' | 'reconciliation.changed' | 'burst.changed';
+  entity_type?: 'target' | 'source' | 'component' | 'connector' | 'incident' | 'maintenance' | 'notification' | 'device' | 'indicator' | 'reconciliation' | 'burst';
   entity_id?: string;
   occurred_at?: string;
 };

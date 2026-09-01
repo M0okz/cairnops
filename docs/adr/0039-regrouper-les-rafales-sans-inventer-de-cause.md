@@ -48,6 +48,9 @@ lorsqu'il existe, sinon son identité racine dans la portée du Connecteur. Un
 trigger créé directement sur un hôte reçoit une empreinte canonique de sa règle
 non développée : expression, fonctions, clés d'items et tags, sans identifiant
 d'hôte. Le nom rendu du problème n'est jamais une preuve de Nature à lui seul.
+Seul le tag explicite `cairnops.nature=availability` permet à un trigger Zabbix
+de publier la Nature canonique d'indisponibilité ; un tag générique ou un mot du
+libellé ne suffit pas.
 Les autres Connecteurs doivent de même fournir une identité sémantique stable ;
 un signal qui ne le peut pas reste isolé plutôt que regroupé par supposition.
 

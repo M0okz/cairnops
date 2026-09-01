@@ -174,7 +174,10 @@ func TestPostgresZabbixIncidentLifecycleAndAcknowledgement(t *testing.T) {
 		t.Fatal(err)
 	}
 	active := activeIncidents(t, ctx, store)
-	if len(active) != 1 || len(active[0].Signals) != 2 || active[0].NatureKey != "zabbix:trigger:15112" {
+	wantNatureKey := "zabbix:" + connectorID + ":15112"
+	if len(active) != 1 || len(active[0].Signals) != 2 || active[0].NatureKey != wantNatureKey ||
+		active[0].NatureScope != "connector" || active[0].NatureNamespace != connectorID ||
+		active[0].NatureFingerprint != "15112" || !active[0].BurstEligible {
 		t.Fatalf("unexpected active incident: %#v", active)
 	}
 
@@ -416,7 +419,9 @@ func TestPostgresUptimeKumaDownRecoveryAndNewFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	active := activeIncidents(t, ctx, store)
-	if len(active) != 1 || len(active[0].Signals) != 1 || active[0].NatureKey != "uptime-kuma:monitor:12" {
+	if len(active) != 1 || len(active[0].Signals) != 1 || active[0].NatureKey != NatureAvailability ||
+		active[0].NatureScope != "canonical" || active[0].NatureFingerprint != NatureAvailability ||
+		!active[0].BurstEligible {
 		t.Fatalf("unexpected Kuma incident: %#v", active)
 	}
 	firstIncidentID := active[0].ID

@@ -118,12 +118,16 @@ func (dispatcher *Dispatcher) deliver(ctx context.Context, delivery Delivery) er
 		return err
 	}
 	priority := "normal"
-	if delivery.EventKind == "firing" {
+	if delivery.PresentationMode == "alert" || (delivery.PresentationMode == "" && delivery.EventKind == "firing") {
 		priority = "high"
+	}
+	collapseID := delivery.IncidentID
+	if delivery.BurstID != "" {
+		collapseID = delivery.BurstID
 	}
 	return dispatcher.relay.Deliver(ctx, DeliveryRequest{
 		Recipient: string(recipient), Envelope: envelope,
-		CollapseKey: collapseKey(delivery.IncidentID), Priority: priority,
+		CollapseKey: collapseKey(collapseID), Priority: priority,
 		ExpiresAt: dispatcher.now().UTC().Add(time.Hour),
 	})
 }

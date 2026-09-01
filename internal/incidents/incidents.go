@@ -62,6 +62,11 @@ type Incident struct {
 	TargetName                string     `json:"target_name"`
 	NatureKey                 string     `json:"nature_key"`
 	NatureLabel               string     `json:"nature_label"`
+	NatureScope               string     `json:"nature_scope"`
+	NatureNamespace           string     `json:"nature_namespace"`
+	NatureFingerprint         string     `json:"nature_fingerprint"`
+	BurstEligible             bool       `json:"burst_eligible"`
+	BurstID                   string     `json:"burst_id,omitempty"`
 	Status                    string     `json:"status"`
 	SourceSeverity            Severity   `json:"source_severity"`
 	EffectiveSeverity         Severity   `json:"effective_severity"`
@@ -85,11 +90,40 @@ type ZabbixSignal struct {
 	BindingID            string
 	ExternalEventID      string
 	ExternalObjectID     string
+	NatureFingerprint    string
+	CanonicalNature      string
 	Name                 string
 	Severity             Severity
 	OpenedAt             time.Time
 	UpstreamAcknowledged bool
 	Suppressed           bool
+}
+
+// NatureIdentity est la preuve technique utilisée pour rapprocher des
+// Incidents. Key continue d'identifier l'Incident sur une Cible ; Scope,
+// Namespace et Fingerprint identifient la Nature indépendamment de la Cible.
+// Eligible reste faux lorsque le Connecteur ne peut pas fournir cette preuve.
+type NatureIdentity struct {
+	Key         string
+	Label       string
+	Scope       string
+	Namespace   string
+	Fingerprint string
+	Eligible    bool
+}
+
+func CanonicalNature(key, label string) NatureIdentity {
+	return NatureIdentity{
+		Key: key, Label: label, Scope: "canonical", Namespace: "cairnops",
+		Fingerprint: key, Eligible: true,
+	}
+}
+
+func ConnectorNature(connectorID, key, label, fingerprint string) NatureIdentity {
+	return NatureIdentity{
+		Key: key, Label: label, Scope: "connector", Namespace: connectorID,
+		Fingerprint: fingerprint, Eligible: strings.TrimSpace(fingerprint) != "",
+	}
 }
 
 type ReconcileZabbixInput struct {
