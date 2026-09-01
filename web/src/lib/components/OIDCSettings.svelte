@@ -23,13 +23,15 @@
       configurations.active?.client_secret_configured ??
       false
   );
-  const testable = $derived(configurations.draft !== null && !dirty && !saving);
   const activatable = $derived(
     configurations.draft?.tested_at !== null &&
       configurations.draft?.tested_at !== undefined &&
       !dirty &&
       !saving &&
       !activating
+  );
+  const needsConfiguration = $derived(
+    dirty || (configurations.active === null && configurations.draft === null)
   );
 
   $effect(() => {
@@ -75,8 +77,9 @@
       .filter(Boolean);
   }
 
-  async function save(event: SubmitEvent) {
+  async function saveAndTest(event: SubmitEvent) {
     event.preventDefault();
+    if (!needsConfiguration) return;
     saving = true;
     error = '';
     try {
@@ -98,7 +101,7 @@
       configurations.draft = response.draft;
       clientSecret = '';
       dirty = false;
-      session.showNotice(t('oidc.draftSaved'));
+      location.assign('/api/v1/oidc/configuration/test');
     } catch (cause) {
       error = messageFrom(cause);
     } finally {
@@ -128,166 +131,396 @@
   }
 </script>
 
-<div class="band-row">
-  <h2 class="band">{t('oidc.title')}</h2>
-  <span class="band-note">{t('oidc.note')}</span>
-</div>
-
-<div class="card oidc-card">
-  <div class="row">
-    <span class="id">
-      <strong>{t('oidc.activeConfiguration')}</strong>
-      <small class="faint">{t('oidc.activeHint')}</small>
-    </span>
-    {#if configurations.active}
-      <span class="means">
-        <span class="pill ok">{configurations.active.label}</span>
-        <span class="faint">{configurations.active.issuer}</span>
-      </span>
-    {:else}
-      <span class="means faint">{t('oidc.notConfigured')}</span>
-    {/if}
-  </div>
-
-  <form class="card-body" onsubmit={save} oninput={() => (dirty = true)}>
-    <div class="oidc-heading">
-      <div>
-        <h3>{t('oidc.draft')}</h3>
-        <p class="lead faint">{t('oidc.draftHint')}</p>
-      </div>
-      {#if configurations.draft?.tested_at}
-        <span class="pill ok">{t('oidc.tested')}</span>
-      {:else if configurations.draft}
-        <span class="pill">{t('oidc.testRequired')}</span>
-      {/if}
+<section class="oidc-panel" aria-labelledby="oidc-title">
+  <header class="panel-heading">
+    <div>
+      <h2 id="oidc-title">{t('oidc.title')}</h2>
+      <p>{t('oidc.note')}</p>
     </div>
+  </header>
 
-    <div class="grid oidc-grid">
-      <div class="field">
-        <label for="oidc-label">{t('oidc.label')}</label>
-        <input id="oidc-label" bind:value={label} required maxlength="80" autocomplete="off" placeholder={t('oidc.labelPlaceholder')} />
-      </div>
-      <div class="field span-two">
-        <label for="oidc-issuer">{t('oidc.issuer')}</label>
-        <input id="oidc-issuer" bind:value={issuer} required type="url" autocomplete="url" placeholder="https://auth.example.net/application/o/cairnops/" />
-        <small>{t('oidc.issuerHint')}</small>
-      </div>
-      <div class="field">
-        <label for="oidc-client-id">{t('oidc.clientID')}</label>
-        <input id="oidc-client-id" bind:value={clientID} required maxlength="255" autocomplete="off" spellcheck="false" />
-      </div>
-      <div class="field">
-        <label for="oidc-client-secret">{t('oidc.clientSecret')}</label>
-        <input id="oidc-client-secret" bind:value={clientSecret} required={!secretConfigured} type="password" autocomplete="new-password" maxlength="4096" />
-        <small>{secretConfigured ? t('oidc.secretKept') : t('oidc.secretRequired')}</small>
-      </div>
-      <div class="field">
-        <label for="oidc-groups-claim">{t('oidc.groupsClaim')}</label>
-        <input id="oidc-groups-claim" bind:value={groupsClaim} required maxlength="128" autocomplete="off" spellcheck="false" />
-        <small>{t('oidc.groupsClaimHint')}</small>
-      </div>
-    </div>
-
-    <fieldset>
-      <legend>{t('oidc.groupMappings')}</legend>
-      <p class="lead faint">{t('oidc.groupMappingsHint')}</p>
-      <div class="grid">
-        <div class="field">
-          <label for="oidc-admin-groups">{t('role.administrator')}</label>
-          <textarea id="oidc-admin-groups" bind:value={administratorGroups} rows="4" spellcheck="false"></textarea>
-        </div>
-        <div class="field">
-          <label for="oidc-operator-groups">{t('role.operator')}</label>
-          <textarea id="oidc-operator-groups" bind:value={operatorGroups} rows="4" spellcheck="false"></textarea>
-        </div>
-        <div class="field">
-          <label for="oidc-observer-groups">{t('role.observer')}</label>
-          <textarea id="oidc-observer-groups" bind:value={observerGroups} rows="4" spellcheck="false"></textarea>
-        </div>
-      </div>
-      <small>{t('oidc.oneGroupPerLine')}</small>
-    </fieldset>
-
-    {#if error}<p class="error" role="alert">{error}</p>{/if}
-
-    <div class="oidc-actions">
-      <button class="btn primary" type="submit" disabled={saving}>
-        {saving ? t('oidc.saving') : t('oidc.saveDraft')}
-      </button>
-      {#if testable}
-        <a class="btn" href="/api/v1/oidc/configuration/test">{t('oidc.testDraft')}</a>
+  <div class="card oidc-card">
+    <div class="status-bar">
+      <span class:ok={configurations.active} class:idle={!configurations.active} class="status-mark" aria-hidden="true"></span>
+      {#if configurations.active}
+        <span class="status-copy">
+          <strong>{t('oidc.activeProvider', { provider: configurations.active.label })}</strong>
+          <small>{configurations.active.issuer}</small>
+        </span>
+        <span class="pill ok">{t('oidc.active')}</span>
       {:else}
-        <button class="btn" type="button" disabled>{t('oidc.testDraft')}</button>
+        <span class="status-copy">
+          <strong>{t('oidc.inactive')}</strong>
+          <small>{t('oidc.inactiveHint')}</small>
+        </span>
+        <span class="pill">{t('oidc.toConfigure')}</span>
       {/if}
-      <button class="btn" type="button" disabled={!activatable} onclick={activate}>
-        {activating ? t('oidc.activating') : t('oidc.activate')}
-      </button>
-      {#if dirty}<span class="faint">{t('oidc.saveBeforeTest')}</span>{/if}
     </div>
-  </form>
-</div>
+
+    <form onsubmit={saveAndTest} oninput={() => (dirty = true)}>
+      <section class="form-section provider-section" aria-labelledby="oidc-provider-title">
+        <div class="section-heading">
+          <div>
+            <h3 id="oidc-provider-title">{t('oidc.provider')}</h3>
+            <p>{t('oidc.providerHint')}</p>
+          </div>
+        </div>
+
+        <div class="provider-grid">
+          <div class="field">
+            <label for="oidc-label">{t('oidc.label')}</label>
+            <input id="oidc-label" bind:value={label} required maxlength="80" autocomplete="off" placeholder={t('oidc.labelPlaceholder')} />
+          </div>
+          <div class="field">
+            <label for="oidc-client-id">{t('oidc.clientID')}</label>
+            <input id="oidc-client-id" bind:value={clientID} required maxlength="255" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="field full">
+            <label for="oidc-issuer">{t('oidc.issuer')}</label>
+            <input id="oidc-issuer" bind:value={issuer} required type="url" inputmode="url" autocomplete="url" aria-describedby="oidc-issuer-hint" placeholder="https://auth.example.net/application/o/cairnops/" />
+            <small id="oidc-issuer-hint">{t('oidc.issuerHint')}</small>
+          </div>
+          <div class="field full">
+            <label for="oidc-client-secret">{t('oidc.clientSecret')}</label>
+            <input id="oidc-client-secret" bind:value={clientSecret} required={!secretConfigured} type="password" autocomplete="new-password" aria-describedby="oidc-secret-hint" maxlength="4096" />
+            <small id="oidc-secret-hint">{secretConfigured ? t('oidc.secretKept') : t('oidc.secretRequired')}</small>
+          </div>
+        </div>
+
+        <details class="advanced-options">
+          <summary>{t('oidc.advancedOptions')}</summary>
+          <div class="advanced-body">
+            <div class="field">
+              <label for="oidc-groups-claim">{t('oidc.groupsClaim')}</label>
+              <input id="oidc-groups-claim" bind:value={groupsClaim} required maxlength="128" autocomplete="off" spellcheck="false" aria-describedby="oidc-groups-claim-hint" />
+              <small id="oidc-groups-claim-hint">{t('oidc.groupsClaimHint')}</small>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="form-section access-section" aria-labelledby="oidc-groups-title">
+        <div class="section-heading">
+          <div>
+            <h3 id="oidc-groups-title">{t('oidc.groupMappings')}</h3>
+            <p>{t('oidc.groupMappingsHint')}</p>
+          </div>
+          <small>{t('oidc.oneGroupPerLine')}</small>
+        </div>
+
+        <div class="role-grid">
+          <div class="field role-card">
+            <label for="oidc-admin-groups">{t('role.administrator')}</label>
+            <small>{t('oidc.administratorHint')}</small>
+            <textarea id="oidc-admin-groups" bind:value={administratorGroups} rows="2" spellcheck="false" placeholder={t('oidc.administratorPlaceholder')}></textarea>
+          </div>
+          <div class="field role-card">
+            <label for="oidc-operator-groups">{t('role.operator')}</label>
+            <small>{t('oidc.operatorHint')}</small>
+            <textarea id="oidc-operator-groups" bind:value={operatorGroups} rows="2" spellcheck="false" placeholder={t('oidc.operatorPlaceholder')}></textarea>
+          </div>
+          <div class="field role-card">
+            <label for="oidc-observer-groups">{t('role.observer')}</label>
+            <small>{t('oidc.observerHint')}</small>
+            <textarea id="oidc-observer-groups" bind:value={observerGroups} rows="2" spellcheck="false" placeholder={t('oidc.observerPlaceholder')}></textarea>
+          </div>
+        </div>
+      </section>
+
+      {#if error}<p class="error" role="alert">{error}</p>{/if}
+
+      <footer class="flow-footer">
+        <span class="flow-copy">
+          {#if needsConfiguration}
+            <strong>{t('oidc.stepConfigure')}</strong>
+            <small>{t('oidc.stepConfigureHint')}</small>
+          {:else if activatable}
+            <strong>{t('oidc.stepActivate')}</strong>
+            <small>{t('oidc.stepActivateHint')}</small>
+          {:else if configurations.draft}
+            <strong>{t('oidc.stepTest')}</strong>
+            <small>{t('oidc.stepTestHint')}</small>
+          {:else}
+            <strong>{t('oidc.upToDate')}</strong>
+            <small>{t('oidc.upToDateHint')}</small>
+          {/if}
+        </span>
+
+        {#if needsConfiguration}
+          <button class="btn primary" type="submit" disabled={saving}>
+            {saving ? t('oidc.saving') : t('oidc.saveAndTest')}
+          </button>
+        {:else if activatable}
+          <button class="btn primary" type="button" disabled={activating} onclick={activate}>
+            {activating ? t('oidc.activating') : configurations.active ? t('oidc.applyChanges') : t('oidc.activate')}
+          </button>
+        {:else if configurations.draft}
+          <a class="btn primary" href="/api/v1/oidc/configuration/test">{t('oidc.testConnection')}</a>
+        {/if}
+      </footer>
+    </form>
+  </div>
+</section>
 
 <style>
-  .oidc-card .means {
-    overflow-wrap: anywhere;
-  }
-
-  .oidc-heading,
-  .oidc-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--s3);
-  }
-
-  .oidc-heading {
-    justify-content: space-between;
-  }
-
-  .oidc-heading h3,
-  .oidc-heading p {
-    margin: 0;
-  }
-
-  .oidc-grid .span-two {
-    grid-column: span 2;
-  }
-
-  fieldset {
-    min-width: 0;
-    margin: var(--s6) 0 0;
-    padding: 0;
-    border: 0;
-  }
-
-  legend {
-    padding: 0;
-    color: var(--ink);
-    font-size: 0.8125rem;
-    font-weight: 600;
-  }
-
-  textarea {
-    min-height: 6rem;
-    resize: vertical;
-  }
-
-  .oidc-actions {
-    flex-wrap: wrap;
+  .oidc-panel {
     margin-top: var(--s6);
   }
 
+  .panel-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: var(--s4);
+    margin-bottom: var(--s4);
+  }
+
+  .panel-heading h2,
+  .panel-heading p,
+  .section-heading h3,
+  .section-heading p {
+    margin: 0;
+  }
+
+  .panel-heading h2 {
+    font-size: 0.9375rem;
+    font-weight: var(--weight-semibold);
+  }
+
+  .panel-heading p,
+  .section-heading p {
+    margin-top: var(--s2);
+    color: var(--faint);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+  }
+
+  .status-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--s3);
+    padding: var(--s4) var(--s5);
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+  }
+
+  .status-mark {
+    width: var(--s3);
+    height: var(--s3);
+    border-radius: var(--r-pill);
+  }
+
+  .status-mark.ok {
+    background: var(--ok);
+  }
+
+  .status-mark.idle {
+    background: var(--dim);
+  }
+
+  .status-copy,
+  .flow-copy {
+    display: grid;
+    min-width: 0;
+    gap: var(--s1);
+  }
+
+  .status-copy strong,
+  .flow-copy strong {
+    color: var(--ink);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .status-copy small,
+  .flow-copy small {
+    overflow-wrap: anywhere;
+    color: var(--faint);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+  }
+
+  .status-copy small {
+    font-family: var(--font-num);
+  }
+
+  .form-section {
+    padding: var(--s5);
+  }
+
+  .form-section + .form-section {
+    border-top: 1px solid var(--line);
+  }
+
+  .section-heading {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: var(--s5);
+    margin-bottom: var(--s4);
+  }
+
+  .section-heading h3 {
+    color: var(--ink);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .section-heading > small {
+    max-width: 24rem;
+    color: var(--faint);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    text-align: end;
+  }
+
+  .provider-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s4);
+  }
+
+  .provider-grid .field,
+  .role-grid .field,
+  .advanced-body .field {
+    align-content: start;
+    margin: 0;
+  }
+
+  .provider-grid .full {
+    grid-column: 1 / -1;
+  }
+
+  .advanced-options {
+    margin-top: var(--s4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-m);
+    background: var(--bg);
+  }
+
+  .advanced-options summary {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    min-height: calc(var(--ctl-h-lg) + var(--s3));
+    padding-inline: var(--s4);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    list-style: none;
+  }
+
+  .advanced-options summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .advanced-options summary::before {
+    content: '›';
+    color: var(--faint);
+    font-size: var(--text-md);
+    transform: rotate(0deg);
+    transition: transform var(--d1) var(--ease);
+  }
+
+  .advanced-options[open] summary {
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+  }
+
+  .advanced-options[open] summary::before {
+    transform: rotate(90deg);
+  }
+
+  .advanced-body {
+    padding: var(--s4);
+  }
+
+  .role-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s4);
+  }
+
+  .role-card {
+    padding: var(--s4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-m);
+    background: var(--bg);
+  }
+
+  .role-card label {
+    color: var(--ink);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .role-card textarea {
+    min-height: 4rem;
+    margin-top: var(--s2);
+    background: var(--surface);
+    font-family: var(--font-num);
+  }
+
+  .error {
+    margin: 0 var(--s5) var(--s5);
+  }
+
+  .flow-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s5);
+    padding: var(--s4) var(--s5);
+    border-top: 1px solid var(--line);
+    background: var(--bg);
+  }
+
+  .flow-footer .btn {
+    flex: none;
+    justify-content: center;
+  }
+
   @media (max-width: 48rem) {
-    .oidc-grid .span-two {
+    .status-bar {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .status-bar .pill {
+      grid-column: 2;
+      justify-self: start;
+    }
+
+    .provider-grid,
+    .role-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .provider-grid .full {
       grid-column: auto;
     }
 
-    .oidc-actions {
+    .section-heading,
+    .flow-footer {
       align-items: stretch;
       flex-direction: column;
+      gap: var(--s3);
     }
 
-    .oidc-actions .btn {
-      justify-content: center;
+    .section-heading > small {
+      max-width: none;
+      text-align: start;
+    }
+
+    .flow-footer .btn {
+      width: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .advanced-options summary::before {
+      transition: none;
     }
   }
 </style>
