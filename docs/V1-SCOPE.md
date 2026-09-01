@@ -16,6 +16,7 @@ La V1 valide un produit de supervision serveur self-hosted dont l'état opérati
 - Connexion guidée à Zabbix et Uptime Kuma, avec aperçu puis import en masse des Cibles découvertes.
 - Réception de signaux par webhook générique et mise en quarantaine des identités inconnues.
 - Regroupement des preuves de plusieurs Sources rattachées à une même Cible dans un Incident unique par Nature.
+- Regroupement automatique et traçable des Incidents simultanés de même Nature en Rafales, avec synthèse des notifications sans fusion des preuves ni déduction de cause.
 - Ouverture, évolution, résolution et historique cohérents d'un Incident sur le Web, iOS et Android.
 - Acquittement depuis n'importe quelle interface avec propagation immédiate et synchronisation limitée vers Zabbix.
 - Invalidation motivée d'une Source défectueuse afin qu'elle ne maintienne pas indéfiniment un Incident actif.
@@ -24,8 +25,8 @@ La V1 valide un produit de supervision serveur self-hosted dont l'état opérati
 - Fenêtres de maintenance immédiates ou planifiées, avec début et fin, appliquées à une ou plusieurs Cibles.
 - Notifications intégrées, Push iOS/Android et Mattermost.
 - Contenu Push configurable par utilisateur en mode Complet, Discret ou Masqué, avec Complet par défaut.
-- Acquittement depuis une notification sur appareil déverrouillé, après contrôle du rôle, revalidation serveur et confirmation explicite du résultat ; sinon ouverture de l'Incident dans l'application.
-- Routage immédiat des notifications selon la Gravité, arrêté par l'Acquittement, avec notification de Résolution aux mêmes destinataires.
+- Acquittement depuis une notification sur appareil déverrouillé, après contrôle du rôle, revalidation serveur et confirmation explicite du résultat ; sinon ouverture de l'Incident ou de la Rafale dans l'application.
+- Routage immédiat des notifications selon la Gravité, arrêté par l'Acquittement hors nouvelle aggravation d'une Rafale, avec notification de Résolution aux mêmes destinataires.
 - Vue Santé de CairnOps pour le serveur, le worker, PostgreSQL, les Connecteurs et le Push.
 - Installation initiale guidée, compte Administrateur local de secours et OpenID Connect facultatif.
 - Association d'un appareil par QR code à usage unique et courte durée, suivie d'une authentification navigateur et d'une confirmation Web ; saisie manuelle de l'URL disponible et identité propre révocable pour chaque appareil.

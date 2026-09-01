@@ -117,7 +117,7 @@ Destination configurée par laquelle CairnOps informe un utilisateur ou un syst�
 _Éviter_ : Source de signal, Intégration entrante
 
 **Politique de notification** :
-Suite d'étapes temporisées qui sélectionne les destinataires et Canaux de notification selon les caractéristiques d'un Incident. La progression s'arrête à son Acquittement ou à sa Résolution et les destinataires déjà alertés sont informés du rétablissement.
+Suite d'étapes temporisées qui sélectionne les destinataires et Canaux de notification selon les caractéristiques d'un Incident. La progression s'arrête à son Acquittement ou à sa Résolution et les destinataires déjà alertés sont informés du rétablissement. Une hausse de Gravité encore jamais notifiée ou la première Propagation étendue d'une Rafale constitue un nouveau fait opérationnel, pas la reprise de cette progression.
 _Éviter_ : Politique de déclenchement, rappel
 
 **Groupe de notification** :
@@ -125,7 +125,7 @@ Ensemble statique d'utilisateurs pouvant être désigné comme destinataire d'un
 _Éviter_ : Astreinte, planning, rôle
 
 **Rappel** :
-Notification répétée explicitement configurée pour signaler qu'un Incident demeure actif, y compris après son Acquittement. Il ne constitue pas une étape supplémentaire d'escalade.
+Notification répétée explicitement configurée pour signaler qu'un Incident demeure actif, y compris après son Acquittement. Il ne constitue pas une étape supplémentaire d'escalade ni le signalement d'un nouveau fait opérationnel affectant une Rafale.
 _Éviter_ : Escalade, nouvel Incident
 
 **Heartbeat** :
@@ -152,6 +152,18 @@ _Éviter_ : Vote, consensus des sources
 Situation opérationnelle d'une Nature donnée affectant une Cible, ouverte ou alimentée dès qu'une Source de signal satisfait sa Politique de déclenchement. Une Cible peut avoir plusieurs Incidents actifs de Natures différentes, mais au plus un Incident actif par Nature ; l'Incident reste actif tant qu'au moins une Source qui l'alimente demeure déclenchée et il est automatiquement résolu après confirmation du rétablissement par chacune d'elles.
 _Éviter_ : Observation, panne d'une source
 
+**Rafale d'Incidents** :
+Regroupement automatique et traçable d'Incidents distincts d'une même Nature affectant plusieurs Cibles dans un intervalle rapproché. CairnOps détermine seul son appartenance pendant sa Propagation, synthétise leurs notifications sans fusionner leurs preuves ni leurs cycles de vie, et n'en déduit jamais à elle seule une cause commune. Elle prend fin uniquement lorsque sa Propagation est fermée et que tous ses Incidents sont résolus.
+_Éviter_ : Événement opérationnel, Incident unique, cause commune, regroupement manuel
+
+**Propagation d'une Rafale** :
+Phase initiale et glissante durant laquelle de nouveaux Incidents de même Nature peuvent rejoindre une Rafale. Chaque nouvelle appartenance retarde sa fermeture dans une tolérance bornée adaptée à la cadence des Sources ; sa fermeture fige l'appartenance sans prononcer la Résolution d'un Incident encore actif.
+_Éviter_ : Durée d'un Incident, Fenêtre de maintenance, corrélation causale
+
+**Propagation étendue** :
+Qualification d'une Rafale d'Incidents dont le nombre de Cibles distinctes encore affectées devient important à l'échelle de l'Espace opérationnel ou par son volume absolu. Elle peut justifier un unique nouveau signalement sans modifier la Gravité de la Rafale ni établir une cause.
+_Éviter_ : Gravité, nouvelle Rafale, cause commune
+
 **Dépendance** :
 Relation explicite indiquant que le fonctionnement d'une Cible dépend de celui d'une autre. Elle fournit un indice de causalité aux regroupements sans constituer une preuve certaine de cause.
 _Éviter_ : Cause confirmée, parenté
@@ -161,8 +173,16 @@ Regroupement corrélé d'Incidents affectant plusieurs Cibles, destiné à repr�
 _Éviter_ : Incident, cause certaine
 
 **Nature d'incident** :
-Catégorie stable du problème opérationnel rencontré par une Cible, telle qu'une indisponibilité ou une expiration TLS imminente. Elle détermine quelles Sources de signal alimentent le même Incident sans préjuger de sa cause profonde.
+Catégorie stable du problème opérationnel rencontré par une Cible, telle qu'une indisponibilité ou une expiration TLS imminente. Son identité ne dépend ni de la Cible affectée ni du libellé particulier d'un signal. Elle détermine quelles Sources de signal alimentent le même Incident sans préjuger de sa cause profonde.
 _Éviter_ : Cause, gravité, message d'alerte
+
+**Nature canonique** :
+Nature d'incident dont CairnOps définit l'identité et le sens indépendamment d'un produit externe. Des Sources de types différents peuvent la partager lorsqu'elles expriment réellement la même conclusion opérationnelle.
+_Éviter_ : Libellé ressemblant, identité locale d'un Connecteur
+
+**Nature locale de Connecteur** :
+Nature d'incident établie automatiquement à partir d'une identité sémantique stable propre à une instance de Connecteur. Elle reste comparable entre les Cibles observées par cette instance, mais jamais avec l'identité locale d'une autre instance.
+_Éviter_ : Nature canonique, identifiant propre à une Cible, message d'alerte
 
 **Gravité** :
 Importance de l'impact associé à un Incident, qualifiée par ordre croissant comme Information, Avertissement, Majeur ou Critique. La Gravité source continue de refléter la Source de signal ; la Gravité effective utilisée par CairnOps peut être requalifiée par un Opérateur, avec justification et trace d'audit, jusqu'à la Résolution ou au retrait explicite de cette requalification.
@@ -171,6 +191,10 @@ _Éviter_ : État de santé, priorité, statut
 **Acquittement** :
 Déclaration traçable qu'un utilisateur a pris connaissance d'un Incident et le prend en charge. Elle peut provenir de CairnOps ou d'un système intégré ; sa propagation dans l'autre système est suivie séparément et un échec de synchronisation ne l'annule pas dans son système d'origine. Elle ne modifie ni l'état de la Cible, ni les preuves, ni les conditions de Résolution.
 _Éviter_ : Résolution, fermeture
+
+**Acquittement de Rafale** :
+Prise en charge traçable d'une Rafale d'Incidents qui acquitte chacun de ses Incidents présents et ceux qui la rejoignent tant que sa Propagation reste ouverte. Chaque Incident conserve son Acquittement propre et son éventuelle synchronisation externe ; cette prise en charge ne modifie ni les preuves, ni les conditions de Résolution.
+_Éviter_ : Résolution collective, Acquittement d'Incidents étrangers à la Rafale
 
 **Invalidation** :
 Décision motivée et traçable d'écarter une Source de signal des preuves actives de l'Incident courant, notamment pour faux positif, défaillance ou doublon. La Source continue ses Observations, son prochain cycle sain met fin à l'Invalidation et un déclenchement ultérieur peut alimenter un nouvel Incident.

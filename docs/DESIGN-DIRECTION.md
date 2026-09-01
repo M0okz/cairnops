@@ -52,6 +52,12 @@ La liste principale affiche le nom, l'État de santé, la Nature et la Gravité 
 
 Une carte d'Incident affiche la Cible et la Nature, la Gravité effective et son éventuel écart avec la Source, l'état d'Acquittement, l'heure de début et la durée, le nombre de Sources actives sur le total, les contradictions ou données manquantes, l'action principale Acquitter et la dernière entrée significative du Journal d'activité. Le détail réserve la chronologie des preuves, toutes les Sources et les actions sensibles comme l'Invalidation.
 
+## Ligne de Rafale
+
+Dans les surfaces globales, une Rafale d'Incidents remplace la répétition de ses cartes par une ligne repliable. Elle affiche la Nature, la plus forte Gravité effective active, le nombre d'Incidents actifs sur le total, le nombre de Cibles distinctes, l'Acquittement et une éventuelle Propagation étendue. Son développement révèle les Incidents dans la même structure et avec les mêmes actions que la liste ordinaire ; aucun code couleur ni vocabulaire ne suggère une cause commune.
+
+Le détail explique le regroupement à la demande dans une phrase lisible fondée sur l'identité de Nature et l'intervalle observé. Il n'affiche ni score de confiance, ni réglage, ni action de fusion ou séparation. Le détail d'une Cible continue de montrer son Incident individuel, tandis que la boîte intégrée et le Push conservent une entrée unique actualisée silencieusement.
+
 ## Chronologie d'Incident
 
 La chronologie fusionne les origines mais affiche d'abord les transitions significatives : déclenchement, contradiction, Acquittement, requalification, Invalidation, maintenance et Résolution. Les Observations brutes restent accessibles à la demande, regroupées par Source et condensées sur les périodes stables, avec une origine CairnOps, Connecteur ou humaine toujours explicite.
