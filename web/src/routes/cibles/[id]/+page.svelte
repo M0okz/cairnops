@@ -9,6 +9,7 @@
   import Spark from '$lib/components/Spark.svelte';
   import Uptime from '$lib/components/Uptime.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
+  import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import MaintenanceWorkshop from '$lib/components/MaintenanceWorkshop.svelte';
   import TargetIndicators from '$lib/components/TargetIndicators.svelte';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
@@ -645,13 +646,15 @@
       <!-- La fenêtre choisie ne gouverne que cette lecture par Source : c'est
            ici qu'on compare une sonde à l'autre sur la même durée. -->
       <div class="measure-head">
-        <div class="segments" role="group" aria-label={t('target.measureWindow')}>
-          {#each ['24h', '7d', '30d'] as const as value (value)}
-            <button type="button" aria-pressed={period === value} onclick={() => (period = value)}>
-              {windowLabel(value)}
-            </button>
-          {/each}
-        </div>
+        <SegmentedControl
+          label={t('target.measureWindow')}
+          value={period}
+          items={(['24h', '7d', '30d'] as const).map((value) => ({
+            value,
+            label: windowLabel(value)
+          }))}
+          onValueChange={(value) => (period = value)}
+        />
         <span class="note">
           {plural('target.conclusiveOf', measure.conclusive_observations, {
             expected: measure.expected_observations

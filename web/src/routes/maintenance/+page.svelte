@@ -6,6 +6,7 @@
   import Topbar from '$lib/components/Topbar.svelte';
   import MaintenanceWorkshop from '$lib/components/MaintenanceWorkshop.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
+  import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import { session } from '$lib/session.svelte';
   import { since, stamp, until } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
@@ -89,14 +90,15 @@
   {/each}
 
   <div class="filters">
-    <div class="segments" role="group" aria-label={t('targets.scope')}>
-      <button type="button" aria-pressed={scope === 'planned'} onclick={() => (scope = 'planned')}>
-        {t('maintenance.scope.planned')} <b><Odometer value={planned.length} /></b>
-      </button>
-      <button type="button" aria-pressed={scope === 'past'} onclick={() => (scope = 'past')}>
-        {t('maintenance.scope.past')} <b><Odometer value={past.length} /></b>
-      </button>
-    </div>
+    <SegmentedControl
+      label={t('targets.scope')}
+      value={scope}
+      items={[
+        { value: 'planned', label: t('maintenance.scope.planned'), count: planned.length },
+        { value: 'past', label: t('maintenance.scope.past'), count: past.length }
+      ]}
+      onValueChange={(value) => (scope = value)}
+    />
     <span class="note">{t('maintenance.timezone', { zone })}</span>
   </div>
 

@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import Icon, { type IconName } from './Icon.svelte';
   import Odometer from './Odometer.svelte';
+  import SegmentedControl from './ui/SegmentedControl.svelte';
   import { session } from '$lib/session.svelte';
   import { i18n, locales, t } from '$lib/i18n.svelte';
 
@@ -188,28 +189,31 @@
             <span
               ><Icon name={session.lightTheme ? 'sun' : 'moon'} size={15} />{t('rail.theme')}</span
             >
-            <div class="segments" role="group" aria-label={t('rail.theme')}>
-              <button type="button" aria-pressed={!session.lightTheme}
-                onclick={() => session.lightTheme && session.toggleTheme()}>{t('rail.dark')}</button>
-              <button type="button" aria-pressed={session.lightTheme}
-                onclick={() => !session.lightTheme && session.toggleTheme()}>{t('rail.light')}</button>
-            </div>
+            <SegmentedControl
+              label={t('rail.theme')}
+              value={session.lightTheme ? 'light' : 'dark'}
+              items={[
+                { value: 'dark', label: t('rail.dark') },
+                { value: 'light', label: t('rail.light') }
+              ]}
+              size="compact"
+              onValueChange={(value) => {
+                if ((value === 'light') !== session.lightTheme) session.toggleTheme();
+              }}
+            />
           </div>
 
           <!-- La langue vit à côté du thème : ce sont les deux réglages qui
                changent l'écran sans rien changer à la supervision. -->
           <div class="menu-row theme">
             <span><Icon name="book" size={15} />{t('rail.language')}</span>
-            <div class="segments" role="group" aria-label={t('rail.language')}>
-              {#each locales as choice (choice.value)}
-                <button
-                  type="button"
-                  lang={choice.value}
-                  aria-pressed={i18n.locale === choice.value}
-                  onclick={() => i18n.choose(choice.value)}>{choice.label}</button
-                >
-              {/each}
-            </div>
+            <SegmentedControl
+              label={t('rail.language')}
+              value={i18n.locale}
+              items={locales.map((choice) => ({ ...choice, lang: choice.value }))}
+              size="compact"
+              onValueChange={(value) => i18n.choose(value)}
+            />
           </div>
 
           <a class="menu-row" role="menuitem" href={CHANGELOG_URL} target="_blank" rel="noreferrer noopener">
@@ -371,16 +375,6 @@
   .theme:hover {
     background: none;
     color: var(--muted);
-  }
-
-  .theme .segments {
-    height: 1.5rem;
-    flex: none;
-  }
-
-  .theme .segments button {
-    padding: 0 0.5rem;
-    font-size: 0.6875rem;
   }
 
   .ext {

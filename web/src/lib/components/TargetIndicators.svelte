@@ -1,6 +1,7 @@
 <script lang="ts">
   import IndicatorAreaChart from './IndicatorAreaChart.svelte';
   import Odometer from './Odometer.svelte';
+  import SegmentedControl from './ui/SegmentedControl.svelte';
   import { session } from '$lib/session.svelte';
   import { formatIndicator, incidentMarkerIsVisible } from '$lib/indicator-format';
   import { clock, severityTone, since, stamp } from '$lib/format';
@@ -33,10 +34,15 @@
         <h2 id="target-indicators-title">Indicateurs</h2>
         <p>Métriques contextuelles importées depuis les Connecteurs</p>
       </div>
-      <div class="segments" role="group" aria-label="Fenêtre des Indicateurs">
-        <button type="button" aria-pressed={window === '24h'} onclick={() => (window = '24h')}>24 h</button>
-        <button type="button" aria-pressed={window === '7d'} onclick={() => (window = '7d')}>7 j</button>
-      </div>
+      <SegmentedControl
+        label="Fenêtre des Indicateurs"
+        value={window}
+        items={[
+          { value: '24h', label: '24 h' },
+          { value: '7d', label: '7 j' }
+        ]}
+        onValueChange={(value) => (window = value)}
+      />
     </header>
     <div class="indicator-list">
       {#each detail.indicators as indicator (indicator.id)}

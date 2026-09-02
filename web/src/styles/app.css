@@ -747,48 +747,6 @@ kbd {
   color: var(--ink);
 }
 
-/* Segments — « Toutes 18 / Problèmes 3 / Maintenance 1 » */
-.segments {
-  display: flex;
-  height: var(--ctl-h);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-m);
-  background: var(--surface);
-  overflow: hidden;
-}
-
-.segments button {
-  padding: 0 0.6875rem;
-  border: 0;
-  border-left: 1px solid var(--line);
-  background: none;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 500;
-  transition: background var(--d1) var(--ease), color var(--d1) var(--ease);
-}
-
-.segments button:first-child {
-  border-left: 0;
-}
-
-.segments button:hover {
-  color: var(--ink);
-}
-
-.segments button[aria-pressed='true'] {
-  background: var(--surface-2);
-  color: var(--ink);
-}
-
-.segments b {
-  margin-left: 0.3125rem;
-  font-family: var(--font-num);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  color: var(--faint);
-}
-
 .filters {
   display: flex;
   align-items: center;

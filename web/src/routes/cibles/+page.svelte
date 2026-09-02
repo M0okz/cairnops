@@ -7,6 +7,7 @@
   import Topbar from '$lib/components/Topbar.svelte';
   import Spark from '$lib/components/Spark.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
+  import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
   import ConnectorChooser from '$lib/components/ConnectorChooser.svelte';
   import { session } from '$lib/session.svelte';
@@ -178,17 +179,16 @@
   </div>
 
   <div class="filters">
-    <div class="segments" role="group" aria-label={t('targets.scope')}>
-      <button type="button" aria-pressed={scope === 'all'} onclick={() => (scope = 'all')}>
-        {t('targets.scope.all')} <b><Odometer value={session.targets.length} /></b>
-      </button>
-      <button type="button" aria-pressed={scope === 'problems'} onclick={() => (scope = 'problems')}>
-        {t('targets.scope.problems')} <b><Odometer value={problemCount} /></b>
-      </button>
-      <button type="button" aria-pressed={scope === 'maintenance'} onclick={() => (scope = 'maintenance')}>
-        {t('nav.maintenance')} <b><Odometer value={maintenanceCount} /></b>
-      </button>
-    </div>
+    <SegmentedControl
+      label={t('targets.scope')}
+      value={scope}
+      items={[
+        { value: 'all', label: t('targets.scope.all'), count: session.targets.length },
+        { value: 'problems', label: t('targets.scope.problems'), count: problemCount },
+        { value: 'maintenance', label: t('nav.maintenance'), count: maintenanceCount }
+      ]}
+      onValueChange={(value) => (scope = value)}
+    />
     <button class="btn sm" type="button" aria-pressed={divergentOnly} onclick={() => (divergentOnly = !divergentOnly)}>
       {t('targets.divergence')} {divergentOnly ? '·' : '⌄'}
     </button>

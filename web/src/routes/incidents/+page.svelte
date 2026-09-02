@@ -9,6 +9,7 @@
   import IncidentBurstRows from '$lib/components/IncidentBurstRows.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
+  import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Incident, type IncidentBurst } from '$lib/api';
   import { incidentHref } from '$lib/incident-detail';
@@ -210,17 +211,20 @@
   </div>
 
   <div class="filters">
-    <div class="segments" role="group" aria-label={t('targets.scope')}>
-      <button type="button" aria-pressed={scope === 'active'} onclick={() => (scope = 'active')}>
-        {t('incidents.scope.active')} <b><Odometer value={session.actionable.length} /></b>
-      </button>
-      <button type="button" aria-pressed={scope === 'unacknowledged'} onclick={() => (scope = 'unacknowledged')}>
-        {t('incidents.scope.unacknowledged')} <b><Odometer value={session.unacknowledged.length} /></b>
-      </button>
-      <button type="button" aria-pressed={scope === 'resolved'} onclick={() => (scope = 'resolved')}>
-        {t('incidents.scope.resolved')} <b><Odometer value={resolved.length} /></b>
-      </button>
-    </div>
+    <SegmentedControl
+      label={t('targets.scope')}
+      value={scope}
+      items={[
+        { value: 'active', label: t('incidents.scope.active'), count: session.actionable.length },
+        {
+          value: 'unacknowledged',
+          label: t('incidents.scope.unacknowledged'),
+          count: session.unacknowledged.length
+        },
+        { value: 'resolved', label: t('incidents.scope.resolved'), count: resolved.length }
+      ]}
+      onValueChange={(value) => (scope = value)}
+    />
     <span class="note">
       {scope === 'resolved' ? t('incidents.lastThirtyDays') : t('incidents.unacknowledgedFirst')}
     </span>
