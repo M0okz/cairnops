@@ -50,3 +50,16 @@ test('le ratio des Sources explique son numérateur et son dénominateur', () =>
   assert.match(french, /'incidents\.column\.activeSources': 'Actives \/ total'/);
   assert.match(english, /'incidents\.column\.activeSources': 'Active \/ total'/);
 });
+
+test('la largeur intermédiaire réserve de la place à la Cible', () => {
+  assert.match(
+    page,
+    /@media\s*\(max-width:\s*68rem\)[\s\S]*?\.cols\s*\{[^}]*--cols:\s*minmax\(0,\s*1fr\)[^;}]*;/,
+    'la grille intermédiaire doit donner toute la largeur restante à la Cible'
+  );
+  assert.match(
+    page,
+    /@media\s*\(max-width:\s*68rem\)[\s\S]*?\.cols\s+:global\(\.log\)\s*\{[^}]*display:\s*none;/,
+    'le Journal doit se masquer avant de comprimer le nom de la Cible'
+  );
+});

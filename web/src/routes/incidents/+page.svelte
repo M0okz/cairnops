@@ -235,7 +235,7 @@
       </span>
       <span class="hide-sm">{t('incidents.column.duration')}</span>
       <span class="hide-sm">{t('incidents.column.activeSources')}</span>
-      <span class="hide-sm">{t('incidents.column.lastEntry')}</span>
+      <span class="hide-sm log">{t('incidents.column.lastEntry')}</span>
       <span></span>
     </div>
 
@@ -367,6 +367,16 @@
 
   .cols :global(.trow > .btn:last-child) {
     justify-self: end;
+  }
+
+  @media (max-width: 68rem) {
+    .cols {
+      --cols: minmax(0, 1fr) 5rem 6rem 3.5rem 5.5rem var(--table-action-width);
+    }
+
+    .cols :global(.log) {
+      display: none;
+    }
   }
 
   @media (max-width: 48rem) {
