@@ -349,6 +349,45 @@ func TestPostgresUpdateSourceKeepsAbsentFieldsAndProtectsIntegrations(t *testing
 	}
 }
 
+func TestPostgresDeleteSourceResolvesIncidentWhoseLastSignalDisappears(t *testing.T) {
+	pool := openTestPool(t)
+	ctx := context.Background()
+	store := NewStore(pool)
+
+	target, err := store.CreateTarget(ctx, CreateTargetInput{Name: "Cible avec Incident"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := store.CreateSource(ctx, target.ID, CreateSourceInput{
+		Name: "Endpoint public", Kind: domain.SourceHTTP, IntervalSeconds: 60, TimeoutMilliseconds: 5000,
+		Config: json.RawMessage(`{"url":"https://example.net/status"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedActiveIncident(t, pool, target.ID, created.Source.ID)
+
+	if err := store.DeleteSource(ctx, created.Source.ID); err != nil {
+		t.Fatal(err)
+	}
+	if active := activeIncidents(t, pool, target.ID); active != 0 {
+		t.Fatalf("deleting the last Source must not leave an active Incident with 0/0 evidence, got %d", active)
+	}
+	var explained int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*)::integer
+		FROM cairnops_incident_activity activity
+		JOIN cairnops_incidents incident ON incident.id = activity.incident_id
+		WHERE incident.target_id = $1::uuid AND activity.kind = 'resolved'
+		  AND activity.data->>'source_id' = $2
+	`, target.ID, created.Source.ID).Scan(&explained); err != nil {
+		t.Fatal(err)
+	}
+	if explained != 1 {
+		t.Fatalf("source deletion must explain the automatic resolution, got %d Activity Log entries", explained)
+	}
+}
+
 // seedActiveIncident pose un Incident actif et sa preuve, tels que la Politique
 // de déclenchement les produit — ce que ce test archive plutôt qu'il ne le
 // rejoue.

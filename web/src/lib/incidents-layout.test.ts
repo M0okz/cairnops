@@ -7,6 +7,8 @@ const page = readFileSync(
   'utf8'
 );
 const styles = readFileSync(new URL('../styles/app.css', import.meta.url), 'utf8');
+const french = readFileSync(new URL('./locales/fr.ts', import.meta.url), 'utf8');
+const english = readFileSync(new URL('./locales/en.ts', import.meta.url), 'utf8');
 
 test('la grille des Incidents réserve la même colonne aux actions dans chaque ligne', () => {
   const declaration = page.match(/\.cols\s*\{[^}]*--cols:\s*([^;]+);/s);
@@ -32,4 +34,19 @@ test('la grille des Incidents réserve la même colonne aux actions dans chaque 
     /@media\s*\(max-width:\s*48rem\)[\s\S]*?\.cols\s+:global\(\.trow\s*>\s*\.btn:last-child\)\s*\{[^}]*justify-self:\s*auto;/s,
     "le repli mobile doit conserver le placement naturel de l’action"
   );
+});
+
+test('le ratio des Sources explique son numérateur et son dénominateur', () => {
+  assert.match(
+    page,
+    /t\('incidents\.column\.activeSources'\)/,
+    "l’en-tête ne doit pas présenter un ratio ambigu sous le seul mot Sources"
+  );
+  assert.match(
+    page,
+    /aria-label=\{t\('incidents\.sourcesRatio', \{ ratio: activeSignalRatio\(incident\) \}\)\}/,
+    'chaque ratio doit porter une explication accessible'
+  );
+  assert.match(french, /'incidents\.column\.activeSources': 'Actives \/ total'/);
+  assert.match(english, /'incidents\.column\.activeSources': 'Active \/ total'/);
 });

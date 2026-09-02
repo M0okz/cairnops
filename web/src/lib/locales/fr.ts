@@ -235,6 +235,8 @@ export const fr = {
   'incidents.column.resolved': 'Résolu',
   'incidents.column.acknowledgement': 'Acquittement',
   'incidents.column.duration': 'Durée',
+  'incidents.column.activeSources': 'Actives / total',
+  'incidents.sourcesRatio': 'Sources actives / total : {ratio}',
   'incidents.column.lastEntry': 'Dernière entrée du Journal',
   'incidents.logUnread': 'Le Journal n’a pas pu être lu.',
   'incidents.emptyResolved': 'Aucun Incident résolu.',

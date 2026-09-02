@@ -234,7 +234,7 @@
         {scope === 'resolved' ? t('incidents.column.resolved') : t('incidents.column.acknowledgement')}
       </span>
       <span class="hide-sm">{t('incidents.column.duration')}</span>
-      <span class="hide-sm">{t('targets.column.sources')}</span>
+      <span class="hide-sm">{t('incidents.column.activeSources')}</span>
       <span class="hide-sm">{t('incidents.column.lastEntry')}</span>
       <span></span>
     </div>
@@ -294,7 +294,11 @@
             : since(incident.opened_at, now)} />
         </span>
 
-        <span class="num hide-sm sources">
+        <span
+          class="num hide-sm sources"
+          title={t('incidents.sourcesRatio', { ratio: activeSignalRatio(incident) })}
+          aria-label={t('incidents.sourcesRatio', { ratio: activeSignalRatio(incident) })}
+        >
           <Odometer value={activeSignalRatio(incident)} />
           {#if diverges(incident)}<span class="crit" title={t('overview.divergence')}>≠</span>{/if}
         </span>
@@ -358,7 +362,7 @@
 
 <style>
   .cols {
-    --cols: minmax(0, 1.4fr) 7.25rem 8.75rem 4.125rem 4.375rem minmax(0, 1.1fr) var(--table-action-width);
+    --cols: minmax(0, 1.4fr) 7.25rem 8.75rem 4.125rem 5.5rem minmax(0, 1.1fr) var(--table-action-width);
   }
 
   .cols :global(.trow > .btn:last-child) {

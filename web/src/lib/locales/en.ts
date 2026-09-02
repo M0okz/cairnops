@@ -236,6 +236,8 @@ export const en: Record<MessageKey, string> = {
   'incidents.column.resolved': 'Resolved',
   'incidents.column.acknowledgement': 'Acknowledgement',
   'incidents.column.duration': 'Duration',
+  'incidents.column.activeSources': 'Active / total',
+  'incidents.sourcesRatio': 'Active / total Sources: {ratio}',
   'incidents.column.lastEntry': 'Last Activity Log entry',
   'incidents.logUnread': 'The Activity Log could not be read.',
   'incidents.emptyResolved': 'No resolved Incident.',
