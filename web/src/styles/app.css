@@ -108,6 +108,9 @@
   --ctl-h-lg: 2rem;
   --counter-slot-w: 1.75rem;
   --counter-pill-h: 1.125rem;
+  /* Les en-têtes de table gardent une piste vide pour les actions. Sa largeur
+   * doit être identique à celle des lignes pour préserver les axes de lecture. */
+  --table-action-width: 6.75rem;
 
   /* Contrôles de choix — le hit area reste plus grand que leur dessin. */
   --choice-hit-area: var(--ctl-h);

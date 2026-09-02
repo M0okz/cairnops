@@ -358,7 +358,17 @@
 
 <style>
   .cols {
-    --cols: minmax(0, 1.4fr) 7.25rem 8.75rem 4.125rem 4.375rem minmax(0, 1.1fr) auto;
+    --cols: minmax(0, 1.4fr) 7.25rem 8.75rem 4.125rem 4.375rem minmax(0, 1.1fr) var(--table-action-width);
+  }
+
+  .cols :global(.trow > .btn:last-child) {
+    justify-self: end;
+  }
+
+  @media (max-width: 48rem) {
+    .cols :global(.trow > .btn:last-child) {
+      justify-self: auto;
+    }
   }
 
   .nature {
