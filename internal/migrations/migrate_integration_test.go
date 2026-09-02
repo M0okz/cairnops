@@ -8,7 +8,7 @@ import (
 	"github.com/M0okz/cairnops/internal/testsupport"
 )
 
-func TestOrphanedIncidentMigrationResolvesExistingActiveIncident(t *testing.T) {
+func TestLatestOrphanedIncidentRepairMigrationResolvesExistingActiveIncident(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
 
@@ -32,7 +32,7 @@ func TestOrphanedIncidentMigrationResolvesExistingActiveIncident(t *testing.T) {
 	}
 	if _, err := pool.Exec(ctx, `
 		DELETE FROM cairnops_schema_migrations
-		WHERE version = 'sql/028_resolve_orphaned_incidents.sql'
+		WHERE version = 'sql/029_repair_rekeyed_zabbix_incidents.sql'
 	`); err != nil {
 		t.Fatal(err)
 	}

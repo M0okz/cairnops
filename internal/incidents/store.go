@@ -397,14 +397,14 @@ func (store *PostgresStore) ReconcileZabbix(ctx context.Context, input Reconcile
 		}
 		seen[key] = struct{}{}
 
-		var existingSignalID string
+		var existingSignalID, existingIncidentID string
 		var invalidated bool
 		err := tx.QueryRow(ctx, `
-			SELECT id::text, invalidated_at IS NOT NULL
+			SELECT id::text, incident_id::text, invalidated_at IS NOT NULL
 			FROM cairnops_incident_signals
 			WHERE origin = 'zabbix' AND connector_id = $1::uuid
 			  AND connector_binding_id = $2::uuid AND external_event_id = $3
-		`, input.ConnectorID, signal.BindingID, signal.ExternalEventID).Scan(&existingSignalID, &invalidated)
+		`, input.ConnectorID, signal.BindingID, signal.ExternalEventID).Scan(&existingSignalID, &existingIncidentID, &invalidated)
 		newSignal := errors.Is(err, pgx.ErrNoRows)
 		if err != nil && !newSignal {
 			return fmt.Errorf("find Zabbix incident signal: %w", err)
@@ -417,6 +417,12 @@ func (store *PostgresStore) ReconcileZabbix(ctx context.Context, input Reconcile
 				return fmt.Errorf("refresh invalidated Zabbix signal: %w", err)
 			}
 			continue
+		}
+		if !newSignal {
+			// Une évolution du fingerprint peut déplacer le même événement vers
+			// un nouvel Incident. L'ancien doit alors être recalculé lui aussi,
+			// sinon il reste actif après avoir perdu sa dernière preuve.
+			impacted[existingIncidentID] = struct{}{}
 		}
 		fingerprint := strings.TrimSpace(signal.NatureFingerprint)
 		if fingerprint == "" {

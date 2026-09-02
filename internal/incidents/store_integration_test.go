@@ -251,6 +251,74 @@ func TestPostgresZabbixIncidentLifecycleAndAcknowledgement(t *testing.T) {
 	}
 }
 
+func TestPostgresZabbixReconciliationResolvesIncidentWhenSignalChangesNature(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+
+	var targetID, connectorID, bindingID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_targets (name)
+		VALUES ('Zabbix nature migration target')
+		RETURNING id::text
+	`).Scan(&targetID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_connectors (
+			kind, name, endpoint, credential_sealed, status, encrypted_transport
+		) VALUES ('zabbix', 'Zabbix nature migration', 'https://zabbix-nature.example/api_jsonrpc.php',
+		          'sealed-credential-with-sufficient-length', 'connected', true)
+		RETURNING id::text
+	`).Scan(&connectorID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_connector_bindings (connector_id, target_id, external_id, external_name)
+		VALUES ($1::uuid, $2::uuid, '10084', 'Zabbix nature migration target')
+		RETURNING id::text
+	`, connectorID, targetID).Scan(&bindingID); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewPostgresStore(pool)
+	openedAt := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	input := ReconcileZabbixInput{
+		ConnectorID: connectorID,
+		ObservedAt:  openedAt,
+		Signals: []ZabbixSignal{{
+			TargetID: targetID, BindingID: bindingID, ExternalEventID: "20427",
+			ExternalObjectID: "15112", NatureFingerprint: "legacy-trigger-15112",
+			Name: "Filesystem space is low", Severity: SeverityWarning, OpenedAt: openedAt,
+		}},
+	}
+	if err := store.ReconcileZabbix(ctx, input); err != nil {
+		t.Fatal(err)
+	}
+	before := activeIncidents(t, ctx, store)
+	if len(before) != 1 {
+		t.Fatalf("expected the original active Incident, got %#v", before)
+	}
+	previousIncidentID := before[0].ID
+
+	input.ObservedAt = openedAt.Add(time.Minute)
+	input.Signals[0].NatureFingerprint = "template-root-uuid"
+	if err := store.ReconcileZabbix(ctx, input); err != nil {
+		t.Fatal(err)
+	}
+
+	after := activeIncidents(t, ctx, store)
+	if len(after) != 1 || after[0].ID == previousIncidentID || len(after[0].Signals) != 1 {
+		t.Fatalf("changing a signal Nature must leave exactly its new Incident active, got %#v", after)
+	}
+	previous, err := store.Get(ctx, previousIncidentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previous.Status != "resolved" || previous.ResolvedAt == nil || len(previous.Signals) != 0 {
+		t.Fatalf("the Incident emptied by a Nature change must be resolved, got %#v", previous)
+	}
+}
+
 func TestPostgresArgusIncidentTracksVersionChangesAndSkippedRearms(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
