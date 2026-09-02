@@ -16,6 +16,86 @@ type acceptingMattermost struct{}
 
 func (acceptingMattermost) Test(context.Context, string) error { return nil }
 
+func TestNonCriticalOpeningWaitsForStabilityAndDropsTransientIncident(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	store := notifications.NewPostgresStore(pool)
+	_, incidentID := seedActiveIncident(t, pool, "warning")
+
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if delivery, err := store.Claim(ctx, "stability-worker"); err != notifications.ErrNoDelivery {
+		t.Fatalf("unstable Incident was already deliverable: %#v, %v", delivery, err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_incidents SET status = 'resolved', resolved_at = now(), updated_at = now()
+		WHERE id = $1::uuid
+	`, incidentID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if delivery, err := store.Claim(ctx, "stability-worker"); err != notifications.ErrNoDelivery {
+		t.Fatalf("transient Incident produced a notification after resolving: %#v, %v", delivery, err)
+	}
+
+	var activeDeliveries, resolutions int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FILTER (WHERE status <> 'cancelled'),
+		       count(*) FILTER (WHERE event_kind = 'resolved')
+		FROM cairnops_notification_outbox WHERE incident_id = $1::uuid
+	`, incidentID).Scan(&activeDeliveries, &resolutions); err != nil {
+		t.Fatal(err)
+	}
+	if activeDeliveries != 0 || resolutions != 0 {
+		t.Fatalf("transient Incident left deliverable noise: active=%d resolutions=%d", activeDeliveries, resolutions)
+	}
+}
+
+func TestCriticalOpeningBypassesStabilityDelay(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	store := notifications.NewPostgresStore(pool)
+	_, incidentID := seedActiveIncident(t, pool, "critical")
+
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := store.Claim(ctx, "critical-worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivery.IncidentID != incidentID || delivery.EventKind != "firing" {
+		t.Fatalf("critical Incident did not bypass the stability delay: %#v", delivery)
+	}
+}
+
+func TestMatureNonCriticalOpeningBecomesDeliverable(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	store := notifications.NewPostgresStore(pool)
+	_, incidentID := seedActiveIncident(t, pool, "major")
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_incidents SET created_at = now() - interval '3 minutes'
+		WHERE id = $1::uuid
+	`, incidentID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := store.Claim(ctx, "mature-worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivery.IncidentID != incidentID || delivery.EventKind != "firing" {
+		t.Fatalf("stable Incident remained held: %#v", delivery)
+	}
+}
+
 func TestNotificationRoutingStopsAtAcknowledgementAndResolvesToOpeningChannel(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
@@ -35,7 +115,7 @@ func TestNotificationRoutingStopsAtAcknowledgementAndResolvesToOpeningChannel(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 	channel, err := notifications.NewService(store, acceptingMattermost{}, box).CreateMattermost(ctx, actorID, notifications.CreateMattermostInput{
 		Name: "Exploitation", WebhookURL: "https://mattermost.example.test/hooks/secret",
 		Severities: []incidents.Severity{incidents.SeverityMajor},

@@ -14,10 +14,48 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func TestBurstReusesOpeningAndSuppressesSecondIncidentNotification(t *testing.T) {
+func TestTransientBurstResolvesInsideStabilityWindowWithoutNotification(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
 	store := notifications.NewPostgresStore(pool)
+	now := time.Now().UTC().Truncate(time.Second)
+	first := notificationIncident(t, ctx, pool, notificationTarget(t, ctx, pool, "Transient burst A"), now)
+
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	second := notificationIncident(t, ctx, pool, notificationTarget(t, ctx, pool, "Transient burst B"), now.Add(time.Second))
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if delivery, err := store.Claim(ctx, "transient-burst-worker"); err != notifications.ErrNoDelivery {
+		t.Fatalf("unstable Rafale was already deliverable: %#v, %v", delivery, err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_incidents
+		SET status = 'resolved', resolved_at = now(), updated_at = now()
+		WHERE id = ANY($1::uuid[])
+	`, []string{first, second}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_incident_bursts SET propagation_ends_at = now() - interval '1 second'
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if delivery, err := store.Claim(ctx, "transient-burst-worker"); err != notifications.ErrNoDelivery {
+		t.Fatalf("transient Rafale produced a notification after resolving: %#v, %v", delivery, err)
+	}
+}
+
+func TestBurstReusesOpeningAndSuppressesSecondIncidentNotification(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	store := immediateNotificationStore(pool)
 	now := time.Now().UTC().Truncate(time.Second)
 
 	var userID string
@@ -94,12 +132,32 @@ func TestBurstReusesOpeningAndSuppressesSecondIncidentNotification(t *testing.T)
 	if redundant != 0 {
 		t.Fatalf("second incident has %d non-cancelled deliveries", redundant)
 	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_incidents
+		SET status = 'resolved', resolved_at = now(), updated_at = now()
+		WHERE id = ANY($1::uuid[])
+	`, []string{firstIncident, secondIncident}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_incident_bursts SET propagation_ends_at = now() - interval '1 second'
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	resolution := deliverNotification(t, ctx, store, "burst_update", "silent")
+	if resolution.BurstStatus != "resolved" {
+		t.Fatalf("resolved burst did not become a quiet state update: %#v", resolution)
+	}
 }
 
 func TestBurstAlertsOnlyForANewHistoricalSeverityHigh(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 	now := time.Now().UTC().Truncate(time.Second)
 	first := notificationIncidentWithSeverity(t, ctx, pool, notificationTarget(t, ctx, pool, "Severity A"), now, "major")
 
@@ -154,7 +212,7 @@ func TestBurstAlertsOnlyForANewHistoricalSeverityHigh(t *testing.T) {
 func TestBurstAlertsForExtendedPropagationOnlyOnce(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 	now := time.Now().UTC().Truncate(time.Second)
 
 	for index := 0; index < 6; index++ {
@@ -181,7 +239,7 @@ func TestBurstAlertsForExtendedPropagationOnlyOnce(t *testing.T) {
 func TestMattermostBurstSendsOnlyOpeningAndFinalSummary(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 	now := time.Now().UTC().Truncate(time.Second)
 	var actorID string
 	if err := pool.QueryRow(ctx, `
@@ -248,7 +306,7 @@ func TestMattermostBurstSendsOnlyOpeningAndFinalSummary(t *testing.T) {
 func TestBurstOpeningDoesNotDependOnAnchorMaintenance(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 	now := time.Now().UTC().Truncate(time.Second)
 	anchorTarget := notificationTarget(t, ctx, pool, "Maintained anchor")
 	first := notificationIncident(t, ctx, pool, anchorTarget, now)
@@ -282,7 +340,7 @@ func TestBurstOpeningDoesNotDependOnAnchorMaintenance(t *testing.T) {
 func TestAcknowledgedBurstStillAlertsForANewSeverityHigh(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 	now := time.Now().UTC().Truncate(time.Second)
 	first := notificationIncident(t, ctx, pool, notificationTarget(t, ctx, pool, "Acknowledged A"), now)
 	if err := store.Schedule(ctx); err != nil {

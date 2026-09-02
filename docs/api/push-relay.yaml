@@ -129,7 +129,12 @@ components:
         collapse_key:
           type: string
           description: Empreinte opaque et stable de l'Incident, jamais son identifiant brut.
-        priority: { type: string, enum: [normal, high] }
+        priority:
+          type: string
+          enum: [normal, high]
+          description: >-
+            `high` demande une alerte visible ; `normal` transporte une mise à
+            jour d'état silencieuse via une notification d'arrière-plan.
         expires_at: { type: string, format: date-time }
     EncryptedEnvelope:
       type: object

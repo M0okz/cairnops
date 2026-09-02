@@ -74,6 +74,46 @@ func TestAPNSProviderSendsEncryptedAlertWithTokenAuthentication(t *testing.T) {
 	}
 }
 
+func TestAPNSProviderSendsSilentUpdateAsBackgroundNotification(t *testing.T) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var received *http.Request
+	var payload map[string]any
+	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		received = request
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatal(err)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(nil)), Header: make(http.Header)}, nil
+	})}
+	provider := newAPNSProvider(
+		"https://api.push.test", "https://api.sandbox.test",
+		"fr.cairnops.ios", "KEYID12345", "TEAMID1234", privateKey, client,
+	)
+	delivery := validDelivery(time.Now().UTC())
+	delivery.Priority = "normal"
+	if err := provider.Deliver(context.Background(), Registration{Platform: "ios", Environment: "production", DeviceToken: "0011aabb"}, delivery); err != nil {
+		t.Fatal(err)
+	}
+	if received.Header.Get("apns-push-type") != "background" || received.Header.Get("apns-priority") != "5" {
+		t.Fatalf("silent update used alert APNs headers: %#v", received.Header)
+	}
+	aps, ok := payload["aps"].(map[string]any)
+	if !ok || aps["content-available"] != float64(1) {
+		t.Fatalf("silent update is not background-capable: %#v", payload)
+	}
+	for _, visibleKey := range []string{"alert", "sound", "mutable-content"} {
+		if _, exists := aps[visibleKey]; exists {
+			t.Fatalf("silent update still contains visible key %q: %#v", visibleKey, payload)
+		}
+	}
+	if cairnops, ok := payload["cairnops"].(map[string]any); !ok || cairnops["envelope"] == nil {
+		t.Fatalf("silent update lost the encrypted envelope: %#v", payload)
+	}
+}
+
 func TestAPNSProviderClassifiesExpiredDeviceToken(t *testing.T) {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

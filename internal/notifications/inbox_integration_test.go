@@ -24,6 +24,10 @@ func inAppChannel(t *testing.T, pool *pgxpool.Pool) string {
 	return id
 }
 
+func immediateNotificationStore(pool *pgxpool.Pool) *notifications.PostgresStore {
+	return notifications.NewPostgresStoreWithStabilityDelay(pool, 0)
+}
+
 func seedAccount(t *testing.T, pool *pgxpool.Pool, role string) string {
 	t.Helper()
 	var id string
@@ -60,7 +64,7 @@ func seedActiveIncident(t *testing.T, pool *pgxpool.Pool, severity string) (targ
 func TestPostgresInAppDeliveryReachesEveryActiveAccount(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 
 	operator := seedAccount(t, pool, "operator")
 	observer := seedAccount(t, pool, "observer")
@@ -137,7 +141,7 @@ func TestPostgresInAppDeliveryReachesEveryActiveAccount(t *testing.T) {
 func TestPostgresDismissedInboxStillRoutesTheResolution(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 
 	actor := seedAccount(t, pool, "operator")
 	neighbor := seedAccount(t, pool, "observer")
@@ -208,7 +212,7 @@ func TestPostgresDismissedInboxStillRoutesTheResolution(t *testing.T) {
 func TestPostgresInAppResolutionReachesTheOpeningRecipientsOnly(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 
 	early := seedAccount(t, pool, "operator")
 	_, incidentID := seedActiveIncident(t, pool, "critical")
@@ -271,7 +275,7 @@ func TestPostgresInAppResolutionReachesTheOpeningRecipientsOnly(t *testing.T) {
 func TestPostgresInAppOpeningIsCancelledByAcknowledgement(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 
 	actor := seedAccount(t, pool, "operator")
 	_, incidentID := seedActiveIncident(t, pool, "major")
@@ -305,7 +309,7 @@ func TestPostgresInAppOpeningIsCancelledByAcknowledgement(t *testing.T) {
 func TestPostgresInAppHonoursTheChannelSeverities(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 
 	actor := seedAccount(t, pool, "operator")
 	seedActiveIncident(t, pool, "information")
@@ -330,7 +334,7 @@ func TestPostgresInAppHonoursTheChannelSeverities(t *testing.T) {
 func TestPostgresInAppSkipsDeactivatedAccounts(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)
-	store := notifications.NewPostgresStore(pool)
+	store := immediateNotificationStore(pool)
 
 	retired := seedAccount(t, pool, "operator")
 	if _, err := pool.Exec(ctx, `

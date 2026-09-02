@@ -128,7 +128,7 @@ func (provider *APNSProvider) Deliver(ctx context.Context, registration Registra
 	request.Header.Set("Authorization", "bearer "+providerToken)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("apns-topic", provider.topic)
-	request.Header.Set("apns-push-type", "alert")
+	request.Header.Set("apns-push-type", apnsPushType(delivery.Priority))
 	request.Header.Set("apns-priority", apnsPriority(delivery.Priority))
 	request.Header.Set("apns-expiration", strconv.FormatInt(delivery.ExpiresAt.UTC().Unix(), 10))
 	request.Header.Set("apns-collapse-id", delivery.CollapseKey)
@@ -218,8 +218,12 @@ func makeAPNSPayload(delivery push.DeliveryRequest) ([]byte, error) {
 	if delivery.ExpiresAt.IsZero() {
 		return nil, &ProviderError{StatusCode: http.StatusBadRequest, Reason: "InvalidExpiration"}
 	}
-	payload := map[string]any{
-		"aps": map[string]any{
+	if delivery.Priority != "normal" && delivery.Priority != "high" {
+		return nil, &ProviderError{StatusCode: http.StatusBadRequest, Reason: "InvalidPriority"}
+	}
+	aps := map[string]any{"content-available": 1}
+	if delivery.Priority == "high" {
+		aps = map[string]any{
 			"alert": map[string]string{
 				"title": "CairnOps",
 				"body":  "Ouvrez CairnOps pour consulter la mise à jour.",
@@ -228,7 +232,10 @@ func makeAPNSPayload(delivery push.DeliveryRequest) ([]byte, error) {
 			"sound":           "default",
 			"category":        "CAIRNOPS_INCIDENT",
 			"thread-id":       delivery.CollapseKey,
-		},
+		}
+	}
+	payload := map[string]any{
+		"aps":      aps,
 		"cairnops": map[string]any{"envelope": delivery.Envelope},
 	}
 	encoded, err := json.Marshal(payload)
@@ -239,6 +246,13 @@ func makeAPNSPayload(delivery push.DeliveryRequest) ([]byte, error) {
 		return nil, &ProviderError{StatusCode: http.StatusBadRequest, Reason: "PayloadTooLarge"}
 	}
 	return encoded, nil
+}
+
+func apnsPushType(priority string) string {
+	if priority == "high" {
+		return "alert"
+	}
+	return "background"
 }
 
 func apnsPriority(priority string) string {

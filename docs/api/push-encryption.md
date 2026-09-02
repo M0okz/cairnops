@@ -23,3 +23,10 @@ Le JSON déchiffré contient `version`, `event_kind`, `incident_id`, `severity`,
 Le Relais Push ne participe à aucune de ces opérations cryptographiques. Il
 reçoit l'enveloppe telle quelle et la remet à APNs ou FCM pour le destinataire
 opaque indiqué par l'instance.
+
+Une priorité `high` produit une alerte visible. Une priorité `normal` reste une
+mise à jour d'état silencieuse : sur APNs, le Relais emploie une notification
+d'arrière-plan sans `alert` ni `sound`. Les révisions ordinaires d'une Rafale et
+les Résolutions utilisent cette voie ; seules l'ouverture, une hausse de
+Gravité encore jamais notifiée ou la première Propagation étendue interrompent
+l'utilisateur.

@@ -14,9 +14,30 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type PostgresStore struct{ pool *pgxpool.Pool }
+const defaultStabilityDelay = 2 * time.Minute
 
-func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore { return &PostgresStore{pool: pool} }
+type PostgresStore struct {
+	pool           *pgxpool.Pool
+	stabilityDelay time.Duration
+}
+
+func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
+	return NewPostgresStoreWithStabilityDelay(pool, defaultStabilityDelay)
+}
+
+// NewPostgresStoreWithStabilityDelay permet aux tests de routage d'écarter
+// l'attente sans faire dormir la suite. En production, NewPostgresStore porte
+// toujours le sas par défaut.
+func NewPostgresStoreWithStabilityDelay(pool *pgxpool.Pool, delay time.Duration) *PostgresStore {
+	if delay < 0 {
+		delay = 0
+	}
+	return &PostgresStore{pool: pool, stabilityDelay: delay}
+}
+
+func (store *PostgresStore) stabilityDelaySeconds() int64 {
+	return int64(store.stabilityDelay / time.Second)
+}
 
 func (store *PostgresStore) List(ctx context.Context) ([]Channel, error) {
 	rows, err := store.pool.Query(ctx, `
@@ -102,6 +123,9 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		        WHEN delivery.status = 'delivered' THEN delivery.burst_revision
 		        ELSE burst.revision
 		    END,
+		    next_attempt_at = CASE WHEN delivery.status <> 'pending' THEN delivery.next_attempt_at
+		        WHEN burst.severity = 'critical' THEN now()
+		        ELSE burst.created_at + $1 * interval '1 second' END,
 		    target_name = CASE WHEN burst.affected_target_count > 1
 		        THEN burst.affected_target_count::text || ' Cibles affectées'
 		        ELSE delivery.target_name END,
@@ -114,7 +138,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		FROM cairnops_incident_bursts burst
 		WHERE delivery.incident_id = burst.anchor_incident_id
 		  AND delivery.event_kind = 'firing' AND delivery.burst_id IS NULL
-	`); err != nil {
+	`, store.stabilityDelaySeconds()); err != nil {
 		return fmt.Errorf("attach opening notifications to incident bursts: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
@@ -172,10 +196,12 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO cairnops_notification_outbox (
 			incident_id, channel_id, event_kind, event_key, target_name, nature_label,
-			severity, opened_at
+			severity, opened_at, next_attempt_at
 		)
 		SELECT incident.id, channel.id, 'firing', 'firing', target.name, incident.nature_label,
-		       incident.effective_severity, incident.opened_at
+		       incident.effective_severity, incident.opened_at,
+		       CASE WHEN incident.effective_severity = 'critical' THEN now()
+		            ELSE incident.created_at + $1 * interval '1 second' END
 		FROM cairnops_incidents incident
 		JOIN cairnops_targets target ON target.id = incident.target_id
 		JOIN cairnops_notification_channels channel
@@ -195,8 +221,21 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		        AND now() BETWEEN maintenance.starts_at AND maintenance.ends_at
 		  )
 		ON CONFLICT DO NOTHING
-	`); err != nil {
+	`, store.stabilityDelaySeconds()); err != nil {
 		return fmt.Errorf("schedule firing notifications: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE cairnops_notification_outbox delivery
+		SET severity = incident.effective_severity,
+		    next_attempt_at = CASE WHEN incident.effective_severity = 'critical' THEN now()
+		        ELSE incident.created_at + $1 * interval '1 second' END,
+		    updated_at = now()
+		FROM cairnops_incidents incident
+		WHERE delivery.incident_id = incident.id
+		  AND delivery.burst_id IS NULL AND delivery.event_kind = 'firing'
+		  AND delivery.status = 'pending'
+	`, store.stabilityDelaySeconds()); err != nil {
+		return fmt.Errorf("refresh pending firing notifications: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -204,7 +243,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 			incident_id, burst_id, burst_revision, channel_id, event_kind, event_key,
 			target_name, nature_label, severity, opened_at,
 			incident_count, affected_target_count, max_affected_targets,
-			burst_status, burst_extended
+			burst_status, burst_extended, next_attempt_at
 		)
 		SELECT burst.anchor_incident_id, burst.id, burst.revision, channel.id,
 		       'firing', 'firing',
@@ -213,7 +252,9 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		           ELSE target.name END,
 		       burst.nature_label, burst.severity, burst.opened_at,
 		       greatest(burst.incident_count, 1), burst.affected_target_count,
-		       greatest(burst.max_affected_targets, 1), burst.status, burst.extended
+		       greatest(burst.max_affected_targets, 1), burst.status, burst.extended,
+		       CASE WHEN burst.severity = 'critical' THEN now()
+		            ELSE burst.created_at + $1 * interval '1 second' END
 		FROM cairnops_incident_bursts burst
 		JOIN cairnops_incidents anchor ON anchor.id = burst.anchor_incident_id
 		JOIN cairnops_targets target ON target.id = anchor.target_id
@@ -223,7 +264,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		WHERE burst.status <> 'resolved' AND burst.acknowledged_at IS NULL
 		  AND burst.active_incident_count > 0
 		ON CONFLICT DO NOTHING
-	`); err != nil {
+	`, store.stabilityDelaySeconds()); err != nil {
 		return fmt.Errorf("schedule incident burst openings: %w", err)
 	}
 
@@ -232,6 +273,9 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 	if _, err := tx.Exec(ctx, `
 		UPDATE cairnops_notification_outbox opening
 		SET burst_revision = burst.revision,
+		    next_attempt_at = CASE WHEN opening.status <> 'pending' THEN opening.next_attempt_at
+		        WHEN burst.severity = 'critical' THEN now()
+		        ELSE burst.created_at + $1 * interval '1 second' END,
 		    target_name = CASE WHEN burst.affected_target_count > 1
 		        THEN burst.affected_target_count::text || ' Cibles affectées'
 		        ELSE opening.target_name END,
@@ -244,7 +288,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		FROM cairnops_incident_bursts burst
 		WHERE opening.burst_id = burst.id AND opening.event_key = 'firing'
 		  AND opening.status IN ('pending', 'failed')
-	`); err != nil {
+	`, store.stabilityDelaySeconds()); err != nil {
 		return fmt.Errorf("refresh pending incident burst openings: %w", err)
 	}
 
@@ -258,8 +302,8 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		)
 		SELECT burst.anchor_incident_id, burst.id, burst.revision, opening.channel_id,
 		       'burst_update', 'revision:' || burst.revision::text,
-		       CASE WHEN burst.status = 'resolved'
-		                  OR cairnops_severity_rank(burst.severity) > coalesce((
+		       CASE WHEN burst.status = 'resolved' THEN 'silent'
+		            WHEN cairnops_severity_rank(burst.severity) > coalesce((
 		                      SELECT max(cairnops_severity_rank(previous.severity))
 		                      FROM cairnops_notification_outbox previous
 		                      WHERE previous.burst_id = burst.id
@@ -322,10 +366,11 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO cairnops_notification_outbox (
 			incident_id, channel_id, event_kind, event_key, target_name, nature_label,
-			severity, opened_at, resolved_at
+			severity, opened_at, resolved_at, presentation
 		)
 		SELECT incident.id, opening.channel_id, 'resolved', 'resolved', opening.target_name,
-		       opening.nature_label, opening.severity, opening.opened_at, incident.resolved_at
+		       opening.nature_label, opening.severity, opening.opened_at, incident.resolved_at,
+		       CASE WHEN channel.kind = 'in_app' THEN 'silent' ELSE 'alert' END
 		FROM cairnops_incidents incident
 		JOIN cairnops_notification_outbox opening
 		  ON opening.incident_id = incident.id
@@ -529,6 +574,13 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 	if delivery.EventKind == "resolved" && delivery.ResolvedAt != nil {
 		occurredAt = *delivery.ResolvedAt
 	}
+	presentation := delivery.Presentation
+	if presentation == "" {
+		presentation = "alert"
+		if delivery.EventKind == "resolved" {
+			presentation = "silent"
+		}
+	}
 
 	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -571,7 +623,7 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 		// identifiant opaque et une enveloppe chiffrée.
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO cairnops_push_outbox (device_id, inbox_id, revision, presentation)
-			SELECT device.id, inbox.id, inbox.revision, 'alert'
+			SELECT device.id, inbox.id, inbox.revision, $3
 			FROM cairnops_notification_inbox inbox
 			JOIN cairnops_devices device ON device.user_id = inbox.user_id
 			JOIN cairnops_users users ON users.id = device.user_id
@@ -581,7 +633,7 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 			  AND users.deactivated_at IS NULL
 			  AND users.external_suspended_at IS NULL
 			ON CONFLICT (device_id, inbox_id, revision) DO NOTHING
-		`, delivery.IncidentID, delivery.EventKind); err != nil {
+		`, delivery.IncidentID, delivery.EventKind, presentation); err != nil {
 			return 0, fmt.Errorf("schedule device push notifications: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
