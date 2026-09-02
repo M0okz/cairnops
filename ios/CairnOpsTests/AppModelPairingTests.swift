@@ -70,6 +70,33 @@ struct AppModelPairingTests {
 
         await snapshotStore.clear()
     }
+
+    @Test("L’annulation réseau de la synchronisation de langue reste silencieuse")
+    func cancelledLocaleSynchronizationDoesNotShowBanner() async throws {
+        let secureDataStore = PairingMemorySecureDataStore()
+        let credentialStore = DeviceCredentialStore(secureDataStore: secureDataStore)
+        try credentialStore.save(identity: DeviceIdentity(
+            serverBaseURL: "https://cairnops.example.net",
+            deviceID: "00000000-0000-0000-0000-000000000001",
+            deviceToken: deviceToken,
+            encryptionPrivateKey: Data(repeating: 7, count: 32),
+            pushRegistration: nil
+        ))
+        let model = AppModel(
+            credentialStore: credentialStore,
+            apiFactory: { configuration, token in
+                CairnOpsAPI(
+                    configuration: configuration,
+                    deviceToken: token,
+                    transport: CancelledLocaleTransport()
+                )
+            }
+        )
+
+        await model.updateDeviceLocale("fr")
+
+        #expect(model.statusMessage == nil)
+    }
 }
 
 @MainActor
@@ -126,4 +153,10 @@ private actor PairingFlowTransport: CairnOpsHTTPTransport {
     }
 
     func recordedRequests() -> [URLRequest] { requests }
+}
+
+private struct CancelledLocaleTransport: CairnOpsHTTPTransport {
+    func perform(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        throw URLError(.cancelled)
+    }
 }

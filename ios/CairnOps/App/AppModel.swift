@@ -626,6 +626,8 @@ final class AppModel {
 			)
 		} catch is CancellationError {
 			return
+		} catch let error as URLError where error.code == .cancelled {
+			return
 		} catch {
 			statusMessage = String(
 				format: AppLanguage.localized("language.syncFailed"),
