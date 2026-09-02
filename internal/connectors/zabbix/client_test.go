@@ -155,6 +155,65 @@ func TestProblemsUseTemplateRootUUIDAsTargetIndependentNature(t *testing.T) {
 	}
 }
 
+func TestProblemsUseTriggerPrototypeRootForDiscoveredSiblings(t *testing.T) {
+	t.Parallel()
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var body struct {
+			Method string         `json:"method"`
+			Params map[string]any `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		response := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header)}
+		ids, _ := body.Params["triggerids"].([]any)
+		switch body.Method {
+		case "problem.get":
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":[
+				{"eventid":"1","objectid":"101","clock":"1786700000","name":"Disk latency","acknowledged":"0","severity":"3","suppressed":"0"},
+				{"eventid":"2","objectid":"102","clock":"1786700001","name":"Disk latency","acknowledged":"0","severity":"3","suppressed":"0"}
+			],"id":1}`))
+		case "trigger.get":
+			if len(ids) == 2 && ids[0] == "101" && ids[1] == "102" {
+				response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":[
+					{"triggerid":"101","templateid":"0","flags":"4","discoveryData":{"parent_triggerid":"201"},"hosts":[{"hostid":"11"}]},
+					{"triggerid":"102","templateid":"0","flags":"4","discoveryData":{"parent_triggerid":"202"},"hosts":[{"hostid":"12"}]}
+				],"id":1}`))
+			} else {
+				// Zabbix ne retourne pas les prototypes via trigger.get.
+				response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":[],"id":1}`))
+			}
+		case "triggerprototype.get":
+			if len(ids) == 2 && ids[0] == "201" && ids[1] == "202" {
+				response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":[
+					{"triggerid":"201","templateid":"900","flags":"2"},
+					{"triggerid":"202","templateid":"900","flags":"2"}
+				],"id":1}`))
+			} else if len(ids) == 1 && ids[0] == "900" {
+				response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":[
+					{"triggerid":"900","templateid":"0","uuid":"67cbf118c3314ecf9137c4b02c2c4190","flags":"2"}
+				],"id":1}`))
+			} else {
+				t.Fatalf("unexpected prototype ids: %#v", ids)
+			}
+		default:
+			t.Fatalf("unexpected method %q", body.Method)
+		}
+		return response, nil
+	})}
+	problems, err := NewClientWithHTTP(client).Problems(
+		context.Background(), "https://zabbix.example.net", "token", []string{"11", "12"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(problems) != 2 ||
+		problems[0].NatureFingerprint != "uuid:67cbf118c3314ecf9137c4b02c2c4190" ||
+		problems[1].NatureFingerprint != problems[0].NatureFingerprint {
+		t.Fatalf("discovered siblings must share their prototype root Nature: %#v", problems)
+	}
+}
+
 func TestDirectTriggerFingerprintExcludesRenderedHostIdentity(t *testing.T) {
 	t.Parallel()
 	left := remoteTrigger{

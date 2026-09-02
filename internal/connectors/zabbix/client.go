@@ -63,6 +63,7 @@ type Problem struct {
 }
 
 type remoteTrigger struct {
+	Prototype          bool            `json:"-"`
 	TriggerID          string          `json:"triggerid"`
 	TemplateID         string          `json:"templateid"`
 	UUID               string          `json:"uuid"`
@@ -387,6 +388,14 @@ func (client *Client) Problems(ctx context.Context, endpoint, token string, host
 }
 
 func (client *Client) triggers(ctx context.Context, endpoint, token string, triggerIDs []string, hosts bool) ([]remoteTrigger, bool, error) {
+	return client.triggerObjects(ctx, endpoint, token, "trigger.get", triggerIDs, hosts, false)
+}
+
+func (client *Client) triggerPrototypes(ctx context.Context, endpoint, token string, triggerIDs []string) ([]remoteTrigger, bool, error) {
+	return client.triggerObjects(ctx, endpoint, token, "triggerprototype.get", triggerIDs, false, true)
+}
+
+func (client *Client) triggerObjects(ctx context.Context, endpoint, token, method string, triggerIDs []string, hosts, prototypes bool) ([]remoteTrigger, bool, error) {
 	params := map[string]any{
 		"output": []string{
 			"triggerid", "templateid", "uuid", "description", "expression",
@@ -402,7 +411,8 @@ func (client *Client) triggers(ctx context.Context, endpoint, token string, trig
 		params["selectHosts"] = []string{"hostid"}
 	}
 	var result []remoteTrigger
-	if err := client.call(ctx, endpoint, token, "trigger.get", params, &result); err == nil {
+	if err := client.call(ctx, endpoint, token, method, params, &result); err == nil {
+		markTriggerPrototypes(result, prototypes)
 		return result, true, nil
 	}
 	// La V1 reste compatible avec les versions Zabbix qui ne connaissent pas
@@ -415,46 +425,88 @@ func (client *Client) triggers(ctx context.Context, endpoint, token string, trig
 		fallback["selectHosts"] = []string{"hostid"}
 	}
 	result = nil
-	if err := client.call(ctx, endpoint, token, "trigger.get", fallback, &result); err != nil {
+	if err := client.call(ctx, endpoint, token, method, fallback, &result); err != nil {
 		return nil, false, err
 	}
+	markTriggerPrototypes(result, prototypes)
 	return result, false, nil
+}
+
+func markTriggerPrototypes(triggers []remoteTrigger, prototypes bool) {
+	if !prototypes {
+		return
+	}
+	for index := range triggers {
+		triggers[index].Prototype = true
+	}
 }
 
 func (client *Client) loadTriggerAncestors(ctx context.Context, endpoint, token string, known map[string]remoteTrigger) error {
 	for depth := 0; depth < 32; depth++ {
-		missing := make([]string, 0)
-		seen := make(map[string]struct{})
+		missingTriggers := make([]string, 0)
+		missingPrototypes := make([]string, 0)
+		seenTriggers := make(map[string]struct{})
+		seenPrototypes := make(map[string]struct{})
 		for _, trigger := range known {
-			for _, parentID := range []string{strings.TrimSpace(trigger.TemplateID), discoveryParent(trigger.DiscoveryData)} {
-				if parentID == "" || parentID == "0" {
-					continue
-				}
-				if _, exists := known[parentID]; exists {
-					continue
-				}
-				if _, duplicate := seen[parentID]; !duplicate {
-					seen[parentID] = struct{}{}
-					missing = append(missing, parentID)
-				}
-			}
+			discoveryID := discoveryParent(trigger.DiscoveryData)
+			appendMissingTrigger(discoveryID, true, known, seenTriggers, seenPrototypes, &missingTriggers, &missingPrototypes)
+			templateID := strings.TrimSpace(trigger.TemplateID)
+			appendMissingTrigger(templateID, trigger.Prototype, known, seenTriggers, seenPrototypes, &missingTriggers, &missingPrototypes)
 		}
-		if len(missing) == 0 {
+		if len(missingTriggers) == 0 && len(missingPrototypes) == 0 {
 			return nil
 		}
-		sort.Strings(missing)
-		ancestors, detailed, err := client.triggers(ctx, endpoint, token, missing, false)
-		if err != nil {
-			return err
+		sort.Strings(missingTriggers)
+		sort.Strings(missingPrototypes)
+		if len(missingTriggers) > 0 {
+			ancestors, detailed, err := client.triggers(ctx, endpoint, token, missingTriggers, false)
+			if err != nil {
+				return err
+			}
+			if !detailed || len(ancestors) != len(missingTriggers) {
+				return fmt.Errorf("trigger ancestry is unavailable")
+			}
+			for _, ancestor := range ancestors {
+				known[ancestor.TriggerID] = ancestor
+			}
 		}
-		if !detailed || len(ancestors) == 0 {
-			return fmt.Errorf("trigger ancestry is unavailable")
-		}
-		for _, ancestor := range ancestors {
-			known[ancestor.TriggerID] = ancestor
+		if len(missingPrototypes) > 0 {
+			ancestors, detailed, err := client.triggerPrototypes(ctx, endpoint, token, missingPrototypes)
+			if err != nil {
+				return err
+			}
+			if !detailed || len(ancestors) != len(missingPrototypes) {
+				return fmt.Errorf("trigger prototype ancestry is unavailable")
+			}
+			for _, ancestor := range ancestors {
+				known[ancestor.TriggerID] = ancestor
+			}
 		}
 	}
 	return fmt.Errorf("trigger ancestry exceeds 32 levels")
+}
+
+func appendMissingTrigger(parentID string, prototype bool, known map[string]remoteTrigger, seenTriggers, seenPrototypes map[string]struct{}, missingTriggers, missingPrototypes *[]string) {
+	parentID = strings.TrimSpace(parentID)
+	if parentID == "" || parentID == "0" {
+		return
+	}
+	if _, exists := known[parentID]; exists {
+		return
+	}
+	if prototype {
+		if _, duplicate := seenPrototypes[parentID]; duplicate {
+			return
+		}
+		seenPrototypes[parentID] = struct{}{}
+		*missingPrototypes = append(*missingPrototypes, parentID)
+		return
+	}
+	if _, duplicate := seenTriggers[parentID]; duplicate {
+		return
+	}
+	seenTriggers[parentID] = struct{}{}
+	*missingTriggers = append(*missingTriggers, parentID)
 }
 
 func discoveryParent(raw json.RawMessage) string {
