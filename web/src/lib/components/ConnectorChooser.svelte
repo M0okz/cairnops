@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { t } from '$lib/i18n.svelte';
+  import { t, type MessageKey } from '$lib/i18n.svelte';
   import Icon, { type IconName } from './Icon.svelte';
   import BrandMark, { type BrandName } from './BrandMark.svelte';
 
@@ -17,40 +17,40 @@
       icon: null,
       brand: 'zabbix' as BrandName,
       name: 'Zabbix',
-      note: t('chooser.zabbix'),
-      access: 'Jeton API'
+      note: 'chooser.zabbix' as MessageKey,
+      access: 'chooser.managedApiToken' as MessageKey
     },
     {
       kind: 'uptime_kuma' as const,
       icon: null,
       brand: 'uptime_kuma' as BrandName,
       name: 'Uptime Kuma',
-      note: t('chooser.uptimeKuma'),
-      access: t('chooser.readApiKey')
+      note: 'chooser.uptimeKuma' as MessageKey,
+      access: 'chooser.managedApiKey' as MessageKey
     },
     {
       kind: 'patchmon' as const,
       icon: null,
       brand: 'patchmon' as BrandName,
       name: 'PatchMon',
-      note: t('chooser.patchmon'),
-      access: t('chooser.readApiToken')
+      note: 'chooser.patchmon' as MessageKey,
+      access: 'chooser.managedApiToken' as MessageKey
     },
     {
       kind: 'argus' as const,
       icon: null,
       brand: 'argus' as BrandName,
       name: 'Argus',
-      note: t('chooser.argus'),
-      access: t('chooser.optionalBasicAuth')
+      note: 'chooser.argus' as MessageKey,
+      access: 'chooser.optionalBasicAuth' as MessageKey
     },
     {
       kind: 'generic_webhook' as const,
       icon: 'webhook' as IconName,
       brand: null,
       name: t('connector.genericWebhook'),
-      note: t('chooser.genericWebhook'),
-      access: t('chooser.generatedSecret')
+      note: 'chooser.genericWebhook' as MessageKey,
+      access: 'chooser.generatedSecret' as MessageKey
     }
   ];
 
@@ -84,9 +84,9 @@
             {/if}
             <span class="copy">
               <strong>{choice.name}</strong>
-              <small class="faint">{choice.note}</small>
+              <small class="faint">{t(choice.note)}</small>
             </span>
-            <span class="access faint">{choice.access}</span>
+            <span class="access faint">{t(choice.access)}</span>
             <span class="caret" aria-hidden="true">›</span>
           </button>
         {/each}

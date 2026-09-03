@@ -785,10 +785,13 @@ export const en: Record<MessageKey, string> = {
   'chooser.argus': 'Deployed versions, available updates and decisions made in Argus.',
   'chooser.readApiKey': 'Read-only API key',
   'chooser.readApiToken': 'Read-only API token',
+  'chooser.managedApiKey': 'Key created automatically',
+  'chooser.managedApiToken': 'Token created automatically',
   'chooser.optionalBasicAuth': 'Optional Basic Auth',
   'chooser.genericWebhook': 'Signed JSON signals, unknown identities held at the door.',
   'chooser.generatedSecret': 'Generated secret',
-  'chooser.note': 'No administrator access to the remote tool is asked for.',
+  'chooser.note':
+    'Each journey discloses the stored secret and every remote change before confirmation.',
 
   /* ── Suspending a Connector ──────────────────────────────────────────── */
   'suspension.title': 'Suspend “{name}”?',
@@ -1154,7 +1157,7 @@ export const en: Record<MessageKey, string> = {
   'zabbix.importHosts_one': 'Import {count} host',
   'zabbix.importHosts_other': 'Import {count} hosts',
   'zabbix.addressHint':
-    'CairnOps completes the API path automatically and refuses any redirect before sending the token.',
+    'CairnOps completes the API path automatically and rejects redirects before sending access data.',
   'zabbix.frontendAddress': 'Frontend address',
   'zabbix.tokenHint':
     'An API token limited to the hosts CairnOps must discover is enough. The secret leaves this form once only.',
@@ -1183,7 +1186,7 @@ export const en: Record<MessageKey, string> = {
   'kuma.importMonitors_one': 'Import {count} monitor',
   'kuma.importMonitors_other': 'Import {count} monitors',
   'kuma.addressHint':
-    'CairnOps completes the metrics endpoint path and refuses any redirect before sending the key.',
+    'CairnOps completes the metrics endpoint path and rejects redirects before sending access data.',
   'kuma.instanceAddress': 'Instance address',
   'kuma.keyHint':
     'A read-only API key is enough: CairnOps queries the official metrics endpoint. The secret leaves this form once only.',
@@ -1217,7 +1220,8 @@ export const en: Record<MessageKey, string> = {
   'patchmon.noActionNote': 'Read-only: CairnOps never installs patches or reboots a host.',
   'patchmon.importHosts_one': 'Import {count} host',
   'patchmon.importHosts_other': 'Import {count} hosts',
-  'patchmon.addressHint': 'CairnOps completes the API path and rejects redirects before sending the token.',
+  'patchmon.addressHint':
+    'CairnOps completes the API path and rejects redirects before sending access data.',
   'patchmon.instanceAddress': 'Instance address',
   'patchmon.tokenHint': 'Use the Key and Secret credentials from the PatchMon Integration API.',
   'patchmon.setupHint':

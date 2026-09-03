@@ -790,10 +790,13 @@ export const fr = {
   'chooser.argus': 'Versions déployées, mises à jour disponibles et décisions prises dans Argus.',
   'chooser.readApiKey': 'Clé API en lecture',
   'chooser.readApiToken': 'Jeton API en lecture',
+  'chooser.managedApiKey': 'Clé créée automatiquement',
+  'chooser.managedApiToken': 'Jeton créé automatiquement',
   'chooser.optionalBasicAuth': 'Basic Auth facultatif',
   'chooser.genericWebhook': 'Signaux JSON signés, identités inconnues retenues à l’entrée.',
   'chooser.generatedSecret': 'Secret généré',
-  'chooser.note': 'Aucun accès administrateur à l’outil distant n’est demandé.',
+  'chooser.note':
+    'Chaque parcours annonce le secret conservé et toute écriture distante avant confirmation.',
 
   /* ── Suspension d'un Connecteur ──────────────────────────────────────── */
   'suspension.title': 'Suspendre « {name} » ?',
@@ -1162,7 +1165,7 @@ export const fr = {
   'zabbix.importHosts_one': 'Importer {count} hôte',
   'zabbix.importHosts_other': 'Importer {count} hôtes',
   'zabbix.addressHint':
-    'CairnOps complète automatiquement le chemin de l’API et refuse toute redirection avant d’envoyer le jeton.',
+    'CairnOps complète automatiquement le chemin de l’API et refuse toute redirection avant d’envoyer les données d’accès.',
   'zabbix.frontendAddress': 'Adresse du frontend',
   'zabbix.tokenHint':
     'Un jeton API limité aux hôtes que CairnOps doit découvrir suffit. Le secret quitte ce formulaire une seule fois.',
@@ -1193,7 +1196,7 @@ export const fr = {
   'kuma.importMonitors_one': 'Importer {count} moniteur',
   'kuma.importMonitors_other': 'Importer {count} moniteurs',
   'kuma.addressHint':
-    'CairnOps complète le chemin de l’endpoint metrics et refuse toute redirection avant d’envoyer la clé.',
+    'CairnOps complète le chemin de l’endpoint metrics et refuse toute redirection avant d’envoyer les données d’accès.',
   'kuma.instanceAddress': 'Adresse de l’instance',
   'kuma.keyHint':
     'Une clé API en lecture suffit : CairnOps interroge l’endpoint metrics officiel. Le secret quitte ce formulaire une seule fois.',
@@ -1228,7 +1231,8 @@ export const fr = {
   'patchmon.noActionNote': 'Lecture seule : CairnOps n’installe aucun correctif et ne redémarre aucun hôte.',
   'patchmon.importHosts_one': 'Importer {count} hôte',
   'patchmon.importHosts_other': 'Importer {count} hôtes',
-  'patchmon.addressHint': 'CairnOps complète le chemin de l’API et refuse toute redirection avant d’envoyer le jeton.',
+  'patchmon.addressHint':
+    'CairnOps complète le chemin de l’API et refuse toute redirection avant d’envoyer les données d’accès.',
   'patchmon.instanceAddress': 'Adresse de l’instance',
   'patchmon.tokenHint': 'Utilisez les identifiants Key et Secret de l’Integration API PatchMon.',
   'patchmon.setupHint':
