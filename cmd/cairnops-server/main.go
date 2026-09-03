@@ -80,7 +80,6 @@ func run(logger *slog.Logger) error {
 	webhookService := connectors.NewWebhookService(connectorStore, incidentStore, secrets, cfg.PublicURL)
 	incidentService := incidents.NewService(incidentStore, connectors.NewAcknowledger(connectorStore, zabbixClient, secrets))
 	burstService := bursts.NewService(bursts.NewPostgresStore(pool), incidentService)
-	burstAcknowledgements := bursts.NewAcknowledgementSynchronizer(pool, incidentService, logger)
 	maintenanceService := maintenance.NewService(maintenance.NewPostgresStore(pool))
 	notificationService := notifications.NewService(
 		notifications.NewPostgresStore(pool),
@@ -92,13 +91,8 @@ func run(logger *slog.Logger) error {
 	if hostname == "" {
 		hostname = "local"
 	}
-	connectorSync := connectors.NewSynchronizer(connectorStore, incidentStore, zabbixClient, secrets, "server:"+hostname, logger)
-	uptimeKumaSync := connectors.NewUptimeKumaSynchronizer(connectorStore, incidentStore, uptimeKumaClient, secrets, "server:"+hostname, logger)
-	patchMonSync := connectors.NewPatchMonSynchronizer(connectorStore, incidentStore, patchMonClient, secrets, "server:"+hostname, logger)
-	argusSync := connectors.NewArgusSynchronizer(connectorStore, incidentStore, argusClient, secrets, "server:"+hostname, logger)
 	indicatorStore := indicators.NewStore(pool)
 	indicatorService := indicators.NewService(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets)
-	indicatorCollector := indicators.NewCollector(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets, logger)
 	reconciliationStore := reconciliation.NewStore(pool)
 	identityStore := identity.NewStore(pool)
 	oidcService := oidcauth.NewService(pool, secrets, identityStore, cfg.PublicURL, &http.Client{Timeout: 15 * time.Second})
@@ -129,43 +123,13 @@ func run(logger *slog.Logger) error {
 		Reconciliations: reconciliationStore,
 	})
 
-	errCh := make(chan error, 8)
+	errCh := make(chan error, 2)
 	go func() {
 		logger.Info("server listening", "address", cfg.HTTPAddress, "version", version.Version)
 		errCh <- server.ListenAndServe()
 	}()
 	go func() {
-		if err := connectorSync.Run(ctx); err != nil {
-			errCh <- err
-		}
-	}()
-	go func() {
-		if err := uptimeKumaSync.Run(ctx); err != nil {
-			errCh <- err
-		}
-	}()
-	go func() {
-		if err := patchMonSync.Run(ctx); err != nil {
-			errCh <- err
-		}
-	}()
-	go func() {
-		if err := argusSync.Run(ctx); err != nil {
-			errCh <- err
-		}
-	}()
-	go func() {
-		if err := indicatorCollector.Run(ctx); err != nil {
-			errCh <- err
-		}
-	}()
-	go func() {
 		if err := oidcSync.Run(ctx); err != nil {
-			errCh <- err
-		}
-	}()
-	go func() {
-		if err := burstAcknowledgements.Run(ctx); err != nil {
 			errCh <- err
 		}
 	}()

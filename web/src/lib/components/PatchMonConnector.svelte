@@ -9,6 +9,7 @@
     resolvedTargetAssignments
   } from '$lib/reconciliation';
   import Icon from './Icon.svelte';
+  import ConnectorAccessPlan from './ConnectorAccessPlan.svelte';
   import ReconciliationSummary from './ReconciliationSummary.svelte';
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
@@ -32,6 +33,10 @@
   let address = $state('');
   let tokenKey = $state('');
   let tokenSecret = $state('');
+  let username = $state('');
+  let password = $state('');
+  let secondFactor = $state('');
+  let manualAccess = $state(false);
   let preview = $state<PatchMonPreview | null>(null);
   let imported = $state<PatchMonImportResult | null>(null);
   let selected = $state<string[]>([]);
@@ -118,10 +123,14 @@
     try {
       adoptPreview(await api<PatchMonPreview>('/api/v1/connectors/patchmon/preview', {
         method: 'POST',
-        body: JSON.stringify({ name, address, token_key: tokenKey, token_secret: tokenSecret })
+        body: JSON.stringify(manualAccess
+          ? { name, address, token_key: tokenKey, token_secret: tokenSecret }
+          : { name, address, username, password, second_factor: secondFactor })
       }));
       tokenKey = '';
       tokenSecret = '';
+      password = '';
+      secondFactor = '';
     } catch (cause) {
       error = cause instanceof Error ? cause.message : t('patchmon.verifyFailed');
     } finally {
@@ -203,6 +212,7 @@
           <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
         </div>
 
+        <ConnectorAccessPlan access={preview.access} product="patchmon" />
         <ReconciliationSummary counts={reconciliation} />
 
         <div class="listbar">
@@ -257,11 +267,22 @@
           </section>
           <section class="last">
             <h3>{t('wizard.authorisation')}</h3>
-            <p class="faint lead">{t('patchmon.tokenHint')}</p>
-            <div class="grid">
-              <div class="field"><label for="patchmon-key">{t('patchmon.tokenKey')}</label><input id="patchmon-key" type="password" bind:value={tokenKey} required autocomplete="off" spellcheck="false" /></div>
-              <div class="field"><label for="patchmon-secret">{t('patchmon.tokenSecret')}</label><input id="patchmon-secret" type="password" bind:value={tokenSecret} required autocomplete="off" spellcheck="false" /></div>
-            </div>
+            <p class="faint lead">{t('patchmon.setupHint')}</p>
+            {#if manualAccess}
+              <div class="grid">
+                <div class="field"><label for="patchmon-key">{t('patchmon.tokenKey')}</label><input id="patchmon-key" type="password" bind:value={tokenKey} required autocomplete="off" spellcheck="false" /></div>
+                <div class="field"><label for="patchmon-secret">{t('patchmon.tokenSecret')}</label><input id="patchmon-secret" type="password" bind:value={tokenSecret} required autocomplete="off" spellcheck="false" /></div>
+              </div>
+            {:else}
+              <div class="grid">
+                <div class="field"><label for="patchmon-user">{t('wizard.installerAccount')}</label><input id="patchmon-user" bind:value={username} required maxlength="4096" autocomplete="username" /></div>
+                <div class="field"><label for="patchmon-password">{t('wizard.temporaryPassword')}</label><input id="patchmon-password" type="password" bind:value={password} required maxlength="4096" autocomplete="current-password" /></div>
+                <div class="field"><label for="patchmon-2fa">{t('wizard.secondFactor')}</label><input id="patchmon-2fa" bind:value={secondFactor} maxlength="32" inputmode="numeric" autocomplete="one-time-code" /></div>
+              </div>
+            {/if}
+            <button class="mode" type="button" onclick={() => manualAccess = !manualAccess}>
+              {t(manualAccess ? 'patchmon.useManagedAccess' : 'patchmon.useExistingToken')}
+            </button>
           </section>
           {#if error}<p class="error" role="alert">{error}</p>{/if}
         </div>
@@ -283,6 +304,7 @@
   .lead { margin: .25rem 0 var(--s4); font-size: .75rem; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--s4); }
   .grid .field { margin: 0; }
+  .mode { margin-top: var(--s3); padding: 0; border: 0; color: var(--accent); background: none; font: inherit; font-size: .75rem; cursor: pointer; }
   .checks { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s5); padding: var(--s4); margin-bottom: var(--s4); border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--bg); }
   .checks span, .checks small { display: block; font-size: .6875rem; }
   .checks strong { display: block; margin-top: 2px; font-size: .75rem; }

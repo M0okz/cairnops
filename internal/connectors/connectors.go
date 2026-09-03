@@ -61,6 +61,12 @@ type TargetReference struct {
 	Name string `json:"name"`
 }
 
+type AccessPreview struct {
+	Mode          string   `json:"mode"`
+	WillProvision bool     `json:"will_provision"`
+	RemoteChanges []string `json:"remote_changes,omitempty"`
+}
+
 type DiscoveredHost struct {
 	ExternalID        string             `json:"external_id"`
 	Name              string             `json:"name"`
@@ -72,9 +78,13 @@ type DiscoveredHost struct {
 }
 
 type ZabbixPreviewInput struct {
-	Name     string `json:"name"`
-	Address  string `json:"address"`
-	APIToken string `json:"api_token"`
+	Name                 string `json:"name"`
+	Address              string `json:"address"`
+	Username             string `json:"username,omitempty"`
+	Password             string `json:"password,omitempty"`
+	APIToken             string `json:"api_token,omitempty"`
+	credentialManagement string
+	managedCredentialID  string
 }
 
 type ZabbixPreview struct {
@@ -87,6 +97,7 @@ type ZabbixPreview struct {
 	EncryptedTransport bool              `json:"encrypted_transport"`
 	Hosts              []DiscoveredHost  `json:"hosts"`
 	AvailableTargets   []TargetReference `json:"available_targets"`
+	Access             AccessPreview     `json:"access"`
 	Receipt            string            `json:"receipt"`
 	ExpiresAt          time.Time         `json:"expires_at"`
 }
@@ -121,9 +132,14 @@ type UptimeKumaMonitorPreview struct {
 }
 
 type UptimeKumaPreviewInput struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	APIKey  string `json:"api_key"`
+	Name                 string `json:"name"`
+	Address              string `json:"address"`
+	Username             string `json:"username,omitempty"`
+	Password             string `json:"password,omitempty"`
+	SecondFactor         string `json:"second_factor,omitempty"`
+	APIKey               string `json:"api_key,omitempty"`
+	credentialManagement string
+	managedCredentialID  string
 }
 
 type UptimeKumaPreview struct {
@@ -135,6 +151,7 @@ type UptimeKumaPreview struct {
 	EncryptedTransport bool                       `json:"encrypted_transport"`
 	Monitors           []UptimeKumaMonitorPreview `json:"monitors"`
 	AvailableTargets   []TargetReference          `json:"available_targets"`
+	Access             AccessPreview              `json:"access"`
 	Receipt            string                     `json:"receipt"`
 	ExpiresAt          time.Time                  `json:"expires_at"`
 }
@@ -168,10 +185,15 @@ type PatchMonHostPreview struct {
 }
 
 type PatchMonPreviewInput struct {
-	Name        string `json:"name"`
-	Address     string `json:"address"`
-	TokenKey    string `json:"token_key"`
-	TokenSecret string `json:"token_secret"`
+	Name                 string `json:"name"`
+	Address              string `json:"address"`
+	Username             string `json:"username,omitempty"`
+	Password             string `json:"password,omitempty"`
+	SecondFactor         string `json:"second_factor,omitempty"`
+	TokenKey             string `json:"token_key,omitempty"`
+	TokenSecret          string `json:"token_secret,omitempty"`
+	credentialManagement string
+	managedCredentialID  string
 }
 
 type PatchMonPreview struct {
@@ -183,6 +205,7 @@ type PatchMonPreview struct {
 	EncryptedTransport bool                  `json:"encrypted_transport"`
 	Hosts              []PatchMonHostPreview `json:"hosts"`
 	AvailableTargets   []TargetReference     `json:"available_targets"`
+	Access             AccessPreview         `json:"access"`
 	Receipt            string                `json:"receipt"`
 	ExpiresAt          time.Time             `json:"expires_at"`
 }
@@ -259,35 +282,41 @@ type PreviewState struct {
 }
 
 type PersistZabbixInput struct {
-	ActorID            string
-	Name               string
-	Endpoint           string
-	CredentialSealed   string
-	Version            string
-	Compatibility      string
-	EncryptedTransport bool
-	Hosts              []zabbix.Host
-	TargetAssignments  map[string]string
+	ActorID              string
+	Name                 string
+	Endpoint             string
+	CredentialSealed     string
+	Version              string
+	Compatibility        string
+	EncryptedTransport   bool
+	Hosts                []zabbix.Host
+	TargetAssignments    map[string]string
+	CredentialManagement string
+	ManagedCredentialID  string
 }
 
 type PersistUptimeKumaInput struct {
-	ActorID            string
-	Name               string
-	Endpoint           string
-	CredentialSealed   string
-	EncryptedTransport bool
-	Monitors           []uptimekuma.Monitor
-	TargetAssignments  map[string]string
+	ActorID              string
+	Name                 string
+	Endpoint             string
+	CredentialSealed     string
+	EncryptedTransport   bool
+	Monitors             []uptimekuma.Monitor
+	TargetAssignments    map[string]string
+	CredentialManagement string
+	ManagedCredentialID  string
 }
 
 type PersistPatchMonInput struct {
-	ActorID            string
-	Name               string
-	Endpoint           string
-	CredentialSealed   string
-	EncryptedTransport bool
-	Hosts              []patchmon.Host
-	TargetAssignments  map[string]string
+	ActorID              string
+	Name                 string
+	Endpoint             string
+	CredentialSealed     string
+	EncryptedTransport   bool
+	Hosts                []patchmon.Host
+	TargetAssignments    map[string]string
+	CredentialManagement string
+	ManagedCredentialID  string
 }
 
 type PersistArgusInput struct {
@@ -316,12 +345,31 @@ type ZabbixClient interface {
 	Inspect(context.Context, string, string) (zabbix.Inspection, error)
 }
 
+type ZabbixBootstrapper interface {
+	PrepareBootstrap(context.Context, string, string, string) (zabbix.Inspection, zabbix.BootstrapSession, error)
+	Provision(context.Context, zabbix.BootstrapSession) (zabbix.ManagedCredential, error)
+	Revoke(context.Context, zabbix.BootstrapSession, string) error
+	CloseBootstrap(context.Context, zabbix.BootstrapSession) error
+}
+
 type UptimeKumaClient interface {
 	Inspect(context.Context, string, string) (uptimekuma.Inspection, error)
 }
 
+type UptimeKumaBootstrapper interface {
+	PrepareBootstrap(context.Context, string, string, string, string) (uptimekuma.Inspection, uptimekuma.BootstrapSession, error)
+	Provision(context.Context, uptimekuma.BootstrapSession) (uptimekuma.ManagedCredential, error)
+	Revoke(context.Context, uptimekuma.BootstrapSession, string) error
+}
+
 type PatchMonClient interface {
 	Inspect(context.Context, string, patchmon.Credentials) (patchmon.Inspection, error)
+}
+
+type PatchMonBootstrapper interface {
+	PrepareBootstrap(context.Context, string, string, string, string) (patchmon.Inspection, patchmon.BootstrapSession, error)
+	Provision(context.Context, patchmon.BootstrapSession) (patchmon.ManagedCredential, error)
+	Revoke(context.Context, patchmon.BootstrapSession, string) error
 }
 
 type ArgusClient interface {
@@ -339,24 +387,33 @@ type Service struct {
 }
 
 type zabbixReceipt struct {
-	Name      string    `json:"name"`
-	Endpoint  string    `json:"endpoint"`
-	APIToken  string    `json:"api_token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Name                string                   `json:"name"`
+	Endpoint            string                   `json:"endpoint"`
+	Mode                string                   `json:"mode"`
+	APIToken            string                   `json:"api_token,omitempty"`
+	ManagedCredentialID string                   `json:"managed_credential_id,omitempty"`
+	Bootstrap           *zabbix.BootstrapSession `json:"bootstrap,omitempty"`
+	ExpiresAt           time.Time                `json:"expires_at"`
 }
 
 type uptimeKumaReceipt struct {
-	Name      string    `json:"name"`
-	Endpoint  string    `json:"endpoint"`
-	APIKey    string    `json:"api_key"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Name                string                       `json:"name"`
+	Endpoint            string                       `json:"endpoint"`
+	Mode                string                       `json:"mode"`
+	APIKey              string                       `json:"api_key,omitempty"`
+	ManagedCredentialID string                       `json:"managed_credential_id,omitempty"`
+	Bootstrap           *uptimekuma.BootstrapSession `json:"bootstrap,omitempty"`
+	ExpiresAt           time.Time                    `json:"expires_at"`
 }
 
 type patchMonReceipt struct {
-	Name        string               `json:"name"`
-	Endpoint    string               `json:"endpoint"`
-	Credentials patchmon.Credentials `json:"credentials"`
-	ExpiresAt   time.Time            `json:"expires_at"`
+	Name                string                     `json:"name"`
+	Endpoint            string                     `json:"endpoint"`
+	Mode                string                     `json:"mode"`
+	Credentials         patchmon.Credentials       `json:"credentials,omitempty"`
+	ManagedCredentialID string                     `json:"managed_credential_id,omitempty"`
+	Bootstrap           *patchmon.BootstrapSession `json:"bootstrap,omitempty"`
+	ExpiresAt           time.Time                  `json:"expires_at"`
 }
 
 type argusReceipt struct {
@@ -414,9 +471,17 @@ func (service *Service) PreviewExisting(ctx context.Context, connectorID string)
 	}
 	switch credential.Kind {
 	case "zabbix":
-		return service.PreviewZabbix(ctx, ZabbixPreviewInput{Name: name, Address: credential.Endpoint, APIToken: string(plaintext)})
+		return service.PreviewZabbix(ctx, ZabbixPreviewInput{
+			Name: name, Address: credential.Endpoint, APIToken: string(plaintext),
+			credentialManagement: credential.CredentialManagement,
+			managedCredentialID:  credential.ManagedCredentialID,
+		})
 	case "uptime_kuma":
-		return service.PreviewUptimeKuma(ctx, UptimeKumaPreviewInput{Name: name, Address: credential.Endpoint, APIKey: string(plaintext)})
+		return service.PreviewUptimeKuma(ctx, UptimeKumaPreviewInput{
+			Name: name, Address: credential.Endpoint, APIKey: string(plaintext),
+			credentialManagement: credential.CredentialManagement,
+			managedCredentialID:  credential.ManagedCredentialID,
+		})
 	case "patchmon":
 		var patchCredentials patchmon.Credentials
 		if err := json.Unmarshal(plaintext, &patchCredentials); err != nil {
@@ -425,6 +490,8 @@ func (service *Service) PreviewExisting(ctx context.Context, connectorID string)
 		return service.PreviewPatchMon(ctx, PatchMonPreviewInput{
 			Name: name, Address: credential.Endpoint,
 			TokenKey: patchCredentials.Key, TokenSecret: patchCredentials.Secret,
+			credentialManagement: credential.CredentialManagement,
+			managedCredentialID:  credential.ManagedCredentialID,
 		})
 	case "argus":
 		var credentials argus.Credentials
@@ -479,7 +546,37 @@ func (service *Service) PreviewZabbix(ctx context.Context, input ZabbixPreviewIn
 	if !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) > 160 {
 		return ZabbixPreview{}, fmt.Errorf("%w: connector name must contain between 1 and 160 characters", ErrInvalidInput)
 	}
-	inspection, err := service.zabbix.Inspect(ctx, input.Address, input.APIToken)
+	mode := input.credentialManagement
+	if mode != "managed" {
+		mode = "provided"
+	}
+	access := AccessPreview{Mode: mode}
+	var bootstrap *zabbix.BootstrapSession
+	var inspection zabbix.Inspection
+	var err error
+	manualAccess := strings.TrimSpace(input.APIToken) != ""
+	bootstrapAccess := strings.TrimSpace(input.Username) != "" || input.Password != ""
+	if manualAccess && bootstrapAccess {
+		return ZabbixPreview{}, fmt.Errorf("%w: choose automatic setup or an existing Zabbix token, not both", ErrInvalidInput)
+	}
+	if manualAccess {
+		inspection, err = service.zabbix.Inspect(ctx, input.Address, input.APIToken)
+	} else {
+		if strings.TrimSpace(input.Username) == "" || input.Password == "" {
+			return ZabbixPreview{}, fmt.Errorf("%w: username and password are required for automatic Zabbix setup", ErrInvalidInput)
+		}
+		provisioner, ok := service.zabbix.(ZabbixBootstrapper)
+		if !ok {
+			return ZabbixPreview{}, fmt.Errorf("%w: automatic Zabbix token setup is unavailable", ErrConnection)
+		}
+		var session zabbix.BootstrapSession
+		inspection, session, err = provisioner.PrepareBootstrap(ctx, input.Address, input.Username, input.Password)
+		bootstrap = &session
+		mode = "managed"
+		access = AccessPreview{
+			Mode: mode, WillProvision: true, RemoteChanges: []string{"create_zabbix_api_token"},
+		}
+	}
 	if err != nil {
 		return ZabbixPreview{}, fmt.Errorf("%w: %v", ErrConnection, err)
 	}
@@ -514,7 +611,8 @@ func (service *Service) PreviewZabbix(ctx context.Context, input ZabbixPreviewIn
 	expiresAt := service.now().UTC().Add(previewLifetime)
 	receiptPayload, err := json.Marshal(zabbixReceipt{
 		Name: input.Name, Endpoint: inspection.Endpoint,
-		APIToken: strings.TrimSpace(input.APIToken), ExpiresAt: expiresAt,
+		Mode: mode, APIToken: strings.TrimSpace(input.APIToken),
+		ManagedCredentialID: input.managedCredentialID, Bootstrap: bootstrap, ExpiresAt: expiresAt,
 	})
 	if err != nil {
 		return ZabbixPreview{}, fmt.Errorf("encode Zabbix preview: %w", err)
@@ -529,6 +627,7 @@ func (service *Service) PreviewZabbix(ctx context.Context, input ZabbixPreviewIn
 		CompatibilityLabel: inspection.CompatibilityLabel,
 		EncryptedTransport: inspection.EncryptedTransport,
 		Hosts:              hosts, AvailableTargets: availableTargets(state.Targets),
+		Access:  access,
 		Receipt: receipt, ExpiresAt: expiresAt,
 	}, nil
 }
@@ -541,7 +640,37 @@ func (service *Service) PreviewUptimeKuma(ctx context.Context, input UptimeKumaP
 	if !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) > 160 {
 		return UptimeKumaPreview{}, fmt.Errorf("%w: connector name must contain between 1 and 160 characters", ErrInvalidInput)
 	}
-	inspection, err := service.uptimeKuma.Inspect(ctx, input.Address, input.APIKey)
+	mode := input.credentialManagement
+	if mode != "managed" {
+		mode = "provided"
+	}
+	access := AccessPreview{Mode: mode}
+	var bootstrap *uptimekuma.BootstrapSession
+	var inspection uptimekuma.Inspection
+	var err error
+	manualAccess := strings.TrimSpace(input.APIKey) != ""
+	bootstrapAccess := strings.TrimSpace(input.Username) != "" || input.Password != "" || strings.TrimSpace(input.SecondFactor) != ""
+	if manualAccess && bootstrapAccess {
+		return UptimeKumaPreview{}, fmt.Errorf("%w: choose automatic setup or an existing Uptime Kuma API key, not both", ErrInvalidInput)
+	}
+	if manualAccess {
+		inspection, err = service.uptimeKuma.Inspect(ctx, input.Address, input.APIKey)
+	} else {
+		if strings.TrimSpace(input.Username) == "" || input.Password == "" {
+			return UptimeKumaPreview{}, fmt.Errorf("%w: username and password are required for automatic Uptime Kuma setup", ErrInvalidInput)
+		}
+		provisioner, ok := service.uptimeKuma.(UptimeKumaBootstrapper)
+		if !ok {
+			return UptimeKumaPreview{}, fmt.Errorf("%w: automatic Uptime Kuma API-key setup is unavailable", ErrConnection)
+		}
+		var session uptimekuma.BootstrapSession
+		inspection, session, err = provisioner.PrepareBootstrap(ctx, input.Address, input.Username, input.Password, input.SecondFactor)
+		bootstrap = &session
+		mode = "managed"
+		access = AccessPreview{
+			Mode: mode, WillProvision: true, RemoteChanges: []string{"create_uptime_kuma_api_key"},
+		}
+	}
 	if err != nil {
 		return UptimeKumaPreview{}, fmt.Errorf("%w: %v", ErrConnection, err)
 	}
@@ -576,7 +705,8 @@ func (service *Service) PreviewUptimeKuma(ctx context.Context, input UptimeKumaP
 	expiresAt := service.now().UTC().Add(previewLifetime)
 	receiptPayload, err := json.Marshal(uptimeKumaReceipt{
 		Name: input.Name, Endpoint: inspection.Endpoint,
-		APIKey: strings.TrimSpace(input.APIKey), ExpiresAt: expiresAt,
+		Mode: mode, APIKey: strings.TrimSpace(input.APIKey),
+		ManagedCredentialID: input.managedCredentialID, Bootstrap: bootstrap, ExpiresAt: expiresAt,
 	})
 	if err != nil {
 		return UptimeKumaPreview{}, fmt.Errorf("encode Uptime Kuma preview: %w", err)
@@ -589,7 +719,8 @@ func (service *Service) PreviewUptimeKuma(ctx context.Context, input UptimeKumaP
 		Kind: "uptime_kuma", Name: input.Name, Endpoint: inspection.Endpoint,
 		Compatibility: "supported", CompatibilityLabel: "API métriques officielle",
 		EncryptedTransport: inspection.EncryptedTransport, Monitors: monitors,
-		AvailableTargets: availableTargets(state.Targets), Receipt: receipt, ExpiresAt: expiresAt,
+		AvailableTargets: availableTargets(state.Targets), Access: access,
+		Receipt: receipt, ExpiresAt: expiresAt,
 	}, nil
 }
 
@@ -601,8 +732,41 @@ func (service *Service) PreviewPatchMon(ctx context.Context, input PatchMonPrevi
 	if !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) > 160 {
 		return PatchMonPreview{}, fmt.Errorf("%w: connector name must contain between 1 and 160 characters", ErrInvalidInput)
 	}
+	mode := input.credentialManagement
+	if mode != "managed" {
+		mode = "provided"
+	}
+	access := AccessPreview{Mode: mode}
 	credentials := patchmon.Credentials{Key: input.TokenKey, Secret: input.TokenSecret}
-	inspection, err := service.patchMon.Inspect(ctx, input.Address, credentials)
+	var bootstrap *patchmon.BootstrapSession
+	var inspection patchmon.Inspection
+	var err error
+	manualAccess := strings.TrimSpace(input.TokenKey) != "" || strings.TrimSpace(input.TokenSecret) != ""
+	bootstrapAccess := strings.TrimSpace(input.Username) != "" || input.Password != "" || strings.TrimSpace(input.SecondFactor) != ""
+	if manualAccess && bootstrapAccess {
+		return PatchMonPreview{}, fmt.Errorf("%w: choose automatic setup or an existing PatchMon token, not both", ErrInvalidInput)
+	}
+	if manualAccess {
+		if strings.TrimSpace(input.TokenKey) == "" || strings.TrimSpace(input.TokenSecret) == "" {
+			return PatchMonPreview{}, fmt.Errorf("%w: both PatchMon token key and secret are required", ErrInvalidInput)
+		}
+		inspection, err = service.patchMon.Inspect(ctx, input.Address, credentials)
+	} else {
+		if strings.TrimSpace(input.Username) == "" || input.Password == "" {
+			return PatchMonPreview{}, fmt.Errorf("%w: username and password are required for automatic PatchMon setup", ErrInvalidInput)
+		}
+		provisioner, ok := service.patchMon.(PatchMonBootstrapper)
+		if !ok {
+			return PatchMonPreview{}, fmt.Errorf("%w: automatic PatchMon API-token setup is unavailable", ErrConnection)
+		}
+		var session patchmon.BootstrapSession
+		inspection, session, err = provisioner.PrepareBootstrap(ctx, input.Address, input.Username, input.Password, input.SecondFactor)
+		bootstrap = &session
+		mode = "managed"
+		access = AccessPreview{
+			Mode: mode, WillProvision: true, RemoteChanges: []string{"create_patchmon_host_read_token"},
+		}
+	}
 	if err != nil {
 		return PatchMonPreview{}, fmt.Errorf("%w: %v", ErrConnection, err)
 	}
@@ -640,8 +804,11 @@ func (service *Service) PreviewPatchMon(ctx context.Context, input PatchMonPrevi
 	expiresAt := service.now().UTC().Add(previewLifetime)
 	receiptPayload, err := json.Marshal(patchMonReceipt{
 		Name: input.Name, Endpoint: inspection.Endpoint,
-		Credentials: patchmon.Credentials{Key: strings.TrimSpace(input.TokenKey), Secret: strings.TrimSpace(input.TokenSecret)},
-		ExpiresAt:   expiresAt,
+		Mode:                mode,
+		Credentials:         patchmon.Credentials{Key: strings.TrimSpace(input.TokenKey), Secret: strings.TrimSpace(input.TokenSecret)},
+		ManagedCredentialID: input.managedCredentialID,
+		Bootstrap:           bootstrap,
+		ExpiresAt:           expiresAt,
 	})
 	if err != nil {
 		return PatchMonPreview{}, fmt.Errorf("encode PatchMon preview: %w", err)
@@ -654,7 +821,8 @@ func (service *Service) PreviewPatchMon(ctx context.Context, input PatchMonPrevi
 		Kind: "patchmon", Name: input.Name, Endpoint: inspection.Endpoint,
 		Compatibility: "supported", CompatibilityLabel: "API d’intégration en lecture seule",
 		EncryptedTransport: inspection.EncryptedTransport, Hosts: hosts,
-		AvailableTargets: availableTargets(state.Targets), Receipt: receipt, ExpiresAt: expiresAt,
+		AvailableTargets: availableTargets(state.Targets), Access: access,
+		Receipt: receipt, ExpiresAt: expiresAt,
 	}, nil
 }
 
@@ -775,7 +943,41 @@ func (service *Service) ImportZabbix(ctx context.Context, actorID string, input 
 	if !service.now().UTC().Before(receipt.ExpiresAt) {
 		return ZabbixImport{}, ErrPreviewExpired
 	}
-	inspection, err := service.zabbix.Inspect(ctx, receipt.Endpoint, receipt.APIToken)
+	mode := receipt.Mode
+	if mode == "" {
+		mode = "provided"
+	}
+	apiToken := receipt.APIToken
+	managedCredentialID := receipt.ManagedCredentialID
+	var provisioner ZabbixBootstrapper
+	persisted := false
+	if mode == "managed" {
+		if receipt.Bootstrap == nil {
+			if strings.TrimSpace(apiToken) == "" || strings.TrimSpace(managedCredentialID) == "" {
+				return ZabbixImport{}, fmt.Errorf("%w: invalid managed preview receipt", ErrInvalidInput)
+			}
+		} else {
+			var ok bool
+			provisioner, ok = service.zabbix.(ZabbixBootstrapper)
+			if !ok {
+				return ZabbixImport{}, fmt.Errorf("%w: automatic Zabbix token setup is unavailable", ErrConnection)
+			}
+			managed, provisionErr := provisioner.Provision(ctx, *receipt.Bootstrap)
+			if provisionErr != nil {
+				return ZabbixImport{}, fmt.Errorf("%w: %v", ErrConnection, provisionErr)
+			}
+			apiToken, managedCredentialID = managed.Token, managed.ID
+			defer func() {
+				cleanupCtx, cancel := connectorCleanupContext(ctx)
+				defer cancel()
+				if !persisted {
+					_ = provisioner.Revoke(cleanupCtx, *receipt.Bootstrap, managedCredentialID)
+				}
+				_ = provisioner.CloseBootstrap(cleanupCtx, *receipt.Bootstrap)
+			}()
+		}
+	}
+	inspection, err := service.zabbix.Inspect(ctx, receipt.Endpoint, apiToken)
 	if err != nil {
 		return ZabbixImport{}, fmt.Errorf("%w: %v", ErrConnection, err)
 	}
@@ -790,7 +992,7 @@ func (service *Service) ImportZabbix(ctx context.Context, actorID string, input 
 		return ZabbixImport{}, fmt.Errorf("%w: one or more selected hosts are no longer available", ErrInvalidInput)
 	}
 	sort.SliceStable(selected, func(i, j int) bool { return selected[i].ID < selected[j].ID })
-	credential, err := service.secrets.Seal([]byte(receipt.APIToken), "connector:zabbix:"+inspection.Endpoint)
+	credential, err := service.secrets.Seal([]byte(apiToken), "connector:zabbix:"+inspection.Endpoint)
 	if err != nil {
 		return ZabbixImport{}, fmt.Errorf("seal Zabbix credential: %w", err)
 	}
@@ -799,10 +1001,12 @@ func (service *Service) ImportZabbix(ctx context.Context, actorID string, input 
 		CredentialSealed: credential, Version: inspection.Version,
 		Compatibility: inspection.Compatibility, EncryptedTransport: inspection.EncryptedTransport,
 		Hosts: selected, TargetAssignments: assignments,
+		CredentialManagement: mode, ManagedCredentialID: managedCredentialID,
 	})
 	if err != nil {
 		return ZabbixImport{}, fmt.Errorf("import Zabbix hosts: %w", err)
 	}
+	persisted = true
 	return result, nil
 }
 
@@ -842,7 +1046,40 @@ func (service *Service) ImportUptimeKuma(ctx context.Context, actorID string, in
 	if !service.now().UTC().Before(receipt.ExpiresAt) {
 		return UptimeKumaImport{}, ErrPreviewExpired
 	}
-	inspection, err := service.uptimeKuma.Inspect(ctx, receipt.Endpoint, receipt.APIKey)
+	mode := receipt.Mode
+	if mode == "" {
+		mode = "provided"
+	}
+	apiKey := receipt.APIKey
+	managedCredentialID := receipt.ManagedCredentialID
+	var provisioner UptimeKumaBootstrapper
+	persisted := false
+	if mode == "managed" {
+		if receipt.Bootstrap == nil {
+			if strings.TrimSpace(apiKey) == "" || strings.TrimSpace(managedCredentialID) == "" {
+				return UptimeKumaImport{}, fmt.Errorf("%w: invalid managed preview receipt", ErrInvalidInput)
+			}
+		} else {
+			var ok bool
+			provisioner, ok = service.uptimeKuma.(UptimeKumaBootstrapper)
+			if !ok {
+				return UptimeKumaImport{}, fmt.Errorf("%w: automatic Uptime Kuma API-key setup is unavailable", ErrConnection)
+			}
+			managed, provisionErr := provisioner.Provision(ctx, *receipt.Bootstrap)
+			if provisionErr != nil {
+				return UptimeKumaImport{}, fmt.Errorf("%w: %v", ErrConnection, provisionErr)
+			}
+			apiKey, managedCredentialID = managed.APIKey, managed.ID
+			defer func() {
+				cleanupCtx, cancel := connectorCleanupContext(ctx)
+				defer cancel()
+				if !persisted {
+					_ = provisioner.Revoke(cleanupCtx, *receipt.Bootstrap, managedCredentialID)
+				}
+			}()
+		}
+	}
+	inspection, err := service.uptimeKuma.Inspect(ctx, receipt.Endpoint, apiKey)
 	if err != nil {
 		return UptimeKumaImport{}, fmt.Errorf("%w: %v", ErrConnection, err)
 	}
@@ -857,7 +1094,7 @@ func (service *Service) ImportUptimeKuma(ctx context.Context, actorID string, in
 		return UptimeKumaImport{}, fmt.Errorf("%w: one or more selected monitors are no longer available", ErrInvalidInput)
 	}
 	sort.SliceStable(selected, func(i, j int) bool { return selected[i].ID < selected[j].ID })
-	credential, err := service.secrets.Seal([]byte(receipt.APIKey), "connector:uptime_kuma:"+inspection.Endpoint)
+	credential, err := service.secrets.Seal([]byte(apiKey), "connector:uptime_kuma:"+inspection.Endpoint)
 	if err != nil {
 		return UptimeKumaImport{}, fmt.Errorf("seal Uptime Kuma credential: %w", err)
 	}
@@ -865,10 +1102,12 @@ func (service *Service) ImportUptimeKuma(ctx context.Context, actorID string, in
 		ActorID: actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
 		CredentialSealed: credential, EncryptedTransport: inspection.EncryptedTransport,
 		Monitors: selected, TargetAssignments: assignments,
+		CredentialManagement: mode, ManagedCredentialID: managedCredentialID,
 	})
 	if err != nil {
 		return UptimeKumaImport{}, fmt.Errorf("import Uptime Kuma monitors: %w", err)
 	}
+	persisted = true
 	return result, nil
 }
 
@@ -908,7 +1147,40 @@ func (service *Service) ImportPatchMon(ctx context.Context, actorID string, inpu
 	if !service.now().UTC().Before(receipt.ExpiresAt) {
 		return PatchMonImport{}, ErrPreviewExpired
 	}
-	inspection, err := service.patchMon.Inspect(ctx, receipt.Endpoint, receipt.Credentials)
+	mode := receipt.Mode
+	if mode == "" {
+		mode = "provided"
+	}
+	credentials := receipt.Credentials
+	managedCredentialID := receipt.ManagedCredentialID
+	var provisioner PatchMonBootstrapper
+	persisted := false
+	if mode == "managed" {
+		if receipt.Bootstrap == nil {
+			if strings.TrimSpace(credentials.Key) == "" || strings.TrimSpace(credentials.Secret) == "" || strings.TrimSpace(managedCredentialID) == "" {
+				return PatchMonImport{}, fmt.Errorf("%w: invalid managed preview receipt", ErrInvalidInput)
+			}
+		} else {
+			var ok bool
+			provisioner, ok = service.patchMon.(PatchMonBootstrapper)
+			if !ok {
+				return PatchMonImport{}, fmt.Errorf("%w: automatic PatchMon API-token setup is unavailable", ErrConnection)
+			}
+			managed, provisionErr := provisioner.Provision(ctx, *receipt.Bootstrap)
+			if provisionErr != nil {
+				return PatchMonImport{}, fmt.Errorf("%w: %v", ErrConnection, provisionErr)
+			}
+			credentials, managedCredentialID = managed.Credentials, managed.ID
+			defer func() {
+				cleanupCtx, cancel := connectorCleanupContext(ctx)
+				defer cancel()
+				if !persisted {
+					_ = provisioner.Revoke(cleanupCtx, *receipt.Bootstrap, managedCredentialID)
+				}
+			}()
+		}
+	}
+	inspection, err := service.patchMon.Inspect(ctx, receipt.Endpoint, credentials)
 	if err != nil {
 		return PatchMonImport{}, fmt.Errorf("%w: %v", ErrConnection, err)
 	}
@@ -923,7 +1195,7 @@ func (service *Service) ImportPatchMon(ctx context.Context, actorID string, inpu
 		return PatchMonImport{}, fmt.Errorf("%w: one or more selected hosts are no longer available", ErrInvalidInput)
 	}
 	sort.SliceStable(selected, func(i, j int) bool { return selected[i].ID < selected[j].ID })
-	encodedCredential, err := json.Marshal(receipt.Credentials)
+	encodedCredential, err := json.Marshal(credentials)
 	if err != nil {
 		return PatchMonImport{}, fmt.Errorf("encode PatchMon credential: %w", err)
 	}
@@ -935,10 +1207,12 @@ func (service *Service) ImportPatchMon(ctx context.Context, actorID string, inpu
 		ActorID: actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
 		CredentialSealed: credential, EncryptedTransport: inspection.EncryptedTransport,
 		Hosts: selected, TargetAssignments: assignments,
+		CredentialManagement: mode, ManagedCredentialID: managedCredentialID,
 	})
 	if err != nil {
 		return PatchMonImport{}, fmt.Errorf("import PatchMon hosts: %w", err)
 	}
+	persisted = true
 	return result, nil
 }
 
@@ -1060,6 +1334,10 @@ func validateTargetAssignments(selected map[string]struct{}, assignments map[str
 		validated[externalID] = targetID
 	}
 	return validated, nil
+}
+
+func connectorCleanupContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), 10*time.Second)
 }
 
 func validUUID(value string) bool {

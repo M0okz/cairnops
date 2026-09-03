@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import ConnectorAccessPlan from './ConnectorAccessPlan.svelte';
   import ReconciliationSummary from './ReconciliationSummary.svelte';
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
@@ -31,6 +32,10 @@
   let name = $state('Uptime Kuma');
   let address = $state('');
   let apiKey = $state('');
+  let username = $state('');
+  let password = $state('');
+  let secondFactor = $state('');
+  let manualAccess = $state(false);
   let preview = $state<UptimeKumaPreview | null>(null);
   let imported = $state<UptimeKumaImportResult | null>(null);
   let selected = $state<string[]>([]);
@@ -117,9 +122,13 @@
     try {
       adoptPreview(await api<UptimeKumaPreview>('/api/v1/connectors/uptime-kuma/preview', {
         method: 'POST',
-        body: JSON.stringify({ name, address, api_key: apiKey })
+        body: JSON.stringify(manualAccess
+          ? { name, address, api_key: apiKey }
+          : { name, address, username, password, second_factor: secondFactor })
       }));
       apiKey = '';
+      password = '';
+      secondFactor = '';
     } catch (cause) {
       error = cause instanceof Error ? cause.message : t('kuma.verifyFailed');
     } finally {
@@ -257,6 +266,7 @@
           <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
         </div>
 
+        <ConnectorAccessPlan access={preview.access} product="uptime_kuma" />
         <ReconciliationSummary counts={reconciliation} />
 
         <div class="listbar">
@@ -345,13 +355,23 @@
 
           <section>
             <h3>{t('wizard.authorisation')}</h3>
-            <p class="faint lead">{t('kuma.keyHint')}</p>
-            <div class="field">
-              <label for="kuma-key">{t('kuma.apiKey')}</label>
-              <input id="kuma-key" type="password" bind:value={apiKey} required maxlength="4096"
-                autocomplete="off" spellcheck="false" placeholder="••••••••••••••••••••••••" />
-              <small>{t('zabbix.tokenSmall')}</small>
-            </div>
+            <p class="faint lead">{t('kuma.setupHint')}</p>
+            {#if manualAccess}
+              <div class="field">
+                <label for="kuma-key">{t('kuma.apiKey')}</label>
+                <input id="kuma-key" type="password" bind:value={apiKey} required maxlength="4096"
+                  autocomplete="off" spellcheck="false" placeholder="••••••••••••••••••••••••" />
+              </div>
+            {:else}
+              <div class="grid">
+                <div class="field"><label for="kuma-user">{t('wizard.installerAccount')}</label><input id="kuma-user" bind:value={username} required maxlength="4096" autocomplete="username" /></div>
+                <div class="field"><label for="kuma-password">{t('wizard.temporaryPassword')}</label><input id="kuma-password" type="password" bind:value={password} required maxlength="4096" autocomplete="current-password" /></div>
+                <div class="field"><label for="kuma-2fa">{t('wizard.secondFactor')}</label><input id="kuma-2fa" bind:value={secondFactor} maxlength="32" inputmode="numeric" autocomplete="one-time-code" /></div>
+              </div>
+            {/if}
+            <button class="mode" type="button" onclick={() => manualAccess = !manualAccess}>
+              {t(manualAccess ? 'kuma.useManagedAccess' : 'kuma.useExistingKey')}
+            </button>
           </section>
 
           <section class="last">
@@ -518,6 +538,8 @@
   .grid .field {
     margin: 0;
   }
+
+  .mode { margin-top: var(--s3); padding: 0; border: 0; color: var(--accent); background: none; font: inherit; font-size: .75rem; cursor: pointer; }
 
   .checks {
     display: flex;

@@ -3,8 +3,10 @@ package patchmon
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -32,6 +34,46 @@ func TestInspectReadsScopedHostSnapshot(t *testing.T) {
 	}
 	if inspection.Hosts[0].Name() != "Database" || inspection.Hosts[1].SecurityUpdatesCount != 2 || !inspection.Hosts[1].NeedsReboot {
 		t.Fatalf("unexpected PatchMon hosts: %#v", inspection.Hosts)
+	}
+}
+
+func TestBootstrapCreatesScopedCredentialAndRemovesPreviewCredential(t *testing.T) {
+	t.Parallel()
+	created, deleted := 0, 0
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/patchmon/api/v1/auth/login":
+			var input map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&input)
+			if input["username"] != "installer" || input["password"] != "temporary-password" {
+				t.Fatal("unexpected PatchMon installer credentials")
+			}
+			_, _ = w.Write([]byte(`{"token":"installer-jwt"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/patchmon/api/v1/auto-enrollment/tokens":
+			if r.Header.Get("Authorization") != "Bearer installer-jwt" {
+				t.Fatal("missing PatchMon installer session")
+			}
+			created++
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"token":{"id":"token-` + string(rune('0'+created)) + `","token_key":"managed-key","token_secret":"managed-secret"}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/patchmon/api/v1/api/hosts":
+			_, _ = w.Write([]byte(`{"hosts":[{"id":"host-1","friendly_name":"Database","hostname":"db"}]}`))
+		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/patchmon/api/v1/auto-enrollment/tokens/"):
+			deleted++
+			_, _ = w.Write([]byte(`{"message":"deleted"}`))
+		default:
+			t.Fatalf("unexpected PatchMon request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	remote := NewClientWithHTTP(server.Client())
+	inspection, session, err := remote.PrepareBootstrap(context.Background(), server.URL+"/patchmon", "installer", "temporary-password", "")
+	if err != nil || len(inspection.Hosts) != 1 || created != 1 || deleted != 1 {
+		t.Fatalf("unexpected bootstrap preview: inspection=%#v created=%d deleted=%d err=%v", inspection, created, deleted, err)
+	}
+	credential, err := remote.Provision(context.Background(), session)
+	if err != nil || credential.Credentials.Key != "managed-key" || credential.ID != "token-2" {
+		t.Fatalf("unexpected durable credential: %#v err=%v", credential, err)
 	}
 }
 

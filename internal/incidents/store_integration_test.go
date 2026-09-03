@@ -477,12 +477,14 @@ func TestPostgresUptimeKumaDownRecoveryAndNewFailure(t *testing.T) {
 	}
 	firstObservedAt := time.Date(2026, 8, 14, 15, 0, 0, 0, time.UTC)
 	if err := store.ReconcileUptimeKuma(ctx, ReconcileUptimeKumaInput{
-		ConnectorID: connectorID, ObservedAt: firstObservedAt, Signals: []UptimeKumaSignal{down},
+		ConnectorID: connectorID, ObservedAt: firstObservedAt,
+		ObservedBindings: []string{bindingID}, Signals: []UptimeKumaSignal{down},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ReconcileUptimeKuma(ctx, ReconcileUptimeKumaInput{
-		ConnectorID: connectorID, ObservedAt: firstObservedAt.Add(time.Minute), Signals: []UptimeKumaSignal{down},
+		ConnectorID: connectorID, ObservedAt: firstObservedAt.Add(time.Minute),
+		ObservedBindings: []string{bindingID}, Signals: []UptimeKumaSignal{down},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -502,6 +504,7 @@ func TestPostgresUptimeKumaDownRecoveryAndNewFailure(t *testing.T) {
 	}
 	if err := store.ReconcileUptimeKuma(ctx, ReconcileUptimeKumaInput{
 		ConnectorID: connectorID, ObservedAt: firstObservedAt.Add(2 * time.Minute),
+		ObservedBindings: []string{bindingID},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -514,7 +517,8 @@ func TestPostgresUptimeKumaDownRecoveryAndNewFailure(t *testing.T) {
 	}
 
 	if err := store.ReconcileUptimeKuma(ctx, ReconcileUptimeKumaInput{
-		ConnectorID: connectorID, ObservedAt: firstObservedAt.Add(3 * time.Minute), Signals: []UptimeKumaSignal{down},
+		ConnectorID: connectorID, ObservedAt: firstObservedAt.Add(3 * time.Minute),
+		ObservedBindings: []string{bindingID}, Signals: []UptimeKumaSignal{down},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -547,7 +551,8 @@ func TestPostgresUptimeKumaDownRecoveryAndNewFailure(t *testing.T) {
 	}
 
 	if err := store.ReconcileUptimeKuma(ctx, ReconcileUptimeKumaInput{
-		ConnectorID: connectorID, ObservedAt: firstObservedAt.Add(4 * time.Minute), Signals: []UptimeKumaSignal{down},
+		ConnectorID: connectorID, ObservedAt: firstObservedAt.Add(4 * time.Minute),
+		ObservedBindings: []string{bindingID}, Signals: []UptimeKumaSignal{down},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -556,11 +561,13 @@ func TestPostgresUptimeKumaDownRecoveryAndNewFailure(t *testing.T) {
 	}
 	if err := store.ReconcileUptimeKuma(ctx, ReconcileUptimeKumaInput{
 		ConnectorID: connectorID, ObservedAt: firstObservedAt.Add(5 * time.Minute),
+		ObservedBindings: []string{bindingID},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.ReconcileUptimeKuma(ctx, ReconcileUptimeKumaInput{
-		ConnectorID: connectorID, ObservedAt: firstObservedAt.Add(6 * time.Minute), Signals: []UptimeKumaSignal{down},
+		ConnectorID: connectorID, ObservedAt: firstObservedAt.Add(6 * time.Minute),
+		ObservedBindings: []string{bindingID}, Signals: []UptimeKumaSignal{down},
 	}); err != nil {
 		t.Fatal(err)
 	}

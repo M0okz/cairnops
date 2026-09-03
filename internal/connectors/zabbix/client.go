@@ -3,6 +3,7 @@ package zabbix
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -47,6 +48,19 @@ type Inspection struct {
 	CompatibilityLabel string `json:"compatibility_label"`
 	EncryptedTransport bool   `json:"encrypted_transport"`
 	Hosts              []Host `json:"hosts"`
+}
+
+// BootstrapSession is a short-lived installer session. It is sealed into the
+// preview receipt and never persisted with the connector.
+type BootstrapSession struct {
+	Endpoint string `json:"endpoint"`
+	Token    string `json:"token"`
+	UserID   string `json:"user_id"`
+}
+
+type ManagedCredential struct {
+	Token string `json:"token"`
+	ID    string `json:"id"`
 }
 
 type Problem struct {
@@ -126,6 +140,101 @@ func NewClient() *Client {
 
 func NewClientWithHTTP(client *http.Client) *Client {
 	return &Client{http: client}
+}
+
+// PrepareBootstrap authenticates the installer and discovers the exact scope
+// visible to that account without keeping its password.
+func (client *Client) PrepareBootstrap(ctx context.Context, address, username, password string) (Inspection, BootstrapSession, error) {
+	endpoint, err := NormalizeEndpoint(address)
+	if err != nil {
+		return Inspection{}, BootstrapSession{}, err
+	}
+	username = strings.TrimSpace(username)
+	if username == "" || len(username) > 4096 || password == "" || len(password) > 4096 {
+		return Inspection{}, BootstrapSession{}, fmt.Errorf("username and password must each contain between 1 and 4096 characters")
+	}
+	var login struct {
+		SessionID string `json:"sessionid"`
+		UserID    string `json:"userid"`
+	}
+	if err := client.call(ctx, endpoint, "", "user.login", map[string]any{
+		"username": username, "password": password, "userData": true,
+	}, &login); err != nil {
+		return Inspection{}, BootstrapSession{}, fmt.Errorf("authenticate Zabbix installer: %w", err)
+	}
+	if strings.TrimSpace(login.SessionID) == "" || strings.TrimSpace(login.UserID) == "" {
+		return Inspection{}, BootstrapSession{}, fmt.Errorf("authenticate Zabbix installer: invalid session response")
+	}
+	session := BootstrapSession{Endpoint: endpoint, Token: login.SessionID, UserID: login.UserID}
+	inspection, err := client.Inspect(ctx, endpoint, session.Token)
+	if err != nil {
+		_ = client.CloseBootstrap(ctx, session)
+		return Inspection{}, BootstrapSession{}, err
+	}
+	return inspection, session, nil
+}
+
+// Provision creates and generates the durable API token only after the user
+// confirms the preview.
+func (client *Client) Provision(ctx context.Context, session BootstrapSession) (ManagedCredential, error) {
+	if strings.TrimSpace(session.Endpoint) == "" || strings.TrimSpace(session.Token) == "" || strings.TrimSpace(session.UserID) == "" {
+		return ManagedCredential{}, fmt.Errorf("Zabbix bootstrap session is incomplete")
+	}
+	var nonce [6]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return ManagedCredential{}, fmt.Errorf("name Zabbix API token: %w", err)
+	}
+	var created struct {
+		TokenIDs []string `json:"tokenids"`
+	}
+	if err := client.call(ctx, session.Endpoint, session.Token, "token.create", map[string]any{
+		"name": "CairnOps " + fmt.Sprintf("%x", nonce[:]), "userid": session.UserID,
+	}, &created); err != nil {
+		return ManagedCredential{}, fmt.Errorf("create Zabbix API token: %w", err)
+	}
+	if len(created.TokenIDs) != 1 || strings.TrimSpace(created.TokenIDs[0]) == "" {
+		return ManagedCredential{}, fmt.Errorf("create Zabbix API token: invalid response")
+	}
+	id := created.TokenIDs[0]
+	var generated []struct {
+		ID    string `json:"tokenid"`
+		Token string `json:"token"`
+	}
+	if err := client.call(ctx, session.Endpoint, session.Token, "token.generate", []string{id}, &generated); err != nil {
+		_ = client.Revoke(ctx, session, id)
+		return ManagedCredential{}, fmt.Errorf("generate Zabbix API token: %w", err)
+	}
+	if len(generated) != 1 || generated[0].ID != id || strings.TrimSpace(generated[0].Token) == "" {
+		_ = client.Revoke(ctx, session, id)
+		return ManagedCredential{}, fmt.Errorf("generate Zabbix API token: invalid response")
+	}
+	return ManagedCredential{ID: id, Token: generated[0].Token}, nil
+}
+
+func (client *Client) Revoke(ctx context.Context, session BootstrapSession, credentialID string) error {
+	var deleted struct {
+		TokenIDs []string `json:"tokenids"`
+	}
+	if err := client.call(ctx, session.Endpoint, session.Token, "token.delete", []string{credentialID}, &deleted); err != nil {
+		return fmt.Errorf("delete Zabbix API token: %w", err)
+	}
+	for _, id := range deleted.TokenIDs {
+		if id == credentialID {
+			return nil
+		}
+	}
+	return fmt.Errorf("delete Zabbix API token: remote response omitted the token")
+}
+
+func (client *Client) CloseBootstrap(ctx context.Context, session BootstrapSession) error {
+	var closed bool
+	if err := client.call(ctx, session.Endpoint, session.Token, "user.logout", []any{}, &closed); err != nil {
+		return fmt.Errorf("close Zabbix bootstrap session: %w", err)
+	}
+	if !closed {
+		return fmt.Errorf("close Zabbix bootstrap session: remote session stayed open")
+	}
+	return nil
 }
 
 func NormalizeEndpoint(raw string) (string, error) {

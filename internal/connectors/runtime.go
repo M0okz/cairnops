@@ -34,9 +34,11 @@ type RuntimeConnector struct {
 }
 
 type RuntimeCredential struct {
-	Kind             string
-	Endpoint         string
-	CredentialSealed string
+	Kind                 string
+	Endpoint             string
+	CredentialSealed     string
+	CredentialManagement string
+	ManagedCredentialID  string
 }
 
 // IntegrationObservation est ce qu'un cycle de synchronisation a constaté sur
@@ -735,6 +737,7 @@ func (synchronizer *UptimeKumaSynchronizer) syncOne(ctx context.Context, connect
 		bindingByMonitor[binding.ExternalID] = binding
 	}
 	signals := make([]incidents.UptimeKumaSignal, 0)
+	observedBindings := make([]string, 0, len(connector.Bindings))
 	observations := make([]IntegrationObservation, 0, len(connector.Bindings))
 	for _, monitor := range monitors {
 		binding, imported := bindingByMonitor[monitor.ID]
@@ -742,6 +745,9 @@ func (synchronizer *UptimeKumaSynchronizer) syncOne(ctx context.Context, connect
 			continue
 		}
 		observations = append(observations, uptimeKumaObservation(binding.ID, monitor))
+		if monitor.Status == 0 || monitor.Status == 1 {
+			observedBindings = append(observedBindings, binding.ID)
+		}
 		if monitor.Status != 0 {
 			continue
 		}
@@ -752,7 +758,8 @@ func (synchronizer *UptimeKumaSynchronizer) syncOne(ctx context.Context, connect
 	}
 	observedAt := synchronizer.now().UTC()
 	if err := synchronizer.incidents.ReconcileUptimeKuma(ctx, incidents.ReconcileUptimeKumaInput{
-		ConnectorID: connector.ID, ObservedAt: observedAt, Signals: signals,
+		ConnectorID: connector.ID, ObservedAt: observedAt,
+		ObservedBindings: observedBindings, Signals: signals,
 	}); err != nil {
 		failed(err)
 		return

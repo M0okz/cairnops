@@ -308,6 +308,9 @@ func TestUptimeKumaSynchronizerProjectsOnlyDownImportedMonitors(t *testing.T) {
 	if store.claimedKind != "uptime_kuma" || !store.completed || store.failed != "" || len(reconciler.kumaInput.Signals) != 1 {
 		t.Fatalf("unexpected Kuma synchronization: store=%#v input=%#v", store, reconciler.kumaInput)
 	}
+	if len(reconciler.kumaInput.ObservedBindings) != 2 {
+		t.Fatalf("only conclusive imported monitors may resolve incidents: %#v", reconciler.kumaInput)
+	}
 	projected := reconciler.kumaInput.Signals[0]
 	if projected.TargetID != "target-down" || projected.ExternalMonitor != "12" || projected.Severity != incidents.SeverityMajor {
 		t.Fatalf("unexpected Kuma signal: %#v", projected)
@@ -356,6 +359,9 @@ func TestUptimeKumaSynchronizerKeepsPendingAndMaintenanceNeutral(t *testing.T) {
 	}
 	if len(reconciler.kumaInput.Signals) != 0 {
 		t.Fatalf("neutral states must not open an incident: %#v", reconciler.kumaInput.Signals)
+	}
+	if len(reconciler.kumaInput.ObservedBindings) != 0 {
+		t.Fatalf("neutral states must not resolve an incident: %#v", reconciler.kumaInput)
 	}
 	for _, observation := range store.observations {
 		if observation.Outcome != "unknown" {

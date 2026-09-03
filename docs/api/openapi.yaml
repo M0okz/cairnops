@@ -925,6 +925,17 @@ components:
         contradictions:
           type: array
           items: { $ref: '#/components/schemas/MatchEvidence' }
+    ConnectorAccessPreview:
+      type: object
+      required: [mode, will_provision]
+      properties:
+        mode: { type: string, enum: [managed, provided] }
+        will_provision: { type: boolean }
+        remote_changes:
+          type: array
+          items:
+            type: string
+            enum: [create_zabbix_api_token, create_uptime_kuma_api_key, create_patchmon_host_read_token]
     ZabbixHostPreview:
       type: object
       required: [external_id, name, technical_name, interfaces]
@@ -942,7 +953,7 @@ components:
         already_imported_to: { $ref: '#/components/schemas/TargetReference' }
     ZabbixPreview:
       type: object
-      required: [kind, name, endpoint, version, compatibility, compatibility_label, encrypted_transport, hosts, available_targets, receipt, expires_at]
+      required: [kind, name, endpoint, version, compatibility, compatibility_label, encrypted_transport, hosts, available_targets, access, receipt, expires_at]
       properties:
         kind: { type: string, const: zabbix }
         name: { type: string }
@@ -957,6 +968,7 @@ components:
         available_targets:
           type: array
           items: { $ref: '#/components/schemas/TargetReference' }
+        access: { $ref: '#/components/schemas/ConnectorAccessPreview' }
         receipt:
           type: string
           writeOnly: true
@@ -996,7 +1008,7 @@ components:
         already_imported_to: { $ref: '#/components/schemas/TargetReference' }
     UptimeKumaPreview:
       type: object
-      required: [kind, name, endpoint, compatibility, compatibility_label, encrypted_transport, monitors, available_targets, receipt, expires_at]
+      required: [kind, name, endpoint, compatibility, compatibility_label, encrypted_transport, monitors, available_targets, access, receipt, expires_at]
       properties:
         kind: { type: string, const: uptime_kuma }
         name: { type: string }
@@ -1010,6 +1022,7 @@ components:
         available_targets:
           type: array
           items: { $ref: '#/components/schemas/TargetReference' }
+        access: { $ref: '#/components/schemas/ConnectorAccessPreview' }
         receipt:
           type: string
           writeOnly: true
@@ -1052,7 +1065,7 @@ components:
         already_imported_to: { $ref: '#/components/schemas/TargetReference' }
     PatchMonPreview:
       type: object
-      required: [kind, name, endpoint, compatibility, compatibility_label, encrypted_transport, hosts, available_targets, receipt, expires_at]
+      required: [kind, name, endpoint, compatibility, compatibility_label, encrypted_transport, hosts, available_targets, access, receipt, expires_at]
       properties:
         kind: { type: string, const: patchmon }
         name: { type: string }
@@ -1066,6 +1079,7 @@ components:
         available_targets:
           type: array
           items: { $ref: '#/components/schemas/TargetReference' }
+        access: { $ref: '#/components/schemas/ConnectorAccessPreview' }
         receipt:
           type: string
           writeOnly: true
@@ -1668,7 +1682,7 @@ paths:
   /api/v1/connectors/zabbix/preview:
     post:
       operationId: previewZabbixConnector
-      description: Vérifie TLS, la version API et la portée du jeton, puis propose des rapprochements explicables par nom, IP ou nom DNS sans importer.
+      description: Vérifie TLS et la version API avec un compte d'installation temporaire ou un jeton avancé, puis propose les rapprochements et la création du jeton dédié avant confirmation.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
@@ -1676,10 +1690,20 @@ paths:
           application/json:
             schema:
               type: object
-              required: [address, api_token]
+              required: [address]
+              oneOf:
+                - required: [username, password]
+                  not: { required: [api_token] }
+                - required: [api_token]
+                  not:
+                    anyOf:
+                      - required: [username]
+                      - required: [password]
               properties:
                 name: { type: string, minLength: 1, maxLength: 160, default: Zabbix }
                 address: { type: string, format: uri, maxLength: 2048 }
+                username: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+                password: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
                 api_token: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
       responses:
         '200':
@@ -1729,7 +1753,7 @@ paths:
   /api/v1/connectors/uptime-kuma/preview:
     post:
       operationId: previewUptimeKumaConnector
-      description: Vérifie TLS, la clé API et la métrique monitor_status, puis propose des rapprochements explicables par nom, IP ou nom DNS sans importer.
+      description: Vérifie TLS et l'inventaire via une session temporaire ou une clé avancée, puis propose les rapprochements et la création d'une clé dédiée avant confirmation.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
@@ -1737,10 +1761,22 @@ paths:
           application/json:
             schema:
               type: object
-              required: [address, api_key]
+              required: [address]
+              oneOf:
+                - required: [username, password]
+                  not: { required: [api_key] }
+                - required: [api_key]
+                  not:
+                    anyOf:
+                      - required: [username]
+                      - required: [password]
+                      - required: [second_factor]
               properties:
                 name: { type: string, minLength: 1, maxLength: 160, default: Uptime Kuma }
                 address: { type: string, format: uri, maxLength: 2048 }
+                username: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+                password: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+                second_factor: { type: string, minLength: 1, maxLength: 32, writeOnly: true }
                 api_key: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
       responses:
         '200':
@@ -1791,8 +1827,8 @@ paths:
     post:
       operationId: previewPatchMonConnector
       description: >-
-        Vérifie TLS et les identifiants de l'Integration API, lit la posture des
-        hôtes puis propose des rapprochements explicables sans importer.
+        Vérifie TLS et l'autorisation temporaire, lit la posture des hôtes puis
+        propose les rapprochements et le jeton host:get avant confirmation.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
@@ -1800,10 +1836,25 @@ paths:
           application/json:
             schema:
               type: object
-              required: [address, token_key, token_secret]
+              required: [address]
+              oneOf:
+                - required: [username, password]
+                  not:
+                    anyOf:
+                      - required: [token_key]
+                      - required: [token_secret]
+                - required: [token_key, token_secret]
+                  not:
+                    anyOf:
+                      - required: [username]
+                      - required: [password]
+                      - required: [second_factor]
               properties:
                 name: { type: string, minLength: 1, maxLength: 160, default: PatchMon }
                 address: { type: string, format: uri, maxLength: 2048 }
+                username: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+                password: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
+                second_factor: { type: string, minLength: 1, maxLength: 32, writeOnly: true }
                 token_key: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
                 token_secret: { type: string, minLength: 1, maxLength: 4096, writeOnly: true }
       responses:

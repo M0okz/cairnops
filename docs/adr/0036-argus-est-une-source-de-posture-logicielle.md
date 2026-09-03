@@ -34,7 +34,10 @@ Un service Argus n'est importable que s'il est actif et possède une
 configuration `deployed_version`. L'aperçu montre aussi les services
 inéligibles, avec leur raison. Les services éligibles non encore liés sont
 présélectionnés, mais chaque liaison à une Cible reste explicite et modifiable.
-Une nouvelle découverte ultérieure n'est jamais importée automatiquement.
+La règle historique qui interdisait tout import automatique après la connexion
+est remplacée par l'ADR 0041 : une découverte ultérieure sans rapprochement
+ambigu crée automatiquement sa Cible, tandis qu'un rapprochement possible
+attend une confirmation.
 
 L'identité externe est l'identifiant du service Argus. Son nom est un libellé
 mutable. Si l'identifiant change, CairnOps voit une nouvelle découverte et

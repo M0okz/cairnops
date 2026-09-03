@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import ConnectorAccessPlan from './ConnectorAccessPlan.svelte';
   import ReconciliationSummary from './ReconciliationSummary.svelte';
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
@@ -31,6 +32,9 @@
   let name = $state('Zabbix');
   let address = $state('');
   let apiToken = $state('');
+  let username = $state('');
+  let password = $state('');
+  let manualAccess = $state(false);
   let preview = $state<ZabbixPreview | null>(null);
   let imported = $state<ZabbixImportResult | null>(null);
   let selected = $state<string[]>([]);
@@ -116,9 +120,12 @@
     try {
       adoptPreview(await api<ZabbixPreview>('/api/v1/connectors/zabbix/preview', {
         method: 'POST',
-        body: JSON.stringify({ name, address, api_token: apiToken })
+        body: JSON.stringify(manualAccess
+          ? { name, address, api_token: apiToken }
+          : { name, address, username, password })
       }));
       apiToken = '';
+      password = '';
     } catch (cause) {
       error = cause instanceof Error ? cause.message : t('zabbix.verifyFailed');
     } finally {
@@ -256,6 +263,7 @@
           <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
         </div>
 
+        <ConnectorAccessPlan access={preview.access} product="zabbix" />
         <ReconciliationSummary counts={reconciliation} />
 
         <div class="listbar">
@@ -345,13 +353,23 @@
 
           <section>
             <h3>{t('wizard.authorisation')}</h3>
-            <p class="faint lead">{t('zabbix.tokenHint')}</p>
-            <div class="field">
-              <label for="zabbix-token">{t('zabbix.apiToken')}</label>
-              <input id="zabbix-token" type="password" bind:value={apiToken} required maxlength="4096"
-                autocomplete="off" spellcheck="false" placeholder="••••••••••••••••••••••••" />
-              <small>{t('zabbix.tokenSmall')}</small>
-            </div>
+            <p class="faint lead">{t('zabbix.setupHint')}</p>
+            {#if manualAccess}
+              <div class="field">
+                <label for="zabbix-token">{t('zabbix.apiToken')}</label>
+                <input id="zabbix-token" type="password" bind:value={apiToken} required maxlength="4096"
+                  autocomplete="off" spellcheck="false" placeholder="••••••••••••••••••••••••" />
+                <small>{t('zabbix.tokenSmall')}</small>
+              </div>
+            {:else}
+              <div class="grid">
+                <div class="field"><label for="zabbix-user">{t('wizard.installerAccount')}</label><input id="zabbix-user" bind:value={username} required maxlength="4096" autocomplete="username" /></div>
+                <div class="field"><label for="zabbix-password">{t('wizard.temporaryPassword')}</label><input id="zabbix-password" type="password" bind:value={password} required maxlength="4096" autocomplete="current-password" /></div>
+              </div>
+            {/if}
+            <button class="mode" type="button" onclick={() => manualAccess = !manualAccess}>
+              {t(manualAccess ? 'zabbix.useManagedAccess' : 'zabbix.useExistingToken')}
+            </button>
           </section>
 
           <section class="last">
@@ -518,6 +536,8 @@
   .grid .field {
     margin: 0;
   }
+
+  .mode { margin-top: var(--s3); padding: 0; border: 0; color: var(--accent); background: none; font: inherit; font-size: .75rem; cursor: pointer; }
 
   .checks {
     display: flex;

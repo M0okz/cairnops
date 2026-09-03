@@ -293,3 +293,61 @@ func TestInspectNeverReturnsRemoteBodyContainingToken(t *testing.T) {
 		t.Fatalf("expected a redacted remote error, got %v", err)
 	}
 }
+
+func TestBootstrapCreatesAndRevokesDedicatedTokenWithoutKeepingPassword(t *testing.T) {
+	t.Parallel()
+	created, generated, deleted, loggedOut := false, false, false, false
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var body struct {
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		response := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header)}
+		switch body.Method {
+		case "user.login":
+			if strings.Contains(string(body.Params), "temporary-password") == false {
+				t.Fatal("installer password was not used for the short session")
+			}
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":{"sessionid":"session-one","userid":"7"},"id":1}`))
+		case "apiinfo.version":
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":"7.4.2","id":1}`))
+		case "host.get":
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":[{"hostid":"10084","host":"db","name":"Database","interfaces":[]}],"id":1}`))
+		case "problem.get", "trigger.get":
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":[],"id":1}`))
+		case "token.create":
+			created = true
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":{"tokenids":["42"]},"id":1}`))
+		case "token.generate":
+			generated = true
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":[{"tokenid":"42","token":"runtime-token"}],"id":1}`))
+		case "token.delete":
+			deleted = true
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":{"tokenids":["42"]},"id":1}`))
+		case "user.logout":
+			loggedOut = true
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":true,"id":1}`))
+		default:
+			t.Fatalf("unexpected method %q", body.Method)
+		}
+		return response, nil
+	})}
+	remote := NewClientWithHTTP(client)
+	inspection, session, err := remote.PrepareBootstrap(context.Background(), "https://zabbix.example.net", "installer", "temporary-password")
+	if err != nil || len(inspection.Hosts) != 1 || session.Token != "session-one" {
+		t.Fatalf("unexpected bootstrap preparation: inspection=%#v session=%#v err=%v", inspection, session, err)
+	}
+	credential, err := remote.Provision(context.Background(), session)
+	if err != nil || credential.ID != "42" || credential.Token != "runtime-token" || !created || !generated {
+		t.Fatalf("unexpected managed credential: %#v err=%v", credential, err)
+	}
+	if err := remote.Revoke(context.Background(), session, credential.ID); err != nil || !deleted {
+		t.Fatalf("managed credential was not revoked: %v", err)
+	}
+	if err := remote.CloseBootstrap(context.Background(), session); err != nil || !loggedOut {
+		t.Fatalf("bootstrap session was not closed: %v", err)
+	}
+}

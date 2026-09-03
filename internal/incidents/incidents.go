@@ -141,9 +141,10 @@ type UptimeKumaSignal struct {
 }
 
 type ReconcileUptimeKumaInput struct {
-	ConnectorID string
-	ObservedAt  time.Time
-	Signals     []UptimeKumaSignal
+	ConnectorID      string
+	ObservedAt       time.Time
+	ObservedBindings []string
+	Signals          []UptimeKumaSignal
 }
 
 type PatchMonSignal struct {

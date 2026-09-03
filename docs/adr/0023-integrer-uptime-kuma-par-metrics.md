@@ -12,12 +12,16 @@ panne, UP comme une preuve de rétablissement et garde PENDING et MAINTENANCE
 neutres. La clé est scellée par la clé maîtresse de l'instance et n'est jamais
 renvoyée par l'API CairnOps.
 
-L'API Socket.IO de Kuma n'est pas utilisée : elle est documentée comme une API
-interne susceptible de changer sans préavis et exigerait un compte interactif ou
-un jeton de session plus puissant. Cette restriction rend l'intégration en lecture
-seule plus stable et plus facile à sécuriser, au prix de l'absence de propagation
-d'acquittement vers Kuma ; un acquittement d'Incident provenant uniquement de Kuma
-reste donc local à CairnOps.
+L'API Socket.IO de Kuma n'est pas utilisée par la Supervision : elle est
+documentée comme une API interne susceptible de changer sans préavis et
+exigerait un compte interactif ou un jeton de session plus puissant. L'ADR 0041
+autorise une exception versionnée et isolée pendant la connexion guidée et la
+suppression, uniquement pour créer ou révoquer la clé dédiée à `/metrics` à
+partir d'une autorisation temporaire. Une rupture de cette interface peut donc
+affecter l'amorçage d'un nouveau Connecteur, jamais la Supervision d'un
+Connecteur existant. L'intégration quotidienne reste ainsi en lecture seule et
+stable, au prix de l'absence de propagation d'acquittement vers Kuma ; un
+acquittement d'Incident provenant uniquement de Kuma reste local à CairnOps.
 
 Références :
 

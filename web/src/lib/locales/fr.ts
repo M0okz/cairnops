@@ -1069,6 +1069,13 @@ export const fr = {
   'wizard.serverVerified': 'Serveur vérifié',
   'wizard.entryPoint': 'Point d’entrée',
   'wizard.authorisation': 'Autorisation',
+  'wizard.remoteAccess': 'Accès distant du Connecteur',
+  'wizard.managedAccess': 'Accès géré par CairnOps',
+  'wizard.providedAccess': 'Accès fourni manuellement',
+  'wizard.onConfirmation': 'À la confirmation',
+  'wizard.installerAccount': 'Compte d’installation',
+  'wizard.temporaryPassword': 'Mot de passe temporaire',
+  'wizard.secondFactor': 'Code à deux facteurs (si activé)',
   'wizard.readAccess': 'Accès en lecture',
   'wizard.preview': 'Aperçu',
   'wizard.explicitImport': 'Import explicite',
@@ -1159,6 +1166,15 @@ export const fr = {
   'zabbix.frontendAddress': 'Adresse du frontend',
   'zabbix.tokenHint':
     'Un jeton API limité aux hôtes que CairnOps doit découvrir suffit. Le secret quitte ce formulaire une seule fois.',
+  'zabbix.setupHint':
+    'Saisissez un compte d’installation. Son mot de passe sert une seule fois ; CairnOps conserve uniquement le jeton créé.',
+  'zabbix.managedSummary': 'CairnOps créera et vérifiera un jeton API Zabbix dédié.',
+  'zabbix.managedExistingSummary': 'CairnOps réutilisera le jeton Zabbix qu’il gère déjà.',
+  'zabbix.providedSummary': 'CairnOps utilisera le jeton Zabbix fourni.',
+  'zabbix.createTokenChange':
+    'Créer un jeton API CairnOps rattaché au compte d’installation.',
+  'zabbix.useManagedAccess': 'Laisser CairnOps créer le jeton',
+  'zabbix.useExistingToken': 'Utiliser un jeton existant',
   'zabbix.tokenSmall':
     'Envoyé uniquement à votre instance CairnOps, puis scellé par sa clé maîtresse.',
   'zabbix.noChangeNote': 'Cette étape ne modifie rien dans Zabbix ni dans vos Cibles.',
@@ -1181,6 +1197,15 @@ export const fr = {
   'kuma.instanceAddress': 'Adresse de l’instance',
   'kuma.keyHint':
     'Une clé API en lecture suffit : CairnOps interroge l’endpoint metrics officiel. Le secret quitte ce formulaire une seule fois.',
+  'kuma.setupHint':
+    'Saisissez le compte Uptime Kuma. CairnOps créera sa clé dédiée après votre confirmation et ne conservera pas le mot de passe.',
+  'kuma.managedSummary': 'CairnOps créera et vérifiera une clé API Uptime Kuma dédiée.',
+  'kuma.managedExistingSummary': 'CairnOps réutilisera la clé Uptime Kuma qu’il gère déjà.',
+  'kuma.providedSummary': 'CairnOps utilisera la clé Uptime Kuma fournie.',
+  'kuma.createKeyChange':
+    'Créer une clé API CairnOps valable dix ans et activer l’accès par clé.',
+  'kuma.useManagedAccess': 'Laisser CairnOps créer la clé',
+  'kuma.useExistingKey': 'Utiliser une clé existante',
   'kuma.metricsEndpoint': 'Endpoint metrics',
   'kuma.metricsEndpointNote': 'Format officiel vérifié',
   'kuma.keyScope': 'Portée de la clé',
@@ -1206,6 +1231,16 @@ export const fr = {
   'patchmon.addressHint': 'CairnOps complète le chemin de l’API et refuse toute redirection avant d’envoyer le jeton.',
   'patchmon.instanceAddress': 'Adresse de l’instance',
   'patchmon.tokenHint': 'Utilisez les identifiants Key et Secret de l’Integration API PatchMon.',
+  'patchmon.setupHint':
+    'Saisissez un compte autorisé à gérer les intégrations. Pour vérifier l’accès, CairnOps crée puis supprime un jeton de test ; le jeton durable est créé seulement après votre confirmation.',
+  'patchmon.managedSummary':
+    'CairnOps créera et vérifiera un jeton PatchMon limité à la lecture des hôtes.',
+  'patchmon.managedExistingSummary': 'CairnOps réutilisera le jeton PatchMon qu’il gère déjà.',
+  'patchmon.providedSummary': 'CairnOps utilisera le jeton PatchMon fourni.',
+  'patchmon.createTokenChange':
+    'Créer un jeton d’intégration CairnOps avec la seule permission host:get.',
+  'patchmon.useManagedAccess': 'Laisser CairnOps créer le jeton',
+  'patchmon.useExistingToken': 'Utiliser un jeton existant',
   'patchmon.tokenKey': 'Token Key',
   'patchmon.tokenSecret': 'Token Secret',
   'patchmon.securityRequired': '{count} correctif(s) de sécurité requis',

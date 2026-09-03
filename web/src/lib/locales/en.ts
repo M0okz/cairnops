@@ -1061,6 +1061,13 @@ export const en: Record<MessageKey, string> = {
   'wizard.serverVerified': 'Server verified',
   'wizard.entryPoint': 'Entry point',
   'wizard.authorisation': 'Authorisation',
+  'wizard.remoteAccess': 'Remote Connector access',
+  'wizard.managedAccess': 'Access managed by CairnOps',
+  'wizard.providedAccess': 'Manually provided access',
+  'wizard.onConfirmation': 'On confirmation',
+  'wizard.installerAccount': 'Installer account',
+  'wizard.temporaryPassword': 'Temporary password',
+  'wizard.secondFactor': 'Two-factor code (if enabled)',
   'wizard.readAccess': 'Read access',
   'wizard.preview': 'Preview',
   'wizard.explicitImport': 'Explicit import',
@@ -1151,6 +1158,14 @@ export const en: Record<MessageKey, string> = {
   'zabbix.frontendAddress': 'Frontend address',
   'zabbix.tokenHint':
     'An API token limited to the hosts CairnOps must discover is enough. The secret leaves this form once only.',
+  'zabbix.setupHint':
+    'Enter an installer account. Its password is used once; CairnOps keeps only the token it creates.',
+  'zabbix.managedSummary': 'CairnOps will create and verify a dedicated Zabbix API token.',
+  'zabbix.managedExistingSummary': 'CairnOps will reuse the Zabbix token it already manages.',
+  'zabbix.providedSummary': 'CairnOps will use the Zabbix token you provide.',
+  'zabbix.createTokenChange': 'Create a CairnOps API token for the installer account.',
+  'zabbix.useManagedAccess': 'Let CairnOps create the token',
+  'zabbix.useExistingToken': 'Use an existing token',
   'zabbix.tokenSmall': 'Sent only to your CairnOps instance, then sealed by its master key.',
   'zabbix.noChangeNote': 'This step changes nothing in Zabbix nor in your Targets.',
 
@@ -1172,6 +1187,14 @@ export const en: Record<MessageKey, string> = {
   'kuma.instanceAddress': 'Instance address',
   'kuma.keyHint':
     'A read-only API key is enough: CairnOps queries the official metrics endpoint. The secret leaves this form once only.',
+  'kuma.setupHint':
+    'Enter the Uptime Kuma account. CairnOps will create its dedicated key after confirmation and will not keep the password.',
+  'kuma.managedSummary': 'CairnOps will create and verify a dedicated Uptime Kuma API key.',
+  'kuma.managedExistingSummary': 'CairnOps will reuse the Uptime Kuma key it already manages.',
+  'kuma.providedSummary': 'CairnOps will use the Uptime Kuma key you provide.',
+  'kuma.createKeyChange': 'Create a CairnOps API key valid for ten years and enable API key access.',
+  'kuma.useManagedAccess': 'Let CairnOps create the key',
+  'kuma.useExistingKey': 'Use an existing key',
   'kuma.metricsEndpoint': 'Metrics endpoint',
   'kuma.metricsEndpointNote': 'Official format verified',
   'kuma.keyScope': 'Key scope',
@@ -1197,6 +1220,16 @@ export const en: Record<MessageKey, string> = {
   'patchmon.addressHint': 'CairnOps completes the API path and rejects redirects before sending the token.',
   'patchmon.instanceAddress': 'Instance address',
   'patchmon.tokenHint': 'Use the Key and Secret credentials from the PatchMon Integration API.',
+  'patchmon.setupHint':
+    'Enter an account that can manage integrations. To verify access, CairnOps creates and removes a test token; it creates the durable token only after confirmation.',
+  'patchmon.managedSummary':
+    'CairnOps will create and verify a PatchMon token limited to reading hosts.',
+  'patchmon.managedExistingSummary': 'CairnOps will reuse the PatchMon token it already manages.',
+  'patchmon.providedSummary': 'CairnOps will use the PatchMon token you provide.',
+  'patchmon.createTokenChange':
+    'Create a CairnOps integration token with only the host:get permission.',
+  'patchmon.useManagedAccess': 'Let CairnOps create the token',
+  'patchmon.useExistingToken': 'Use an existing token',
   'patchmon.tokenKey': 'Token Key',
   'patchmon.tokenSecret': 'Token Secret',
   'patchmon.securityRequired': '{count} security patch(es) required',

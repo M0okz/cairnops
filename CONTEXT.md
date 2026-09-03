@@ -89,8 +89,8 @@ Adaptateur sur mesure fourni par CairnOps pour créer et exploiter simplement un
 _Éviter_ : Intégration, configuration manuelle
 
 **Cible découverte** :
-Entité trouvée dans l'inventaire d'une Intégration et présentée à un Administrateur avant son import comme Cible. Plusieurs Cibles découvertes peuvent être importées en une seule validation, mais jamais silencieusement.
-_Éviter_ : Cible active, import automatique
+Entité trouvée dans l'inventaire d'une Intégration avant de devenir une Cible. Pendant la connexion initiale, elle est présentée à un Administrateur avant son import ; après cette connexion, elle peut devenir automatiquement une Cible lorsqu'aucun rapprochement plausible n'existe, tandis qu'une ambiguïté exige toujours une confirmation.
+_Éviter_ : Cible active, rapprochement automatique ambigu
 
 **Signal à rapprocher** :
 Signal entrant muni d'une identité externe stable mais ne pouvant pas encore être rattaché avec certitude à une Cible. Il reste hors du tableau opérationnel et ne déclenche aucune escalade jusqu'à sa création ou son rapprochement par un Administrateur ; ses signaux conservés sont alors rattachés rétroactivement, sans notifier un problème déjà terminé.

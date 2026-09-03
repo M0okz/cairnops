@@ -554,6 +554,10 @@ func (store *PostgresStore) ReconcileUptimeKuma(ctx context.Context, input Recon
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	seen := make(map[string]struct{}, len(input.Signals))
+	observedBindings := make(map[string]struct{}, len(input.ObservedBindings))
+	for _, bindingID := range input.ObservedBindings {
+		observedBindings[bindingID] = struct{}{}
+	}
 	impacted := make(map[string]struct{})
 	for _, signal := range input.Signals {
 		if _, duplicate := seen[signal.BindingID]; duplicate {
@@ -666,6 +670,9 @@ func (store *PostgresStore) ReconcileUptimeKuma(ctx context.Context, input Recon
 	}
 	rows.Close()
 	for _, signal := range active {
+		if _, observed := observedBindings[signal.bindingID]; !observed {
+			continue
+		}
 		if _, stillDown := seen[signal.bindingID]; stillDown {
 			continue
 		}
@@ -708,6 +715,9 @@ func (store *PostgresStore) ReconcileUptimeKuma(ctx context.Context, input Recon
 	}
 	rearmRows.Close()
 	for _, signal := range invalidatedSignals {
+		if _, observed := observedBindings[signal.bindingID]; !observed {
+			continue
+		}
 		if _, stillDown := seen[signal.bindingID]; stillDown {
 			continue
 		}

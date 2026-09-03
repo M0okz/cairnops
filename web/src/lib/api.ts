@@ -526,6 +526,16 @@ export type ZabbixHostPreview = {
   already_imported_to?: TargetReference;
 };
 
+export type ConnectorAccessPreview = {
+  mode: 'managed' | 'provided';
+  will_provision: boolean;
+  remote_changes?: Array<
+    | 'create_zabbix_api_token'
+    | 'create_uptime_kuma_api_key'
+    | 'create_patchmon_host_read_token'
+  >;
+};
+
 export type ZabbixPreview = {
   kind: 'zabbix';
   name: string;
@@ -536,6 +546,7 @@ export type ZabbixPreview = {
   encrypted_transport: boolean;
   hosts: ZabbixHostPreview[];
   available_targets: TargetReference[];
+  access: ConnectorAccessPreview;
   receipt: string;
   expires_at: string;
 };
@@ -572,6 +583,7 @@ export type UptimeKumaPreview = {
   encrypted_transport: boolean;
   monitors: UptimeKumaMonitorPreview[];
   available_targets: TargetReference[];
+  access: ConnectorAccessPreview;
   receipt: string;
   expires_at: string;
 };
@@ -604,6 +616,7 @@ export type PatchMonPreview = {
   encrypted_transport: boolean;
   hosts: PatchMonHostPreview[];
   available_targets: TargetReference[];
+  access: ConnectorAccessPreview;
   receipt: string;
   expires_at: string;
 };

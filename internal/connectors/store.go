@@ -708,8 +708,10 @@ func (store *PostgresStore) ImportUptimeKuma(ctx context.Context, input PersistU
 		INSERT INTO cairnops_connectors (
 			kind, name, endpoint, credential_sealed, status,
 			remote_version, compatibility, encrypted_transport,
-			last_checked_at, last_error, created_by
-		) VALUES ('uptime_kuma', $1, $2, $3, 'connected', '', 'supported', $4, now(), '', $5::uuid)
+			last_checked_at, last_error, created_by,
+			credential_management, managed_credential_id
+		) VALUES ('uptime_kuma', $1, $2, $3, 'connected', '', 'supported', $4, now(), '', $5::uuid,
+		          coalesce(nullif($6, ''), 'provided'), $7)
 		ON CONFLICT (kind, (lower(endpoint))) DO UPDATE SET
 			name = EXCLUDED.name,
 			credential_sealed = EXCLUDED.credential_sealed,
@@ -721,12 +723,15 @@ func (store *PostgresStore) ImportUptimeKuma(ctx context.Context, input PersistU
 			next_sync_at = now(),
 			lease_owner = NULL,
 			lease_until = NULL,
+			credential_management = EXCLUDED.credential_management,
+			managed_credential_id = EXCLUDED.managed_credential_id,
 			updated_at = now()
 		RETURNING id::text, kind, name, endpoint, status, remote_version,
 		          compatibility, encrypted_transport,
 		          (SELECT count(*)::integer FROM cairnops_connector_bindings WHERE connector_id = cairnops_connectors.id), 0,
 		          last_checked_at, last_error, created_at, updated_at
-	`, input.Name, input.Endpoint, input.CredentialSealed, input.EncryptedTransport, input.ActorID))
+	`, input.Name, input.Endpoint, input.CredentialSealed, input.EncryptedTransport, input.ActorID,
+		input.CredentialManagement, input.ManagedCredentialID))
 	if err != nil {
 		return UptimeKumaImport{}, fmt.Errorf("save Uptime Kuma connector: %w", err)
 	}
@@ -832,8 +837,10 @@ func (store *PostgresStore) ImportPatchMon(ctx context.Context, input PersistPat
 		INSERT INTO cairnops_connectors (
 			kind, name, endpoint, credential_sealed, status,
 			remote_version, compatibility, encrypted_transport,
-			last_checked_at, last_error, created_by, sync_interval_seconds
-		) VALUES ('patchmon', $1, $2, $3, 'connected', '', 'supported', $4, now(), '', $5::uuid, 300)
+			last_checked_at, last_error, created_by, sync_interval_seconds,
+			credential_management, managed_credential_id
+		) VALUES ('patchmon', $1, $2, $3, 'connected', '', 'supported', $4, now(), '', $5::uuid, 300,
+		          coalesce(nullif($6, ''), 'provided'), $7)
 		ON CONFLICT (kind, (lower(endpoint))) DO UPDATE SET
 			name = EXCLUDED.name,
 			credential_sealed = EXCLUDED.credential_sealed,
@@ -845,12 +852,15 @@ func (store *PostgresStore) ImportPatchMon(ctx context.Context, input PersistPat
 			next_sync_at = now(),
 			lease_owner = NULL,
 			lease_until = NULL,
+			credential_management = EXCLUDED.credential_management,
+			managed_credential_id = EXCLUDED.managed_credential_id,
 			updated_at = now()
 		RETURNING id::text, kind, name, endpoint, status, remote_version,
 		          compatibility, encrypted_transport,
 		          (SELECT count(*)::integer FROM cairnops_connector_bindings WHERE connector_id = cairnops_connectors.id), 0,
 		          last_checked_at, last_error, created_at, updated_at
-	`, input.Name, input.Endpoint, input.CredentialSealed, input.EncryptedTransport, input.ActorID))
+	`, input.Name, input.Endpoint, input.CredentialSealed, input.EncryptedTransport, input.ActorID,
+		input.CredentialManagement, input.ManagedCredentialID))
 	if err != nil {
 		return PatchMonImport{}, fmt.Errorf("save PatchMon connector: %w", err)
 	}
@@ -1082,8 +1092,10 @@ func (store *PostgresStore) ImportZabbix(ctx context.Context, input PersistZabbi
 		INSERT INTO cairnops_connectors (
 			kind, name, endpoint, credential_sealed, status,
 			remote_version, compatibility, encrypted_transport,
-			last_checked_at, last_error, created_by
-		) VALUES ('zabbix', $1, $2, $3, 'connected', $4, $5, $6, now(), '', $7::uuid)
+			last_checked_at, last_error, created_by,
+			credential_management, managed_credential_id
+		) VALUES ('zabbix', $1, $2, $3, 'connected', $4, $5, $6, now(), '', $7::uuid,
+		          coalesce(nullif($8, ''), 'provided'), $9)
 		ON CONFLICT (kind, (lower(endpoint))) DO UPDATE SET
 			name = EXCLUDED.name,
 			credential_sealed = EXCLUDED.credential_sealed,
@@ -1096,13 +1108,16 @@ func (store *PostgresStore) ImportZabbix(ctx context.Context, input PersistZabbi
 			next_sync_at = now(),
 			lease_owner = NULL,
 			lease_until = NULL,
+			credential_management = EXCLUDED.credential_management,
+			managed_credential_id = EXCLUDED.managed_credential_id,
 			updated_at = now()
 		RETURNING id::text, kind, name, endpoint, status, remote_version,
 		          compatibility, encrypted_transport,
 		          (SELECT count(*)::integer FROM cairnops_connector_bindings WHERE connector_id = cairnops_connectors.id), 0,
 		          last_checked_at, last_error, created_at, updated_at
 	`, input.Name, input.Endpoint, input.CredentialSealed, input.Version,
-		input.Compatibility, input.EncryptedTransport, input.ActorID))
+		input.Compatibility, input.EncryptedTransport, input.ActorID,
+		input.CredentialManagement, input.ManagedCredentialID))
 	if err != nil {
 		return ZabbixImport{}, fmt.Errorf("save Zabbix connector: %w", err)
 	}
@@ -1234,36 +1249,52 @@ func (store *PostgresStore) ClaimDueConnector(ctx context.Context, kind, owner s
 	}
 	rows.Close()
 
-	for index := range connectors {
-		bindingRows, err := store.pool.Query(ctx, `
-			SELECT id::text, target_id::text, external_id, external_name, metadata
-			FROM cairnops_connector_bindings
-			WHERE connector_id = $1::uuid AND integration_enabled
-			ORDER BY external_id, id
-		`, connectors[index].ID)
-		if err != nil {
-			return nil, fmt.Errorf("list %s runtime bindings: %w", kind, err)
-		}
-		connectors[index].Bindings = make([]RuntimeBinding, 0)
-		for bindingRows.Next() {
-			var binding RuntimeBinding
-			var metadata []byte
-			if err := bindingRows.Scan(&binding.ID, &binding.TargetID, &binding.ExternalID, &binding.ExternalName, &metadata); err != nil {
-				bindingRows.Close()
-				return nil, fmt.Errorf("scan %s runtime binding: %w", kind, err)
-			}
-			if err := json.Unmarshal(metadata, &binding.Metadata); err != nil {
-				bindingRows.Close()
-				return nil, fmt.Errorf("decode %s runtime binding metadata: %w", kind, err)
-			}
-			connectors[index].Bindings = append(connectors[index].Bindings, binding)
-		}
-		if err := bindingRows.Err(); err != nil {
-			bindingRows.Close()
-			return nil, fmt.Errorf("iterate %s runtime bindings: %w", kind, err)
-		}
-		bindingRows.Close()
+	if len(connectors) == 0 {
+		return connectors, nil
 	}
+	connectorIndexes := make(map[string]int, len(connectors))
+	connectorIDs := make([]string, 0, len(connectors))
+	for index := range connectors {
+		connectorIndexes[connectors[index].ID] = index
+		connectorIDs = append(connectorIDs, connectors[index].ID)
+		connectors[index].Bindings = make([]RuntimeBinding, 0)
+	}
+	bindingRows, err := store.pool.Query(ctx, `
+			SELECT binding.connector_id::text, binding.id::text, binding.target_id::text,
+			       binding.external_id, binding.external_name, binding.metadata
+			FROM cairnops_connector_bindings AS binding
+			JOIN unnest($1::text[]) AS claimed(id)
+			  ON binding.connector_id = claimed.id::uuid
+			WHERE binding.integration_enabled
+			ORDER BY binding.connector_id, binding.external_id, binding.id
+	`, connectorIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list %s runtime bindings: %w", kind, err)
+	}
+	for bindingRows.Next() {
+		var connectorID string
+		var binding RuntimeBinding
+		var metadata []byte
+		if err := bindingRows.Scan(&connectorID, &binding.ID, &binding.TargetID, &binding.ExternalID, &binding.ExternalName, &metadata); err != nil {
+			bindingRows.Close()
+			return nil, fmt.Errorf("scan %s runtime binding: %w", kind, err)
+		}
+		if err := json.Unmarshal(metadata, &binding.Metadata); err != nil {
+			bindingRows.Close()
+			return nil, fmt.Errorf("decode %s runtime binding metadata: %w", kind, err)
+		}
+		index, claimed := connectorIndexes[connectorID]
+		if !claimed {
+			bindingRows.Close()
+			return nil, fmt.Errorf("runtime binding references unclaimed %s connector %s", kind, connectorID)
+		}
+		connectors[index].Bindings = append(connectors[index].Bindings, binding)
+	}
+	if err := bindingRows.Err(); err != nil {
+		bindingRows.Close()
+		return nil, fmt.Errorf("iterate %s runtime bindings: %w", kind, err)
+	}
+	bindingRows.Close()
 	return connectors, nil
 }
 
@@ -1394,10 +1425,13 @@ func (store *PostgresStore) FailConnectorSync(ctx context.Context, connectorID, 
 func (store *PostgresStore) RuntimeCredential(ctx context.Context, connectorID string) (RuntimeCredential, error) {
 	var credential RuntimeCredential
 	if err := store.pool.QueryRow(ctx, `
-		SELECT kind, endpoint, credential_sealed
+		SELECT kind, endpoint, credential_sealed, credential_management, managed_credential_id
 		FROM cairnops_connectors
 		WHERE id = $1::uuid AND status <> 'disabled'
-	`, connectorID).Scan(&credential.Kind, &credential.Endpoint, &credential.CredentialSealed); err != nil {
+	`, connectorID).Scan(
+		&credential.Kind, &credential.Endpoint, &credential.CredentialSealed,
+		&credential.CredentialManagement, &credential.ManagedCredentialID,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return RuntimeCredential{}, fmt.Errorf("connector is unavailable")
 		}
