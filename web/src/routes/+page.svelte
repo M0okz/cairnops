@@ -52,7 +52,7 @@
   const healthy = $derived(session.targets.length - watched.length);
 
   const critical = $derived(
-    session.actionable.filter((incident) => incident.effective_severity === 'critical' || incident.effective_severity === 'major')
+    session.actionable.filter((incident) => incident.severity === 'critical' || incident.severity === 'major')
   );
 
   /* Couverture : part des Observations attendues qui ont réellement conclu,
@@ -151,7 +151,7 @@
         title:
           critical.length > 1
             ? t('overview.verdict.manyDown', { count: critical.length })
-            : t('overview.verdict.oneDown', { target: critical[0].target_name }),
+            : t('overview.verdict.oneDown', { target: critical[0].impacts[0]?.target_name ?? t('nav.incidents') }),
         say: t('overview.verdict.downSay')
       };
     }

@@ -617,20 +617,39 @@ func (store *Store) overviewProjections(ctx context.Context, indicators []Indica
 }
 
 func (store *Store) Incident(ctx context.Context, userID, incidentID string) (IncidentProjection, error) {
-	projection := IncidentProjection{IncidentID: incidentID, Snapshots: []Snapshot{}, Indicators: []Indicator{}, Series: map[string][]Point{}, Disclaimer: "Corrélation temporelle uniquement — ces Indicateurs ne prouvent pas la cause de l’Incident."}
-	if err := store.pool.QueryRow(ctx, `SELECT target_id::text, opened_at FROM cairnops_incidents WHERE id = $1::uuid`, incidentID).Scan(&projection.TargetID, &projection.OpenedAt); err != nil {
+	projection := IncidentProjection{IncidentID: incidentID, TargetIDs: []string{}, Snapshots: []Snapshot{}, Indicators: []Indicator{}, Series: map[string][]Point{}, Disclaimer: "Corrélation temporelle uniquement — ces Indicateurs ne prouvent pas la cause de l’Incident."}
+	if err := store.pool.QueryRow(ctx, `
+		SELECT incident.opened_at,
+		       array_agg(impact.target_id::text ORDER BY impact.opened_at, impact.id)
+		FROM cairnops_incidents incident
+		JOIN cairnops_incident_impacts impact ON impact.incident_id = incident.id
+		WHERE incident.id = $1::uuid
+		GROUP BY incident.id, incident.opened_at
+	`, incidentID).Scan(&projection.OpenedAt, &projection.TargetIDs); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return IncidentProjection{}, ErrNotFound
 		}
 		return IncidentProjection{}, fmt.Errorf("load indicator incident: %w", err)
 	}
-	rows, err := store.pool.Query(ctx, `SELECT coalesce(indicator_id::text, ''), semantic_key, label, unit, value, observed_at FROM cairnops_incident_indicator_snapshots WHERE incident_id = $1::uuid ORDER BY semantic_key, label`, incidentID)
+	rows, err := store.pool.Query(ctx, `
+		SELECT coalesce(snapshot.indicator_id::text, ''), snapshot.impact_id::text,
+		       snapshot.target_id::text, target.name, snapshot.semantic_key,
+		       snapshot.label, snapshot.unit, snapshot.value, snapshot.observed_at
+		FROM cairnops_incident_indicator_snapshots snapshot
+		JOIN cairnops_targets target ON target.id = snapshot.target_id
+		WHERE snapshot.incident_id = $1::uuid
+		ORDER BY target.name, snapshot.semantic_key, snapshot.label
+	`, incidentID)
 	if err != nil {
 		return IncidentProjection{}, fmt.Errorf("list incident indicator snapshots: %w", err)
 	}
 	for rows.Next() {
 		var snapshot Snapshot
-		if err := rows.Scan(&snapshot.IndicatorID, &snapshot.SemanticKey, &snapshot.Label, &snapshot.Unit, &snapshot.Value, &snapshot.ObservedAt); err != nil {
+		if err := rows.Scan(
+			&snapshot.IndicatorID, &snapshot.ImpactID, &snapshot.TargetID,
+			&snapshot.TargetName, &snapshot.SemanticKey, &snapshot.Label,
+			&snapshot.Unit, &snapshot.Value, &snapshot.ObservedAt,
+		); err != nil {
 			rows.Close()
 			return IncidentProjection{}, fmt.Errorf("scan incident indicator snapshot: %w", err)
 		}
@@ -641,7 +660,7 @@ func (store *Store) Incident(ctx context.Context, userID, incidentID string) (In
 		return IncidentProjection{}, fmt.Errorf("iterate incident indicator snapshots: %w", err)
 	}
 	rows.Close()
-	projection.Indicators, err = store.listIndicators(ctx, userID, projection.TargetID, "")
+	projection.Indicators, err = store.listIndicatorsForTargets(ctx, userID, projection.TargetIDs, "")
 	if err != nil {
 		return IncidentProjection{}, err
 	}
@@ -657,6 +676,17 @@ func (store *Store) Incident(ctx context.Context, userID, incidentID string) (In
 }
 
 func (store *Store) listIndicators(ctx context.Context, userID, targetID, mode string) ([]Indicator, error) {
+	targetIDs := []string{}
+	if targetID != "" {
+		targetIDs = append(targetIDs, targetID)
+	}
+	return store.listIndicatorsForTargets(ctx, userID, targetIDs, mode)
+}
+
+func (store *Store) listIndicatorsForTargets(ctx context.Context, userID string, targetIDs []string, mode string) ([]Indicator, error) {
+	if targetIDs == nil {
+		targetIDs = []string{}
+	}
 	rows, err := store.pool.Query(ctx, `
 		SELECT indicator.id::text, indicator.connector_id::text, indicator.connector_binding_id::text,
 		       indicator.target_id::text, indicator.semantic_key, indicator.label, indicator.external_id,
@@ -667,10 +697,10 @@ func (store *Store) listIndicators(ctx context.Context, userID, targetID, mode s
 		JOIN cairnops_connector_bindings binding ON binding.id = indicator.connector_binding_id AND binding.indicators_enabled
 		JOIN cairnops_connectors connector ON connector.id = indicator.connector_id AND connector.status <> 'disabled'
 		LEFT JOIN cairnops_user_indicator_pins pin ON pin.indicator_id = indicator.id AND pin.user_id = $1::uuid
-		WHERE indicator.enabled AND ($2 = '' OR indicator.target_id = $2::uuid)
+		WHERE indicator.enabled AND (cardinality($2::uuid[]) = 0 OR indicator.target_id = ANY($2::uuid[]))
 		  AND ($3 <> 'pinned' OR pin.position IS NOT NULL)
 		ORDER BY pin.position NULLS LAST, indicator.semantic_key, indicator.dimension, indicator.id
-	`, userID, targetID, mode)
+	`, userID, targetIDs, mode)
 	if err != nil {
 		return nil, fmt.Errorf("list target indicators: %w", err)
 	}

@@ -164,6 +164,9 @@ type TargetProjection struct {
 
 type Snapshot struct {
 	IndicatorID string    `json:"indicator_id,omitempty"`
+	ImpactID    string    `json:"impact_id"`
+	TargetID    string    `json:"target_id"`
+	TargetName  string    `json:"target_name"`
 	SemanticKey string    `json:"semantic_key"`
 	Label       string    `json:"label"`
 	Unit        string    `json:"unit"`
@@ -173,7 +176,7 @@ type Snapshot struct {
 
 type IncidentProjection struct {
 	IncidentID string             `json:"incident_id"`
-	TargetID   string             `json:"target_id"`
+	TargetIDs  []string           `json:"target_ids"`
 	OpenedAt   time.Time          `json:"opened_at"`
 	Snapshots  []Snapshot         `json:"snapshots"`
 	Indicators []Indicator        `json:"indicators"`

@@ -18,7 +18,7 @@ type Incidents interface {
 	Get(context.Context, string) (incidents.Incident, error)
 	OpenedByDay(context.Context, int) ([]incidents.OpenedDay, error)
 	Acknowledge(context.Context, string, string, string) (incidents.Incident, error)
-	InvalidateSignal(context.Context, string, string, string, string, string) (incidents.Incident, error)
+	InvalidateEvidence(context.Context, string, string, string, string, string) (incidents.Incident, error)
 }
 
 type incidentHandler struct {
@@ -109,17 +109,17 @@ func (handler incidentHandler) acknowledge(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, incident)
 }
 
-type invalidateSignalInput struct {
+type invalidateEvidenceInput struct {
 	Reason string `json:"reason"`
 }
 
-func (handler incidentHandler) invalidateSignal(w http.ResponseWriter, r *http.Request) {
-	incidentID, signalID := r.PathValue("incidentID"), r.PathValue("signalID")
-	if !validUUID(incidentID) || !validUUID(signalID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid incident or signal ID"})
+func (handler incidentHandler) invalidateEvidence(w http.ResponseWriter, r *http.Request) {
+	incidentID, evidenceID := r.PathValue("incidentID"), r.PathValue("evidenceID")
+	if !validUUID(incidentID) || !validUUID(evidenceID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid incident or evidence ID"})
 		return
 	}
-	var input invalidateSignalInput
+	var input invalidateEvidenceInput
 	if err := decodeJSON(w, r, maximumAdminBody, &input, false); err != nil {
 		return
 	}
@@ -128,8 +128,8 @@ func (handler incidentHandler) invalidateSignal(w http.ResponseWriter, r *http.R
 		unauthorizedSession(w)
 		return
 	}
-	incident, err := handler.incidents.InvalidateSignal(
-		r.Context(), incidentID, signalID, principal.ID, principal.DisplayName, input.Reason,
+	incident, err := handler.incidents.InvalidateEvidence(
+		r.Context(), incidentID, evidenceID, principal.ID, principal.DisplayName, input.Reason,
 	)
 	if err != nil {
 		handler.writeError(w, err)

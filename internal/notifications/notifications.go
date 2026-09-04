@@ -157,25 +157,24 @@ func normalizeSeverities(values []incidents.Severity) ([]incidents.Severity, err
 const KindInApp = "in_app"
 
 type Delivery struct {
-	ID               int64
-	IncidentID       string
-	BurstID          string
-	BurstRevision    int
-	ChannelID        string
-	ChannelKind      string
-	EventKind        string
-	Presentation     string
-	TargetName       string
-	NatureLabel      string
-	Severity         incidents.Severity
-	IncidentCount    int
-	AffectedTargets  int
-	MaxAffected      int
-	BurstStatus      string
-	BurstExtended    bool
-	OpenedAt         time.Time
-	ResolvedAt       *time.Time
-	CredentialSealed string
+	ID                int64
+	IncidentID        string
+	IncidentRevision  int
+	ChannelID         string
+	ChannelKind       string
+	EventKind         string
+	Presentation      string
+	TargetName        string
+	NatureLabel       string
+	Severity          incidents.Severity
+	ImpactCount       int
+	AffectedTargets   int
+	MaxAffected       int
+	PropagationStatus string
+	Extended          bool
+	OpenedAt          time.Time
+	ResolvedAt        *time.Time
+	CredentialSealed  string
 }
 
 type DeliveryStore interface {
@@ -193,20 +192,19 @@ type Sender interface {
 }
 
 type Message struct {
-	EventKind       string
-	IncidentID      string
-	BurstID         string
-	TargetName      string
-	NatureLabel     string
-	Severity        incidents.Severity
-	IncidentCount   int
-	AffectedTargets int
-	MaxAffected     int
-	BurstStatus     string
-	BurstExtended   bool
-	OpenedAt        time.Time
-	ResolvedAt      *time.Time
-	PublicURL       string
+	EventKind         string
+	IncidentID        string
+	TargetName        string
+	NatureLabel       string
+	Severity          incidents.Severity
+	ImpactCount       int
+	AffectedTargets   int
+	MaxAffected       int
+	PropagationStatus string
+	Extended          bool
+	OpenedAt          time.Time
+	ResolvedAt        *time.Time
+	PublicURL         string
 }
 
 type Dispatcher struct {
@@ -281,11 +279,11 @@ func (dispatcher *Dispatcher) deliver(ctx context.Context, delivery Delivery) er
 		return err
 	}
 	return dispatcher.sender.Send(ctx, string(webhook), Message{
-		EventKind: delivery.EventKind, IncidentID: delivery.IncidentID, BurstID: delivery.BurstID,
+		EventKind: delivery.EventKind, IncidentID: delivery.IncidentID,
 		TargetName: delivery.TargetName, NatureLabel: delivery.NatureLabel,
-		Severity: delivery.Severity, IncidentCount: delivery.IncidentCount,
+		Severity: delivery.Severity, ImpactCount: delivery.ImpactCount,
 		AffectedTargets: delivery.AffectedTargets, MaxAffected: delivery.MaxAffected,
-		BurstStatus: delivery.BurstStatus, BurstExtended: delivery.BurstExtended,
+		PropagationStatus: delivery.PropagationStatus, Extended: delivery.Extended,
 		OpenedAt: delivery.OpenedAt, ResolvedAt: delivery.ResolvedAt, PublicURL: dispatcher.publicURL,
 	})
 }

@@ -67,6 +67,102 @@ func TestRecordKeepsTheSourceObservationTimestamp(t *testing.T) {
 	}
 }
 
+func TestIncidentProjectionIncludesEveryAffectedTarget(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	var userID, connectorID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_users (username, display_name, password_hash, role)
+		VALUES ('incident-indicators', 'Incident Indicators', 'unused', 'operator')
+		RETURNING id::text
+	`).Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_connectors (
+			kind, name, endpoint, credential_sealed, status,
+			compatibility, encrypted_transport
+		) VALUES ('zabbix', 'Zabbix incident',
+		          'https://zabbix-incident-indicators.example.test/api_jsonrpc.php',
+		          repeat('x', 40), 'connected', 'supported', true)
+		RETURNING id::text
+	`).Scan(&connectorID); err != nil {
+		t.Fatal(err)
+	}
+
+	targetIDs := make([]string, 2)
+	for index, name := range []string{"API indicateurs", "Base indicateurs"} {
+		var bindingID string
+		if err := pool.QueryRow(ctx, `
+			INSERT INTO cairnops_targets (name) VALUES ($1) RETURNING id::text
+		`, name).Scan(&targetIDs[index]); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(ctx, `
+			INSERT INTO cairnops_connector_bindings (
+				connector_id, target_id, external_id, external_name, indicators_enabled
+			) VALUES ($1::uuid, $2::uuid, $3, $4, true)
+			RETURNING id::text
+		`, connectorID, targetIDs[index], []string{"host-api", "host-db"}[index], name).Scan(&bindingID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO cairnops_context_indicators (
+				connector_id, connector_binding_id, target_id, semantic_key,
+				label, external_id, unit, last_value, last_observed_at
+			) VALUES ($1::uuid, $2::uuid, $3::uuid, 'cpu.utilization',
+			          'CPU', $4, 'percent', $5, now())
+		`, connectorID, bindingID, targetIDs[index], "cpu-"+name, 40+index); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var incidentID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_incidents (
+			nature_key, nature_label, nature_scope, nature_namespace,
+			nature_fingerprint, propagation_eligible, status,
+			propagation_status, severity, opened_at, last_impact_at,
+			propagation_window_seconds, propagation_ends_at,
+			active_impact_count, impact_count, affected_target_count,
+			max_affected_targets
+		) VALUES (
+			'availability', 'Indisponibilité', 'canonical', 'cairnops',
+			'availability', true, 'active', 'open', 'major', now(), now(),
+			60, now() + interval '60 seconds', 2, 2, 2, 2
+		) RETURNING id::text
+	`).Scan(&incidentID); err != nil {
+		t.Fatal(err)
+	}
+	for _, targetID := range targetIDs {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO cairnops_incident_impacts (
+				incident_id, target_id, status, source_severity,
+				effective_severity, opened_at
+			) VALUES ($1::uuid, $2::uuid, 'active', 'major', 'major', now())
+		`, incidentID, targetID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	projection, err := NewStore(pool).Incident(ctx, userID, incidentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projection.TargetIDs) != 2 || len(projection.Indicators) != 2 || len(projection.Snapshots) != 2 {
+		t.Fatalf("multi-target context was truncated: %#v", projection)
+	}
+	seenTargets := map[string]bool{}
+	for _, snapshot := range projection.Snapshots {
+		seenTargets[snapshot.TargetID] = snapshot.TargetName != "" && snapshot.ImpactID != ""
+	}
+	for _, targetID := range targetIDs {
+		if !seenTargets[targetID] {
+			t.Fatalf("missing contextual snapshot for target %s: %#v", targetID, projection.Snapshots)
+		}
+	}
+}
+
 func TestIndicatorScopeStaysIndependentFromOperationalConnectorScope(t *testing.T) {
 	ctx := context.Background()
 	pool := testsupport.Pool(t)

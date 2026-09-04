@@ -97,19 +97,19 @@ func TestDispatcherDeliversAnOpaqueEncryptedProjection(t *testing.T) {
 	}
 }
 
-func TestSilentBurstUpdateCollapsesOnThePersistentBurst(t *testing.T) {
+func TestSilentUpdateCollapsesOnTheIncident(t *testing.T) {
 	box, err := secretbox.New(make([]byte, 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	sealedRecipient, err := box.Seal([]byte("opaque-recipient-burst-012345"), devices.PushRecipientPurpose)
+	sealedRecipient, err := box.Seal([]byte("opaque-recipient-incident-012345"), devices.PushRecipientPurpose)
 	if err != nil {
 		t.Fatal(err)
 	}
 	store := &dispatcherStore{delivery: Delivery{
 		ID: 8, RecipientSealed: sealedRecipient,
 		EncryptionPublicKey: curve25519.Basepoint,
-		EventKind:           "firing", IncidentID: "incident-anchor", BurstID: "burst-persistent",
+		EventKind:           "incident_update", IncidentID: "incident-anchor",
 		Revision: 4, PresentationMode: "silent", Severity: "major",
 	}}
 	relay := &recordingRelay{}
@@ -117,8 +117,8 @@ func TestSilentBurstUpdateCollapsesOnThePersistentBurst(t *testing.T) {
 	if err := dispatcher.Process(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if relay.delivery.CollapseKey != collapseKey("burst-persistent") || relay.delivery.Priority != "normal" {
-		t.Fatalf("silent burst update did not collapse quietly: %#v", relay.delivery)
+	if relay.delivery.CollapseKey != collapseKey("incident-anchor") || relay.delivery.Priority != "normal" {
+		t.Fatalf("silent incident update did not collapse quietly: %#v", relay.delivery)
 	}
 }
 

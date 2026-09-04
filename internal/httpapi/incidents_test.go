@@ -24,7 +24,7 @@ func (*fakeIncidents) List(context.Context, string, int) ([]incidents.Incident, 
 }
 func (fake *fakeIncidents) ListForTarget(_ context.Context, _ string, targetID string, _ int) ([]incidents.Incident, error) {
 	fake.listedTarget = targetID
-	return []incidents.Incident{{ID: "10000000-0000-0000-0000-000000000001", TargetID: targetID, Status: "resolved"}}, nil
+	return []incidents.Incident{{ID: "10000000-0000-0000-0000-000000000001", Impacts: []incidents.Impact{{TargetID: targetID}}, Status: "resolved"}}, nil
 }
 func (*fakeIncidents) Get(context.Context, string) (incidents.Incident, error) {
 	return incidents.Incident{ID: "10000000-0000-0000-0000-000000000001"}, nil
@@ -37,7 +37,7 @@ func (fake *fakeIncidents) Acknowledge(_ context.Context, incidentID, actorID, _
 	fake.ackActor = actorID
 	return incidents.Incident{ID: incidentID, AcknowledgementSyncStatus: "synchronized"}, nil
 }
-func (fake *fakeIncidents) InvalidateSignal(_ context.Context, incidentID, _ string, actorID, _ string, reason string) (incidents.Incident, error) {
+func (fake *fakeIncidents) InvalidateEvidence(_ context.Context, incidentID, _ string, actorID, _ string, reason string) (incidents.Incident, error) {
 	fake.invalidateActor = actorID
 	fake.invalidateReason = reason
 	return incidents.Incident{ID: incidentID, Status: "resolved"}, nil
@@ -73,11 +73,11 @@ func TestIncidentAcknowledgementRejectsObserver(t *testing.T) {
 	}
 }
 
-func TestSignalInvalidationAllowsOperatorAndCapturesReason(t *testing.T) {
+func TestEvidenceInvalidationAllowsOperatorAndCapturesReason(t *testing.T) {
 	t.Parallel()
 	fake := &fakeIncidents{}
 	server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "operator"}, Incidents: fake})
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/10000000-0000-0000-0000-000000000001/signals/20000000-0000-0000-0000-000000000002/invalidation", strings.NewReader(`{"reason":"La source est en défaut de collecte"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/10000000-0000-0000-0000-000000000001/evidence/20000000-0000-0000-0000-000000000002/invalidation", strings.NewReader(`{"reason":"La source est en défaut de collecte"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
 	response := httptest.NewRecorder()
@@ -89,11 +89,11 @@ func TestSignalInvalidationAllowsOperatorAndCapturesReason(t *testing.T) {
 	}
 }
 
-func TestSignalInvalidationRejectsObserver(t *testing.T) {
+func TestEvidenceInvalidationRejectsObserver(t *testing.T) {
 	t.Parallel()
 	fake := &fakeIncidents{}
 	server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "observer"}, Incidents: fake})
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/10000000-0000-0000-0000-000000000001/signals/20000000-0000-0000-0000-000000000002/invalidation", strings.NewReader(`{"reason":"La source est en défaut de collecte"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/10000000-0000-0000-0000-000000000001/evidence/20000000-0000-0000-0000-000000000002/invalidation", strings.NewReader(`{"reason":"La source est en défaut de collecte"}`))
 	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
 	response := httptest.NewRecorder()
 

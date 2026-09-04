@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/M0okz/cairnops/internal/bursts"
 	"github.com/M0okz/cairnops/internal/config"
 	"github.com/M0okz/cairnops/internal/connectors"
 	"github.com/M0okz/cairnops/internal/connectors/argus"
@@ -76,7 +75,7 @@ func run(logger *slog.Logger) error {
 	indicatorCollector := indicators.NewCollector(
 		indicators.NewStore(pool), zabbixClient, uptimeKumaClient, patchMonClient, secrets, logger,
 	)
-	burstAcknowledgements := bursts.NewAcknowledgementSynchronizer(pool, incidentService, logger)
+	incidentRuntime := incidents.NewRuntime(incidentStore, incidentService, logger)
 
 	healthServer := httpapi.NewServer(httpapi.ServerOptions{
 		Address: cfg.HealthAddress,
@@ -112,7 +111,7 @@ func run(logger *slog.Logger) error {
 			reconciliationDetector, reconciliationProcessor,
 		).WithSupervisedRunners(
 			connectorSync, uptimeKumaSync, patchMonSync, argusSync,
-			indicatorCollector, burstAcknowledgements,
+			indicatorCollector, incidentRuntime,
 		)
 		errCh <- runtime.Run(ctx)
 	}()

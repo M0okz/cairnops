@@ -488,8 +488,10 @@ const summarySelect = `
 	SELECT target.id::text, target.name, target.description, target.created_at,
 	       target.identity_managed_at IS NOT NULL,
 	       (SELECT count(*)::integer FROM cairnops_signal_sources source WHERE source.target_id = target.id),
-	       (SELECT count(*)::integer FROM cairnops_incidents incident WHERE incident.target_id = target.id),
-	       (SELECT count(*)::integer FROM cairnops_incidents incident WHERE incident.target_id = target.id AND incident.status = 'active'),
+	       (SELECT count(*)::integer FROM cairnops_incident_impacts impact WHERE impact.target_id = target.id),
+	       (SELECT count(*)::integer FROM cairnops_incident_impacts impact
+	        JOIN cairnops_incidents incident ON incident.id = impact.incident_id
+	        WHERE impact.target_id = target.id AND incident.status = 'active'),
 	       coalesce((
 	         SELECT sum(hour.healthy + hour.unhealthy + hour.unknown)::bigint
 	         FROM cairnops_observation_hours hour WHERE hour.target_id = target.id
@@ -541,11 +543,13 @@ func (store *Store) incidentConflicts(ctx context.Context, leftID, rightID strin
 		SELECT left_incident.nature_key, left_incident.nature_label,
 		       left_incident.id::text, right_incident.id::text
 		FROM cairnops_incidents left_incident
+		JOIN cairnops_incident_impacts left_impact ON left_impact.incident_id = left_incident.id
 		JOIN cairnops_incidents right_incident
-		  ON right_incident.target_id = $2::uuid
-		 AND right_incident.status = 'active'
+		  ON right_incident.status = 'active'
 		 AND right_incident.nature_key = left_incident.nature_key
-		WHERE left_incident.target_id = $1::uuid AND left_incident.status = 'active'
+		JOIN cairnops_incident_impacts right_impact ON right_impact.incident_id = right_incident.id
+		WHERE left_impact.target_id = $1::uuid AND right_impact.target_id = $2::uuid
+		  AND left_incident.status = 'active' AND left_incident.id <> right_incident.id
 		ORDER BY left_incident.opened_at, left_incident.id
 	`, leftID, rightID)
 	if err != nil {

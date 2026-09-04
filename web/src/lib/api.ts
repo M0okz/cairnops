@@ -368,10 +368,13 @@ export type TargetIndicators = {
 
 export type IncidentIndicators = {
   incident_id: string;
-  target_id: string;
+  target_ids: string[];
   opened_at: string;
   snapshots: Array<{
     indicator_id?: string;
+    impact_id: string;
+    target_id: string;
+    target_name: string;
     semantic_key: IndicatorSemanticKey;
     label: string;
     unit: IndicatorUnit;
@@ -693,8 +696,10 @@ export type WebhookApproval = {
 
 export type IncidentSeverity = 'information' | 'warning' | 'major' | 'critical';
 
-export type IncidentSignal = {
+export type IncidentEvidence = {
   id: string;
+  impact_id: string;
+  target_id: string;
   origin: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'webhook' | 'native';
   connector_id?: string;
   connector_name?: string;
@@ -706,6 +711,9 @@ export type IncidentSignal = {
   opened_at: string;
   resolved_at?: string;
   upstream_acknowledged: boolean;
+  acknowledgement_sync_status: 'not_applicable' | 'pending' | 'synchronized' | 'failed';
+  acknowledgement_sync_error?: string;
+  acknowledgement_synced_at?: string;
   invalidated_at?: string;
   invalidated_by?: string;
   invalidation_reason?: string;
@@ -714,6 +722,8 @@ export type IncidentSignal = {
 
 export type IncidentActivity = {
   id: number;
+  impact_id?: string;
+  evidence_id?: string;
   kind: string;
   origin: string;
   actor_name?: string;
@@ -724,82 +734,50 @@ export type IncidentActivity = {
 
 export type Incident = {
   id: string;
-  target_id: string;
-  target_name: string;
   nature_key: string;
   nature_label: string;
   nature_scope: 'canonical' | 'connector';
   nature_namespace: string;
   nature_fingerprint: string;
-  burst_eligible: boolean;
-  burst_id?: string;
+  propagation_eligible: boolean;
   status: 'active' | 'resolved';
-  source_severity: IncidentSeverity;
-  effective_severity: IncidentSeverity;
+  propagation_status: 'open' | 'closed';
+  severity: IncidentSeverity;
   opened_at: string;
+  last_impact_at: string;
+  propagation_window_seconds: number;
+  propagation_ends_at: string;
+  propagation_closed_at?: string;
   resolved_at?: string;
   acknowledged_at?: string;
   acknowledged_by?: string;
   acknowledgement_origin?: 'user' | 'connector';
   acknowledgement_sync_status: 'not_applicable' | 'pending' | 'synchronized' | 'failed';
   acknowledgement_sync_error?: string;
-  maintenance_active: boolean;
-  maintenance_ends_at?: string;
-  signals: IncidentSignal[];
+  extended: boolean;
+  active_impact_count: number;
+  impact_count: number;
+  affected_target_count: number;
+  max_affected_targets: number;
+  revision: number;
+  impacts: IncidentImpact[];
   activity: IncidentActivity[];
   created_at: string;
   updated_at: string;
 };
 
-export type IncidentBurstMember = {
-  incident_id: string;
+export type IncidentImpact = {
+  id: string;
   target_id: string;
   target_name: string;
   status: 'active' | 'resolved';
+  source_severity: IncidentSeverity;
   effective_severity: IncidentSeverity;
   opened_at: string;
   resolved_at?: string;
-  acknowledged_at?: string;
   maintenance_active: boolean;
-  joined_at: string;
-};
-
-export type IncidentBurstActivity = {
-  id: number;
-  kind: string;
-  actor_name?: string;
-  message: string;
-  data: Record<string, unknown>;
-  occurred_at: string;
-};
-
-export type IncidentBurst = {
-  id: string;
-  anchor_incident_id: string;
-  nature_scope: 'canonical' | 'connector';
-  nature_namespace: string;
-  nature_fingerprint: string;
-  nature_label: string;
-  status: 'propagating' | 'sealed' | 'resolved';
-  severity: IncidentSeverity;
-  opened_at: string;
-  last_joined_at: string;
-  propagation_window_seconds: number;
-  propagation_ends_at: string;
-  sealed_at?: string;
-  resolved_at?: string;
-  acknowledged_at?: string;
-  acknowledged_by?: string;
-  extended: boolean;
-  active_incident_count: number;
-  incident_count: number;
-  affected_target_count: number;
-  target_count: number;
-  max_affected_targets: number;
-  revision: number;
-  explanation: string;
-  members: IncidentBurstMember[];
-  activity: IncidentBurstActivity[];
+  maintenance_ends_at?: string;
+  evidence: IncidentEvidence[];
   created_at: string;
   updated_at: string;
 };
@@ -845,7 +823,6 @@ export type IncidentDay = {
 export type InboxEntry = {
   id: number;
   incident_id: string;
-  burst_id?: string;
   revision: number;
   target_id?: string;
   event_kind: 'firing' | 'resolved';
@@ -853,11 +830,11 @@ export type InboxEntry = {
   nature_key: string;
   nature_label: string;
   severity: IncidentSeverity;
-  incident_count: number;
+  impact_count: number;
   affected_target_count: number;
   max_affected_targets: number;
-  burst_status?: 'propagating' | 'sealed' | 'resolved';
-  burst_extended: boolean;
+  propagation_status: 'open' | 'closed';
+  extended: boolean;
   occurred_at: string;
   read_at: string | null;
 };
@@ -865,8 +842,8 @@ export type InboxEntry = {
 export type RealtimeMessage = {
   type: 'ready' | 'event';
   version: number;
-  kind?: 'target.changed' | 'source.changed' | 'observation.created' | 'component.heartbeat' | 'connector.changed' | 'incident.changed' | 'maintenance.changed' | 'notification.changed' | 'device.changed' | 'indicator.changed' | 'reconciliation.changed' | 'burst.changed';
-  entity_type?: 'target' | 'source' | 'component' | 'connector' | 'incident' | 'maintenance' | 'notification' | 'device' | 'indicator' | 'reconciliation' | 'burst';
+  kind?: 'target.changed' | 'source.changed' | 'observation.created' | 'component.heartbeat' | 'connector.changed' | 'incident.changed' | 'maintenance.changed' | 'notification.changed' | 'device.changed' | 'indicator.changed' | 'reconciliation.changed';
+  entity_type?: 'target' | 'source' | 'component' | 'connector' | 'incident' | 'maintenance' | 'notification' | 'device' | 'indicator' | 'reconciliation';
   entity_id?: string;
   occurred_at?: string;
 };

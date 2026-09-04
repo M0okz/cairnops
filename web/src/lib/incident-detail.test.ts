@@ -26,20 +26,26 @@ describe('incident detail', () => {
   it('keeps captured values first even when their Indicator no longer exists', () => {
     const current = {
       id: 'current',
+      target_id: 'target-api',
       semantic_key: 'cpu.utilization',
       label: 'CPU',
       unit: 'percent'
     } as ContextIndicator;
     const additional = {
       id: 'additional',
+      target_id: 'target-api',
       semantic_key: 'memory.utilization',
       label: 'RAM',
       unit: 'percent'
     } as ContextIndicator;
     const detail = {
+      target_ids: ['target-api'],
       snapshots: [
         {
           indicator_id: 'current',
+          impact_id: 'impact-api',
+          target_id: 'target-api',
+          target_name: 'API',
           semantic_key: 'cpu.utilization',
           label: 'CPU',
           unit: 'percent',
@@ -47,6 +53,9 @@ describe('incident detail', () => {
           observed_at: '2026-08-29T10:00:00Z'
         },
         {
+          impact_id: 'impact-api',
+          target_id: 'target-api',
+          target_name: 'API',
           semantic_key: 'filesystem.utilization',
           label: 'Volume',
           unit: 'percent',

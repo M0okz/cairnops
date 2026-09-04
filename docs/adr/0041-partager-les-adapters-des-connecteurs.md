@@ -4,7 +4,7 @@ status: accepted
 
 # Partager les adapters des Connecteurs entre connexion guidée et Supervision
 
-Chaque Connecteur officiel porte un adapter produit unique. Cet adapter satisfait plusieurs petites interfaces selon les capacités réelles du produit : découvrir les cibles pendant la connexion guidée, observer leur état pendant la Supervision et, seulement lorsque le produit le permet, lire des Indicateurs ou acquitter un Burst.
+Chaque Connecteur officiel porte un adapter produit unique. Cet adapter satisfait plusieurs petites interfaces selon les capacités réelles du produit : découvrir les cibles pendant la connexion guidée, observer leur état pendant la Supervision et, seulement lorsque le produit le permet, lire des Indicateurs ou acquitter les Preuves externes d'un Incident.
 
 Le module de connexion guidée et le runtime de Supervision conservent leurs workflows respectifs. Ils possèdent notamment l'ouverture des secrets, les baux d'exécution et la persistance ; l'adapter ne possède que le dialogue avec le produit externe et sa traduction vers le langage CairnOps. Le catalogue reste fermé aux Connecteurs officiels et n'introduit ni interface universelle fourre-tout ni mécanisme générique de plugin, conformément aux ADR 0013 et 0014.
 

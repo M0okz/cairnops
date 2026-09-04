@@ -28,12 +28,7 @@ func TestNonCriticalOpeningWaitsForStabilityAndDropsTransientIncident(t *testing
 	if delivery, err := store.Claim(ctx, "stability-worker"); err != notifications.ErrNoDelivery {
 		t.Fatalf("unstable Incident was already deliverable: %#v, %v", delivery, err)
 	}
-	if _, err := pool.Exec(ctx, `
-		UPDATE cairnops_incidents SET status = 'resolved', resolved_at = now(), updated_at = now()
-		WHERE id = $1::uuid
-	`, incidentID); err != nil {
-		t.Fatal(err)
-	}
+	resolveSeedIncident(t, pool, incidentID)
 	if err := store.Schedule(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -101,14 +96,11 @@ func TestNotificationRoutingStopsAtAcknowledgementAndResolvesToOpeningChannel(t 
 	pool := testsupport.Pool(t)
 
 	suffix := time.Now().UTC().UnixNano()
-	var actorID, targetID, incidentID string
+	var actorID, incidentID string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO cairnops_users (username, display_name, password_hash, role)
 		VALUES ($1, 'Notification Admin', 'not-used', 'administrator') RETURNING id::text
 	`, fmt.Sprintf("notification-%d", suffix)).Scan(&actorID); err != nil {
-		t.Fatal(err)
-	}
-	if err := pool.QueryRow(ctx, `INSERT INTO cairnops_targets (name) VALUES ($1) RETURNING id::text`, fmt.Sprintf("Mattermost target %d", suffix)).Scan(&targetID); err != nil {
 		t.Fatal(err)
 	}
 	box, err := secretbox.New(make([]byte, 32))
@@ -124,14 +116,7 @@ func TestNotificationRoutingStopsAtAcknowledgementAndResolvesToOpeningChannel(t 
 		t.Fatal(err)
 	}
 
-	if err := pool.QueryRow(ctx, `
-		INSERT INTO cairnops_incidents (
-			target_id, nature_key, nature_label, status, source_severity, effective_severity, opened_at
-		) VALUES ($1::uuid, 'native:tcp', 'Port indisponible', 'active', 'major', 'major', now())
-		RETURNING id::text
-	`, targetID).Scan(&incidentID); err != nil {
-		t.Fatal(err)
-	}
+	_, incidentID = seedActiveIncident(t, pool, "major")
 	// Le Canal intégré est posé par la migration et routerait le même Incident.
 	// Ce scénario porte sur Mattermost : on l'écarte pour que la boîte d'envoi
 	// ne contienne que la livraison qu'il examine.
@@ -153,12 +138,7 @@ func TestNotificationRoutingStopsAtAcknowledgementAndResolvesToOpeningChannel(t 
 	if err := store.Complete(ctx, firing.ID, "worker-test"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `
-		UPDATE cairnops_incidents SET status = 'resolved', resolved_at = now(), updated_at = now()
-		WHERE id = $1::uuid
-	`, incidentID); err != nil {
-		t.Fatal(err)
-	}
+	resolveSeedIncident(t, pool, incidentID)
 	if err := store.Schedule(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -173,16 +153,7 @@ func TestNotificationRoutingStopsAtAcknowledgementAndResolvesToOpeningChannel(t 
 		t.Fatal(err)
 	}
 
-	var acknowledgedIncidentID string
-	if err := pool.QueryRow(ctx, `
-		INSERT INTO cairnops_incidents (
-			target_id, nature_key, nature_label, status, source_severity, effective_severity, opened_at
-		) VALUES ($1::uuid, 'native:dns', 'Réponse DNS invalide', 'active', 'major', 'major',
-		          now())
-		RETURNING id::text
-	`, targetID).Scan(&acknowledgedIncidentID); err != nil {
-		t.Fatal(err)
-	}
+	_, acknowledgedIncidentID := seedActiveIncident(t, pool, "major")
 	if err := store.Schedule(ctx); err != nil {
 		t.Fatal(err)
 	}

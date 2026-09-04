@@ -22,8 +22,10 @@ export function incidentTimelineForTarget(
   );
 
   return [...incidents.values()]
-    .filter((incident) => incident.target_id === targetId)
-    .flatMap((incident) => incident.activity.map((entry) => ({ incident, entry })))
+    .filter((incident) => incident.impacts.some((impact) => impact.target_id === targetId))
+    .flatMap((incident) => incident.activity
+      .filter((entry) => !entry.impact_id || incident.impacts.some((impact) => impact.id === entry.impact_id && impact.target_id === targetId))
+      .map((entry) => ({ incident, entry })))
     .sort(
       (a, b) =>
         new Date(b.entry.occurred_at).getTime() - new Date(a.entry.occurred_at).getTime()

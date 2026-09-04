@@ -309,35 +309,60 @@ func TestPostgresRemovalClosesIncidentsLeftWithoutEvidence(t *testing.T) {
 	openedAt := time.Date(2026, 8, 17, 9, 0, 0, 0, time.UTC)
 	incidentIDs := make(map[string]string, 2)
 	for _, imported := range imported.Targets {
-		var incidentID string
+		var incidentID, impactID string
 		if err := pool.QueryRow(ctx, `
 			INSERT INTO cairnops_incidents (
-				target_id, nature_key, nature_label, status,
-				source_severity, effective_severity, opened_at
-			) VALUES ($1::uuid, 'availability', 'Indisponibilité', 'active', 'major', 'major', $2)
+				nature_key, nature_label, nature_scope, nature_namespace,
+				nature_fingerprint, propagation_eligible, status,
+				propagation_status, severity, opened_at, last_impact_at,
+				propagation_window_seconds, propagation_ends_at,
+				propagation_closed_at, active_impact_count, impact_count,
+				affected_target_count, max_affected_targets
+			) VALUES (
+				'availability', 'Indisponibilité', 'canonical', 'cairnops',
+				'availability', false, 'active', 'closed', 'major', $1, $1,
+				60, $1, $1, 1, 1, 1, 1
+			)
 			RETURNING id::text
-		`, imported.TargetID, openedAt).Scan(&incidentID); err != nil {
+		`, openedAt).Scan(&incidentID); err != nil {
 			t.Fatal(err)
 		}
 		incidentIDs[imported.TargetName] = incidentID
+		if err := pool.QueryRow(ctx, `
+			INSERT INTO cairnops_incident_impacts (
+				incident_id, target_id, status, source_severity,
+				effective_severity, opened_at
+			) VALUES ($1::uuid, $2::uuid, 'active', 'major', 'major', $3)
+			RETURNING id::text
+		`, incidentID, imported.TargetID, openedAt).Scan(&impactID); err != nil {
+			t.Fatal(err)
+		}
 		if _, err := pool.Exec(ctx, `
-			INSERT INTO cairnops_incident_signals (
-				incident_id, target_id, origin, connector_id, connector_binding_id,
-				external_event_id, name, active, severity, opened_at
+			INSERT INTO cairnops_incident_evidence (
+				incident_id, impact_id, target_id, origin, connector_id,
+				connector_binding_id, identity_scope, identity_key,
+				external_event_id, name, active, severity, opened_at, last_seen_at
 			)
-			SELECT $1::uuid, $2::uuid, 'zabbix', $3::uuid, binding.id, $4, 'Trigger', true, 'major', $5
+			SELECT $1::uuid, $2::uuid, $3::uuid, 'zabbix', $4::uuid,
+			       binding.id, binding.id::text, $5, $5,
+			       'Trigger', true, 'major', $6, $6
 			FROM cairnops_connector_bindings binding
-			WHERE binding.connector_id = $3::uuid AND binding.external_id = $6
-		`, incidentID, imported.TargetID, connectorID, "event-"+imported.ExternalID, openedAt, imported.ExternalID); err != nil {
+			WHERE binding.connector_id = $4::uuid AND binding.external_id = $7
+		`, incidentID, impactID, imported.TargetID, connectorID,
+			"event-"+imported.ExternalID, openedAt, imported.ExternalID); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO cairnops_incident_signals (
-			incident_id, target_id, origin, external_event_id, name, active, severity, opened_at
+		INSERT INTO cairnops_incident_evidence (
+			incident_id, impact_id, target_id, origin, identity_scope,
+			identity_key, external_event_id, name, active, severity,
+			opened_at, last_seen_at
 		)
-		SELECT $1::uuid, target_id, 'webhook', 'own-evidence', 'Sonde maison', true, 'major', $2
-		FROM cairnops_incidents WHERE id = $1::uuid
+		SELECT $1::uuid, impact.id, impact.target_id, 'webhook',
+		       'local-probe', 'own-evidence', 'own-evidence',
+		       'Sonde maison', true, 'major', $2, $2
+		FROM cairnops_incident_impacts impact WHERE impact.incident_id = $1::uuid
 	`, incidentIDs[sharedName], openedAt); err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +419,8 @@ func TestPostgresRemovalClosesIncidentsLeftWithoutEvidence(t *testing.T) {
 	var explained int
 	if err := pool.QueryRow(ctx, `
 		SELECT count(*)::integer FROM cairnops_incident_activity
-		WHERE incident_id = $1::uuid AND kind = 'resolved' AND data->>'connector' = 'Production'
+		WHERE incident_id = $1::uuid AND kind = 'evidence_updated'
+		  AND message = 'Connecteur supprimé'
 	`, incidentIDs[aloneName]).Scan(&explained); err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +431,8 @@ func TestPostgresRemovalClosesIncidentsLeftWithoutEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, `
-		SELECT count(*)::integer FROM cairnops_incident_signals WHERE incident_id = ANY($1::uuid[])
+		SELECT count(*)::integer FROM cairnops_incident_evidence
+		WHERE incident_id = ANY($1::uuid[]) AND active
 	`, []string{incidentIDs[aloneName], incidentIDs[sharedName]}).Scan(&remainingSignals); err != nil {
 		t.Fatal(err)
 	}

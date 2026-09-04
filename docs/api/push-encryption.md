@@ -26,7 +26,7 @@ opaque indiqué par l'instance.
 
 Une priorité `high` produit une alerte visible. Une priorité `normal` reste une
 mise à jour d'état silencieuse : sur APNs, le Relais emploie une notification
-d'arrière-plan sans `alert` ni `sound`. Les révisions ordinaires d'une Rafale et
+d'arrière-plan sans `alert` ni `sound`. Les révisions ordinaires d'un Incident et
 les Résolutions utilisent cette voie ; seules l'ouverture, une hausse de
 Gravité encore jamais notifiée ou la première Propagation étendue interrompent
 l'utilisateur.

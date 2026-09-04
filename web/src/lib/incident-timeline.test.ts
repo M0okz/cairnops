@@ -5,15 +5,15 @@ import test from 'node:test';
 import type { Incident } from './api.ts';
 import { incidentTimelineForTarget } from './incident-timeline.ts';
 
-function incident(input: Pick<Incident, 'id' | 'target_id' | 'status' | 'activity'>): Incident {
+function incident(input: Pick<Incident, 'id' | 'status' | 'impacts' | 'activity'>): Incident {
   return input as Incident;
 }
 
 test('keeps the activity of an incident resolved by invalidating its last signal', () => {
   const resolved = incident({
     id: 'incident-resolved-by-invalidation',
-    target_id: 'target-1',
     status: 'resolved',
+    impacts: [{ id: 'impact-1', target_id: 'target-1' }],
     activity: [
       {
         id: 3,
@@ -54,8 +54,8 @@ test('keeps the activity of an incident resolved by invalidating its last signal
 test('does not leak another target activity into the journal', () => {
   const other = incident({
     id: 'other-incident',
-    target_id: 'target-2',
     status: 'resolved',
+    impacts: [{ id: 'impact-2', target_id: 'target-2' }],
     activity: [
       {
         id: 1,
@@ -74,8 +74,8 @@ test('does not leak another target activity into the journal', () => {
 test('does not duplicate an active incident already present in history', () => {
   const active = incident({
     id: 'active-incident',
-    target_id: 'target-1',
     status: 'active',
+    impacts: [{ id: 'impact-1', target_id: 'target-1' }],
     activity: [
       {
         id: 1,

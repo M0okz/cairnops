@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/M0okz/cairnops/internal/bursts"
 	"github.com/M0okz/cairnops/internal/config"
 	"github.com/M0okz/cairnops/internal/connectors"
 	"github.com/M0okz/cairnops/internal/connectors/argus"
@@ -79,7 +78,6 @@ func run(logger *slog.Logger) error {
 	connectorService := connectors.NewService(connectorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets, argusClient)
 	webhookService := connectors.NewWebhookService(connectorStore, incidentStore, secrets, cfg.PublicURL)
 	incidentService := incidents.NewService(incidentStore, connectors.NewAcknowledger(connectorStore, zabbixClient, secrets))
-	burstService := bursts.NewService(bursts.NewPostgresStore(pool), incidentService)
 	maintenanceService := maintenance.NewService(maintenance.NewPostgresStore(pool))
 	notificationService := notifications.NewService(
 		notifications.NewPostgresStore(pool),
@@ -114,7 +112,6 @@ func run(logger *slog.Logger) error {
 		Connectors:      connectorService,
 		Webhooks:        webhookService,
 		Incidents:       incidentService,
-		Bursts:          burstService,
 		Maintenances:    maintenanceService,
 		Notifications:   notificationService,
 		Devices:         deviceStore,

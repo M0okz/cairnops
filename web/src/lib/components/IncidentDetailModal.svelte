@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
   import IndicatorAreaChart from './IndicatorAreaChart.svelte';
-  import { APIError, api, type Incident, type IncidentIndicators, type IncidentSignal } from '$lib/api';
+  import { APIError, api, type Incident, type IncidentEvidence, type IncidentIndicators } from '$lib/api';
   import {
     diverges,
     natureLabel,
@@ -37,7 +37,7 @@
   let indicatorsError = $state('');
   let acknowledging = $state(false);
   let invalidating = $state(false);
-  let invalidationFor = $state<IncidentSignal | null>(null);
+  let invalidationFor = $state<IncidentEvidence | null>(null);
   let invalidationReason = $state('');
   let invalidationError = $state('');
   let invalidationTrigger = $state<HTMLButtonElement | null>(null);
@@ -52,17 +52,25 @@
     indicators ? incidentIndicatorRows(indicators) : { captured: [], additional: [] }
   );
   const projected = $derived(session.incidents.find((item) => item.id === incidentId) ?? null);
+  const evidence = $derived(incident?.impacts.flatMap((impact) => impact.evidence) ?? []);
+  const maintainedImpacts = $derived(incident?.impacts.filter((impact) => impact.maintenance_active) ?? []);
+  const firstImpact = $derived(incident?.impacts[0] ?? null);
+  const incidentTitle = $derived(incident
+    ? incident.affected_target_count > 1
+      ? plural('incidents.targetsAffected', incident.affected_target_count)
+      : (firstImpact?.target_name ?? t('nav.incidents'))
+    : t('nav.incidents'));
   const marker = $derived(
     incident
       ? {
           at: incident.opened_at,
           label: t('incidents.detail.openingMarker'),
-          tone: severityTone(incident.effective_severity) as 'info' | 'warn' | 'crit'
+          tone: severityTone(incident.severity) as 'info' | 'warn' | 'crit'
         }
       : null
   );
 
-  const origins: Record<IncidentSignal['origin'], string> = {
+  const origins: Record<IncidentEvidence['origin'], string> = {
     native: 'CairnOps',
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
@@ -70,6 +78,10 @@
     argus: 'Argus',
     webhook: 'Webhook'
   };
+
+  function activeEvidenceCount(impact: Incident['impacts'][number]): number {
+    return impact.evidence.filter((item) => item.active && !item.invalidated_at).length;
+  }
 
   async function loadIncident(showLoading = true) {
     const version = ++requestVersion;
@@ -114,7 +126,7 @@
     }
   }
 
-  function beginInvalidation(signal: IncidentSignal, trigger: HTMLButtonElement) {
+  function beginInvalidation(signal: IncidentEvidence, trigger: HTMLButtonElement) {
     invalidationFor = signal;
     invalidationReason = '';
     invalidationError = '';
@@ -201,7 +213,7 @@
 
 <svelte:head>
   <title>{incident
-    ? `${natureLabel(incident)} · ${incident.target_name} — ${session.instanceLabel}`
+    ? `${natureLabel(incident)} · ${incidentTitle} — ${session.instanceLabel}`
     : `${t('incidents.detail.title')} — ${session.instanceLabel}`}</title>
 </svelte:head>
 
@@ -220,21 +232,21 @@
   <header class="modal-head">
     <div class="title-copy">
       <span class="eyebrow">{t('incidents.detail.title')}</span>
-      <h2 id={titleID}>{incident?.target_name ?? t('nav.incidents')}</h2>
+      <h2 id={titleID}>{incidentTitle}</h2>
       <p id={descriptionID}>{incident ? natureLabel(incident) : t('incidents.detail.loading')}</p>
     </div>
     {#if incident}
       <div class="head-status">
-        <span class="pill {incident.status === 'resolved' ? 'ok' : severityTone(incident.effective_severity)}">
-          <i class="dot {incident.status === 'resolved' ? 'ok' : severityTone(incident.effective_severity)}" aria-hidden="true"></i>
+        <span class="pill {incident.status === 'resolved' ? 'ok' : severityTone(incident.severity)}">
+          <i class="dot {incident.status === 'resolved' ? 'ok' : severityTone(incident.severity)}" aria-hidden="true"></i>
           {incident.status === 'resolved'
             ? t('incidents.detail.resolvedStatus')
             : t('incidents.detail.activeStatus')}
         </span>
-        <span class="pill {severityTone(incident.effective_severity)}">
-          {severityLabel(incident.effective_severity)}
+        <span class="pill {severityTone(incident.severity)}">
+          {severityLabel(incident.severity)}
         </span>
-        {#if incident.maintenance_active}
+        {#if maintainedImpacts.length > 0}
           <span class="pill info">{t('state.maintenance')}</span>
         {/if}
       </div>
@@ -296,13 +308,8 @@
           </div>
         </div>
         <div class="summary-notes">
-          {#if incident.source_severity !== incident.effective_severity}
-            <span>
-              {t('incidents.detail.sourceSeverity', {
-                severity: severityLabel(incident.source_severity)
-              })}
-            </span>
-          {/if}
+          <span>{t('incidents.impactsActive', { active: incident.active_impact_count, total: incident.impact_count })}</span>
+          <span>{t(`incidents.propagation.${incident.propagation_status}`)}</span>
           {#if incident.acknowledgement_sync_status === 'pending'}
             <span class="warn">{t('incidents.detail.syncPending')}</span>
           {:else if incident.acknowledgement_sync_status === 'failed'}
@@ -310,10 +317,18 @@
               {t('incidents.detail.syncFailed')}
             </span>
           {/if}
-          {#if incident.maintenance_active && incident.maintenance_ends_at}
-            <span>{t('incidents.detail.maintenanceUntil', { date: stamp(incident.maintenance_ends_at) })}</span>
+          {#if maintainedImpacts[0]?.maintenance_ends_at}
+            <span>{t('incidents.detail.maintenanceUntil', { date: stamp(maintainedImpacts[0].maintenance_ends_at) })}</span>
           {/if}
         </div>
+        {#if incident.impact_count > 1}
+          <p class="grouping-note">
+            {t('incidents.detail.groupingExplanation', {
+              nature: natureLabel(incident),
+              seconds: incident.propagation_window_seconds
+            })}
+          </p>
+        {/if}
       </section>
 
       <section class="detail-section metrics" aria-labelledby="incident-metrics-title">
@@ -407,111 +422,145 @@
       <section class="detail-section sources" aria-labelledby="incident-sources-title">
         <div class="section-head">
           <div>
-            <h3 id="incident-sources-title">{t('target.proofs')}</h3>
-            <p>{t('target.proofsNote')}</p>
+            <h3 id="incident-sources-title">{t('incidents.detail.impactsAndEvidence')}</h3>
+            <p>{t('incidents.detail.impactsAndEvidenceNote')}</p>
           </div>
           {#if diverges(incident)}<span class="pill warn">{t('targets.divergence')}</span>{/if}
-          <span class="section-count num">{incident.signals.length}</span>
+          <span class="section-count num">{evidence.length}</span>
         </div>
 
-        <div class="source-list">
-          {#each incident.signals as signal (signal.id)}
-            {@const invalidated = Boolean(signal.invalidated_at)}
-            <article class="source-row" class:invalidated>
-              <div class="source-identity">
-                <i
-                  class="dot {invalidated ? 'idle' : signal.active ? severityTone(signal.severity) : 'ok'}"
-                  aria-hidden="true"
-                ></i>
-                <span>
-                  <strong>{signal.name}</strong>
-                  <small>{signal.connector_name ?? origins[signal.origin]}</small>
-                </span>
-              </div>
-              <span class="pill {invalidated ? '' : signal.active ? severityTone(signal.severity) : 'ok'}">
-                {invalidated
-                  ? t('target.verdict.invalidated')
-                  : signal.active
-                    ? t('target.failing')
-                    : t('target.verdict.recovered')}
-              </span>
-              <dl class="source-dates">
+        <div class="impact-list">
+          {#each incident.impacts as impact (impact.id)}
+            <section class="impact-group">
+              <header class="impact-head">
                 <div>
-                  <dt>{t('incidents.detail.sourceOpened')}</dt>
-                  <dd class="num">{stamp(signal.opened_at)}</dd>
-                </div>
-                <div>
-                  <dt>{t('incidents.detail.sourceRecovered')}</dt>
-                  <dd class="num">{signal.resolved_at ? stamp(signal.resolved_at) : t('common.none')}</dd>
-                </div>
-                <div>
-                  <dt>{t('incidents.detail.upstreamAck')}</dt>
-                  <dd>{signal.upstream_acknowledged ? t('incidents.detail.yes') : t('incidents.detail.no')}</dd>
-                </div>
-              </dl>
-
-              {#if invalidated}
-                <p class="invalidation-copy">
-                  <strong>{signal.invalidation_reason ?? t('target.noReason')}</strong>
-                  <span>
-                    {t('incidents.detail.invalidatedBy', {
-                      who: signal.invalidated_by ?? t('target.anOperator'),
-                      date: signal.invalidated_at ? stamp(signal.invalidated_at) : t('common.none')
+                  <a href="/cibles/{impact.target_id}"><strong>{impact.target_name}</strong></a>
+                  <small>
+                    {t('incidents.detail.impactDates', {
+                      opened: stamp(impact.opened_at),
+                      resolved: impact.resolved_at ? stamp(impact.resolved_at) : t('incidents.detail.ongoing')
                     })}
-                  </span>
-                </p>
-              {:else if incident.status === 'active' && signal.active && session.user?.role !== 'observer'}
-                <button
-                  class="btn sm source-action"
-                  type="button"
-                  onclick={(event) => beginInvalidation(signal, event.currentTarget)}
-                >{t('target.invalidate')}</button>
-              {/if}
+                  </small>
+                </div>
+                <span class="pill {impact.status === 'resolved' ? 'ok' : severityTone(impact.effective_severity)}">
+                  {severityLabel(impact.effective_severity)}
+                </span>
+                <span class="impact-count num">
+                  {t('incidents.detail.evidenceRatio', {
+                    active: activeEvidenceCount(impact),
+                    total: impact.evidence.length
+                  })}
+                </span>
+              </header>
 
-              {#if signal.external_event_id || signal.external_object_id}
-                <details class="source-ids">
-                  <summary>{t('incidents.detail.externalIdentifiers')}</summary>
-                  {#if signal.external_event_id}
-                    <code>{signal.external_event_id}</code>
-                  {/if}
-                  {#if signal.external_object_id}
-                    <code>{signal.external_object_id}</code>
-                  {/if}
-                </details>
-              {/if}
+              <div class="source-list">
+                {#each impact.evidence as signal (signal.id)}
+                  {@const invalidated = Boolean(signal.invalidated_at)}
+                  <article class="source-row" class:invalidated>
+                    <div class="source-identity">
+                      <i
+                        class="dot {invalidated ? 'idle' : signal.active ? severityTone(signal.severity) : 'ok'}"
+                        aria-hidden="true"
+                      ></i>
+                      <span>
+                        <strong>{signal.name}</strong>
+                        <small>{signal.connector_name ?? origins[signal.origin]}</small>
+                      </span>
+                    </div>
+                    <span class="pill {invalidated ? '' : signal.active ? severityTone(signal.severity) : 'ok'}">
+                      {invalidated
+                        ? t('target.verdict.invalidated')
+                        : signal.active
+                          ? t('target.failing')
+                          : t('target.verdict.recovered')}
+                    </span>
+                    <dl class="source-dates">
+                      <div>
+                        <dt>{t('incidents.detail.sourceOpened')}</dt>
+                        <dd class="num">{stamp(signal.opened_at)}</dd>
+                      </div>
+                      <div>
+                        <dt>{t('incidents.detail.sourceRecovered')}</dt>
+                        <dd class="num">{signal.resolved_at ? stamp(signal.resolved_at) : t('common.none')}</dd>
+                      </div>
+                      <div>
+                        <dt>{t('incidents.detail.upstreamAck')}</dt>
+                        <dd
+                          class:crit={signal.acknowledgement_sync_status === 'failed'}
+                          title={signal.acknowledgement_sync_error}
+                        >
+                          {t(`incidents.detail.ackSync.${signal.acknowledgement_sync_status}`)}
+                        </dd>
+                      </div>
+                    </dl>
 
-              {#if invalidationFor?.id === signal.id}
-                <form class="invalidation-form" onsubmit={confirmInvalidation} novalidate>
-                  <div class="field">
-                    <label for="incident-invalidation-reason-{signal.id}">{t('target.reason')}</label>
-                    <textarea
-                      bind:this={reasonField}
-                      id="incident-invalidation-reason-{signal.id}"
-                      bind:value={invalidationReason}
-                      rows="3"
-                      required
-                      minlength="8"
-                      maxlength="500"
-                      aria-invalid={invalidationError ? 'true' : undefined}
-                      aria-describedby="incident-invalidation-hint-{signal.id}{invalidationError ? ` incident-invalidation-error-${signal.id}` : ''}"
-                      placeholder={t('target.reasonPlaceholder')}
-                    ></textarea>
-                    <small id="incident-invalidation-hint-{signal.id}">{t('target.reasonHint')}</small>
-                    {#if invalidationError}
-                      <small id="incident-invalidation-error-{signal.id}" class="field-error" role="alert">
-                        {invalidationError}
-                      </small>
+                    {#if invalidated}
+                      <p class="invalidation-copy">
+                        <strong>{signal.invalidation_reason ?? t('target.noReason')}</strong>
+                        <span>
+                          {t('incidents.detail.invalidatedBy', {
+                            who: signal.invalidated_by ?? t('target.anOperator'),
+                            date: signal.invalidated_at ? stamp(signal.invalidated_at) : t('common.none')
+                          })}
+                        </span>
+                      </p>
+                    {:else if incident.status === 'active' && signal.active && session.user?.role !== 'observer'}
+                      <button
+                        class="btn sm source-action"
+                        type="button"
+                        onclick={(event) => beginInvalidation(signal, event.currentTarget)}
+                      >{t('target.invalidate')}</button>
                     {/if}
-                  </div>
-                  <div class="form-actions">
-                    <button class="btn" type="button" onclick={cancelInvalidation}>{t('common.cancel')}</button>
-                    <button class="btn danger" type="submit" disabled={invalidating}>
-                      {invalidating ? t('common.saving') : t('target.invalidateConfirm')}
-                    </button>
-                  </div>
-                </form>
-              {/if}
-            </article>
+
+                    {#if signal.external_event_id || signal.external_object_id}
+                      <details class="source-ids">
+                        <summary>{t('incidents.detail.externalIdentifiers')}</summary>
+                        {#if signal.external_event_id}
+                          <code>{signal.external_event_id}</code>
+                        {/if}
+                        {#if signal.external_object_id}
+                          <code>{signal.external_object_id}</code>
+                        {/if}
+                      </details>
+                    {/if}
+
+                    {#if invalidationFor?.id === signal.id}
+                      <form class="invalidation-form" onsubmit={confirmInvalidation} novalidate>
+                        <div class="field">
+                          <label for="incident-invalidation-reason-{signal.id}">{t('target.reason')}</label>
+                          <textarea
+                            bind:this={reasonField}
+                            id="incident-invalidation-reason-{signal.id}"
+                            bind:value={invalidationReason}
+                            rows="3"
+                            required
+                            minlength="8"
+                            maxlength="500"
+                            aria-invalid={invalidationError ? 'true' : undefined}
+                            aria-describedby="incident-invalidation-hint-{signal.id}{invalidationError ? ` incident-invalidation-error-${signal.id}` : ''}"
+                            placeholder={t('target.reasonPlaceholder')}
+                          ></textarea>
+                          <small id="incident-invalidation-hint-{signal.id}">{t('target.reasonHint')}</small>
+                          {#if invalidationError}
+                            <small id="incident-invalidation-error-{signal.id}" class="field-error" role="alert">
+                              {invalidationError}
+                            </small>
+                          {/if}
+                        </div>
+                        <div class="form-actions">
+                          <button class="btn" type="button" onclick={cancelInvalidation}>{t('common.cancel')}</button>
+                          <button class="btn danger" type="submit" disabled={invalidating}>
+                            {invalidating ? t('common.saving') : t('target.invalidateConfirm')}
+                          </button>
+                        </div>
+                      </form>
+                    {/if}
+                  </article>
+                {:else}
+                  <div class="section-state compact">{t('incidents.detail.sourcesEmpty')}</div>
+                {/each}
+              </div>
+            </section>
           {:else}
             <div class="section-state">{t('incidents.detail.sourcesEmpty')}</div>
           {/each}
@@ -554,7 +603,9 @@
           ? t('incidents.detail.liveNote')
           : t('incidents.detail.resolvedNote')}
       </span>
-      <a class="btn" href="/cibles/{incident.target_id}">{t('incidents.detail.viewTarget')}</a>
+      {#if firstImpact}
+        <a class="btn" href="/cibles/{firstImpact.target_id}">{t('incidents.detail.viewTarget')}</a>
+      {/if}
       {#if incident.status === 'active' && !incident.acknowledged_at && session.user?.role !== 'observer'}
         <button class="btn primary" type="button" disabled={acknowledging} onclick={acknowledge}>
           {acknowledging ? t('incident.acknowledging') : t('incident.acknowledge')}
@@ -747,6 +798,14 @@
     flex-wrap: wrap;
   }
 
+  .grouping-note {
+    padding: var(--s3) var(--s5);
+    border-top: 1px solid var(--line-row);
+    color: var(--muted);
+    font-size: 0.6875rem;
+    line-height: 1.5;
+  }
+
   .section-head {
     display: flex;
     align-items: center;
@@ -862,6 +921,45 @@
     border-top: 1px solid var(--line);
     color: var(--faint);
     font-size: 0.625rem;
+  }
+
+  .impact-group + .impact-group {
+    border-top: 1px solid var(--line-strong);
+  }
+
+  .impact-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: var(--s4);
+    padding: var(--s3) var(--s5);
+    background: var(--surface-2);
+  }
+
+  .impact-head > div,
+  .impact-head strong,
+  .impact-head small {
+    display: block;
+    min-width: 0;
+  }
+
+  .impact-head strong {
+    font-size: var(--text-sm);
+  }
+
+  .impact-head a:hover strong {
+    color: var(--accent);
+  }
+
+  .impact-head small,
+  .impact-count {
+    margin-top: var(--s1);
+    color: var(--faint);
+    font-size: 0.625rem;
+  }
+
+  .section-state.compact {
+    min-height: 4rem;
   }
 
   .source-row {
@@ -1142,6 +1240,15 @@
 
     .section-head {
       align-items: flex-start;
+    }
+
+    .impact-head {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .impact-count {
+      grid-column: 1 / -1;
+      margin-top: 0;
     }
 
     .source-row {

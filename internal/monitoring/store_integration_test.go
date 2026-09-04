@@ -79,11 +79,14 @@ func TestPostgresCompleteFeedsTheIncidentCycle(t *testing.T) {
 	if incident == nil {
 		t.Fatal("the second unhealthy observation should open an incident")
 	}
-	if incident.EffectiveSeverity != incidents.SeverityCritical || incident.NatureKey != incidents.NatureAvailability {
+	if incident.Severity != incidents.SeverityCritical || incident.NatureKey != incidents.NatureAvailability {
 		t.Fatalf("unexpected incident: %#v", incident)
 	}
 
 	run(domain.OutcomeHealthy)
+	if err := incidents.NewPostgresStore(pool).Advance(ctx, time.Now().UTC().Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
 	if again := activeIncident(); again != nil {
 		t.Fatalf("the confirmed recovery should resolve the incident: %#v", again)
 	}

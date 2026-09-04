@@ -173,7 +173,7 @@ export function leadIncident(incidents: Incident[]): Incident | null {
   if (incidents.length === 0) return null;
   return [...incidents].sort(
     (a, b) =>
-      severityWeight(b.effective_severity) - severityWeight(a.effective_severity) ||
+      severityWeight(b.severity) - severityWeight(a.severity) ||
       new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime()
   )[0];
 }
@@ -181,11 +181,10 @@ export function leadIncident(incidents: Incident[]): Incident | null {
 /** Une preuve est en désaccord quand les Sources vivantes ne concluent pas
  *  la même chose. Cela ne crée pas un État de santé supplémentaire. */
 export function diverges(incident: Incident): boolean {
-  const live = incident.signals.filter((signal) => !signal.invalidated_at);
+  const live = incident.impacts.flatMap((impact) => impact.evidence).filter((evidence) => !evidence.invalidated_at);
   return live.some((signal) => signal.active) && live.some((signal) => !signal.active);
 }
 
-export function activeSignalRatio(incident: Incident): string {
-  const live = incident.signals.filter((signal) => !signal.invalidated_at);
-  return `${live.filter((signal) => signal.active).length}/${live.length || 0}`;
+export function activeImpactRatio(incident: Incident): string {
+  return `${incident.active_impact_count}/${incident.impact_count}`;
 }

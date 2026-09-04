@@ -75,6 +75,13 @@
       .slice(0, PER_GROUP);
   }
 
+  function incidentTargetLabel(incident: (typeof session.actionable)[number]): string {
+    if (incident.affected_target_count > 1) {
+      return plural('incident.targetsAffected', incident.affected_target_count);
+    }
+    return incident.impacts[0]?.target_name ?? t('nav.incidents');
+  }
+
   const connectorLabels = $derived<Record<string, string>>({
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
@@ -136,17 +143,20 @@
       label: t('nav.incidents'),
       icon: 'incidents',
       hits: best(
-        session.actionable.map((incident) => ({
-          key: `incident:${incident.id}`,
-          href: incidentHref(incident.id),
-          label: `${incident.target_name} · ${natureLabel(incident)}`,
-          detail: `${t('palette.openedFor', { duration: since(incident.opened_at) })} · ${
-            incident.acknowledged_at ? t('incident.acknowledged') : t('incident.unacknowledged')
-          }`,
-          badge: severityLabel(incident.effective_severity),
-          tone: severityTone(incident.effective_severity),
-          score: score(incident.target_name, [natureLabel(incident), incident.nature_label])
-        }))
+        session.actionable.map((incident) => {
+          const target = incidentTargetLabel(incident);
+          return {
+            key: `incident:${incident.id}`,
+            href: incidentHref(incident.id),
+            label: `${target} · ${natureLabel(incident)}`,
+            detail: `${t('palette.openedFor', { duration: since(incident.opened_at) })} · ${
+              incident.acknowledged_at ? t('incident.acknowledged') : t('incident.unacknowledged')
+            }`,
+            badge: severityLabel(incident.severity),
+            tone: severityTone(incident.severity),
+            score: score(target, [natureLabel(incident), incident.nature_label])
+          };
+        })
       )
     };
 

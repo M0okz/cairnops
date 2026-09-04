@@ -34,20 +34,7 @@ func TestTargetMergeConsolidatesHistoryAndKeepsRedirect(t *testing.T) {
 		t.Fatalf("insert secondary rollup: %v", err)
 	}
 	olderIncidentID := insertActiveIncident(t, ctx, pool, primaryID, primarySourceID, "major", observedAt.Add(-time.Hour), false, actorID)
-	newerIncidentID := insertActiveIncident(t, ctx, pool, secondaryID, secondarySourceID, "critical", observedAt, true, actorID)
-
-	var inAppChannelID string
-	if err := pool.QueryRow(ctx, `SELECT id::text FROM cairnops_notification_channels WHERE kind = 'in_app'`).Scan(&inAppChannelID); err != nil {
-		t.Fatalf("find in-app channel: %v", err)
-	}
-	if _, err := pool.Exec(ctx, `
-		INSERT INTO cairnops_notification_outbox (
-			incident_id, channel_id, event_kind, status, target_name, nature_label,
-			severity, opened_at, delivered_at
-		) VALUES ($1::uuid, $2::uuid, 'firing', 'delivered', 'Authentik', 'Indisponibilité', 'critical', $3, now())
-	`, newerIncidentID, inAppChannelID, observedAt); err != nil {
-		t.Fatalf("insert delivered opening: %v", err)
-	}
+	insertNativeSignal(t, ctx, pool, olderIncidentID, secondaryID, secondarySourceID, "critical", observedAt)
 
 	processor := NewProcessor(pool, "integration-test", slog.Default())
 	result, err := processor.mergeTargets(ctx, operationWork{
@@ -92,8 +79,8 @@ func TestTargetMergeConsolidatesHistoryAndKeepsRedirect(t *testing.T) {
 	var acknowledgedAt *time.Time
 	var signalCount int
 	if err := pool.QueryRow(ctx, `
-		SELECT status, effective_severity, acknowledged_at,
-		       (SELECT count(*)::integer FROM cairnops_incident_signals WHERE incident_id = incident.id)
+		SELECT status, severity, acknowledged_at,
+		       (SELECT count(*)::integer FROM cairnops_incident_evidence WHERE incident_id = incident.id)
 		FROM cairnops_incidents incident WHERE id = $1::uuid
 	`, olderIncidentID).Scan(&status, &severity, &acknowledgedAt, &signalCount); err != nil {
 		t.Fatalf("read surviving incident: %v", err)
@@ -101,17 +88,6 @@ func TestTargetMergeConsolidatesHistoryAndKeepsRedirect(t *testing.T) {
 	if status != "active" || severity != "critical" || acknowledgedAt != nil || signalCount != 2 {
 		t.Fatalf("active incidents were not merged conservatively: status=%s severity=%s ack=%v signals=%d", status, severity, acknowledgedAt, signalCount)
 	}
-	var resolutionStatus string
-	if err := pool.QueryRow(ctx, `
-		SELECT status FROM cairnops_notification_outbox
-		WHERE incident_id = $1::uuid AND channel_id = $2::uuid AND event_kind = 'resolved'
-	`, newerIncidentID, inAppChannelID).Scan(&resolutionStatus); err != nil {
-		t.Fatalf("read suppressed technical resolution: %v", err)
-	}
-	if resolutionStatus != "cancelled" {
-		t.Fatalf("technical merge emitted a resolution notification: %s", resolutionStatus)
-	}
-
 	targets, err := controlplane.NewStore(pool).ListTargets(ctx)
 	if err != nil {
 		t.Fatalf("list targets after merge: %v", err)
@@ -187,34 +163,34 @@ func TestSourceMoveSplitsSharedIncidentAndMovesAttributableHistory(t *testing.T)
 	if err := pool.QueryRow(ctx, `SELECT target_id::text FROM cairnops_observation_hours WHERE source_id = $1::uuid`, movingSourceID).Scan(&rollupTarget); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `SELECT incident_id::text FROM cairnops_incident_signals WHERE source_id = $1::uuid`, movingSourceID).Scan(&movedIncident); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT incident_id::text FROM cairnops_incident_evidence WHERE source_id = $1::uuid`, movingSourceID).Scan(&movedIncident); err != nil {
 		t.Fatal(err)
 	}
-	if sourceTarget != destinationID || observationTarget != destinationID || rollupTarget != destinationID || movedIncident != destinationIncidentID {
+	if sourceTarget != destinationID || observationTarget != destinationID || rollupTarget != destinationID || movedIncident != originIncidentID {
 		t.Fatalf("Source history was not reconstructed: source=%s observation=%s rollup=%s incident=%s", sourceTarget, observationTarget, rollupTarget, movedIncident)
 	}
 	var destinationSeverity string
 	var destinationSignals int
 	if err := pool.QueryRow(ctx, `
-		SELECT effective_severity,
-		       (SELECT count(*)::integer FROM cairnops_incident_signals WHERE incident_id = incident.id)
+		SELECT severity,
+		       (SELECT count(*)::integer FROM cairnops_incident_evidence WHERE incident_id = incident.id)
 		FROM cairnops_incidents incident WHERE id = $1::uuid
 	`, destinationIncidentID).Scan(&destinationSeverity, &destinationSignals); err != nil {
 		t.Fatal(err)
 	}
-	if destinationSeverity != "major" || destinationSignals != 2 {
-		t.Fatalf("destination Incident did not absorb active evidence: severity=%s signals=%d", destinationSeverity, destinationSignals)
+	if destinationSeverity != "warning" || destinationSignals != 1 {
+		t.Fatalf("unrelated destination Incident was rewritten: severity=%s evidence=%d", destinationSeverity, destinationSignals)
 	}
 	var originStatus string
 	var originSignals int
 	if err := pool.QueryRow(ctx, `
-		SELECT status, (SELECT count(*)::integer FROM cairnops_incident_signals WHERE incident_id = incident.id)
+		SELECT status, (SELECT count(*)::integer FROM cairnops_incident_evidence WHERE incident_id = incident.id)
 		FROM cairnops_incidents incident WHERE id = $1::uuid
 	`, originIncidentID).Scan(&originStatus, &originSignals); err != nil {
 		t.Fatal(err)
 	}
-	if originStatus != "active" || originSignals != 1 {
-		t.Fatalf("unrelated origin evidence was rewritten: status=%s signals=%d", originStatus, originSignals)
+	if originStatus != "active" || originSignals != 2 {
+		t.Fatalf("Source evidence did not remain attached to its Incident: status=%s evidence=%d", originStatus, originSignals)
 	}
 	var originArchived bool
 	if err := pool.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM cairnops_targets WHERE id = $1::uuid`, originID).Scan(&originArchived); err != nil {
@@ -324,14 +300,23 @@ func insertActiveIncident(t *testing.T, ctx context.Context, pool *pgxpool.Pool,
 	var incidentID string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO cairnops_incidents (
-			target_id, nature_key, nature_label, status, source_severity,
-			effective_severity, opened_at, acknowledged_at, acknowledged_by, acknowledgement_origin
-		) VALUES ($1::uuid, 'availability', 'Indisponibilité', 'active', $2, $2, $3,
-		          CASE WHEN $4 THEN now() END,
-		          CASE WHEN $4 THEN $5::uuid END,
-		          CASE WHEN $4 THEN 'user' END)
+			nature_key, nature_label, nature_scope, nature_namespace,
+			nature_fingerprint, propagation_eligible, status,
+			propagation_status, severity, opened_at, last_impact_at,
+			propagation_window_seconds, propagation_ends_at,
+			active_impact_count, impact_count, affected_target_count,
+			max_affected_targets, acknowledged_at, acknowledged_by,
+			acknowledgement_origin
+		) VALUES (
+			'availability', 'Indisponibilité', 'canonical', 'cairnops',
+			'availability', true, 'active', 'open', $1, $2::timestamptz, $2::timestamptz,
+			60, $2::timestamptz + interval '1 minute', 1, 1, 1, 1,
+			CASE WHEN $3 THEN now() END,
+			CASE WHEN $3 THEN $4::uuid END,
+			CASE WHEN $3 THEN 'user' END
+		)
 		RETURNING id::text
-	`, targetID, severity, openedAt, acknowledged, actorID).Scan(&incidentID); err != nil {
+	`, severity, openedAt, acknowledged, actorID).Scan(&incidentID); err != nil {
 		t.Fatalf("insert active incident: %v", err)
 	}
 	insertNativeSignal(t, ctx, pool, incidentID, targetID, sourceID, severity, openedAt)
@@ -340,13 +325,53 @@ func insertActiveIncident(t *testing.T, ctx context.Context, pool *pgxpool.Pool,
 
 func insertNativeSignal(t *testing.T, ctx context.Context, pool *pgxpool.Pool, incidentID, targetID, sourceID, severity string, openedAt time.Time) {
 	t.Helper()
-	var id string
+	var impactID, id string
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO cairnops_incident_signals (
-			incident_id, target_id, origin, source_id, name, active, severity, opened_at
-		) VALUES ($1::uuid, $2::uuid, 'native', $3::uuid, 'Preuve native', true, $4, $5)
+		INSERT INTO cairnops_incident_impacts (
+			incident_id, target_id, status, source_severity,
+			effective_severity, opened_at
+		) VALUES ($1::uuid, $2::uuid, 'active', $3, $3, $4)
+		ON CONFLICT (incident_id, target_id) DO UPDATE
+		SET source_severity = CASE
+		      WHEN cairnops_severity_rank(cairnops_incident_impacts.source_severity) >= cairnops_severity_rank(EXCLUDED.source_severity)
+		      THEN cairnops_incident_impacts.source_severity ELSE EXCLUDED.source_severity END,
+		    effective_severity = CASE
+		      WHEN cairnops_severity_rank(cairnops_incident_impacts.effective_severity) >= cairnops_severity_rank(EXCLUDED.effective_severity)
+		      THEN cairnops_incident_impacts.effective_severity ELSE EXCLUDED.effective_severity END,
+		    updated_at = now()
 		RETURNING id::text
-	`, incidentID, targetID, sourceID, severity, openedAt).Scan(&id); err != nil {
+	`, incidentID, targetID, severity, openedAt).Scan(&impactID); err != nil {
+		t.Fatalf("insert native incident impact: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_incident_evidence (
+			incident_id, impact_id, target_id, origin, source_id,
+			identity_scope, identity_key, name, active, severity,
+			opened_at, last_seen_at
+		) VALUES (
+			$1::uuid, $2::uuid, $3::uuid, 'native', $4::uuid,
+			$4::text, 'availability', 'Preuve native', true, $5, $6, $6
+		)
+		RETURNING id::text
+	`, incidentID, impactID, targetID, sourceID, severity, openedAt).Scan(&id); err != nil {
 		t.Fatalf("insert native incident signal: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_incidents incident
+		SET severity = aggregate.severity,
+		    active_impact_count = aggregate.active_count,
+		    impact_count = aggregate.total_count,
+		    affected_target_count = aggregate.active_count,
+		    max_affected_targets = greatest(max_affected_targets, aggregate.active_count),
+		    revision = revision + 1, updated_at = now()
+		FROM (
+			SELECT count(*) FILTER (WHERE status = 'active')::integer AS active_count,
+			       count(*)::integer AS total_count,
+			       (array_agg(effective_severity ORDER BY cairnops_severity_rank(effective_severity) DESC))[1] AS severity
+			FROM cairnops_incident_impacts WHERE incident_id = $1::uuid
+		) aggregate
+		WHERE incident.id = $1::uuid
+	`, incidentID); err != nil {
+		t.Fatalf("refresh incident fixture: %v", err)
 	}
 }

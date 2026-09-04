@@ -44,19 +44,67 @@ func seedAccount(t *testing.T, pool *pgxpool.Pool, role string) string {
 func seedActiveIncident(t *testing.T, pool *pgxpool.Pool, severity string) (targetID, incidentID string) {
 	t.Helper()
 	ctx := context.Background()
-	name := fmt.Sprintf("Cible intégrée %d", time.Now().UTC().UnixNano())
-	if err := pool.QueryRow(ctx, `INSERT INTO cairnops_targets (name) VALUES ($1) RETURNING id::text`, name).Scan(&targetID); err != nil {
-		t.Fatal(err)
-	}
+	targetID, _ = seedTarget(t, pool)
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO cairnops_incidents (
-			target_id, nature_key, nature_label, status, source_severity, effective_severity, opened_at
-		) VALUES ($1::uuid, 'native:http', 'Indisponibilité', 'active', $2, $2, now())
+			nature_key, nature_label, nature_scope, nature_namespace,
+			nature_fingerprint, propagation_eligible, status,
+			propagation_status, severity, opened_at, last_impact_at,
+			propagation_window_seconds, propagation_ends_at,
+			active_impact_count, impact_count, affected_target_count,
+			max_affected_targets
+		) VALUES (
+			'native:http', 'Indisponibilité', 'canonical', 'cairnops',
+			'native:http', true, 'active', 'open', $1, now(), now(),
+			60, now() + interval '1 minute', 1, 1, 1, 1
+		)
 		RETURNING id::text
-	`, targetID, severity).Scan(&incidentID); err != nil {
+	`, severity).Scan(&incidentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO cairnops_incident_impacts (
+			incident_id, target_id, status, source_severity,
+			effective_severity, opened_at
+		) VALUES ($1::uuid, $2::uuid, 'active', $3, $3, now())
+	`, incidentID, targetID, severity); err != nil {
 		t.Fatal(err)
 	}
 	return targetID, incidentID
+}
+
+func seedTarget(t *testing.T, pool *pgxpool.Pool) (targetID, name string) {
+	t.Helper()
+	name = fmt.Sprintf("Cible intégrée %d", time.Now().UTC().UnixNano())
+	if err := pool.QueryRow(context.Background(), `
+		INSERT INTO cairnops_targets (name) VALUES ($1) RETURNING id::text
+	`, name).Scan(&targetID); err != nil {
+		t.Fatal(err)
+	}
+	return targetID, name
+}
+
+func resolveSeedIncident(t *testing.T, pool *pgxpool.Pool, incidentID string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_incident_impacts
+		SET status = 'resolved', resolved_at = now(), updated_at = now()
+		WHERE incident_id = $1::uuid AND status = 'active'
+	`, incidentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE cairnops_incidents
+		SET status = 'resolved', propagation_status = 'closed',
+		    propagation_closed_at = coalesce(propagation_closed_at, now()),
+		    resolved_at = now(), active_impact_count = 0,
+		    affected_target_count = 0, revision = revision + 1,
+		    updated_at = now()
+		WHERE id = $1::uuid
+	`, incidentID); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // Le trajet complet : une ouverture atteint tout le monde, la Résolution ne
@@ -150,9 +198,9 @@ func TestPostgresDismissedInboxStillRoutesTheResolution(t *testing.T) {
 		if _, err := pool.Exec(ctx, `
 			INSERT INTO cairnops_notification_inbox (
 				user_id, incident_id, target_id, event_kind, target_name,
-				nature_label, severity, occurred_at
+				nature_label, severity, propagation_status, occurred_at
 			) VALUES ($1::uuid, $2::uuid, $3::uuid, 'firing', 'Cible intégrée',
-				'Indisponibilité', 'major', now())
+				'Indisponibilité', 'major', 'open', now())
 		`, userID, incidentID, targetID); err != nil {
 			t.Fatal(err)
 		}
@@ -181,18 +229,13 @@ func TestPostgresDismissedInboxStillRoutesTheResolution(t *testing.T) {
 	}
 
 	resolvedAt := time.Now().UTC()
-	if _, err := pool.Exec(ctx, `
-		UPDATE cairnops_incidents
-		SET status = 'resolved', resolved_at = $2
-		WHERE id = $1::uuid
-	`, incidentID, resolvedAt); err != nil {
-		t.Fatal(err)
-	}
+	resolveSeedIncident(t, pool, incidentID)
 	delivered, err := store.Deliver(ctx, notifications.Delivery{
 		IncidentID: incidentID, ChannelID: inAppChannel(t, pool),
-		ChannelKind: notifications.KindInApp, EventKind: "resolved",
+		ChannelKind: notifications.KindInApp, EventKind: "incident_update", IncidentRevision: 2,
 		TargetName: "Cible intégrée", NatureLabel: "Indisponibilité",
 		Severity: "major", OpenedAt: resolvedAt.Add(-time.Hour), ResolvedAt: &resolvedAt,
+		ImpactCount: 1, MaxAffected: 1, PropagationStatus: "closed",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -235,11 +278,7 @@ func TestPostgresInAppResolutionReachesTheOpeningRecipientsOnly(t *testing.T) {
 	// pas la fin.
 	late := seedAccount(t, pool, "observer")
 
-	if _, err := pool.Exec(ctx, `
-		UPDATE cairnops_incidents SET status = 'resolved', resolved_at = now() WHERE id = $1::uuid
-	`, incidentID); err != nil {
-		t.Fatal(err)
-	}
+	resolveSeedIncident(t, pool, incidentID)
 	if err := store.Schedule(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +286,7 @@ func TestPostgresInAppResolutionReachesTheOpeningRecipientsOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resolved.EventKind != "resolved" {
+	if resolved.EventKind != "incident_update" {
 		t.Fatalf("la livraison réclamée n'est pas la Résolution : %+v", resolved)
 	}
 	if _, err := store.Deliver(ctx, resolved); err != nil {
@@ -258,7 +297,7 @@ func TestPostgresInAppResolutionReachesTheOpeningRecipientsOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(earlyInbox.Entries) != 2 {
+	if len(earlyInbox.Entries) != 1 || earlyInbox.Entries[0].EventKind != "resolved" {
 		t.Fatalf("le destinataire de l'ouverture n'a pas reçu la Résolution : %+v", earlyInbox.Entries)
 	}
 	lateInbox, err := store.Inbox(ctx, late, 0)

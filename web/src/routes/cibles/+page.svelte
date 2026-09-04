@@ -130,7 +130,7 @@
           .some((value) => value.toLocaleLowerCase(i18n.locale).includes(query));
       })
       .sort((a, b) => {
-        const weight = (row: Row) => (row.lead ? severityWeight(row.lead.effective_severity) : 0);
+        const weight = (row: Row) => (row.lead ? severityWeight(row.lead.severity) : 0);
         return weight(b) - weight(a) || a.target.name.localeCompare(b.target.name, i18n.locale);
       });
   });
@@ -226,7 +226,7 @@
 
         <span class="muted hide-sm nature">
           {#if row.lead}
-            {natureLabel(row.lead)} · <span class={severityTone(row.lead.effective_severity)}>{severityLabel(row.lead.effective_severity)}</span>
+            {natureLabel(row.lead)} · <span class={severityTone(row.lead.severity)}>{severityLabel(row.lead.severity)}</span>
           {:else}
             {t('common.none')}
           {/if}

@@ -10,7 +10,6 @@ import {
   api,
   type Connector,
   type Incident,
-  type IncidentBurst,
   type IncidentDay,
   type Maintenance,
   type InboxEntry,
@@ -69,7 +68,6 @@ class Session {
   targets = $state<Target[]>([]);
   connectors = $state<Connector[]>([]);
   incidents = $state<Incident[]>([]);
-  bursts = $state<IncidentBurst[]>([]);
   incidentHistoryTarget = $state('');
   incidentHistory = $state<Incident[]>([]);
 
@@ -142,7 +140,9 @@ class Session {
   }
 
   get actionable() {
-    return this.incidents.filter((incident) => !incident.maintenance_active);
+    return this.incidents.filter((incident) =>
+      incident.impacts.some((impact) => impact.status === 'active' && !impact.maintenance_active)
+    );
   }
 
   get unacknowledged() {
@@ -162,17 +162,20 @@ class Session {
   /** L'État de santé d'une Cible, déduit des Incidents qui la concernent.
    *  Une Divergence de Sources ne crée pas un cinquième État. */
   targetState(target: Target): 'down' | 'degraded' | 'maintenance' | 'unknown' | 'ok' {
-    const own = this.incidents.filter((incident) => incident.target_id === target.id);
+	const own = this.incidents.filter((incident) =>
+	  incident.impacts.some((impact) => impact.target_id === target.id)
+	);
     const posture = own.filter((incident) =>
       incident.nature_key === 'security-patches-required' || incident.nature_key === 'reboot-required'
     );
     const operational = own.filter((incident) => !posture.includes(incident));
-    if (own.some((incident) => incident.maintenance_active)) return 'maintenance';
-    if (operational.some((incident) => incident.effective_severity === 'critical')) return 'down';
-    if (operational.some((incident) => incident.effective_severity === 'major')) return 'down';
-    if (posture.some((incident) => incident.effective_severity === 'critical' || incident.effective_severity === 'major')) return 'degraded';
-    if (own.some((incident) => incident.effective_severity === 'warning')) return 'degraded';
-    if (own.some((incident) => incident.effective_severity === 'information')) return 'unknown';
+    const impacts = (incident: Incident) =>
+      incident.impacts.filter((impact) => impact.target_id === target.id && impact.status === 'active');
+    if (own.some((incident) => impacts(incident).some((impact) => impact.maintenance_active))) return 'maintenance';
+    if (operational.some((incident) => impacts(incident).some((impact) => impact.effective_severity === 'critical' || impact.effective_severity === 'major'))) return 'down';
+    if (posture.some((incident) => impacts(incident).some((impact) => impact.effective_severity === 'critical' || impact.effective_severity === 'major'))) return 'degraded';
+    if (own.some((incident) => impacts(incident).some((impact) => impact.effective_severity === 'warning'))) return 'degraded';
+    if (own.some((incident) => impacts(incident).some((impact) => impact.effective_severity === 'information'))) return 'unknown';
     const externalMeasures = this.measures[target.id]?.sources;
     if (target.sources.length === 0 && externalMeasures && !externalMeasures.some((source) => source.measures_availability)) return 'unknown';
     if (target.sources.length === 0 && target.external_source_count === 0) return 'unknown';
@@ -182,14 +185,18 @@ class Session {
   /** Une Cible dont les Sources ne concluent pas la même chose. */
   hasDivergence(target: Target): boolean {
     return this.incidents.some((incident) => {
-      if (incident.target_id !== target.id) return false;
-      const live = incident.signals.filter((signal) => !signal.invalidated_at);
+      const live = incident.impacts
+		.filter((impact) => impact.target_id === target.id)
+		.flatMap((impact) => impact.evidence)
+		.filter((evidence) => !evidence.invalidated_at);
       return live.some((signal) => signal.active) && live.some((signal) => !signal.active);
     });
   }
 
   incidentsFor(targetId: string) {
-    return this.incidents.filter((incident) => incident.target_id === targetId);
+    return this.incidents.filter((incident) =>
+      incident.impacts.some((impact) => impact.target_id === targetId)
+    );
   }
 
   incidentHistoryFor(targetId: string) {
@@ -424,7 +431,6 @@ class Session {
       this.indicatorDetails = {};
       this.connectors = [];
       this.incidents = [];
-      this.bursts = [];
       this.incidentHistoryTarget = '';
       this.incidentHistory = [];
       this.incidentDays = [];
@@ -448,7 +454,6 @@ class Session {
     this.#refreshTimer = setInterval(() => {
       void this.loadSystemHealth();
       void this.loadIncidents();
-      void this.loadBursts();
       void this.loadIncidentDays();
       if (this.incidentHistoryTarget) void this.loadIncidentHistory(this.incidentHistoryTarget);
       void this.loadMaintenances();
@@ -474,7 +479,6 @@ class Session {
       this.loadIndicatorOverview(),
       this.loadConnectors(),
       this.loadIncidents(),
-      this.loadBursts(),
       this.loadIncidentDays(),
       this.loadMaintenances(),
       this.loadNotifications(),
@@ -535,18 +539,6 @@ class Session {
     } catch (cause) {
       if (this.#expired(cause)) return;
       this.showNotice(t('session.refreshIncidents', { error: messageFrom(cause) }));
-    }
-  }
-
-  async loadBursts() {
-    try {
-      const response = await api<{ bursts: IncidentBurst[] }>(
-        '/api/v1/incident-bursts?status=active&limit=200'
-      );
-      this.bursts = response.bursts;
-    } catch (cause) {
-      if (this.#expired(cause)) return;
-      this.showNotice(t('session.refreshBursts', { error: messageFrom(cause) }));
     }
   }
 
@@ -830,7 +822,6 @@ class Session {
     if (kind === 'component.heartbeat') this.#dirty.add('health');
     else if (kind === 'connector.changed') this.#dirty.add('connectors');
     else if (kind === 'incident.changed') this.#dirty.add('incidents');
-    else if (kind === 'burst.changed') this.#dirty.add('bursts');
     else if (kind === 'indicator.changed') this.#dirty.add('indicators');
     else if (kind === 'maintenance.changed') {
       this.#dirty.add('maintenances');
@@ -848,7 +839,6 @@ class Session {
         void this.loadIncidentDays();
         if (this.incidentHistoryTarget) void this.loadIncidentHistory(this.incidentHistoryTarget);
       }
-      if (this.#dirty.has('bursts')) void this.loadBursts();
       if (this.#dirty.has('maintenances')) void this.loadMaintenances();
       if (this.#dirty.has('notifications')) {
         void this.loadNotifications();
@@ -891,27 +881,17 @@ class Session {
     }
   }
 
-  async acknowledgeBurst(burst: IncidentBurst) {
+  async invalidate(incidentId: string, evidenceId: string, reason: string) {
     try {
-      const acknowledged = await api<IncidentBurst>(
-        `/api/v1/incident-bursts/${burst.id}/acknowledgement`,
-        { method: 'POST' }
-      );
-      this.bursts = this.bursts.map((item) => (item.id === acknowledged.id ? acknowledged : item));
-      await this.loadIncidents();
-      this.showNotice(t('session.burstAcknowledged'));
-    } catch (cause) {
-      this.showNotice(t('session.burstAcknowledgeFailed', { error: messageFrom(cause) }));
-    }
-  }
-
-  async invalidate(incidentId: string, signalId: string, reason: string) {
-    try {
-      const invalidated = await api<Incident>(`/api/v1/incidents/${incidentId}/signals/${signalId}/invalidation`, {
+      const invalidated = await api<Incident>(`/api/v1/incidents/${incidentId}/evidence/${evidenceId}/invalidation`, {
         method: 'POST',
         body: JSON.stringify({ reason })
       });
-      await Promise.all([this.loadIncidents(), this.loadIncidentHistory(invalidated.target_id)]);
+      const targetIDs = invalidated.impacts.map((impact) => impact.target_id);
+      await this.loadIncidents();
+      if (this.incidentHistoryTarget && targetIDs.includes(this.incidentHistoryTarget)) {
+        await this.loadIncidentHistory(this.incidentHistoryTarget);
+	  }
       this.showNotice(t('session.invalidated'));
       return true;
     } catch (cause) {

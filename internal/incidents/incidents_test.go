@@ -7,10 +7,9 @@ import (
 )
 
 type serviceStore struct {
-	plan          AcknowledgementPlan
-	completeState string
-	completeError string
-	openedDays    int
+	plan            AcknowledgementPlan
+	completeResults []AcknowledgementResult
+	openedDays      int
 }
 
 func (*serviceStore) List(context.Context, string, int) ([]Incident, error) { return nil, nil }
@@ -25,18 +24,25 @@ func (store *serviceStore) OpenedByDay(_ context.Context, days int) ([]OpenedDay
 func (store *serviceStore) AcknowledgeLocal(context.Context, string, string, string) (AcknowledgementPlan, error) {
 	return store.plan, nil
 }
-func (store *serviceStore) CompleteAcknowledgement(_ context.Context, _ string, status, message string) (Incident, error) {
-	store.completeState, store.completeError = status, message
-	return Incident{AcknowledgementSyncStatus: status, AcknowledgementSyncError: message}, nil
+func (store *serviceStore) CompleteAcknowledgement(_ context.Context, _ string, results []AcknowledgementResult) (Incident, error) {
+	store.completeResults = results
+	incident := Incident{AcknowledgementSyncStatus: "synchronized"}
+	for _, result := range results {
+		if result.Error != "" {
+			incident.AcknowledgementSyncStatus = "failed"
+			incident.AcknowledgementSyncError = result.Error
+		}
+	}
+	return incident, nil
 }
-func (*serviceStore) InvalidateSignal(context.Context, string, string, string, string, string) (Incident, error) {
+func (*serviceStore) InvalidateEvidence(context.Context, string, string, string, string, string) (Incident, error) {
 	return Incident{}, nil
 }
 
-func TestSignalInvalidationRequiresAMeaningfulReason(t *testing.T) {
+func TestEvidenceInvalidationRequiresAMeaningfulReason(t *testing.T) {
 	t.Parallel()
 	service := NewService(&serviceStore{}, nil)
-	if _, err := service.InvalidateSignal(context.Background(), "incident", "signal", "actor", "Gregory", "panne"); !errors.Is(err, ErrInvalidInput) {
+	if _, err := service.InvalidateEvidence(context.Background(), "incident", "evidence", "actor", "Gregory", "panne"); !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("expected invalid input, got %v", err)
 	}
 }
@@ -73,7 +79,10 @@ func TestAcknowledgementRemainsLocalWhenExternalSyncFails(t *testing.T) {
 	t.Parallel()
 	store := &serviceStore{plan: AcknowledgementPlan{
 		Incident: Incident{ID: "incident", AcknowledgementSyncStatus: "pending"},
-		Targets:  []AcknowledgementTarget{{Origin: "zabbix", ConnectorID: "connector", ExternalEventID: "42"}},
+		Targets: []AcknowledgementTarget{{
+			EvidenceID: "evidence", Origin: "zabbix",
+			ConnectorID: "connector", ExternalEventID: "42",
+		}},
 	}}
 	service := NewService(store, failingAcknowledger{})
 
@@ -81,10 +90,10 @@ func TestAcknowledgementRemainsLocalWhenExternalSyncFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if incident.AcknowledgementSyncStatus != "failed" || store.completeState != "failed" {
+	if incident.AcknowledgementSyncStatus != "failed" || len(store.completeResults) != 1 {
 		t.Fatalf("unexpected acknowledgement result: %#v", incident)
 	}
-	if store.completeError != "permission refusée" {
-		t.Fatalf("unexpected synchronization error: %q", store.completeError)
+	if result := store.completeResults[0]; result.EvidenceID != "evidence" || result.Error != "permission refusée" {
+		t.Fatalf("unexpected synchronization result: %#v", result)
 	}
 }

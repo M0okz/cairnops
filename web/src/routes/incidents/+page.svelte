@@ -1,21 +1,18 @@
 <script lang="ts">
-  /* Écran 4c — Incidents.
-   * Un Incident par Cible et par Nature. Les Résolus sont chargés à part : la
-   * projection partagée ne retient que les actifs. */
+  /* Écran 4c — Incidents. Un Incident peut porter plusieurs Atteintes. */
 
   import { afterNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import IncidentDetailModal from '$lib/components/IncidentDetailModal.svelte';
-  import IncidentBurstRows from '$lib/components/IncidentBurstRows.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
-  import { api, type Incident, type IncidentBurst } from '$lib/api';
+  import { api, type Incident } from '$lib/api';
   import { incidentHref } from '$lib/incident-detail';
   import { shouldLoadResolvedIncidents, type IncidentScope } from '$lib/resolved-incidents';
   import {
-    activeSignalRatio,
+    activeImpactRatio,
     diverges,
     natureLabel,
     severityLabel,
@@ -27,22 +24,16 @@
 
   let scope = $state<IncidentScope>('active');
   let resolved = $state<Incident[]>([]);
-  let resolvedBursts = $state<IncidentBurst[]>([]);
-  let linkedBurst = $state<IncidentBurst | null>(null);
-  let requestedBurstID = '';
   let resolvedRevision = $state(-1);
   let resolvedRequest = 0;
   let resolvedError = $state('');
   let acknowledging = $state('');
   let now = $state(new Date());
   const incidentIDFrom = (url: URL) => url.searchParams.get('incident')?.trim() ?? '';
-  const burstIDFrom = (url: URL) => url.searchParams.get('burst')?.trim() ?? '';
   let selectedIncidentID = $state(incidentIDFrom(page.url));
-  let selectedBurstID = $state(burstIDFrom(page.url));
 
   afterNavigate(({ to }) => {
     selectedIncidentID = to ? incidentIDFrom(to.url) : '';
-    selectedBurstID = to ? burstIDFrom(to.url) : '';
   });
 
   $effect(() => {
@@ -50,41 +41,13 @@
     return () => clearInterval(timer);
   });
 
-  async function loadLinkedBurst(burstID: string) {
-    try {
-      const item = await api<IncidentBurst>(`/api/v1/incident-bursts/${burstID}`);
-      if (selectedBurstID !== burstID) return;
-      linkedBurst = item;
-      scope = item.status === 'resolved' ? 'resolved' : 'active';
-    } catch (cause) {
-      if (selectedBurstID !== burstID) return;
-      resolvedError = messageFrom(cause);
-    }
-  }
-
-  $effect(() => {
-    const burstID = selectedBurstID;
-    if (!burstID || session.bursts.some((burst) => burst.id === burstID)) {
-      linkedBurst = null;
-      requestedBurstID = '';
-      return;
-    }
-    if (requestedBurstID === burstID) return;
-    requestedBurstID = burstID;
-    void loadLinkedBurst(burstID);
-  });
-
   async function loadResolved(revision: number) {
     const request = ++resolvedRequest;
     resolvedError = '';
     try {
-      const [response, burstResponse] = await Promise.all([
-        api<{ incidents: Incident[] }>('/api/v1/incidents?status=resolved&limit=100'),
-        api<{ bursts: IncidentBurst[] }>('/api/v1/incident-bursts?status=resolved&limit=100')
-      ]);
+      const response = await api<{ incidents: Incident[] }>('/api/v1/incidents?status=resolved&limit=100');
       if (request !== resolvedRequest) return;
       resolved = response.incidents;
-      resolvedBursts = burstResponse.bursts;
       resolvedRevision = revision;
     } catch (cause) {
       if (request !== resolvedRequest) return;
@@ -97,7 +60,6 @@
    * ainsi dès l'ouverture du filtre, ou immédiatement s'il est déjà ouvert. */
   $effect(() => {
     const revision = session.incidentRevision;
-    session.bursts.map((burst) => `${burst.id}:${burst.revision}`).join(',');
     if (!shouldLoadResolvedIncidents(scope, resolvedRevision, revision)) return;
     void loadResolved(revision);
   });
@@ -116,40 +78,9 @@
         ? active.filter((incident) => !incident.acknowledged_at)
         : active
   );
-  const candidateBursts = $derived.by(() => {
-    const candidates = scope === 'resolved'
-      ? resolvedBursts
-      : scope === 'unacknowledged'
-        ? session.bursts.filter((burst) => !burst.acknowledged_at)
-        : session.bursts;
-    if (
-      linkedBurst &&
-      linkedBurst.id === selectedBurstID &&
-      (scope === 'resolved') === (linkedBurst.status === 'resolved') &&
-      !candidates.some((burst) => burst.id === linkedBurst?.id)
-    ) {
-      return [...candidates, linkedBurst];
-    }
-    return candidates;
-  });
-  const shown = $derived.by(() => {
-    const grouped = new Set(candidateBursts.flatMap((burst) => burst.members.map((member) => member.incident_id)));
-    const rows: Array<
-      | { kind: 'incident'; id: string; openedAt: string; incident: Incident }
-      | { kind: 'burst'; id: string; openedAt: string; burst: IncidentBurst }
-    > = candidateIncidents
-      .filter((incident) => !grouped.has(incident.id))
-      .map((incident) => ({ kind: 'incident' as const, id: incident.id, openedAt: incident.opened_at, incident }));
-    rows.push(
-      ...candidateBursts.map((burst) => ({
-        kind: 'burst' as const,
-        id: burst.id,
-        openedAt: burst.opened_at,
-        burst
-      }))
-    );
-    return rows.sort((left, right) => new Date(left.openedAt).getTime() - new Date(right.openedAt).getTime());
-  });
+  const shown = $derived([...candidateIncidents].sort(
+    (left, right) => new Date(left.opened_at).getTime() - new Date(right.opened_at).getTime()
+  ));
   const selectedIncident = $derived(
     [...session.incidents, ...resolved].find((incident) => incident.id === selectedIncidentID) ?? null
   );
@@ -158,15 +89,6 @@
     acknowledging = incident.id;
     try {
       await session.acknowledge(incident);
-    } finally {
-      acknowledging = '';
-    }
-  }
-
-  async function acknowledgeBurst(burst: IncidentBurst) {
-    acknowledging = burst.id;
-    try {
-      await session.acknowledgeBurst(burst);
     } finally {
       acknowledging = '';
     }
@@ -238,41 +160,34 @@
         {scope === 'resolved' ? t('incidents.column.resolved') : t('incidents.column.acknowledgement')}
       </span>
       <span class="hide-sm">{t('incidents.column.duration')}</span>
-      <span class="hide-sm">{t('incidents.column.activeSources')}</span>
+      <span class="hide-sm">{t('incidents.column.activeImpacts')}</span>
       <span class="hide-sm log">{t('incidents.column.lastEntry')}</span>
       <span></span>
     </div>
 
-    {#each shown as row (`${row.kind}:${row.id}`)}
-      {#if row.kind === 'burst'}
-        <IncidentBurstRows
-          burst={row.burst}
-          resolved={scope === 'resolved'}
-          {now}
-          openInitially={selectedBurstID === row.burst.id}
-          canAcknowledge={session.user?.role !== 'observer'}
-          acknowledging={acknowledging === row.burst.id}
-          onacknowledge={() => acknowledgeBurst(row.burst)}
-        />
-      {:else}
-      {@const incident = row.incident}
+    {#each shown as incident (incident.id)}
       <div class="trow">
         <span class="cell-name">
-          <i class="dot {scope === 'resolved' ? 'ok' : severityTone(incident.effective_severity)}"></i>
+          <i class="dot {scope === 'resolved' ? 'ok' : severityTone(incident.severity)}"></i>
           <span>
             <a
               class="incident-link"
               href={incidentHref(incident.id)}
               data-incident-trigger={incident.id}
             >
-              <strong>{incident.target_name}</strong>
-              <small class="nature">{natureLabel(incident)}</small>
+              <strong>{incident.affected_target_count > 1
+                ? plural('incidents.targetsAffected', incident.affected_target_count)
+                : (incident.impacts[0]?.target_name ?? t('nav.incidents'))}</strong>
+              <small class="nature">
+                {natureLabel(incident)}
+                {#if incident.extended} · {t('incidents.extended')}{/if}
+              </small>
             </a>
           </span>
         </span>
 
-        <span class="pill {severityTone(incident.effective_severity)}">
-          {severityLabel(incident.effective_severity)}
+        <span class="pill {severityTone(incident.severity)}">
+          {severityLabel(incident.severity)}
         </span>
 
         <span class="hide-sm ack-cell">
@@ -300,10 +215,10 @@
 
         <span
           class="num hide-sm sources"
-          title={t('incidents.sourcesRatio', { ratio: activeSignalRatio(incident) })}
-          aria-label={t('incidents.sourcesRatio', { ratio: activeSignalRatio(incident) })}
+          title={t('incidents.impactsRatio', { ratio: activeImpactRatio(incident) })}
+          aria-label={t('incidents.impactsRatio', { ratio: activeImpactRatio(incident) })}
         >
-          <Odometer value={activeSignalRatio(incident)} />
+          <Odometer value={activeImpactRatio(incident)} />
           {#if diverges(incident)}<span class="crit" title={t('overview.divergence')}>≠</span>{/if}
         </span>
 
@@ -326,7 +241,6 @@
           >{t('incidents.detail.open')}</a>
         {/if}
       </div>
-      {/if}
     {:else}
       <div class="empty">
         {#if scope === 'resolved' && resolvedError}

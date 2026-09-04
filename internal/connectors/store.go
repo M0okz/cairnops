@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -245,71 +246,20 @@ func (store *PostgresStore) Delete(ctx context.Context, connectorID string) (Rem
 		return Removal{}, ErrStructureBusy
 	}
 
-	exposed, err := collectIncidentIDs(ctx, tx, `
-		SELECT DISTINCT incident.id::text
-		FROM cairnops_incidents incident
-		JOIN cairnops_incident_signals signal ON signal.incident_id = incident.id
-		WHERE incident.status = 'active' AND signal.connector_id = $1::uuid
-	`, connectorID)
+	resolved, err := incidents.ResolveForConnectorRemoval(ctx, tx, connectorID)
 	if err != nil {
-		return Removal{}, fmt.Errorf("list incidents fed by connector: %w", err)
+		return Removal{}, fmt.Errorf("resolve evidence fed by connector: %w", err)
 	}
+	removal.ResolvedIncidents = resolved
 
 	if _, err := tx.Exec(ctx, `DELETE FROM cairnops_connectors WHERE id = $1::uuid`, connectorID); err != nil {
 		return Removal{}, fmt.Errorf("remove connector: %w", err)
-	}
-
-	orphaned, err := collectIncidentIDs(ctx, tx, `
-		UPDATE cairnops_incidents incident
-		SET status = 'resolved', resolved_at = now(), updated_at = now()
-		WHERE incident.id::text = ANY($1) AND incident.status = 'active'
-		  AND NOT EXISTS (
-		      SELECT 1 FROM cairnops_incident_signals signal
-		      WHERE signal.incident_id = incident.id AND signal.active
-		  )
-		RETURNING incident.id::text
-	`, exposed)
-	if err != nil {
-		return Removal{}, fmt.Errorf("close incidents left without evidence: %w", err)
-	}
-	removal.ResolvedIncidents = len(orphaned)
-
-	if len(orphaned) > 0 {
-		note, err := json.Marshal(map[string]any{"connector": removal.Name, "kind": removal.Kind})
-		if err != nil {
-			return Removal{}, fmt.Errorf("encode connector removal note: %w", err)
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO cairnops_incident_activity (incident_id, kind, origin, message, data)
-			SELECT id::uuid, 'resolved', 'cairnops', $2, $3::jsonb
-			FROM unnest($1::text[]) AS removed(id)
-		`, orphaned, fmt.Sprintf("Le Connecteur « %s » a été supprimé : plus aucune preuve n'appuie cet Incident", removal.Name), note); err != nil {
-			return Removal{}, fmt.Errorf("record connector removal on incidents: %w", err)
-		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return Removal{}, fmt.Errorf("commit connector removal: %w", err)
 	}
 	return removal, nil
-}
-
-func collectIncidentIDs(ctx context.Context, tx pgx.Tx, query string, argument any) ([]string, error) {
-	rows, err := tx.Query(ctx, query, argument)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	identifiers := make([]string, 0)
-	for rows.Next() {
-		var identifier string
-		if err := rows.Scan(&identifier); err != nil {
-			return nil, err
-		}
-		identifiers = append(identifiers, identifier)
-	}
-	return identifiers, rows.Err()
 }
 
 func (store *PostgresStore) CreateGenericWebhook(ctx context.Context, actorID, name, endpoint, publicID, credentialSealed string, encryptedTransport bool) (Connector, error) {

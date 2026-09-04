@@ -36,19 +36,19 @@ test('la grille des Incidents réserve la même colonne aux actions dans chaque 
   );
 });
 
-test('le ratio des Sources explique son numérateur et son dénominateur', () => {
+test('le ratio des Atteintes explique son numérateur et son dénominateur', () => {
   assert.match(
     page,
-    /t\('incidents\.column\.activeSources'\)/,
-    "l’en-tête ne doit pas présenter un ratio ambigu sous le seul mot Sources"
+    /t\('incidents\.column\.activeImpacts'\)/,
+    "l’en-tête ne doit pas présenter un ratio ambigu sous le seul mot Atteintes"
   );
   assert.match(
     page,
-    /aria-label=\{t\('incidents\.sourcesRatio', \{ ratio: activeSignalRatio\(incident\) \}\)\}/,
+    /aria-label=\{t\('incidents\.impactsRatio', \{ ratio: activeImpactRatio\(incident\) \}\)\}/,
     'chaque ratio doit porter une explication accessible'
   );
-  assert.match(french, /'incidents\.column\.activeSources': 'Actives \/ total'/);
-  assert.match(english, /'incidents\.column\.activeSources': 'Active \/ total'/);
+  assert.match(french, /'incidents\.column\.activeImpacts': 'Atteintes actives \/ total'/);
+  assert.match(english, /'incidents\.column\.activeImpacts': 'Active \/ total Impacts'/);
 });
 
 test('la largeur intermédiaire réserve de la place à la Cible', () => {

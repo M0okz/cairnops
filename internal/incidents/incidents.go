@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 )
@@ -27,27 +26,50 @@ const (
 	SeverityCritical    Severity = "critical"
 )
 
-type Signal struct {
-	ID                   string     `json:"id"`
-	Origin               string     `json:"origin"`
-	ConnectorID          string     `json:"connector_id,omitempty"`
-	ConnectorName        string     `json:"connector_name,omitempty"`
-	ExternalEventID      string     `json:"external_event_id,omitempty"`
-	ExternalObjectID     string     `json:"external_object_id,omitempty"`
-	Name                 string     `json:"name"`
-	Active               bool       `json:"active"`
-	Severity             Severity   `json:"severity"`
-	OpenedAt             time.Time  `json:"opened_at"`
-	ResolvedAt           *time.Time `json:"resolved_at,omitempty"`
-	UpstreamAcknowledged bool       `json:"upstream_acknowledged"`
-	InvalidatedAt        *time.Time `json:"invalidated_at,omitempty"`
-	InvalidatedBy        string     `json:"invalidated_by,omitempty"`
-	InvalidationReason   string     `json:"invalidation_reason,omitempty"`
-	RearmedAt            *time.Time `json:"rearmed_at,omitempty"`
+type Evidence struct {
+	ID                        string     `json:"id"`
+	ImpactID                  string     `json:"impact_id"`
+	TargetID                  string     `json:"target_id"`
+	Origin                    string     `json:"origin"`
+	ConnectorID               string     `json:"connector_id,omitempty"`
+	ConnectorName             string     `json:"connector_name,omitempty"`
+	ExternalEventID           string     `json:"external_event_id,omitempty"`
+	ExternalObjectID          string     `json:"external_object_id,omitempty"`
+	Name                      string     `json:"name"`
+	Active                    bool       `json:"active"`
+	Severity                  Severity   `json:"severity"`
+	OpenedAt                  time.Time  `json:"opened_at"`
+	ResolvedAt                *time.Time `json:"resolved_at,omitempty"`
+	UpstreamAcknowledged      bool       `json:"upstream_acknowledged"`
+	AcknowledgementSyncStatus string     `json:"acknowledgement_sync_status"`
+	AcknowledgementSyncError  string     `json:"acknowledgement_sync_error,omitempty"`
+	AcknowledgementSyncedAt   *time.Time `json:"acknowledgement_synced_at,omitempty"`
+	InvalidatedAt             *time.Time `json:"invalidated_at,omitempty"`
+	InvalidatedBy             string     `json:"invalidated_by,omitempty"`
+	InvalidationReason        string     `json:"invalidation_reason,omitempty"`
+	RearmedAt                 *time.Time `json:"rearmed_at,omitempty"`
+}
+
+type Impact struct {
+	ID                string     `json:"id"`
+	TargetID          string     `json:"target_id"`
+	TargetName        string     `json:"target_name"`
+	Status            string     `json:"status"`
+	SourceSeverity    Severity   `json:"source_severity"`
+	EffectiveSeverity Severity   `json:"effective_severity"`
+	OpenedAt          time.Time  `json:"opened_at"`
+	ResolvedAt        *time.Time `json:"resolved_at,omitempty"`
+	MaintenanceActive bool       `json:"maintenance_active"`
+	MaintenanceEndsAt *time.Time `json:"maintenance_ends_at,omitempty"`
+	Evidence          []Evidence `json:"evidence"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type Activity struct {
 	ID         int64          `json:"id"`
+	ImpactID   string         `json:"impact_id,omitempty"`
+	EvidenceID string         `json:"evidence_id,omitempty"`
 	Kind       string         `json:"kind"`
 	Origin     string         `json:"origin"`
 	ActorName  string         `json:"actor_name,omitempty"`
@@ -58,28 +80,33 @@ type Activity struct {
 
 type Incident struct {
 	ID                        string     `json:"id"`
-	TargetID                  string     `json:"target_id"`
-	TargetName                string     `json:"target_name"`
 	NatureKey                 string     `json:"nature_key"`
 	NatureLabel               string     `json:"nature_label"`
 	NatureScope               string     `json:"nature_scope"`
 	NatureNamespace           string     `json:"nature_namespace"`
 	NatureFingerprint         string     `json:"nature_fingerprint"`
-	BurstEligible             bool       `json:"burst_eligible"`
-	BurstID                   string     `json:"burst_id,omitempty"`
+	PropagationEligible       bool       `json:"propagation_eligible"`
 	Status                    string     `json:"status"`
-	SourceSeverity            Severity   `json:"source_severity"`
-	EffectiveSeverity         Severity   `json:"effective_severity"`
+	PropagationStatus         string     `json:"propagation_status"`
+	Severity                  Severity   `json:"severity"`
 	OpenedAt                  time.Time  `json:"opened_at"`
+	LastImpactAt              time.Time  `json:"last_impact_at"`
+	PropagationWindowSeconds  int        `json:"propagation_window_seconds"`
+	PropagationEndsAt         time.Time  `json:"propagation_ends_at"`
+	PropagationClosedAt       *time.Time `json:"propagation_closed_at,omitempty"`
 	ResolvedAt                *time.Time `json:"resolved_at,omitempty"`
 	AcknowledgedAt            *time.Time `json:"acknowledged_at,omitempty"`
 	AcknowledgedBy            string     `json:"acknowledged_by,omitempty"`
 	AcknowledgementOrigin     string     `json:"acknowledgement_origin,omitempty"`
 	AcknowledgementSyncStatus string     `json:"acknowledgement_sync_status"`
 	AcknowledgementSyncError  string     `json:"acknowledgement_sync_error,omitempty"`
-	MaintenanceActive         bool       `json:"maintenance_active"`
-	MaintenanceEndsAt         *time.Time `json:"maintenance_ends_at,omitempty"`
-	Signals                   []Signal   `json:"signals"`
+	Extended                  bool       `json:"extended"`
+	ActiveImpactCount         int        `json:"active_impact_count"`
+	ImpactCount               int        `json:"impact_count"`
+	AffectedTargetCount       int        `json:"affected_target_count"`
+	MaxAffectedTargets        int        `json:"max_affected_targets"`
+	Revision                  int        `json:"revision"`
+	Impacts                   []Impact   `json:"impacts"`
 	Activity                  []Activity `json:"activity"`
 	CreatedAt                 time.Time  `json:"created_at"`
 	UpdatedAt                 time.Time  `json:"updated_at"`
@@ -201,9 +228,15 @@ type WebhookSignal struct {
 }
 
 type AcknowledgementTarget struct {
+	EvidenceID      string
 	Origin          string
 	ConnectorID     string
 	ExternalEventID string
+}
+
+type AcknowledgementResult struct {
+	EvidenceID string
+	Error      string
 }
 
 type AcknowledgementPlan struct {
@@ -225,8 +258,8 @@ type Store interface {
 	Get(context.Context, string) (Incident, error)
 	OpenedByDay(context.Context, int) ([]OpenedDay, error)
 	AcknowledgeLocal(context.Context, string, string, string) (AcknowledgementPlan, error)
-	CompleteAcknowledgement(context.Context, string, string, string) (Incident, error)
-	InvalidateSignal(context.Context, string, string, string, string, string) (Incident, error)
+	CompleteAcknowledgement(context.Context, string, []AcknowledgementResult) (Incident, error)
+	InvalidateEvidence(context.Context, string, string, string, string, string) (Incident, error)
 }
 
 type ExternalAcknowledger interface {
@@ -287,12 +320,12 @@ func (service *Service) OpenedByDay(ctx context.Context, days int) ([]OpenedDay,
 	return service.store.OpenedByDay(ctx, days)
 }
 
-func (service *Service) InvalidateSignal(ctx context.Context, incidentID, signalID, actorID, actorName, reason string) (Incident, error) {
+func (service *Service) InvalidateEvidence(ctx context.Context, incidentID, evidenceID, actorID, actorName, reason string) (Incident, error) {
 	reason = strings.TrimSpace(reason)
 	if len([]rune(reason)) < 8 || len([]rune(reason)) > 500 {
 		return Incident{}, fmt.Errorf("%w: le motif doit contenir entre 8 et 500 caractères", ErrInvalidInput)
 	}
-	return service.store.InvalidateSignal(ctx, incidentID, signalID, actorID, actorName, reason)
+	return service.store.InvalidateEvidence(ctx, incidentID, evidenceID, actorID, actorName, reason)
 }
 
 func (service *Service) Acknowledge(ctx context.Context, incidentID, actorID, actorName string) (Incident, error) {
@@ -304,16 +337,13 @@ func (service *Service) Acknowledge(ctx context.Context, incidentID, actorID, ac
 		return plan.Incident, nil
 	}
 
-	errorsByTarget := make([]string, 0)
-	seen := make(map[string]struct{}, len(plan.Targets))
+	results := make([]AcknowledgementResult, 0, len(plan.Targets))
 	for _, target := range plan.Targets {
-		key := target.Origin + ":" + target.ConnectorID + ":" + target.ExternalEventID
-		if _, duplicate := seen[key]; duplicate {
-			continue
-		}
-		seen[key] = struct{}{}
 		if service.acknowledger == nil {
-			errorsByTarget = append(errorsByTarget, "aucun adaptateur de synchronisation n’est disponible")
+			results = append(results, AcknowledgementResult{
+				EvidenceID: target.EvidenceID,
+				Error:      "aucun adaptateur de synchronisation n’est disponible",
+			})
 			continue
 		}
 		message := "Acquitté depuis CairnOps"
@@ -321,18 +351,10 @@ func (service *Service) Acknowledge(ctx context.Context, incidentID, actorID, ac
 			message += " par " + strings.TrimSpace(actorName)
 		}
 		if err := service.acknowledger.Acknowledge(ctx, target, message); err != nil {
-			errorsByTarget = append(errorsByTarget, err.Error())
+			results = append(results, AcknowledgementResult{EvidenceID: target.EvidenceID, Error: err.Error()})
+			continue
 		}
+		results = append(results, AcknowledgementResult{EvidenceID: target.EvidenceID})
 	}
-
-	status, syncError := "synchronized", ""
-	if len(errorsByTarget) > 0 {
-		status = "failed"
-		sort.Strings(errorsByTarget)
-		syncError = strings.Join(errorsByTarget, "; ")
-		if len(syncError) > 500 {
-			syncError = syncError[:500]
-		}
-	}
-	return service.store.CompleteAcknowledgement(ctx, incidentID, status, syncError)
+	return service.store.CompleteAcknowledgement(ctx, incidentID, results)
 }

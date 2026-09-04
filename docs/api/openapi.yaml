@@ -119,11 +119,10 @@ components:
         Une notification reçue par la personne connectée. Elle appartient à un
         compte : cette API ne rend jamais la boîte de quelqu'un d'autre.
       type: object
-      required: [id, incident_id, revision, event_kind, target_name, nature_key, nature_label, severity, incident_count, affected_target_count, max_affected_targets, burst_extended, occurred_at, read_at]
+      required: [id, incident_id, revision, event_kind, target_name, nature_key, nature_label, severity, impact_count, affected_target_count, max_affected_targets, propagation_status, extended, occurred_at, read_at]
       properties:
         id: { type: integer, format: int64 }
         incident_id: { type: string, format: uuid }
-        burst_id: { type: string, format: uuid }
         revision: { type: integer, minimum: 0 }
         target_id: { type: string, format: uuid }
         event_kind: { type: string, enum: [firing, resolved] }
@@ -131,11 +130,11 @@ components:
         nature_key: { type: string }
         nature_label: { type: string }
         severity: { type: string, enum: [information, warning, major, critical] }
-        incident_count: { type: integer, minimum: 1 }
+        impact_count: { type: integer, minimum: 0 }
         affected_target_count: { type: integer, minimum: 0 }
         max_affected_targets: { type: integer, minimum: 0 }
-        burst_status: { type: string, enum: [propagating, sealed, resolved] }
-        burst_extended: { type: boolean }
+        propagation_status: { type: string, enum: [open, closed] }
+        extended: { type: boolean }
         occurred_at: { type: string, format: date-time }
         read_at: { type: string, format: date-time, nullable: true }
     AuthenticatedSession:
@@ -671,9 +670,12 @@ components:
             items: { $ref: '#/components/schemas/IndicatorPoint' }
     IncidentIndicatorSnapshot:
       type: object
-      required: [semantic_key, label, unit, value, observed_at]
+      required: [impact_id, target_id, target_name, semantic_key, label, unit, value, observed_at]
       properties:
         indicator_id: { type: string, format: uuid }
+        impact_id: { type: string, format: uuid }
+        target_id: { type: string, format: uuid }
+        target_name: { type: string }
         semantic_key: { $ref: '#/components/schemas/IndicatorCandidate/properties/semantic_key' }
         label: { type: string }
         unit: { $ref: '#/components/schemas/IndicatorCandidate/properties/unit' }
@@ -681,10 +683,12 @@ components:
         observed_at: { type: string, format: date-time }
     IncidentIndicators:
       type: object
-      required: [incident_id, target_id, opened_at, snapshots, indicators, series, disclaimer]
+      required: [incident_id, target_ids, opened_at, snapshots, indicators, series, disclaimer]
       properties:
         incident_id: { type: string, format: uuid }
-        target_id: { type: string, format: uuid }
+        target_ids:
+          type: array
+          items: { type: string, format: uuid }
         opened_at: { type: string, format: date-time }
         snapshots:
           type: array
@@ -722,11 +726,13 @@ components:
         bindings: { type: integer, minimum: 0, description: Sources externes déliées. Les Cibles correspondantes sont conservées. }
         quarantined: { type: integer, minimum: 0, description: Identités en quarantaine emportées sans décision. }
         resolved_incidents: { type: integer, minimum: 0, description: Incidents clos faute de preuve après la suppression. }
-    IncidentSignal:
+    IncidentEvidence:
       type: object
-      required: [id, origin, name, active, severity, opened_at, upstream_acknowledged]
+      required: [id, impact_id, target_id, origin, name, active, severity, opened_at, upstream_acknowledged, acknowledgement_sync_status]
       properties:
         id: { type: string, format: uuid }
+        impact_id: { type: string, format: uuid }
+        target_id: { type: string, format: uuid }
         origin: { type: string, enum: [native, zabbix, uptime_kuma, patchmon, argus, webhook] }
         connector_id: { type: string, format: uuid }
         connector_name: { type: string }
@@ -738,6 +744,9 @@ components:
         opened_at: { type: string, format: date-time }
         resolved_at: { type: string, format: date-time }
         upstream_acknowledged: { type: boolean }
+        acknowledgement_sync_status: { type: string, enum: [not_applicable, pending, synchronized, failed] }
+        acknowledgement_sync_error: { type: string }
+        acknowledgement_synced_at: { type: string, format: date-time }
         invalidated_at: { type: string, format: date-time }
         invalidated_by: { type: string }
         invalidation_reason: { type: string, minLength: 8, maxLength: 500 }
@@ -747,107 +756,73 @@ components:
       required: [id, kind, origin, message, data, occurred_at]
       properties:
         id: { type: integer, format: int64 }
+        impact_id: { type: string, format: uuid }
+        evidence_id: { type: string, format: uuid }
         kind: { type: string }
         origin: { type: string }
         actor_name: { type: string }
         message: { type: string }
         data: { type: object, additionalProperties: true }
         occurred_at: { type: string, format: date-time }
-    Incident:
+    IncidentImpact:
       type: object
-      required: [id, target_id, target_name, nature_key, nature_label, nature_scope, nature_namespace, nature_fingerprint, burst_eligible, status, source_severity, effective_severity, opened_at, acknowledgement_sync_status, maintenance_active, signals, activity, created_at, updated_at]
+      required: [id, target_id, target_name, status, source_severity, effective_severity, opened_at, maintenance_active, evidence, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         target_id: { type: string, format: uuid }
         target_name: { type: string }
+        status: { type: string, enum: [active, resolved] }
+        source_severity: { type: string, enum: [information, warning, major, critical] }
+        effective_severity: { type: string, enum: [information, warning, major, critical] }
+        opened_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+        maintenance_active: { type: boolean }
+        maintenance_ends_at: { type: string, format: date-time }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/IncidentEvidence' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Incident:
+      description: >-
+        Cycle commun d'une même Nature. Il agrège plusieurs Atteintes par
+        Cible pendant sa fenêtre de propagation, sans déclarer de cause.
+      type: object
+      required: [id, nature_key, nature_label, nature_scope, nature_namespace, nature_fingerprint, propagation_eligible, status, propagation_status, severity, opened_at, last_impact_at, propagation_window_seconds, propagation_ends_at, acknowledgement_sync_status, extended, active_impact_count, impact_count, affected_target_count, max_affected_targets, revision, impacts, activity, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
         nature_key: { type: string }
         nature_label: { type: string }
         nature_scope: { type: string, enum: [canonical, connector] }
         nature_namespace: { type: string }
         nature_fingerprint: { type: string }
-        burst_eligible: { type: boolean }
-        burst_id: { type: string, format: uuid }
+        propagation_eligible: { type: boolean }
         status: { type: string, enum: [active, resolved] }
-        source_severity: { type: string, enum: [information, warning, major, critical] }
-        effective_severity: { type: string, enum: [information, warning, major, critical] }
+        propagation_status: { type: string, enum: [open, closed] }
+        severity: { type: string, enum: [information, warning, major, critical] }
         opened_at: { type: string, format: date-time }
+        last_impact_at: { type: string, format: date-time }
+        propagation_window_seconds: { type: integer, minimum: 60, maximum: 300 }
+        propagation_ends_at: { type: string, format: date-time }
+        propagation_closed_at: { type: string, format: date-time }
         resolved_at: { type: string, format: date-time }
         acknowledged_at: { type: string, format: date-time }
         acknowledged_by: { type: string }
         acknowledgement_origin: { type: string, enum: [user, connector] }
         acknowledgement_sync_status: { type: string, enum: [not_applicable, pending, synchronized, failed] }
         acknowledgement_sync_error: { type: string }
-        maintenance_active: { type: boolean }
-        maintenance_ends_at: { type: string, format: date-time }
-        signals:
+        extended: { type: boolean }
+        active_impact_count: { type: integer, minimum: 0 }
+        impact_count: { type: integer, minimum: 0 }
+        affected_target_count: { type: integer, minimum: 0 }
+        max_affected_targets: { type: integer, minimum: 0 }
+        revision: { type: integer, minimum: 1 }
+        impacts:
           type: array
-          items: { $ref: '#/components/schemas/IncidentSignal' }
+          items: { $ref: '#/components/schemas/IncidentImpact' }
         activity:
           type: array
           items: { $ref: '#/components/schemas/IncidentActivity' }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-    IncidentBurstMember:
-      type: object
-      required: [incident_id, target_id, target_name, status, effective_severity, opened_at, maintenance_active, joined_at]
-      properties:
-        incident_id: { type: string, format: uuid }
-        target_id: { type: string, format: uuid }
-        target_name: { type: string }
-        status: { type: string, enum: [active, resolved] }
-        effective_severity: { type: string, enum: [information, warning, major, critical] }
-        opened_at: { type: string, format: date-time }
-        resolved_at: { type: string, format: date-time }
-        acknowledged_at: { type: string, format: date-time }
-        maintenance_active: { type: boolean }
-        joined_at: { type: string, format: date-time }
-    IncidentBurstActivity:
-      type: object
-      required: [id, kind, message, data, occurred_at]
-      properties:
-        id: { type: integer, format: int64 }
-        kind: { type: string, enum: [formed, incident_joined, sealed, severity_changed, extended, acknowledged, resolved] }
-        actor_name: { type: string }
-        message: { type: string }
-        data: { type: object, additionalProperties: true }
-        occurred_at: { type: string, format: date-time }
-    IncidentBurst:
-      description: >-
-        Regroupement déterministe de présentation et de notification. Une Rafale
-        ne déclare aucune cause et ne remplace jamais ses Incidents membres.
-      type: object
-      required: [id, anchor_incident_id, nature_scope, nature_namespace, nature_fingerprint, nature_label, status, severity, opened_at, last_joined_at, propagation_window_seconds, propagation_ends_at, extended, active_incident_count, incident_count, affected_target_count, target_count, max_affected_targets, revision, explanation, members, activity, created_at, updated_at]
-      properties:
-        id: { type: string, format: uuid }
-        anchor_incident_id: { type: string, format: uuid }
-        nature_scope: { type: string, enum: [canonical, connector] }
-        nature_namespace: { type: string }
-        nature_fingerprint: { type: string }
-        nature_label: { type: string }
-        status: { type: string, enum: [propagating, sealed, resolved] }
-        severity: { type: string, enum: [information, warning, major, critical] }
-        opened_at: { type: string, format: date-time }
-        last_joined_at: { type: string, format: date-time }
-        propagation_window_seconds: { type: integer, minimum: 60, maximum: 300 }
-        propagation_ends_at: { type: string, format: date-time }
-        sealed_at: { type: string, format: date-time }
-        resolved_at: { type: string, format: date-time }
-        acknowledged_at: { type: string, format: date-time }
-        acknowledged_by: { type: string }
-        extended: { type: boolean }
-        active_incident_count: { type: integer, minimum: 0 }
-        incident_count: { type: integer, minimum: 2 }
-        affected_target_count: { type: integer, minimum: 0 }
-        target_count: { type: integer, minimum: 2 }
-        max_affected_targets: { type: integer, minimum: 0 }
-        revision: { type: integer, minimum: 1 }
-        explanation: { type: string }
-        members:
-          type: array
-          items: { $ref: '#/components/schemas/IncidentBurstMember' }
-        activity:
-          type: array
-          items: { $ref: '#/components/schemas/IncidentBurstActivity' }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     TargetReference:
@@ -1335,8 +1310,8 @@ components:
         version: { type: integer, format: int64, minimum: 0 }
         kind:
           type: string
-          enum: [target.changed, source.changed, observation.created, component.heartbeat, connector.changed, incident.changed, maintenance.changed, notification.changed, device.changed, indicator.changed, reconciliation.changed, burst.changed]
-        entity_type: { type: string, enum: [target, source, component, connector, incident, maintenance, notification, device, indicator, reconciliation, burst] }
+          enum: [target.changed, source.changed, observation.created, component.heartbeat, connector.changed, incident.changed, maintenance.changed, notification.changed, device.changed, indicator.changed, reconciliation.changed]
+        entity_type: { type: string, enum: [target, source, component, connector, incident, maintenance, notification, device, indicator, reconciliation] }
         entity_id: { type: string }
         occurred_at: { type: string, format: date-time }
     Error:
@@ -2268,9 +2243,9 @@ paths:
         '403': { description: Rôle Administrateur ou Opérateur requis }
         '404': { description: Incident absent }
         '409': { description: Incident déjà résolu }
-  /api/v1/incidents/{incidentID}/signals/{signalID}/invalidation:
+  /api/v1/incidents/{incidentID}/evidence/{evidenceID}/invalidation:
     post:
-      operationId: invalidateIncidentSignal
+      operationId: invalidateIncidentEvidence
       description: >-
         Écarte une preuve active sans la supprimer. La décision motivée est
         ajoutée au Journal ; une Source à état réutilisable doit ensuite montrer
@@ -2282,7 +2257,7 @@ paths:
           required: true
           schema: { type: string, format: uuid }
         - in: path
-          name: signalID
+          name: evidenceID
           required: true
           schema: { type: string, format: uuid }
       requestBody:
@@ -2306,77 +2281,6 @@ paths:
         '403': { description: Rôle Administrateur ou Opérateur requis }
         '404': { description: Incident ou preuve absent }
         '409': { description: Preuve déjà inactive }
-  /api/v1/incident-bursts:
-    get:
-      operationId: listIncidentBursts
-      description: >-
-        Retourne les Rafales persistantes. Le filtre active couvre les états
-        propagating et sealed ; les Incidents membres restent comptés et
-        accessibles individuellement.
-      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
-      parameters:
-        - in: query
-          name: status
-          schema: { type: string, enum: [active, resolved, all], default: active }
-        - in: query
-          name: limit
-          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
-      responses:
-        '200':
-          description: Rafales correspondant au filtre
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [bursts]
-                properties:
-                  bursts:
-                    type: array
-                    items: { $ref: '#/components/schemas/IncidentBurst' }
-        '400': { description: Filtre invalide }
-        '401': { description: Authentification requise }
-  /api/v1/incident-bursts/{burstID}:
-    get:
-      operationId: getIncidentBurst
-      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
-      parameters:
-        - in: path
-          name: burstID
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200':
-          description: Rafale, membres, explication et Journal d'activité
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/IncidentBurst' }
-        '400': { description: Identifiant invalide }
-        '401': { description: Authentification requise }
-        '404': { description: Rafale absente }
-  /api/v1/incident-bursts/{burstID}/acknowledgement:
-    post:
-      operationId: acknowledgeIncidentBurst
-      description: >-
-        Acquitte chaque membre actuel et tout membre qui rejoint avant la
-        fermeture de Propagation. Chaque synchronisation amont garde son propre
-        résultat sur l'Incident concerné.
-      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
-      parameters:
-        - in: path
-          name: burstID
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200':
-          description: Rafale acquittée et états individuels actualisés
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/IncidentBurst' }
-        '400': { description: Identifiant invalide }
-        '401': { description: Authentification requise }
-        '403': { description: Rôle Administrateur ou Opérateur requis }
-        '404': { description: Rafale absente }
-        '409': { description: Rafale déjà résolue }
   /api/v1/maintenances:
     get:
       operationId: listMaintenances

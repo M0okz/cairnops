@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/M0okz/cairnops/internal/domain"
+	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/testsupport"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -86,6 +88,9 @@ func TestPostgresHeartbeatFeedsTheTriggerPolicy(t *testing.T) {
 	}
 	if count := activeNativeSignals(t, pool, created.Source.ID); count != 0 {
 		t.Fatalf("the recovery threshold was reached but %d signal(s) remain active", count)
+	}
+	if err := incidents.NewPostgresStore(pool).Advance(ctx, time.Now().UTC().Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
 	}
 	if _, _, status := incidentForTarget(t, pool, target.ID); status != "resolved" {
 		t.Fatalf("incident status is %q instead of resolved", status)
@@ -223,6 +228,9 @@ func TestPostgresArchivingATargetClosesItsPresentAndKeepsItsPast(t *testing.T) {
 	if err := store.ArchiveTarget(ctx, target.ID); err != nil {
 		t.Fatal(err)
 	}
+	if err := incidents.NewPostgresStore(pool).Advance(ctx, time.Now().UTC().Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
 	if active := activeIncidents(t, pool, target.ID); active != 0 {
 		t.Fatalf("archiving must resolve the active incidents, %d remain", active)
 	}
@@ -230,9 +238,10 @@ func TestPostgresArchivingATargetClosesItsPresentAndKeepsItsPast(t *testing.T) {
 	var resolved int
 	if err := pool.QueryRow(ctx, `
 		SELECT count(*)::integer FROM cairnops_incidents incident
+		JOIN cairnops_incident_impacts impact ON impact.incident_id = incident.id
 		JOIN cairnops_incident_activity activity ON activity.incident_id = incident.id
-		WHERE incident.target_id = $1::uuid AND incident.status = 'resolved'
-		  AND activity.message = 'Incident résolu : la Cible a été archivée'
+		WHERE impact.target_id = $1::uuid AND incident.status = 'resolved'
+		  AND activity.kind = 'resolved'
 	`, target.ID).Scan(&resolved); err != nil {
 		t.Fatal(err)
 	}
@@ -338,6 +347,9 @@ func TestPostgresUpdateSourceKeepsAbsentFieldsAndProtectsIntegrations(t *testing
 	if err := store.DeleteSource(ctx, created.Source.ID); err != nil {
 		t.Fatal(err)
 	}
+	if err := incidents.NewPostgresStore(pool).Advance(ctx, time.Now().UTC().Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
 	var remaining int
 	if err := pool.QueryRow(ctx,
 		`SELECT count(*)::integer FROM cairnops_observations WHERE source_id = $1::uuid`, created.Source.ID,
@@ -370,6 +382,9 @@ func TestPostgresDeleteSourceResolvesIncidentWhoseLastSignalDisappears(t *testin
 	if err := store.DeleteSource(ctx, created.Source.ID); err != nil {
 		t.Fatal(err)
 	}
+	if err := incidents.NewPostgresStore(pool).Advance(ctx, time.Now().UTC().Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
 	if active := activeIncidents(t, pool, target.ID); active != 0 {
 		t.Fatalf("deleting the last Source must not leave an active Incident with 0/0 evidence, got %d", active)
 	}
@@ -378,9 +393,10 @@ func TestPostgresDeleteSourceResolvesIncidentWhoseLastSignalDisappears(t *testin
 		SELECT count(*)::integer
 		FROM cairnops_incident_activity activity
 		JOIN cairnops_incidents incident ON incident.id = activity.incident_id
-		WHERE incident.target_id = $1::uuid AND activity.kind = 'resolved'
-		  AND activity.data->>'source_id' = $2
-	`, target.ID, created.Source.ID).Scan(&explained); err != nil {
+		JOIN cairnops_incident_impacts impact ON impact.incident_id = incident.id
+		WHERE impact.target_id = $1::uuid AND activity.kind = 'evidence_updated'
+		  AND activity.message = 'Contrôle supprimé'
+	`, target.ID).Scan(&explained); err != nil {
 		t.Fatal(err)
 	}
 	if explained != 1 {
@@ -394,20 +410,43 @@ func TestPostgresDeleteSourceResolvesIncidentWhoseLastSignalDisappears(t *testin
 func seedActiveIncident(t *testing.T, pool *pgxpool.Pool, targetID, sourceID string) {
 	t.Helper()
 	ctx := context.Background()
-	var incidentID string
+	var incidentID, impactID string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO cairnops_incidents (
-			target_id, nature_key, nature_label, status, source_severity, effective_severity, opened_at
-		) VALUES ($1::uuid, 'availability', 'Indisponibilité', 'active', 'major', 'major', now())
+			nature_key, nature_label, nature_scope, nature_namespace,
+			nature_fingerprint, propagation_eligible, status,
+			propagation_status, severity, opened_at, last_impact_at,
+			propagation_window_seconds, propagation_ends_at,
+			active_impact_count, impact_count, affected_target_count,
+			max_affected_targets
+		) VALUES (
+			'availability', 'Indisponibilité', 'canonical', 'cairnops',
+			'availability', true, 'active', 'open', 'major', now(), now(),
+			60, now() + interval '1 minute', 1, 1, 1, 1
+		)
 		RETURNING id::text
-	`, targetID).Scan(&incidentID); err != nil {
+	`).Scan(&incidentID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_incident_impacts (
+			incident_id, target_id, status, source_severity,
+			effective_severity, opened_at
+		) VALUES ($1::uuid, $2::uuid, 'active', 'major', 'major', now())
+		RETURNING id::text
+	`, incidentID, targetID).Scan(&impactID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO cairnops_incident_signals (
-			incident_id, target_id, origin, source_id, name, active, severity, opened_at, last_seen_at
-		) VALUES ($1::uuid, $2::uuid, 'native', $3::uuid, 'Endpoint public', true, 'major', now(), now())
-	`, incidentID, targetID, sourceID); err != nil {
+		INSERT INTO cairnops_incident_evidence (
+			incident_id, impact_id, target_id, origin, source_id,
+			identity_scope, identity_key, name, active, severity,
+			opened_at, last_seen_at
+		) VALUES (
+			$1::uuid, $2::uuid, $3::uuid, 'native', $4::uuid,
+			$4::text, 'availability', 'Endpoint public', true, 'major', now(), now()
+		)
+	`, incidentID, impactID, targetID, sourceID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -416,8 +455,9 @@ func activeIncidents(t *testing.T, pool *pgxpool.Pool, targetID string) int {
 	t.Helper()
 	var count int
 	if err := pool.QueryRow(context.Background(), `
-		SELECT count(*)::integer FROM cairnops_incidents
-		WHERE target_id = $1::uuid AND status = 'active'
+		SELECT count(*)::integer FROM cairnops_incidents incident
+		JOIN cairnops_incident_impacts impact ON impact.incident_id = incident.id
+		WHERE impact.target_id = $1::uuid AND incident.status = 'active'
 	`, targetID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
@@ -476,7 +516,7 @@ func activeNativeSignals(t *testing.T, pool *pgxpool.Pool, sourceID string) int 
 	t.Helper()
 	var count int
 	if err := pool.QueryRow(context.Background(), `
-		SELECT count(*) FROM cairnops_incident_signals
+		SELECT count(*) FROM cairnops_incident_evidence
 		WHERE origin = 'native' AND source_id = $1::uuid AND active
 	`, sourceID).Scan(&count); err != nil {
 		t.Fatal(err)
@@ -487,10 +527,11 @@ func activeNativeSignals(t *testing.T, pool *pgxpool.Pool, sourceID string) int 
 func incidentForTarget(t *testing.T, pool *pgxpool.Pool, targetID string) (nature, severity, status string) {
 	t.Helper()
 	if err := pool.QueryRow(context.Background(), `
-		SELECT nature_key, effective_severity, status
-		FROM cairnops_incidents
-		WHERE target_id = $1::uuid
-		ORDER BY created_at DESC
+		SELECT incident.nature_key, incident.severity, incident.status
+		FROM cairnops_incidents incident
+		JOIN cairnops_incident_impacts impact ON impact.incident_id = incident.id
+		WHERE impact.target_id = $1::uuid
+		ORDER BY incident.created_at DESC
 		LIMIT 1
 	`, targetID).Scan(&nature, &severity, &status); err != nil {
 		t.Fatal(err)

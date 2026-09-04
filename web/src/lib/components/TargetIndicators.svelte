@@ -15,7 +15,7 @@
   const marker = $derived(incident && markerVisible ? {
     at: incident.opened_at,
     label: `Ouverture · ${clock(incident.opened_at)}`,
-    tone: severityTone(incident.effective_severity) as 'info' | 'warn' | 'crit'
+    tone: severityTone(incident.severity) as 'info' | 'warn' | 'crit'
   } : null);
   $effect(() => { void session.loadTargetIndicators(targetId, window); });
   $effect(() => { const timer = setInterval(() => (now = new Date()), 30_000); return () => clearInterval(timer); });
@@ -66,7 +66,7 @@
       <span>Contexte uniquement · les seuils et alertes restent sous l’autorité du produit d’origine. Les relevés détaillés expirent après 24 h et les agrégats horaires après 7 j.</span>
       {#if incident}
         <span class="incident-marker-note">
-          <i class={severityTone(incident.effective_severity)} aria-hidden="true"></i>
+          <i class={severityTone(incident.severity)} aria-hidden="true"></i>
           {markerVisible
             ? `Ouverture de l’Incident · ${stamp(incident.opened_at)} · repère temporel, sans lien de cause établi.`
             : `Ouverture de l’Incident · ${stamp(incident.opened_at)} · repère hors de la fenêtre affichée.`}

@@ -187,7 +187,7 @@ func (service *WebhookService) Receive(ctx context.Context, publicID, authorizat
 	if route.QuarantineID != "" {
 		return WebhookReceipt{Disposition: "quarantined", QuarantineID: route.QuarantineID}, nil
 	}
-	if err := service.incidents.ApplyWebhook(ctx, webhookIncidentSignal(credential.ConnectorID, route.BindingID, route.TargetID, event, now)); err != nil {
+	if err := service.incidents.ApplyWebhook(ctx, webhookIncidentEvidence(credential.ConnectorID, route.BindingID, route.TargetID, event, now)); err != nil {
 		return WebhookReceipt{}, fmt.Errorf("apply authorized webhook: %w", err)
 	}
 	return WebhookReceipt{Disposition: "accepted"}, nil
@@ -214,7 +214,7 @@ func (service *WebhookService) Approve(ctx context.Context, actorID, connectorID
 			EventKey: event.EventKey, NatureKey: event.NatureKey, Nature: event.Nature,
 			Status: event.Status, Severity: event.Severity, Summary: event.Summary, Details: event.Details,
 		}
-		if err := service.incidents.ApplyWebhook(ctx, webhookIncidentSignal(connectorID, approval.BindingID, approval.TargetID, input, event.LastSeenAt)); err != nil {
+		if err := service.incidents.ApplyWebhook(ctx, webhookIncidentEvidence(connectorID, approval.BindingID, approval.TargetID, input, event.LastSeenAt)); err != nil {
 			return WebhookApproval{}, fmt.Errorf("replay quarantined webhook: %w", err)
 		}
 	}
@@ -226,7 +226,7 @@ func (service *WebhookService) Approve(ctx context.Context, actorID, connectorID
 	return approval, nil
 }
 
-func webhookIncidentSignal(connectorID, bindingID, targetID string, event GenericWebhookEvent, observedAt time.Time) incidents.WebhookSignal {
+func webhookIncidentEvidence(connectorID, bindingID, targetID string, event GenericWebhookEvent, observedAt time.Time) incidents.WebhookSignal {
 	return incidents.WebhookSignal{
 		ConnectorID: connectorID, BindingID: bindingID, TargetID: targetID,
 		ExternalEventKey: event.EventKey, NatureKey: event.NatureKey, NatureLabel: event.Nature,

@@ -24,19 +24,34 @@ func TestExpiredRelayRecipientDisablesOnlyItsDevice(t *testing.T) {
 	}
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO cairnops_incidents (
-			target_id, nature_key, nature_label, status, source_severity,
-			effective_severity, opened_at
-		) VALUES ($1::uuid, 'native:http', 'Indisponibilité', 'active', 'critical', 'critical', now())
+			nature_key, nature_label, nature_scope, nature_namespace,
+			nature_fingerprint, propagation_eligible, status,
+			propagation_status, severity, opened_at, last_impact_at,
+			propagation_window_seconds, propagation_ends_at,
+			active_impact_count, impact_count, affected_target_count,
+			max_affected_targets
+		) VALUES (
+			'native:http', 'Indisponibilité', 'canonical', 'cairnops',
+			'native:http', true, 'active', 'open', 'critical', now(), now(),
+			60, now() + interval '1 minute', 1, 1, 1, 1
+		)
 		RETURNING id::text
-	`, targetID).Scan(&incidentID); err != nil {
+	`).Scan(&incidentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO cairnops_incident_impacts (
+			incident_id, target_id, status, source_severity, effective_severity, opened_at
+		) VALUES ($1::uuid, $2::uuid, 'active', 'critical', 'critical', now())
+	`, incidentID, targetID); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO cairnops_notification_inbox (
 			user_id, incident_id, target_id, event_kind, target_name,
-			nature_label, severity, occurred_at
+			nature_label, severity, propagation_status, occurred_at
 		) VALUES ($1::uuid, $2::uuid, $3::uuid, 'firing', 'Expired push target',
-		          'Indisponibilité', 'critical', now())
+		          'Indisponibilité', 'critical', 'open', now())
 		RETURNING id::text
 	`, userID, incidentID, targetID).Scan(&inboxID); err != nil {
 		t.Fatal(err)

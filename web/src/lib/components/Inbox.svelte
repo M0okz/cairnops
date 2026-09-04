@@ -60,10 +60,7 @@
 
   /* Au-delà d'une centaine, le compte exact n'aide plus personne à décider. */
   const badge = $derived(session.unread > 99 ? '99+' : String(session.unread));
-  const entryHref = (entry: { incident_id: string; burst_id?: string }) =>
-    entry.burst_id
-      ? `/incidents?burst=${encodeURIComponent(entry.burst_id)}`
-      : incidentHref(entry.incident_id);
+  const entryHref = (entry: { incident_id: string }) => incidentHref(entry.incident_id);
 </script>
 
 <div class="inbox" bind:this={anchor}>
@@ -112,7 +109,6 @@
             <span class="what">
               <strong>{entry.target_name}</strong>
               <small class="faint">
-                {#if entry.burst_id}<span class="burst-mark">{t('bursts.label')} · </span>{/if}
                 {entry.event_kind === 'resolved'
                   ? t('inbox.resolved', { nature: natureLabel(entry) })
                   : t('inbox.opened', { nature: natureLabel(entry) })}
@@ -271,11 +267,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .burst-mark {
-    color: var(--accent);
-    font-weight: 600;
   }
 
   .when {

@@ -34,14 +34,8 @@ func (client *MattermostClient) Send(ctx context.Context, webhookURL string, mes
 	resolved := message.EventKind == "resolved"
 	color, label, icon := severityPresentation(string(message.Severity))
 	title := fmt.Sprintf("%s [%s] %s — %s", icon, label, message.TargetName, message.NatureLabel)
-	if message.BurstID != "" && !resolved {
-		title = fmt.Sprintf("%s [%s] Rafale — %s", icon, label, message.NatureLabel)
-	}
 	if resolved {
 		color, title = "#39d98a", fmt.Sprintf("✅ [RÉSOLU] %s — %s", message.TargetName, message.NatureLabel)
-		if message.BurstID != "" {
-			title = fmt.Sprintf("✅ [RÉSOLUE] Rafale — %s", message.NatureLabel)
-		}
 	}
 	fields := []map[string]any{
 		{"short": true, "title": "Gravité", "value": label},
@@ -50,22 +44,19 @@ func (client *MattermostClient) Send(ctx context.Context, webhookURL string, mes
 	text := "La supervision serveur conserve les preuves liées à cet Incident."
 	if resolved {
 		text = "L’Incident est résolu. Cette notification est envoyée au même canal que son ouverture."
-		if message.BurstID != "" {
-			text = fmt.Sprintf("La Rafale est résolue après avoir affecté jusqu’à %d Cibles. Les Incidents et leurs preuves restent distincts.", message.MaxAffected)
+		if message.MaxAffected > 1 {
+			text = fmt.Sprintf("L’Incident est résolu après avoir affecté jusqu’à %d Cibles. Ses Atteintes et leurs Preuves restent consultables.", message.MaxAffected)
 		}
 	}
 	if message.PublicURL != "" {
-		link := message.PublicURL + "/#incidents"
-		if message.BurstID != "" {
-			link = message.PublicURL + "/incidents?burst=" + url.QueryEscape(message.BurstID)
-		}
+		link := message.PublicURL + "/incidents?incident=" + url.QueryEscape(message.IncidentID)
 		text += " [Ouvrir CairnOps](" + link + ")"
 	}
 	return client.post(ctx, webhookURL, map[string]any{
 		"username": "CairnOps",
 		"attachments": []map[string]any{{
 			"color": color, "title": title, "text": text, "fields": fields,
-			"footer": map[bool]string{true: "Rafale " + message.BurstID, false: "Incident " + message.IncidentID}[message.BurstID != ""],
+			"footer": "Incident " + message.IncidentID,
 		}},
 	})
 }

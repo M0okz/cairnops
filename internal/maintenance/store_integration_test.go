@@ -16,7 +16,7 @@ func TestMaintenanceNeutralizesIncidentProjectionWithoutDeletingProof(t *testing
 	pool := testsupport.Pool(t)
 
 	suffix := time.Now().UTC().UnixNano()
-	var actorID, targetID, sourceID, incidentID string
+	var actorID, targetID, sourceID, incidentID, impactID string
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO cairnops_users (username, display_name, password_hash, role)
 		VALUES ($1, 'Maintenance Operator', 'not-used', 'operator') RETURNING id::text
@@ -34,16 +34,41 @@ func TestMaintenanceNeutralizesIncidentProjectionWithoutDeletingProof(t *testing
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, `
-		INSERT INTO cairnops_incidents (target_id, nature_key, nature_label, status, source_severity, effective_severity, opened_at)
-		VALUES ($1::uuid, 'native:tcp', 'Port indisponible', 'active', 'major', 'major', now())
+		INSERT INTO cairnops_incidents (
+			nature_key, nature_label, nature_scope, nature_namespace,
+			nature_fingerprint, propagation_eligible, status,
+			propagation_status, severity, opened_at, last_impact_at,
+			propagation_window_seconds, propagation_ends_at,
+			active_impact_count, impact_count, affected_target_count,
+			max_affected_targets
+		) VALUES (
+			'native:tcp', 'Port indisponible', 'canonical', 'cairnops',
+			'native:tcp', true, 'active', 'open', 'major', now(), now(),
+			60, now() + interval '1 minute', 1, 1, 1, 1
+		)
 		RETURNING id::text
-	`, targetID).Scan(&incidentID); err != nil {
+	`).Scan(&incidentID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_incident_impacts (
+			incident_id, target_id, status, source_severity,
+			effective_severity, opened_at
+		) VALUES ($1::uuid, $2::uuid, 'active', 'major', 'major', now())
+		RETURNING id::text
+	`, incidentID, targetID).Scan(&impactID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO cairnops_incident_signals (incident_id, target_id, origin, source_id, name, active, severity, opened_at)
-		VALUES ($1::uuid, $2::uuid, 'native', $3::uuid, 'Connexion refusée', true, 'major', now())
-	`, incidentID, targetID, sourceID); err != nil {
+		INSERT INTO cairnops_incident_evidence (
+			incident_id, impact_id, target_id, origin, source_id,
+			identity_scope, identity_key, name, active, severity,
+			opened_at, last_seen_at
+		) VALUES (
+			$1::uuid, $2::uuid, $3::uuid, 'native', $4::uuid,
+			$4, 'availability', 'Connexion refusée', true, 'major', now(), now()
+		)
+	`, incidentID, impactID, targetID, sourceID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -59,7 +84,9 @@ func TestMaintenanceNeutralizesIncidentProjectionWithoutDeletingProof(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !projected.MaintenanceActive || projected.MaintenanceEndsAt == nil || len(projected.Signals) != 1 || !projected.Signals[0].Active {
+	if len(projected.Impacts) != 1 || !projected.Impacts[0].MaintenanceActive ||
+		projected.Impacts[0].MaintenanceEndsAt == nil || len(projected.Impacts[0].Evidence) != 1 ||
+		!projected.Impacts[0].Evidence[0].Active {
 		t.Fatalf("maintenance must neutralize the projection and preserve proof: %#v", projected)
 	}
 	cancelled, err := service.Cancel(ctx, created.ID, actorID)
@@ -73,7 +100,8 @@ func TestMaintenanceNeutralizesIncidentProjectionWithoutDeletingProof(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if projected.MaintenanceActive || len(projected.Signals) != 1 || !projected.Signals[0].Active {
+	if len(projected.Impacts) != 1 || projected.Impacts[0].MaintenanceActive ||
+		len(projected.Impacts[0].Evidence) != 1 || !projected.Impacts[0].Evidence[0].Active {
 		t.Fatalf("cancellation must restore projection and preserve proof: %#v", projected)
 	}
 }

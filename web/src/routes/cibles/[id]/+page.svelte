@@ -36,7 +36,7 @@
     windowLabel
   } from '$lib/format';
   import { plural, t } from '$lib/i18n.svelte';
-  import { api, type IncidentSignal, type MeasureWindow, type ReconciliationSourceSummary, type TargetReconciliationActivity } from '$lib/api';
+  import { api, type IncidentEvidence, type MeasureWindow, type ReconciliationSourceSummary, type TargetReconciliationActivity } from '$lib/api';
 
   type Tab = 'view' | 'sources' | 'checks' | 'log' | 'settings';
 
@@ -44,7 +44,7 @@
   let maintenanceOpen = $state(false);
   let acknowledging = $state(false);
   let invalidating = $state('');
-  let invalidationFor = $state<{ incidentId: string; signal: IncidentSignal } | null>(null);
+  let invalidationFor = $state<{ incidentId: string; signal: IncidentEvidence } | null>(null);
   let invalidationReason = $state('');
   let now = $state(new Date());
   let controlOpen = $state(false);
@@ -62,6 +62,7 @@
   const incidents = $derived(target ? session.incidentsFor(target.id) : []);
   const incidentHistory = $derived(target ? session.incidentHistoryFor(target.id) : []);
   const lead = $derived(leadIncident(incidents));
+  const leadImpact = $derived(lead?.impacts.find((impact) => impact.target_id === target?.id) ?? null);
   const healthState = $derived(target ? session.targetState(target) : 'unknown');
   const structureBusy = $derived(
     target ? reconciliationState.activeOperations.some((operation) =>
@@ -187,7 +188,7 @@
     generic_webhook: 'Webhook'
   };
 
-  const originLabels: Record<IncidentSignal['origin'], string> = {
+  const originLabels: Record<IncidentEvidence['origin'], string> = {
     native: 'CairnOps',
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
@@ -200,7 +201,9 @@
    * « par Source » que demande l'écran, pas la lecture par Incident. */
   const proofs = $derived(
     incidents.flatMap((incident) =>
-      incident.signals.map((signal) => ({ incident, signal }))
+      incident.impacts
+        .filter((impact) => impact.target_id === target?.id)
+        .flatMap((impact) => impact.evidence.map((signal) => ({ incident, signal })))
     )
   );
 
@@ -369,12 +372,12 @@
 
     {#if tab === 'view'}
       {#if lead}
-        <div class="banner {severityTone(lead.effective_severity)}">
-          <i class="dot {severityTone(lead.effective_severity)}"></i>
+        <div class="banner {severityTone(leadImpact?.effective_severity ?? lead.severity)}">
+          <i class="dot {severityTone(leadImpact?.effective_severity ?? lead.severity)}"></i>
           <div class="banner-copy">
             <strong>
               {t('target.ongoingIncident')} · {natureLabel(lead)} ·
-              {severityLabel(lead.effective_severity)} ·
+              {severityLabel(leadImpact?.effective_severity ?? lead.severity)} ·
               {lead.acknowledged_at
                 ? t('target.acknowledgedBy', {
                     who: lead.acknowledged_by ?? t('target.anOperator')
@@ -400,7 +403,7 @@
       <div class="kpis">
         <div class="card kpi">
           <span>{t('incidents.column.duration')}</span>
-          <b class={lead ? severityTone(lead.effective_severity) : ''}>
+          <b class={lead ? severityTone(leadImpact?.effective_severity ?? lead.severity) : ''}>
             <Odometer value={lead ? since(lead.opened_at, now) : t('common.none')} />
           </b>
         </div>

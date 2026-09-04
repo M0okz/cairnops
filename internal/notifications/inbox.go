@@ -19,7 +19,6 @@ const InboxLimit = 50
 type InboxEntry struct {
 	ID                  int64              `json:"id"`
 	IncidentID          string             `json:"incident_id"`
-	BurstID             string             `json:"burst_id,omitempty"`
 	Revision            int                `json:"revision"`
 	TargetID            string             `json:"target_id,omitempty"`
 	EventKind           string             `json:"event_kind"`
@@ -27,11 +26,11 @@ type InboxEntry struct {
 	NatureKey           string             `json:"nature_key"`
 	NatureLabel         string             `json:"nature_label"`
 	Severity            incidents.Severity `json:"severity"`
-	IncidentCount       int                `json:"incident_count"`
+	ImpactCount         int                `json:"impact_count"`
 	AffectedTargetCount int                `json:"affected_target_count"`
 	MaxAffectedTargets  int                `json:"max_affected_targets"`
-	BurstStatus         string             `json:"burst_status,omitempty"`
-	BurstExtended       bool               `json:"burst_extended"`
+	PropagationStatus   string             `json:"propagation_status"`
+	Extended            bool               `json:"extended"`
 	OccurredAt          time.Time          `json:"occurred_at"`
 	ReadAt              *time.Time         `json:"read_at"`
 }
@@ -51,12 +50,12 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 	}
 
 	rows, err := store.pool.Query(ctx, `
-		SELECT inbox.id, inbox.incident_id::text, coalesce(inbox.burst_id::text, ''),
+		SELECT inbox.id, inbox.incident_id::text,
 		       inbox.revision, coalesce(inbox.target_id::text, ''),
 		       inbox.event_kind, inbox.target_name, incident.nature_key,
-		       inbox.nature_label, inbox.severity, inbox.incident_count,
+		       inbox.nature_label, inbox.severity, inbox.impact_count,
 		       inbox.affected_target_count, inbox.max_affected_targets,
-		       coalesce(inbox.burst_status, ''), inbox.burst_extended,
+		       inbox.propagation_status, inbox.extended,
 		       inbox.occurred_at, inbox.read_at
 		FROM cairnops_notification_inbox inbox
 		JOIN cairnops_incidents incident ON incident.id = inbox.incident_id
@@ -73,11 +72,11 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 	for rows.Next() {
 		var entry InboxEntry
 		if err := rows.Scan(
-			&entry.ID, &entry.IncidentID, &entry.BurstID, &entry.Revision,
+			&entry.ID, &entry.IncidentID, &entry.Revision,
 			&entry.TargetID, &entry.EventKind,
 			&entry.TargetName, &entry.NatureKey, &entry.NatureLabel, &entry.Severity,
-			&entry.IncidentCount, &entry.AffectedTargetCount,
-			&entry.MaxAffectedTargets, &entry.BurstStatus, &entry.BurstExtended,
+			&entry.ImpactCount, &entry.AffectedTargetCount,
+			&entry.MaxAffectedTargets, &entry.PropagationStatus, &entry.Extended,
 			&entry.OccurredAt, &entry.ReadAt,
 		); err != nil {
 			return Inbox{}, fmt.Errorf("scan notification inbox: %w", err)

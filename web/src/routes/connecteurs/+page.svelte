@@ -332,7 +332,7 @@
 
       <div class="thead">
         <span>{t('connectors.column.identity')}</span>
-        <span>{t('connectors.column.signals')}</span>
+        <span>{t('connectors.column.evidence')}</span>
         <span class="hide-sm">{t('connectors.column.lastSignal')}</span>
         <span class="hide-sm">{t('connectors.column.payload')}</span>
         <span></span>

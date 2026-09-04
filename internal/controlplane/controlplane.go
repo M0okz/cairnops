@@ -266,8 +266,9 @@ func (store *Store) UpdateTarget(ctx context.Context, targetID string, input Upd
 }
 
 // ArchiveTarget retire une Cible de l'Espace opérationnel sans effacer son
-// passé. Ses Incidents actifs sont résolus avec leur raison au Journal, et plus
-// aucun signal ne la ressuscite tant qu'elle n'est pas restaurée.
+// passé. Ses Preuves actives sont refermées avec leur raison au Journal ; leur
+// Incident suit ensuite sa règle normale de fermeture de Propagation. Plus
+// aucun signal ne ressuscite la Cible tant qu'elle n'est pas restaurée.
 func (store *Store) ArchiveTarget(ctx context.Context, targetID string) error {
 	tx, err := store.pool.Begin(ctx)
 	if err != nil {
@@ -551,13 +552,13 @@ func (store *Store) DeleteSource(ctx context.Context, sourceID string) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var origin, targetID, sourceName string
+	var origin, targetID string
 	err = tx.QueryRow(ctx, `
-		SELECT origin, target_id::text, name
+		SELECT origin, target_id::text
 		FROM cairnops_signal_sources
 		WHERE id = $1::uuid
 		FOR UPDATE
-	`, sourceID).Scan(&origin, &targetID, &sourceName)
+	`, sourceID).Scan(&origin, &targetID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -573,57 +574,12 @@ func (store *Store) DeleteSource(ctx context.Context, sourceID string) error {
 		return ErrStructureBusy
 	}
 
-	rows, err := tx.Query(ctx, `
-		SELECT incident.id::text
-		FROM cairnops_incidents incident
-		WHERE incident.status = 'active'
-		  AND EXISTS (
-		      SELECT 1 FROM cairnops_incident_signals signal
-		      WHERE signal.incident_id = incident.id AND signal.source_id = $1::uuid
-		  )
-		FOR UPDATE
-	`, sourceID)
-	if err != nil {
-		return fmt.Errorf("list incidents fed by source: %w", err)
-	}
-	exposed := make([]string, 0)
-	for rows.Next() {
-		var incidentID string
-		if err := rows.Scan(&incidentID); err != nil {
-			rows.Close()
-			return fmt.Errorf("scan incident fed by source: %w", err)
-		}
-		exposed = append(exposed, incidentID)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate incidents fed by source: %w", err)
+	if err := incidents.ResolveForSourceRemoval(ctx, tx, sourceID); err != nil {
+		return fmt.Errorf("resolve evidence fed by source: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `DELETE FROM cairnops_signal_sources WHERE id = $1::uuid`, sourceID); err != nil {
 		return fmt.Errorf("delete source: %w", err)
-	}
-
-	if len(exposed) > 0 {
-		if _, err := tx.Exec(ctx, `
-			WITH resolved AS (
-				UPDATE cairnops_incidents incident
-				SET status = 'resolved', resolved_at = now(), updated_at = now()
-				WHERE incident.id = ANY($1::uuid[]) AND incident.status = 'active'
-				  AND NOT EXISTS (
-				      SELECT 1 FROM cairnops_incident_signals signal
-				      WHERE signal.incident_id = incident.id AND signal.active
-				  )
-				RETURNING incident.id
-			)
-			INSERT INTO cairnops_incident_activity (incident_id, kind, origin, message, data)
-			SELECT id, 'resolved', 'cairnops',
-			       'Incident résolu : le Contrôle « ' || $2::text || ' » a été supprimé et plus aucune preuve ne l’alimente',
-			       jsonb_build_object('source_id', $3::text, 'source_name', $2::text)
-			FROM resolved
-		`, exposed, sourceName, sourceID); err != nil {
-			return fmt.Errorf("resolve incidents emptied by source deletion: %w", err)
-		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

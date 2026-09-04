@@ -30,14 +30,14 @@ func TestMattermostResolutionMessageKeepsOperationalContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded, _ := json.Marshal(payload)
-	for _, expected := range []string{"RÉSOLU", "Nextcloud", "Réponse HTTP invalide", "même canal", "https://cairnops.example.test/#incidents"} {
+	for _, expected := range []string{"RÉSOLU", "Nextcloud", "Réponse HTTP invalide", "même canal", "https://cairnops.example.test/incidents?incident=incident-1"} {
 		if !strings.Contains(string(encoded), expected) {
 			t.Fatalf("Mattermost payload does not contain %q: %s", expected, encoded)
 		}
 	}
 }
 
-func TestMattermostBurstLinkOpensThePersistentBurst(t *testing.T) {
+func TestMattermostMultiTargetIncidentKeepsItsImpactSummary(t *testing.T) {
 	t.Parallel()
 	var payload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +49,7 @@ func TestMattermostBurstLinkOpensThePersistentBurst(t *testing.T) {
 	defer server.Close()
 	client := NewMattermostClient(server.Client())
 	if err := client.Send(context.Background(), server.URL, Message{
-		EventKind: "resolved", IncidentID: "incident-anchor", BurstID: "burst-1",
+		EventKind: "resolved", IncidentID: "incident-1",
 		TargetName: "7 Cibles affectées", NatureLabel: "Latence disque élevée",
 		Severity: incidents.SeverityCritical, MaxAffected: 7,
 		PublicURL: "https://cairnops.example.test",
@@ -57,9 +57,9 @@ func TestMattermostBurstLinkOpensThePersistentBurst(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded, _ := json.Marshal(payload)
-	for _, expected := range []string{"RÉSOLUE", "jusqu’à 7 Cibles", "https://cairnops.example.test/incidents?burst=burst-1"} {
+	for _, expected := range []string{"RÉSOLU", "jusqu’à 7 Cibles", "https://cairnops.example.test/incidents?incident=incident-1"} {
 		if !strings.Contains(string(encoded), expected) {
-			t.Fatalf("Mattermost burst payload does not contain %q: %s", expected, encoded)
+			t.Fatalf("Mattermost incident payload does not contain %q: %s", expected, encoded)
 		}
 	}
 }

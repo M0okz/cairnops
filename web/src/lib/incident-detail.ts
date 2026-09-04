@@ -37,14 +37,16 @@ export function incidentIndicatorRows(detail: IncidentIndicators): {
   const captured = detail.snapshots.map((snapshot) => {
     const indicator = detail.indicators.find(
       (candidate) =>
-        (snapshot.indicator_id && candidate.id === snapshot.indicator_id) ||
-        (candidate.semantic_key === snapshot.semantic_key && candidate.label === snapshot.label)
+        candidate.target_id === snapshot.target_id && (
+          (snapshot.indicator_id && candidate.id === snapshot.indicator_id) ||
+          (candidate.semantic_key === snapshot.semantic_key && candidate.label === snapshot.label)
+        )
     );
     if (indicator) capturedIndicatorIDs.add(indicator.id);
-    capturedSemanticLabels.add(`${snapshot.semantic_key}:${snapshot.label}`);
+    capturedSemanticLabels.add(`${snapshot.target_id}:${snapshot.semantic_key}:${snapshot.label}`);
     return {
-      key: snapshot.indicator_id ?? `snapshot:${snapshot.semantic_key}:${snapshot.label}`,
-      label: snapshot.label,
+      key: snapshot.indicator_id ?? `snapshot:${snapshot.target_id}:${snapshot.semantic_key}:${snapshot.label}`,
+      label: detail.target_ids.length > 1 ? `${snapshot.target_name} · ${snapshot.label}` : snapshot.label,
       unit: snapshot.unit,
       snapshot,
       indicator,
@@ -56,7 +58,7 @@ export function incidentIndicatorRows(detail: IncidentIndicators): {
     .filter(
       (indicator) =>
         !capturedIndicatorIDs.has(indicator.id) &&
-        !capturedSemanticLabels.has(`${indicator.semantic_key}:${indicator.label}`)
+        !capturedSemanticLabels.has(`${indicator.target_id}:${indicator.semantic_key}:${indicator.label}`)
     )
     .map((indicator) => ({
       key: indicator.id,
