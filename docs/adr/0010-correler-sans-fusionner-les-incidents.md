@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: superseded
+superseded_by: 0042-unifier-les-atteintes-dans-un-incident-propage.md
 ---
 
 # Corréler sans fusionner les Incidents

@@ -48,19 +48,15 @@ La Vue d'ensemble est orientée exceptions : État global et fraîcheur, Inciden
 
 La liste principale affiche le nom, l'État de santé, la Nature et la Gravité du principal Incident actif, la dernière Observation et sa fraîcheur, la latence lorsque pertinente, la disponibilité sur 24 heures, le nombre de Sources, une éventuelle contradiction et une mini-tendance. Les adresses, preuves détaillées par Source et historiques complets restent dans le détail.
 
-## Carte d'Incident
+## Ligne d'Incident
 
-Une carte d'Incident affiche la Cible et la Nature, la Gravité effective et son éventuel écart avec la Source, l'état d'Acquittement, l'heure de début et la durée, le nombre de Sources actives sur le total, les contradictions ou données manquantes, l'action principale Acquitter et la dernière entrée significative du Journal d'activité. Le détail réserve la chronologie des preuves, toutes les Sources et les actions sensibles comme l'Invalidation.
+Une ligne d'Incident affiche sa Nature, sa plus forte Gravité effective active, l'état d'Acquittement, l'heure de début et la durée, le nombre d'Atteintes actives sur le total, le nombre de Cibles distinctes et une éventuelle Propagation étendue. Son développement révèle les Atteintes dans une structure comparable : Cible, Gravité, instants, nombre de Preuves actives, contradictions ou données manquantes et dernière transition significative.
 
-## Ligne de Rafale
-
-Dans les surfaces globales, une Rafale d'Incidents remplace la répétition de ses cartes par une ligne repliable. Elle affiche la Nature, la plus forte Gravité effective active, le nombre d'Incidents actifs sur le total, le nombre de Cibles distinctes, l'Acquittement et une éventuelle Propagation étendue. Son développement révèle les Incidents dans la même structure et avec les mêmes actions que la liste ordinaire ; aucun code couleur ni vocabulaire ne suggère une cause commune.
-
-Le détail explique le regroupement à la demande dans une phrase lisible fondée sur l'identité de Nature et l'intervalle observé. Il n'affiche ni score de confiance, ni réglage, ni action de fusion ou séparation. Le détail d'une Cible continue de montrer son Incident individuel, tandis que la boîte intégrée et le Push conservent une entrée unique actualisée silencieusement.
+Le détail explique à la demande pourquoi les Atteintes partagent l'Incident, dans une phrase lisible fondée sur l'identité de Nature et l'intervalle observé. Il n'affiche ni score de confiance, ni réglage, ni action de fusion ou séparation, et aucun code couleur ni vocabulaire ne suggère une cause commune. Le détail d'une Cible montre les Incidents qui l'affectent en donnant la priorité à son Atteinte ; la boîte intégrée et le Push conservent une entrée unique par Incident, actualisée silencieusement hors nouveau Fait opérationnel.
 
 ## Chronologie d'Incident
 
-La chronologie fusionne les origines mais affiche d'abord les transitions significatives : déclenchement, contradiction, Acquittement, requalification, Invalidation, maintenance et Résolution. Les Observations brutes restent accessibles à la demande, regroupées par Source et condensées sur les périodes stables, avec une origine CairnOps, Connecteur ou humaine toujours explicite.
+La chronologie fusionne les origines mais affiche d'abord les transitions significatives : ouverture, arrivée ou rétablissement d'une Atteinte, contradiction, Acquittement, requalification, Invalidation, maintenance, fermeture de la Propagation et Résolution. Les Observations brutes restent accessibles à la demande, regroupées par Source et condensées sur les périodes stables, avec une origine CairnOps, Connecteur ou humaine toujours explicite.
 
 Visuellement, la chronologie s'appuie sur un filet vertical discret le long duquel les entrées s'alignent. Les preuves actives sont présentées en lignes comparables et conservent chacune leur verdict, leur fraîcheur et leur origine ; la divergence reste visible sans produire un nouvel état.
 
