@@ -202,6 +202,31 @@ func TestOfflineHostMakesCachedGuestStatusInconclusive(t *testing.T) {
 	}
 }
 
+func TestProvisionCleansUpWhenCreatedUserResponseIsLost(t *testing.T) {
+	var userID string
+	removed := false
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/users":
+			_ = r.ParseForm()
+			userID = r.Form.Get("userid")
+			_, _ = fmt.Fprint(w, "truncated response")
+		case r.Method == http.MethodGet && r.URL.Path == "/api2/json/access/users":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"userid": userID, "comment": "CairnOps managed read-only integration"}}})
+		case r.Method == http.MethodDelete && strings.HasSuffix(r.URL.Path, userID):
+			removed = true
+			_, _ = fmt.Fprint(w, `{"data":null}`)
+		default:
+			t.Errorf("unexpected cleanup request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	if _, err := NewClientWithHTTP(server.Client()).Provision(context.Background(), server.URL, testCredential); err == nil || !removed {
+		t.Fatal("uncertain user creation was not cleaned up")
+	}
+}
+
 func TestLiveProxmoxReadOnly(t *testing.T) {
 	endpoint := os.Getenv("CAIRNOPS_TEST_PVE_ENDPOINT")
 	if endpoint == "" {

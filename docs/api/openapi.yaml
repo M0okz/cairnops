@@ -1151,13 +1151,14 @@ components:
       required: [id, external_id, type, name, node, status, template, importable, expected_running, already_imported, candidate_targets]
       properties:
         id: { type: string }
-        external_id: { type: string, description: Identité stable node/nom, qemu/VMID, lxc/VMID ou storage/nœud/stockage. }
+        external_id: { type: string, description: "Identité stable node/nom, qemu/VMID, lxc/VMID ou storage/nœud/stockage." }
         type: { type: string, enum: [node, qemu, lxc, storage] }
         name: { type: string }
         node: { type: string }
         vmid: { type: integer }
         storage: { type: string }
         status: { type: string }
+        host_unavailable: { type: boolean, description: Un hôte absent ou hors ligne rend l’état conservé de la machine non concluant. }
         template: { type: integer }
         tags: { type: string }
         cpu: { type: number }

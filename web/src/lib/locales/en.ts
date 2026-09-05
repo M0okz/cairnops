@@ -29,6 +29,7 @@ export const en: Record<MessageKey, string> = {
   "proxmox.toggleVisible": "Toggle visible selection",
   "proxmox.template": "Template · not monitored",
   "proxmox.alertOnStop": "Alert on stop",
+  "proxmox.hostUnavailable": "State unknown: host unavailable",
   "proxmox.noMatch": "No resources match this filter.",
   "proxmox.stoppedWarning": "{count} selected guest(s) are already stopped and will trigger an alert.",
   "proxmox.observes": "CairnOps observes your infrastructure. CPU, memory and storage remain contextual indicators without alert thresholds.",

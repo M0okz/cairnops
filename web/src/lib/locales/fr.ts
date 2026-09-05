@@ -28,6 +28,7 @@ export const fr = {
   "proxmox.toggleVisible": "Inverser la sélection visible",
   "proxmox.template": "Modèle · hors supervision",
   "proxmox.alertOnStop": "Signaler un arrêt",
+  "proxmox.hostUnavailable": "État inconnu : hôte indisponible",
   "proxmox.noMatch": "Aucun objet ne correspond au filtre.",
   "proxmox.stoppedWarning": "{count} machine(s) sélectionnée(s) sont déjà arrêtées et déclencheront une alerte.",
   "proxmox.observes": "CairnOps observe l’infrastructure. CPU, mémoire et stockage restent des indicateurs sans seuils d’alerte.",

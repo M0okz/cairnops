@@ -128,7 +128,7 @@
             {@const picked = selected.includes(resource.external_id)}
             <li class:picked>
               <Checkbox variant="row" checked={picked} disabled={!resource.importable || busy} onCheckedChange={() => toggle(resource.external_id)}>
-                <span class="identity"><strong>{resource.name}</strong><small class="faint mono">{resource.external_id} · {resource.node} · {resource.status}</small></span>
+                <span class="identity"><strong>{resource.name}</strong><small class="faint mono">{resource.external_id} · {resource.node} · {resource.host_unavailable ? t('proxmox.hostUnavailable') : resource.status}</small></span>
               </Checkbox>
               <div class="decision">
                 {#if resource.already_imported_to}<span class="faint">{t('wizard.alreadyBound')} · {resource.already_imported_to.name}</span>

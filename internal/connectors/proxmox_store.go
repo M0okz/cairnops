@@ -99,9 +99,12 @@ func (store *PostgresStore) ImportProxmox(ctx context.Context, input PersistProx
 			return ProxmoxImport{}, err
 		}
 	}
+	if err := updateProxmoxInventoryPresence(ctx, tx, id, input.Inventory); err != nil {
+		return ProxmoxImport{}, err
+	}
 	result.Connector, err = scanConnector(tx.QueryRow(ctx, `SELECT id::text, kind, name, endpoint, status, remote_version, compatibility, encrypted_transport,
 		(SELECT count(*)::integer FROM cairnops_connector_bindings WHERE connector_id = $1::uuid AND integration_enabled),
-		(SELECT count(*)::integer FROM cairnops_proxmox_inventory WHERE connector_id = $1::uuid AND pending), last_checked_at, last_error, created_at, updated_at
+		(SELECT count(*)::integer FROM cairnops_proxmox_inventory WHERE connector_id = $1::uuid AND pending AND present), last_checked_at, last_error, created_at, updated_at
 		FROM cairnops_connectors WHERE id = $1::uuid`, id))
 	if err != nil {
 		return ProxmoxImport{}, err
@@ -201,6 +204,9 @@ func (store *PostgresStore) RefreshProxmox(ctx context.Context, connector Runtim
 			return nil, err
 		}
 	}
+	if err := updateProxmoxInventoryPresence(ctx, tx, connector.ID, resources); err != nil {
+		return nil, err
+	}
 	ids := make([]string, 0, len(resources))
 	for _, resource := range resources {
 		ids = append(ids, resource.ID)
@@ -236,4 +242,16 @@ func (store *PostgresStore) RefreshProxmox(ctx context.Context, connector Runtim
 		return nil, err
 	}
 	return bindings, nil
+}
+
+// Keep the discovery decision across disappearances, but only ask for a
+// reconciliation while the resource can actually be chosen in the inventory.
+func updateProxmoxInventoryPresence(ctx context.Context, tx pgx.Tx, connectorID string, resources []proxmox.Resource) error {
+	ids := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		ids = append(ids, resource.ID)
+	}
+	_, err := tx.Exec(ctx, `UPDATE cairnops_proxmox_inventory SET present = (external_id = ANY($2::text[]))
+		WHERE connector_id = $1::uuid AND present <> (external_id = ANY($2::text[]))`, connectorID, ids)
+	return err
 }

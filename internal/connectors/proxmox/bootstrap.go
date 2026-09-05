@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -49,11 +50,13 @@ func (client *Client) Provision(ctx context.Context, address string, installer C
 		return result, fmt.Errorf("name Proxmox VE account: %w", err)
 	}
 	userID := "cairnops-" + hex.EncodeToString(nonce[:]) + "@pve"
-	if err := client.request(ctx, endpoint, http.MethodPost, "/access/users", installer, url.Values{"userid": {userID}, "comment": {"CairnOps managed read-only integration"}, "enable": {"1"}}, nil); err != nil {
-		return result, err
-	}
+	creationConfirmed := false
 	defer func() {
 		if err == nil {
+			return
+		}
+		var rejected *responseError
+		if !creationConfirmed && errors.As(err, &rejected) && rejected.status >= 400 && rejected.status < 500 {
 			return
 		}
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
@@ -62,6 +65,10 @@ func (client *Client) Provision(ctx context.Context, address string, installer C
 			err = fmt.Errorf("%w; remote account %s could not be removed: %v", err, userID, cleanupErr)
 		}
 	}()
+	if err = client.request(ctx, endpoint, http.MethodPost, "/access/users", installer, url.Values{"userid": {userID}, "comment": {"CairnOps managed read-only integration"}, "enable": {"1"}}, nil); err != nil {
+		return result, err
+	}
+	creationConfirmed = true
 	acl := url.Values{"path": {"/"}, "roles": {"PVEAuditor"}, "propagate": {"1"}, "users": {userID}}
 	if err = client.request(ctx, endpoint, http.MethodPut, "/access/acl", installer, acl, nil); err != nil {
 		return result, err

@@ -23,6 +23,15 @@ import (
 
 const maximumResponse = 16 << 20
 
+type responseError struct {
+	method, path string
+	status       int
+}
+
+func (e *responseError) Error() string {
+	return fmt.Sprintf("Proxmox VE %s %s returned HTTP %d", e.method, e.path, e.status)
+}
+
 type Credentials struct {
 	TokenID     string `json:"token_id"`
 	Secret      string `json:"secret"`
@@ -285,7 +294,7 @@ func (client *Client) request(ctx context.Context, endpoint, method, path string
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("Proxmox VE %s %s returned HTTP %d", method, strings.Split(path, "?")[0], response.StatusCode)
+		return &responseError{method: method, path: strings.Split(path, "?")[0], status: response.StatusCode}
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maximumResponse+1))
 	if err != nil {

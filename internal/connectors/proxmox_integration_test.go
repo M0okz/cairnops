@@ -78,6 +78,16 @@ func TestProxmoxStormRecoveryAndIncompleteReads(t *testing.T) {
 		}
 	}
 	assertEvidence(15)
+	if _, err := store.SetStatus(ctx, imported.Connector.ID, "disabled"); err != nil {
+		t.Fatal(err)
+	}
+	if err := incidentStore.ApplyEvidenceSnapshot(ctx, incidents.EvidenceSnapshot{Origin: "proxmox", ConnectorID: imported.Connector.ID, ObservedAt: time.Now(), LeaseOwner: "test-worker", CompleteConnector: true}); err == nil {
+		t.Fatal("a cycle invalidated by suspension could still change evidence")
+	}
+	assertEvidence(15)
+	if _, err := store.SetStatus(ctx, imported.Connector.ID, "connected"); err != nil {
+		t.Fatal(err)
+	}
 	client.err = errors.New("permissions lost")
 	tick()
 	assertEvidence(15)
@@ -130,6 +140,7 @@ func TestProxmoxImportIsAtomicAndNeverSilentlyMatchesNames(t *testing.T) {
 	}
 	input.TargetAssignments = nil
 	input.Inventory = input.Resources
+	input.ManagedUserID = "cairnops-0123456789abcdef@pve"
 	result, err := store.ImportProxmox(ctx, input)
 	if err != nil {
 		t.Fatal(err)
@@ -165,5 +176,36 @@ func TestProxmoxImportIsAtomicAndNeverSilentlyMatchesNames(t *testing.T) {
 	}
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM cairnops_proxmox_inventory WHERE pending`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("ambiguous discovery was not pending: %d %v", count, err)
+	}
+	// A status response replaces the browser's connector object. It must keep
+	// the managed cleanup requirements and the actionable discovery count.
+	for _, status := range []string{"disabled", "connected"} {
+		updated, err := store.SetStatus(ctx, result.Connector.ID, status)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if updated.CredentialManagement != "managed" || updated.QuarantineCount != 1 || updated.BindingCount != 3 {
+			t.Fatalf("status response lost connector context: %+v", updated)
+		}
+	}
+	if _, err := pool.Exec(ctx, `UPDATE cairnops_connectors SET lease_owner='discovery', lease_until=now()+interval '1 minute' WHERE id=$1::uuid`, result.Connector.ID); err != nil {
+		t.Fatal(err)
+	}
+	// An absent candidate cannot be selected in the preview. Preserve its
+	// decision for a later reappearance without showing an impossible action.
+	for _, snapshot := range []struct {
+		resources []proxmox.Resource
+		pending   int
+	}{{discovered[:3], 0}, {discovered, 1}} {
+		if _, err := store.RefreshProxmox(ctx, RuntimeConnector{ID: result.Connector.ID, Endpoint: input.Endpoint}, "discovery", snapshot.resources); err != nil {
+			t.Fatal(err)
+		}
+		listed, err := store.List(ctx)
+		if err != nil || len(listed) != 1 {
+			t.Fatalf("list connector: %v", err)
+		}
+		if listed[0].QuarantineCount != snapshot.pending || listed[0].BindingCount != 3 {
+			t.Fatalf("discovery decision changed across disappearance: %+v", listed[0])
+		}
 	}
 }

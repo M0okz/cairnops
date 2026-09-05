@@ -39,6 +39,8 @@ seuils de métriques, ni diagnostic causal, ni fonctions d’administration de V
   réellement nouveaux et sans rapprochement plausible sont importés ensuite ;
   les autres restent à rapprocher dans l’inventaire. Un ancien objet ignoré
   n’est pas réimporté automatiquement au cycle suivant.
+  Un objet à rapprocher qui disparaît quitte le compteur des décisions en
+  attente ; sa décision reste mémorisée et redevient visible s’il réapparaît.
 
 ## Indicateurs et contexte
 

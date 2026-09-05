@@ -894,7 +894,7 @@ export type ProxmoxCertificate = {
 };
 export type ProxmoxResourcePreview = {
   id: string; external_id: string; name: string; type: 'node' | 'qemu' | 'lxc' | 'storage'; node: string; vmid?: number;
-  status: string; template: number; importable: boolean; expected_running: boolean; already_imported: boolean;
+  status: string; host_unavailable?: boolean; template: number; importable: boolean; expected_running: boolean; already_imported: boolean;
   already_imported_to?: TargetReference; suggested_target?: TargetReference; candidate_targets: TargetMatch[];
 };
 export type ProxmoxPreview = {
