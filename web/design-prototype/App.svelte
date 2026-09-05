@@ -2,12 +2,13 @@
   // Atelier jetable : trois compositions (?variant=A/B/C), état en mémoire.
   // Intent : comprendre les exceptions, puis passer du verdict aux preuves.
   // Hiérarchie : état global > incidents > contexte > inventaire sain.
-  // Palette : graphite/pierre, cuivre d’action, couleurs de santé réservées.
+  // Palette : Titane, accent de marque, couleurs de santé réservées.
   // Depth/surfaces : traits fins et élévation par surface, aucun décor.
   // Typographie : système 28/18/14/13/12, nombres tabulaires. Grille : 4 px.
   import { onMount } from 'svelte';
   import Icon, { type IconName } from '../src/lib/components/Icon.svelte';
   import Chart from './Chart.svelte';
+  import Brand from '../src/lib/components/Brand.svelte';
   import ThemePicker from './ThemePicker.svelte';
   import { targets, incidents, type Target } from './data';
 
@@ -41,7 +42,7 @@
   const pending = $derived(2-acknowledged.length);
   const incident = $derived(incidents.find(i=>i.id===selected.id));
   const variantNames: Record<string,string> = {A:'Vue d’ensemble',B:'Priorité aux incidents',C:'Analyse en grand'};
-  const themeChange = (value:'light'|'dark') => { theme=value; document.documentElement.dataset.theme=value; };
+  const themeChange = (value:'light'|'dark') => { theme=value; document.documentElement.dataset.theme=value; document.querySelector('meta[name="theme-color"]')?.setAttribute('content',getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()); };
   function chooseVariant(value:string) {
     variant=value;
     const url=new URL(location.href); url.searchParams.set('variant',value); history.replaceState({},'',url);
@@ -64,7 +65,7 @@
 <svelte:window onkeydown={key}/>
 
 {#snippet logo(size=28)}
-  <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true" class="p-logo"><path d="M12 4h8a3 3 0 0 1 3 3v1H9V7a3 3 0 0 1 3-3Z" fill="currentColor"/><path d="M8 12h16a3 3 0 0 1 3 3v2H5v-2a3 3 0 0 1 3-3Z" fill="currentColor" opacity=".8"/><path d="M5 21h22a3 3 0 0 1 3 3v3H2v-3a3 3 0 0 1 3-3Z" fill="currentColor" opacity=".55"/></svg>
+  <Brand width={size} symbolOnly/>
 {/snippet}
 
 {#snippet incidentCard(item:typeof incidents[number])}
@@ -73,7 +74,7 @@
     <button class="p-incident-title" onclick={event=>detail(targets[item.id],event)}>{item.target}<span>↗</span></button>
     <p>{item.title}</p>
     <div class="p-proof-label"><Icon name="signal" size={13}/>{item.source}<span>·</span>{item.assurance}</div>
-    <div class="p-incident-actions"><span class="p-small">{item.since}</span>{#if acknowledged.includes(item.id)}<span class="p-ack"><Icon name="health" size={13}/>Acquitté</span>{:else}<button class="p-btn p-btn-small" onclick={()=>acknowledge(item.id)}>Acquitter<Icon name="plus" size={12}/></button>{/if}</div>
+    <div class="p-incident-actions"><span class="p-small">{item.since}</span>{#if acknowledged.includes(item.id)}<span class="p-ack"><Icon name="acknowledge" size={13}/>Acquitté</span>{:else}<button class="p-btn p-btn-small" onclick={()=>acknowledge(item.id)}>Acquitter<Icon name="acknowledge" size={14}/></button>{/if}</div>
   </article>
 {/snippet}
 
@@ -112,7 +113,7 @@
 
   <div class="p-app" data-variant={variant}>
     <a class="p-skip" href="#content">Aller au contenu</a>
-    <aside class="p-sidebar"><a class="p-brand" href="?variant=A" aria-label="CairnOps, vue d’ensemble">{@render logo()}<span>CairnOps</span></a><div class="p-space"><span class="p-space-icon">H</span><span><strong>Homeblack</strong><small>Espace opérationnel</small></span><span class="p-chevron">⌄</span></div><p class="p-nav-label">Supervision</p><nav aria-label="Navigation principale">{#each nav as item}<button class:current={section===item.id} aria-current={section===item.id?'page':undefined} onclick={()=>navigate(item.id)}><Icon name={item.icon} size={17}/><span>{item.label}</span>{#if item.count}<b class:hot={item.id==='incidents'}>{item.count}</b>{/if}</button>{/each}</nav><div class="p-sidebar-bottom"><div class="p-instance"><span class="p-dot ok"></span><span>Instance opérationnelle</span></div><div class="p-person"><span class="p-avatar">GN</span><span><strong>Grégory</strong><small>Administrateur · démo</small></span><Icon name="settings" size={16}/></div></div></aside>
+    <aside class="p-sidebar"><a class="p-brand" href="?variant=A" aria-label="CairnOps, vue d’ensemble"><span class="p-brand-full"><Brand width={150}/></span><span class="p-brand-compact">{@render logo()}</span></a><div class="p-space"><span class="p-space-icon">H</span><span><strong>Homeblack</strong><small>Espace opérationnel</small></span><span class="p-chevron">⌄</span></div><p class="p-nav-label">Supervision</p><nav aria-label="Navigation principale">{#each nav as item}<button class:current={section===item.id} aria-current={section===item.id?'page':undefined} onclick={()=>navigate(item.id)}><Icon name={item.icon} size={17}/><span>{item.label}</span>{#if item.count}<b class:hot={item.id==='incidents'}>{item.count}</b>{/if}</button>{/each}</nav><div class="p-sidebar-bottom"><div class="p-instance"><span class="p-dot ok"></span><span>Instance opérationnelle</span></div><div class="p-person"><span class="p-avatar">GN</span><span><strong>Grégory</strong><small>Administrateur · démo</small></span><Icon name="settings" size={16}/></div></div></aside>
     <div class="p-workspace"><header class="p-topbar"><div class="p-breadcrumb"><span>Homeblack</span><span>/</span><strong>{nav.find(i=>i.id===section)?.label}</strong></div><div class="p-topbar-actions"><span class="p-demo-label">Données de démonstration</span><ThemePicker ontheme={themeChange}/><button class="p-icon-btn p-notifications" aria-label="Voir les incidents" onclick={()=>navigate('incidents')}><Icon name="bell" size={18}/>{#if pending>0}<i></i>{/if}</button></div></header>
     <main id="content" class="p-content" tabindex="-1">
       <header class="p-page-head"><div><div class="p-eyebrow">{section==='overview'?'Votre espace opérationnel':'Homeblack'}</div><h1>{nav.find(i=>i.id===section)?.label}</h1><p>{section==='overview'?'48 cibles. 64 sources. Une situation partagée.':section==='targets'?'Chaque cible, ses signaux, ses preuves.':section==='incidents'?'Comprendre, prendre en charge, suivre le rétablissement.':section==='connectors'?'Vos outils de supervision, réunis au même endroit.':'Anticiper les interventions, garder le contexte.'}</p></div><span class="p-date"><Icon name="changelog" size={15}/>5 septembre 2026</span></header>
@@ -131,7 +132,7 @@
       {:else if section==='maintenance'}
         <section class="p-panel p-maintenance"><span class="p-badge info"><Icon name="maintenance" size={14}/>Planifiée</span><h2>Mise à jour du stockage</h2><p>Dimanche 6 septembre · 02:00–03:00 · Stockage principal</p><div class="p-maintenance-explanation"><Icon name="bell" size={19}/><p>Les observations restent enregistrées. Pendant la fenêtre, les incidents de cette cible n’affectent ni l’état global, ni la disponibilité, ni les notifications.</p></div><button class="p-btn" onclick={event=>detail(targets[4],event)}>Voir la cible <span>→</span></button></section>
       {/if}
-      <footer class="p-workspace-footer"><span>{@render logo(15)}CairnOps</span><span>Un verdict lisible. Des preuves accessibles.</span><span>Maquette interactive</span></footer>
+      <footer class="p-workspace-footer"><span>{@render logo(16)}CairnOps</span><span>Un verdict lisible. Des preuves accessibles.</span><span>Maquette interactive</span></footer>
     </main></div>
     <div class="p-prototype-bar" aria-label="Choisir une composition"><span class="p-prototype-label">Atelier</span><button aria-label="Composition précédente" onclick={()=>moveVariant(-1)}>←</button><span><b>{variant}</b> {variantNames[variant]}</span><button aria-label="Composition suivante" onclick={()=>moveVariant(1)}>→</button><span class="p-prototype-theme">{theme==='dark'?'Sombre':'Clair'}</span></div>
     <dialog bind:this={dialog} class="p-drawer" onclose={()=>trigger?.focus()} aria-labelledby="detail-title" aria-describedby="detail-description"><div class="p-drawer-inner"><header><span class="p-eyebrow">{incident?'Détail de l’incident':'Détail de la cible'}</span><button class="p-icon-btn" aria-label="Fermer le détail" onclick={()=>dialog.close()}><Icon name="close" size={20}/></button></header><span class={`p-badge ${selected.tone}`}><span class="p-dot"></span>{selected.state}</span><h2 id="detail-title">{selected.name}</h2><p id="detail-description">{incident?.title??'Les sources récentes confirment un état opérationnel.'}</p>{#if incident}<div class="p-detail-summary"><span>Gravité<strong class={incident.tone}>{incident.severity}</strong></span><span>Début<strong>{incident.since.replace('Depuis ','')}</strong></span><span>Assurance<strong>{incident.assurance}</strong></span></div><h3>Ce que les preuves établissent</h3><div class="p-evidence"><div><span class="p-source-symbol">{incident.source[0]}</span><strong>{incident.source}</strong><span class={`p-state ${incident.tone}`}><span class="p-dot"></span>Active</span></div><p>{incident.proof}</p><small>Observation du scénario à 14:32 · Source fraîche</small></div>{#if selected.id===0}<div class="p-detail-chart"><h3>Contexte au même instant</h3><Chart label="Évolution du temps de réponse de la cible"/><p>Indicateur contextuel. Le seuil et l’alerte appartiennent à Uptime Kuma.</p></div>{/if}<h3>Journal d’activité</h3><ol class="p-timeline">{#if acknowledged.includes(incident.id)}<li><span class="p-timeline-mark"></span><time>14:32</time><div><strong>Incident acquitté</strong><p>Pris en charge par Grégory · démonstration.</p></div></li>{/if}<li><span class="p-timeline-mark warn"></span><time>{incident.since.replace('Depuis ','')}</time><div><strong>Incident ouvert</strong><p>{incident.title}. Preuve reçue de {incident.source}.</p></div></li><li><span class="p-timeline-mark ok"></span><time>{selected.id===0?'14:17':'13:21'}</time><div><strong>Dernier état opérationnel</strong><p>Les observations précédentes étaient favorables.</p></div></li></ol><footer class="p-drawer-actions">{#if acknowledged.includes(incident.id)}<div class="p-ack">✓ Pris en charge · supervision toujours active</div>{:else}<button class="p-btn p-primary" onclick={()=>acknowledge(incident.id)}>Acquitter l’incident</button><p>L’acquittement confirme la prise en charge.</p>{/if}</footer>{:else}<div class="p-detail-summary"><span>Disponibilité<strong>{selected.availability} %</strong></span><span>Couverture<strong>{selected.coverage} %</strong></span><span>Latence<strong>{selected.latency} ms</strong></span></div><div class="p-evidence"><div><Icon name="health"/><strong>État opérationnel confirmé</strong></div><p>Aucun incident actif. Les dernières observations du scénario sont fraîches.</p></div>{/if}</div></dialog>

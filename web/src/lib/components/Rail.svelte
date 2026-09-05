@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Brand from './Brand.svelte';
   import { page } from '$app/state';
   import Icon, { type IconName } from './Icon.svelte';
   import Odometer from './Odometer.svelte';
@@ -140,7 +141,7 @@
 
 <aside class="rail">
   <div class="rail-brand">
-    <span class="cairn" aria-hidden="true"><i></i><i></i><i></i></span>
+    <Brand width={24} symbolOnly />
     <!-- Le rail nomme l'instance, pas le produit : c'est ce qui distingue deux
          onglets ouverts côte à côte. -->
     <strong title={session.instanceLabel}>{session.instanceLabel}</strong>

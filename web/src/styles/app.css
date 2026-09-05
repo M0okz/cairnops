@@ -1,8 +1,8 @@
 /* CairnOps — feuille de style unique.
  *
- * Source de vérité : « CairnOps - Écrans.dc.html » (projet Claude Design), huit
- * écrans en sombre et en clair. Le sombre est la référence ; le clair inverse
- * les rôles de fond et de surface sans changer la grille ni la densité.
+ * Identité : Convergence · Titane (docs/brand/BRAND-GUIDE.md).
+ * La grille des Écrans reste la base ; les compositions de la refonte sont
+ * comparées séparément dans web/design-prototype.
  *
  * Tout passe par les jetons ci-dessous. Aucune couleur littérale sous ce bloc. */
 
@@ -34,24 +34,25 @@
 
 :root {
   /* Surfaces */
-  --bg: #101014;
-  --surface: #17171c;
-  --surface-2: #22222a;
-  --surface-3: #26262e;
-  --line: #26262e;
-  --line-strong: #2b2b34;
-  --line-row: #22222a;
+  --bg: #1c1b19;
+  --surface: color-mix(in srgb, var(--ink) 3%, var(--bg));
+  --surface-2: color-mix(in srgb, var(--ink) 6%, var(--bg));
+  --surface-3: color-mix(in srgb, var(--ink) 9%, var(--bg));
+  --line: color-mix(in srgb, var(--ink) 10%, var(--bg));
+  --line-strong: color-mix(in srgb, var(--ink) 18%, var(--bg));
+  --line-row: color-mix(in srgb, var(--ink) 5%, var(--bg));
 
   /* Encres */
-  --ink: #ececed;
-  --muted: #a9a9b2;
-  --faint: #8c8c95;
-  --dim: #6f6f79;
-  --icon: #45454f;
+  --ink: #faf8f4;
+  --muted: #bbc3cc;
+  --faint: #a39b90;
+  --dim: #a39b90;
+  --icon: #a39b90;
 
-  /* Accent — cuivre. Une seule couleur d'action. */
-  --accent: #e08c4a;
-  --accent-ink: #161006;
+  /* Titane — une seule couleur d'action, distincte des verdicts. */
+  --accent: #ccc6bc;
+  --accent-ink: #1c1b19;
+  --chart-context: color-mix(in srgb, var(--info) 35%, var(--muted));
 
   /* Sémantique — réservée à l'État de santé et à la Gravité. */
   --ok: #34d399;
@@ -69,7 +70,7 @@
 
   /* Identité des Sources — jamais un verdict. Leur teinte reste stable même
    * quand la Cible change d'état, pour reconnaître la provenance d'un regard. */
-  --source-cairnops: #e08c4a;
+  --source-cairnops: var(--accent);
   --source-zabbix: #e34a3f;
   --source-uptime-kuma: #5cdd8b;
   --source-patchmon: #60a5fa;
@@ -148,28 +149,19 @@
 }
 
 :root[data-theme='light'] {
-  --bg: #fbfbfa;
+  --bg: #faf8f4;
   --surface: #ffffff;
-  --surface-2: #f0efec;
-  --surface-3: #e8e8e5;
-  --line: #e8e8e5;
-  --line-strong: #e3e3e0;
-  --line-row: #f0efec;
+  --surface-2: color-mix(in srgb, var(--ink) 3%, var(--bg));
+  --surface-3: color-mix(in srgb, var(--ink) 6%, var(--bg));
 
-  --ink: #1c1c1a;
-  --muted: #4a4a46;
-  --faint: #6b6b66;
-  --dim: #737370;
-  --icon: #c9c9c4;
+  --ink: #1c1b19;
+  --muted: #706a61;
+  --faint: #706a61;
+  --dim: #706a61;
+  --icon: #706a61;
 
-  /* Ces trois teintes portent du texte de 12 px, sur la surface comme sur leur
-   * propre lavis dans les pastilles. Les valeurs claires de la maquette n'y
-   * atteignaient pas le rapport de 4,5:1 exigé par WCAG AA — 3,51:1 pour l'ok,
-   * 3,25:1 pour l'avertissement, 4,37:1 pour l'accent. L'ok et l'avertissement
-   * reprennent les variantes sombres que la maquette fournit déjà ; l'accent
-   * est assombri au minimum nécessaire pour franchir le seuil sans changer la
-   * couleur de marque. Le sombre, lui, passait partout et n'a pas bougé. */
-  --accent: #af5d1d;
+  /* Valeurs de marque retenues ; les teintes sémantiques gardent leur rôle. */
+  --accent: #58534c;
   --accent-ink: #ffffff;
 
   --ok: #0f7a47;
@@ -185,7 +177,6 @@
   --info-bg: #eaf1f8;
   --info-line: #cfe0f0;
 
-  --source-cairnops: #af5d1d;
   --source-zabbix: #c52f25;
   --source-uptime-kuma: #16834c;
   --source-patchmon: #2563eb;
@@ -345,21 +336,13 @@ td.num,
   text-overflow: ellipsis;
 }
 
-.cairn {
-  display: grid;
-  gap: var(--s1);
-}
-
-.cairn i {
+.cairnops-brand {
   display: block;
-  height: 0.1875rem;
-  border-radius: 1px;
-  background: var(--accent);
+  flex: none;
+  color: var(--ink);
 }
 
-.cairn i:nth-child(1) { width: 0.5rem; }
-.cairn i:nth-child(2) { width: 0.8125rem; }
-.cairn i:nth-child(3) { width: 1.125rem; }
+.cairnops-brand-sign { fill: var(--accent); }
 
 .version {
   flex: none;

@@ -1,7 +1,7 @@
 <script lang="ts">
   // Intent : choisir un rythme visuel, sans permission de localisation implicite.
   // Hiérarchie : 4 choix explicites puis la ville du mode solaire.
-  // Palette/depth : surface élevée, cuivre de sélection, bordure faible.
+  // Palette/depth : surface élevée, Titane de sélection, bordure faible.
   // Typographie : système 13/12 px. Espacement : 4/8/12/16 px.
   import { onMount } from 'svelte';
   import * as SunCalc from 'suncalc';

@@ -1,0 +1,35 @@
+{
+  "name": "Graphite · Titane",
+  "primitives": {
+    "dark": "#1C1B19",
+    "light": "#FAF8F4",
+    "accent": "#58534C",
+    "accentDark": "#CCC6BC",
+    "muted": "#706A61"
+  },
+  "roles": {
+    "light": {
+      "background": "#FAF8F4",
+      "text": "#1C1B19",
+      "textSecondary": "#706A61",
+      "brand": "#58534C",
+      "onBrand": "#FFFFFF",
+      "icon": "#1C1B19"
+    },
+    "dark": {
+      "background": "#1C1B19",
+      "text": "#FAF8F4",
+      "textSecondary": "#BBC3CC",
+      "brand": "#CCC6BC",
+      "onBrand": "#1C1B19",
+      "icon": "#FAF8F4"
+    }
+  },
+  "contrast": {
+    "brand_on_light": 7.18,
+    "white_on_brand": 7.62,
+    "brand_on_dark": 10.14,
+    "secondary_text_on_light": 5.05,
+    "secondary_text_on_dark": 9.66
+  }
+}

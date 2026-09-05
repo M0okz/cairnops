@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Brand from './Brand.svelte';
   import { t } from '$lib/i18n.svelte';
   import type { User } from '$lib/api';
   import InfoHint from '$lib/components/InfoHint.svelte';
@@ -99,7 +100,7 @@
 <main class="gate">
   <div class="gate-card">
     <div class="gate-head">
-      <span class="cairn" aria-hidden="true"><i></i><i></i><i></i></span>
+      <Brand width={24} symbolOnly />
       <!-- Une instance nommée se nomme elle-même ici : c'est la première chose
            que voit quelqu'un qui garde plusieurs instances ouvertes. -->
       <strong>{instance}</strong>

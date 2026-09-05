@@ -213,6 +213,8 @@ class Session {
 
   applyTheme() {
     document.documentElement.dataset.theme = this.lightTheme ? 'light' : 'dark';
+    const background = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', background);
   }
 
   toggleTheme() {

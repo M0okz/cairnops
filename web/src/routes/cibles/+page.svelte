@@ -250,7 +250,7 @@
         </span>
 
         <!-- Une pastille par Source, à la couleur stable de sa provenance :
-             rouge Zabbix, vert Uptime Kuma, violet Webhook, cuivre CairnOps.
+             rouge Zabbix, vert Uptime Kuma, violet Webhook, Titane CairnOps.
              L'État garde ainsi ses propres couleurs sémantiques. -->
         <span class="hide-sm sources">
           {#if row.sourceCount === 0}

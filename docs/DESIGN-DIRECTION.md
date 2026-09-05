@@ -2,18 +2,20 @@
 
 CairnOps doit inspirer confiance avant de chercher à impressionner. Son interface est fonctionnelle, précise et soigneusement finie ; le mouvement agrémente la navigation et confirme les actions sans détourner l'attention de l'état opérationnel.
 
-La référence visuelle est la maquette « CairnOps — Écrans », huit écrans en sombre et en clair. Ce document énonce les règles ; la maquette tranche les cas particuliers. Leur traduction en code vit dans les jetons de `web/src/styles/app.css`, et nulle part ailleurs.
+L’identité retenue est **Convergence · Titane**, décrite dans [le guide de marque](brand/BRAND-GUIDE.md). Elle remplace les pistes cuivre et Framboise et le cairn en pierres empilées. La grille des huit « Écrans » reste la base de l’application ; les compositions A/B/C de `web/design-prototype` sont encore à comparer. Le choix de marque ne choisit pas une composition. Les jetons de `web/src/styles/app.css` portent la traduction commune aux écrans et au prototype.
 
 ## Identité
 
-- Esthétique opérationnelle et sobre liée au nom CairnOps, sans iconographie montagnarde décorative. Seule la marque conserve les trois strates empilées du cairn.
-- Fond froid et profond en sombre (`#101014`), fond pierre clair en clair (`#fbfbfa`). Les deux thèmes inversent les rôles de fond et de surface sans changer la grille ni la densité.
-- Accent unique cuivre — `#e08c4a` en sombre, `#b8621f` en clair. Il ne sert qu'à l'action principale et à la route courante, jamais à décorer.
+- Le symbole Convergence représente trois signaux orientés vers un même état. Ses trois formes restent angulaires, avec leurs proportions et leur dégagement d’origine. Le composant `Brand.svelte` reprend le signe et le mot-symbole vectorisés du kit, sans dépendre d’une police installée. Le rail et la connexion associent le signe au nom de l’instance.
+- Fond Titane sombre `#1C1B19`, fond clair `#FAF8F4`, texte principal inversé entre les deux. Les surfaces et bordures déclinent ces neutres dans les jetons communs, sans changer la grille ni la densité.
+- Accent de marque `#CCC6BC` en sombre, `#58534C` en clair. Le texte sur accent utilise respectivement `#1C1B19` et `#FFFFFF`. Les textes secondaires suivent le kit : `#BBC3CC` en sombre et `#706A61` en clair. L’accent distingue l’action principale et la route courante.
 - Vert, orange et rouge réservés à l'État de santé et à la Gravité. Le bleu signale l'information et la maintenance. Aucune couleur de Connecteur n'entre dans ce registre.
 - Formes solides et discrètement arrondies : 4 px pour les micro-contrôles, 6 px pour les contrôles, 8 px pour les dalles, pastilles pleinement arrondies.
 - Typographie `system-ui` pour toute l'interface : elle donne la densité et la neutralité attendues d'un poste de conduite, et se charge instantanément. Le monospace du système est réservé aux nombres — latences, disponibilités, durées, compteurs — toujours en chiffres tabulaires. Les capitales espacées et les libellés de type terminal ne servent jamais de décoration.
-- Icônes de trait uniformes : cadre 24, épaisseur 1.75, bouts et jointures arrondis, 15 px dans le rail.
+- Famille de 30 icônes originales : cadre 24, épaisseur 2, bouts et jointures arrondis, couleur héritée du contexte. Les 21 noms historiques de `Icon.svelte` sont conservés ; les neuf nouveaux noms permettent notamment de représenter les états et l’Acquittement. L’arrondi des icônes ne s’applique pas au signe Convergence. Les tailles compactes existantes restent disponibles, avec une cible de 20–24 px pour les actions de la refonte.
 - Thèmes clair et sombre de qualité équivalente. Le sombre est la référence de conception ; le clair n'en est pas une dégradation.
+
+Le film de présentation et de développement est destiné au futur site vitrine. Son entrée d’aperçu est indépendante ; il n’apparaît pas dans la navigation de CairnOps. Les ressources iOS du kit seront reprises dans le chantier natif, en conservant un seul AppIcon par cible.
 
 ### Signature : densité constante
 
