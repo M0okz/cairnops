@@ -185,6 +185,7 @@
     uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon',
     argus: 'Argus',
+    proxmox: 'Proxmox VE',
     generic_webhook: 'Webhook'
   };
 
@@ -194,6 +195,7 @@
     uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon',
     argus: 'Argus',
+    proxmox: 'Proxmox VE',
     webhook: 'Webhook'
   };
 
@@ -521,6 +523,10 @@
                         {observation.latency_milliseconds} ms
                         {#if observation.message}· {observation.message}{:else if observation.reason}· {observation.reason}{/if}
                       </small>
+                      {#if typeof observation.details.host_external_id === 'string' && typeof observation.details.node === 'string'}
+                        <small class="faint posture">{t('proxmox.host')} · {observation.details.node}</small>
+                      {/if}
+                      {#if observation.details.missing === true}<small class="warn">{t('proxmox.missing')}</small>{/if}
                       {#if argus}
                         <small class="faint posture">
                           {t('argus.observationVersions', { deployed: argus.deployed || '—', latest: argus.latest || '—' })}

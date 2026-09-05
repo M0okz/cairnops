@@ -25,6 +25,7 @@
     uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon',
     argus: 'Argus',
+    proxmox: 'Proxmox VE',
     generic_webhook: t('suspension.webhookSender')
   });
 

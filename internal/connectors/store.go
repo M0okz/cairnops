@@ -111,9 +111,11 @@ func (store *PostgresStore) List(ctx context.Context) ([]Connector, error) {
 		       connector.status, connector.remote_version, connector.compatibility,
 		       connector.encrypted_transport, count(binding.id) FILTER (WHERE binding.integration_enabled)::integer,
 		       (SELECT count(*)::integer FROM cairnops_webhook_quarantine quarantine
-		        WHERE quarantine.connector_id = connector.id AND quarantine.approved_at IS NULL),
+		        WHERE quarantine.connector_id = connector.id AND quarantine.approved_at IS NULL)
+		       + (SELECT count(*)::integer FROM cairnops_proxmox_inventory inventory
+		          WHERE inventory.connector_id = connector.id AND inventory.pending AND inventory.present),
 		       connector.last_checked_at, connector.last_error,
-		       connector.created_at, connector.updated_at
+		       connector.created_at, connector.updated_at, connector.credential_management
 		FROM cairnops_connectors connector
 		LEFT JOIN cairnops_connector_bindings binding ON binding.connector_id = connector.id
 		GROUP BY connector.id
@@ -126,7 +128,9 @@ func (store *PostgresStore) List(ctx context.Context) ([]Connector, error) {
 
 	connectors := make([]Connector, 0)
 	for rows.Next() {
-		connector, err := scanConnector(rows)
+		var management string
+		connector, err := scanConnector(rows, &management)
+		connector.CredentialManagement = management
 		if err != nil {
 			return nil, err
 		}
@@ -152,6 +156,7 @@ func (store *PostgresStore) SetStatus(ctx context.Context, connectorID, status s
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	var management string
 	connector, err := scanConnector(tx.QueryRow(ctx, `
 		UPDATE cairnops_connectors SET
 			status = $2,
@@ -164,17 +169,20 @@ func (store *PostgresStore) SetStatus(ctx context.Context, connectorID, status s
 		RETURNING id::text, kind, name, endpoint, status, remote_version,
 		          compatibility, encrypted_transport,
 		          (SELECT count(*)::integer FROM cairnops_connector_bindings binding
-		           WHERE binding.connector_id = cairnops_connectors.id),
+		           WHERE binding.connector_id = cairnops_connectors.id AND binding.integration_enabled),
 		          (SELECT count(*)::integer FROM cairnops_webhook_quarantine quarantine
-		           WHERE quarantine.connector_id = cairnops_connectors.id AND quarantine.approved_at IS NULL),
-		          last_checked_at, last_error, created_at, updated_at
-	`, connectorID, status))
+		           WHERE quarantine.connector_id = cairnops_connectors.id AND quarantine.approved_at IS NULL)
+		          + (SELECT count(*)::integer FROM cairnops_proxmox_inventory inventory
+		             WHERE inventory.connector_id = cairnops_connectors.id AND inventory.pending AND inventory.present),
+		          last_checked_at, last_error, created_at, updated_at, credential_management
+	`, connectorID, status), &management)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Connector{}, ErrNotFound
 	}
 	if err != nil {
 		return Connector{}, fmt.Errorf("set connector status: %w", err)
 	}
+	connector.CredentialManagement = management
 	if _, err := tx.Exec(ctx, `
 		UPDATE cairnops_signal_sources source
 		SET enabled = ($2 <> 'disabled' AND binding.integration_enabled), updated_at = now()
@@ -1394,15 +1402,16 @@ type scanner interface {
 	Scan(...any) error
 }
 
-func scanConnector(row scanner) (Connector, error) {
+func scanConnector(row scanner, extra ...any) (Connector, error) {
 	var connector Connector
-	if err := row.Scan(
+	fields := []any{
 		&connector.ID, &connector.Kind, &connector.Name, &connector.Endpoint,
 		&connector.Status, &connector.RemoteVersion, &connector.Compatibility,
 		&connector.EncryptedTransport, &connector.BindingCount, &connector.QuarantineCount,
 		&connector.LastCheckedAt, &connector.LastError,
 		&connector.CreatedAt, &connector.UpdatedAt,
-	); err != nil {
+	}
+	if err := row.Scan(append(fields, extra...)...); err != nil {
 		return Connector{}, fmt.Errorf("scan connector: %w", err)
 	}
 	return connector, nil

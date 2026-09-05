@@ -8,10 +8,11 @@
     onselect
   }: {
     onclose: () => void;
-    onselect: (kind: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'generic_webhook') => void;
+    onselect: (kind: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'proxmox' | 'generic_webhook') => void;
   } = $props();
 
   const choices = [
+    { kind: 'proxmox' as const, icon: 'server' as IconName, brand: null, name: 'Proxmox VE', note: 'chooser.proxmox' as MessageKey, access: 'chooser.managedApiToken' as MessageKey },
     {
       kind: 'zabbix' as const,
       icon: null,

@@ -67,6 +67,7 @@
     uptime_kuma: t('connectors.contract.uptimeKuma'),
     patchmon: t('connectors.contract.patchmon'),
     argus: t('connectors.contract.argus'),
+    proxmox: t('connectors.contract.proxmox'),
     generic_webhook: t('connectors.contract.genericWebhook')
   });
 
@@ -183,7 +184,7 @@
             {#if kindBrands[connector.kind]}
               <BrandMark name={kindBrands[connector.kind]!} size={34} />
             {:else}
-              <span class="key"><Icon name="webhook" size={16} /></span>
+              <span class="key"><Icon name={connector.kind === 'proxmox' ? 'server' : 'webhook'} size={16} /></span>
             {/if}
             <span class="id">
               <strong>{connector.name}</strong>
@@ -196,7 +197,7 @@
             <div class="fig"><b><Odometer value={connector.binding_count} /></b><span>Sources</span></div>
             <div class="fig">
               <b class={connector.quarantine_count > 0 ? 'warn' : ''}><Odometer value={connector.quarantine_count} /></b>
-              <span>En quarantaine</span>
+              <span>{connector.kind === 'proxmox' ? t('proxmox.pending') : 'En quarantaine'}</span>
             </div>
             <div class="fig">
               <b><Odometer value={connector.last_checked_at ? since(connector.last_checked_at, now) : '—'} /></b>

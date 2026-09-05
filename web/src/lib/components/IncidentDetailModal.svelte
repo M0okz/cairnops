@@ -76,6 +76,7 @@
     uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon',
     argus: 'Argus',
+    proxmox: 'Proxmox VE',
     webhook: 'Webhook'
   };
 

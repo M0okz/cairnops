@@ -347,7 +347,7 @@ components:
         name: { type: string }
         kind:
           type: string
-          enum: [http, tcp, dns, icmp, heartbeat, zabbix, uptime_kuma, patchmon, argus, generic_webhook]
+          enum: [http, tcp, dns, icmp, heartbeat, zabbix, uptime_kuma, patchmon, argus, proxmox, generic_webhook]
         origin:
           type: string
           enum: [native, integration]
@@ -497,12 +497,13 @@ components:
       required: [id, kind, name, endpoint, status, remote_version, compatibility, encrypted_transport, binding_count, quarantine_count, last_checked_at, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [zabbix, uptime_kuma, patchmon, argus, generic_webhook] }
+        kind: { type: string, enum: [zabbix, uptime_kuma, patchmon, argus, proxmox, generic_webhook] }
         name: { type: string, minLength: 1, maxLength: 160 }
         endpoint: { type: string, format: uri, maxLength: 2048 }
         status: { type: string, enum: [connected, degraded, disabled] }
         remote_version: { type: string }
         compatibility: { type: string, enum: [supported, warning] }
+        credential_management: { type: string, enum: [provided, managed] }
         encrypted_transport: { type: boolean }
         binding_count: { type: integer, minimum: 0 }
         quarantine_count: { type: integer, minimum: 0 }
@@ -736,7 +737,7 @@ components:
       required: [id, kind, name, bindings, quarantined, resolved_incidents]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [zabbix, uptime_kuma, patchmon, argus, generic_webhook] }
+        kind: { type: string, enum: [zabbix, uptime_kuma, patchmon, argus, proxmox, generic_webhook] }
         name: { type: string }
         bindings: { type: integer, minimum: 0, description: Sources externes déliées. Les Cibles correspondantes sont conservées. }
         quarantined: { type: integer, minimum: 0, description: Identités en quarantaine emportées sans décision. }
@@ -748,7 +749,7 @@ components:
         id: { type: string, format: uuid }
         impact_id: { type: string, format: uuid }
         target_id: { type: string, format: uuid }
-        origin: { type: string, enum: [native, zabbix, uptime_kuma, patchmon, argus, webhook] }
+        origin: { type: string, enum: [native, zabbix, uptime_kuma, patchmon, argus, proxmox, webhook] }
         connector_id: { type: string, format: uuid }
         connector_name: { type: string }
         source_id: { type: string, format: uuid }
@@ -1125,6 +1126,85 @@ components:
           items: { $ref: '#/components/schemas/TargetMatch' }
         suggested_target: { $ref: '#/components/schemas/TargetReference' }
         already_imported_to: { $ref: '#/components/schemas/TargetReference' }
+    ProxmoxCredentials:
+      type: object
+      required: [token_id, secret]
+      properties:
+        token_id: { type: string, maxLength: 256, writeOnly: true }
+        secret: { type: string, maxLength: 4096, writeOnly: true }
+        fingerprint:
+          type: string
+          description: Empreinte SHA-256 hexadécimale du certificat explicitement approuvé. Vide pour la validation PKI normale.
+          pattern: '^([0-9a-fA-F]{64})?$'
+    ProxmoxCertificate:
+      type: object
+      required: [endpoint, trusted, fingerprint, subject, issuer, expires_at]
+      properties:
+        endpoint: { type: string, format: uri }
+        trusted: { type: boolean }
+        fingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+        subject: { type: string }
+        issuer: { type: string }
+        expires_at: { type: string, format: date-time }
+    ProxmoxResourcePreview:
+      type: object
+      required: [id, external_id, type, name, node, status, template, importable, expected_running, already_imported, candidate_targets]
+      properties:
+        id: { type: string }
+        external_id: { type: string, description: "Identité stable node/nom, qemu/VMID, lxc/VMID ou storage/nœud/stockage." }
+        type: { type: string, enum: [node, qemu, lxc, storage] }
+        name: { type: string }
+        node: { type: string }
+        vmid: { type: integer }
+        storage: { type: string }
+        status: { type: string }
+        host_unavailable: { type: boolean, description: Un hôte absent ou hors ligne rend l’état conservé de la machine non concluant. }
+        template: { type: integer }
+        tags: { type: string }
+        cpu: { type: number }
+        mem: { type: number }
+        maxmem: { type: number }
+        disk: { type: number }
+        maxdisk: { type: number }
+        uptime: { type: integer }
+        importable: { type: boolean }
+        expected_running: { type: boolean }
+        already_imported: { type: boolean }
+        already_imported_to: { $ref: '#/components/schemas/TargetReference' }
+        suggested_target: { $ref: '#/components/schemas/TargetReference' }
+        candidate_targets:
+          type: array
+          items: { $ref: '#/components/schemas/TargetMatch' }
+    ProxmoxPreview:
+      type: object
+      required: [kind, name, endpoint, version, encrypted_transport, importable_count, resources, available_targets, access, receipt, expires_at]
+      properties:
+        kind: { type: string, const: proxmox }
+        name: { type: string }
+        endpoint: { type: string, format: uri }
+        version: { type: string }
+        encrypted_transport: { type: boolean, const: true }
+        importable_count: { type: integer, minimum: 0 }
+        resources:
+          type: array
+          items: { $ref: '#/components/schemas/ProxmoxResourcePreview' }
+        available_targets:
+          type: array
+          items: { $ref: '#/components/schemas/TargetReference' }
+        access:
+          type: object
+          required: [mode, will_provision, remote_changes]
+          properties:
+            mode: { type: string, enum: [automatic, provided] }
+            will_provision: { type: boolean }
+            remote_changes:
+              type: array
+              items: { type: string, enum: [proxmox_technical_user, proxmox_auditor_token, proxmox_cleanup_authorization] }
+        receipt: { type: string, description: Reçu opaque chiffré valable quinze minutes. }
+        expires_at: { type: string, format: date-time }
+    ProxmoxImport:
+      allOf:
+        - $ref: '#/components/schemas/ArgusImport'
     ArgusPreview:
       type: object
       required: [kind, name, endpoint, version, compatibility, compatibility_label, encrypted_transport, importable_count, pending_update_count, services, available_targets, receipt, expires_at]
@@ -1652,6 +1732,7 @@ paths:
                   - $ref: '#/components/schemas/UptimeKumaPreview'
                   - $ref: '#/components/schemas/PatchMonPreview'
                   - $ref: '#/components/schemas/ArgusPreview'
+                  - $ref: '#/components/schemas/ProxmoxPreview'
         '400': { description: Type de Connecteur sans inventaire découvrable }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
@@ -1898,6 +1979,160 @@ paths:
         '403': { description: Rôle Administrateur requis }
         '410': { description: Aperçu expiré }
         '422': { description: La revalidation PatchMon a échoué }
+  /api/v1/connectors/proxmox/certificate:
+    post:
+      operationId: inspectProxmoxCertificate
+      description: Lit uniquement le certificat TLS sans transmettre de jeton. Les certificats expirés sont refusés.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address: { type: string, format: uri, maxLength: 2048 }
+      responses:
+        '200':
+          description: Identité TLS à vérifier avant autorisation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProxmoxCertificate' }
+        '400': { description: Entrée invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '422': { description: Certificat inaccessible ou expiré }
+  /api/v1/connectors/proxmox/preview:
+    post:
+      operationId: previewProxmoxConnector
+      description: Vérifie Proxmox VE 8 ou 9, les permissions propagées Sys.Audit, VM.Audit et Datastore.Audit sur /, puis découvre les objets. Aucun accès distant créé à ce stade.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, address, credentials]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                address: { type: string, format: uri, maxLength: 2048 }
+                mode: { type: string, enum: [automatic, provided], default: automatic }
+                credentials: { $ref: '#/components/schemas/ProxmoxCredentials' }
+      responses:
+        '200':
+          description: Inventaire et plan de création d’accès à confirmer
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProxmoxPreview' }
+        '400': { description: Entrée invalide ou endpoint déjà connecté }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '422': { description: TLS, version, inventaire ou autorisation non vérifiés }
+  /api/v1/connectors/proxmox/import:
+    post:
+      operationId: importProxmoxConnector
+      description: Revalide la sélection, crée si demandé le compte technique sans mot de passe et le jeton PVEAuditor, puis importe atomiquement. Les arrêts de VM n’alertent que pour les identités explicitement déclarées dans expected_running_ids.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receipt, resource_ids]
+              properties:
+                receipt: { type: string, minLength: 32, maxLength: 32768, writeOnly: true }
+                resource_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 5000
+                  uniqueItems: true
+                  items: { type: string }
+                expected_running_ids:
+                  type: array
+                  uniqueItems: true
+                  description: Sous-ensemble des VM et conteneurs sélectionnés dont l’arrêt doit alerter.
+                  items: { type: string }
+                target_assignments:
+                  type: object
+                  additionalProperties: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Import terminé sans association silencieuse par nom
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProxmoxImport' }
+        '400': { description: Sélection invalide ou Connecteur modifié }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '410': { description: Aperçu expiré }
+        '422': { description: Revalidation ou création de l’accès distant échouée }
+  /api/v1/connectors/{connectorID}/proxmox/remove:
+    post:
+      operationId: removeProxmoxConnector
+      description: Suspend le Connecteur puis retire les accès créés par CairnOps avant suppression locale. Une nouvelle autorisation administrative est nécessaire pour un accès géré. Un échec conserve le Connecteur suspendu pour réessayer, sans conserver l’autorisation administrative. Un jeton fourni n’est jamais révoqué.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      parameters:
+        - name: connectorID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token_id: { type: string, writeOnly: true }
+                secret: { type: string, writeOnly: true }
+      responses:
+        '200':
+          description: Accès gérés retirés et Connecteur supprimé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectorRemoval' }
+        '400': { description: Identité invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Connecteur introuvable }
+        '422': { description: Connecteur suspendu, nettoyage distant en attente }
+  /api/v1/connectors/{connectorID}/proxmox/certificate:
+    post:
+      operationId: approveProxmoxCertificate
+      description: Revalide le jeton existant contre l’empreinte explicitement approuvée avant de remplacer son épinglage. Un échec conserve le certificat précédent.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      parameters:
+        - name: connectorID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fingerprint]
+              properties:
+                fingerprint: { type: string, pattern: '^[0-9a-fA-F]{64}$' }
+      responses:
+        '200':
+          description: Épinglage remplacé
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [approved]
+                properties:
+                  approved: { type: boolean, const: true }
+        '400': { description: Empreinte ou Connecteur invalide }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Connecteur introuvable }
+        '422': { description: Le nouvel épinglage n’a pas pu être vérifié }
   /api/v1/connectors/argus/preview:
     post:
       operationId: previewArgusConnector
