@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/M0okz/cairnops/internal/synthesis"
 )
 
 const maximumMattermostResponse = 64 * 1024
@@ -31,23 +33,19 @@ func (client *MattermostClient) Test(ctx context.Context, webhookURL string) err
 }
 
 func (client *MattermostClient) Send(ctx context.Context, webhookURL string, message Message) error {
-	resolved := message.EventKind == "resolved"
+	resolved := message.EventKind == "resolved" || message.ResolvedAt != nil
 	color, label, icon := severityPresentation(string(message.Severity))
-	title := fmt.Sprintf("%s [%s] %s — %s", icon, label, message.TargetName, message.NatureLabel)
+	summary := synthesis.Render(synthesis.Situation{
+		NatureKey: message.NatureKey, NatureLabel: message.NatureLabel,
+		TargetName: message.TargetName, AffectedTargets: message.AffectedTargets,
+		MaxAffected: message.MaxAffected, Resolved: resolved,
+	}, "fr")
+	title := fmt.Sprintf("%s [%s] %s", icon, label, summary.Title)
 	if resolved {
-		color, title = "#39d98a", fmt.Sprintf("✅ [RÉSOLU] %s — %s", message.TargetName, message.NatureLabel)
+		color, title = "#39d98a", fmt.Sprintf("✅ %s", summary.Title)
 	}
-	fields := []map[string]any{
-		{"short": true, "title": "Gravité", "value": label},
-		{"short": true, "title": "État", "value": map[bool]string{true: "Résolu", false: "Actif"}[resolved]},
-	}
-	text := "La supervision serveur conserve les preuves liées à cet Incident."
-	if resolved {
-		text = "L’Incident est résolu. Cette notification est envoyée au même canal que son ouverture."
-		if message.MaxAffected > 1 {
-			text = fmt.Sprintf("L’Incident est résolu après avoir affecté jusqu’à %d Cibles. Ses Atteintes et leurs Preuves restent consultables.", message.MaxAffected)
-		}
-	}
+	text := summary.Body
+
 	if message.PublicURL != "" {
 		link := message.PublicURL + "/incidents?incident=" + url.QueryEscape(message.IncidentID)
 		text += " [Ouvrir CairnOps](" + link + ")"
@@ -55,7 +53,7 @@ func (client *MattermostClient) Send(ctx context.Context, webhookURL string, mes
 	return client.post(ctx, webhookURL, map[string]any{
 		"username": "CairnOps",
 		"attachments": []map[string]any{{
-			"color": color, "title": title, "text": text, "fields": fields,
+			"color": color, "title": title, "text": text,
 			"footer": "Incident " + message.IncidentID,
 		}},
 	})

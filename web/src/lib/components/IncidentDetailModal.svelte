@@ -13,7 +13,7 @@
   } from '$lib/format';
   import { formatIndicator } from '$lib/indicator-format';
   import { incidentActivity, incidentIndicatorRows } from '$lib/incident-detail';
-  import { plural, t } from '$lib/i18n.svelte';
+  import { i18n, plural, t } from '$lib/i18n.svelte';
   import { messageFrom, session } from '$lib/session.svelte';
 
   let {
@@ -232,8 +232,8 @@
   <header class="modal-head">
     <div class="title-copy">
       <span class="eyebrow">{t('incidents.detail.title')}</span>
-      <h2 id={titleID}>{incidentTitle}</h2>
-      <p id={descriptionID}>{incident ? natureLabel(incident) : t('incidents.detail.loading')}</p>
+      <h2 id={titleID}>{incident?.summary?.[i18n.locale].title ?? incidentTitle}</h2>
+      <p id={descriptionID}>{incident?.summary?.[i18n.locale].body ?? (incident ? natureLabel(incident) : t('incidents.detail.loading'))}</p>
     </div>
     {#if incident}
       <div class="head-status">

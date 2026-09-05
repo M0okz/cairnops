@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"strings"
 	"time"
+
+	"github.com/M0okz/cairnops/internal/synthesis"
 )
 
 type Presentation struct {
@@ -63,13 +65,12 @@ func presentationFor(delivery Delivery) Presentation {
 		}
 		return Presentation{Title: "CairnOps", Body: "Un Incident demande votre attention."}
 	default:
-		if delivery.EventKind == "resolved" {
-			if english {
-				return Presentation{Title: delivery.TargetName, Body: delivery.NatureLabel + " resolved"}
-			}
-			return Presentation{Title: delivery.TargetName, Body: delivery.NatureLabel + " résolu"}
-		}
-		return Presentation{Title: delivery.TargetName, Body: delivery.NatureLabel}
+		text := synthesis.Render(synthesis.Situation{
+			NatureKey: delivery.NatureKey, NatureLabel: delivery.NatureLabel,
+			TargetName: delivery.TargetName, AffectedTargets: delivery.AffectedTargets,
+			MaxAffected: delivery.MaxAffected, Resolved: delivery.EventKind == "resolved",
+		}, delivery.Locale)
+		return Presentation{Title: text.Title, Body: text.Body}
 	}
 }
 

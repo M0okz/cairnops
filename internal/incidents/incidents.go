@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/M0okz/cairnops/internal/synthesis"
 )
 
 var (
@@ -33,6 +35,8 @@ type Evidence struct {
 	Origin                    string     `json:"origin"`
 	ConnectorID               string     `json:"connector_id,omitempty"`
 	ConnectorName             string     `json:"connector_name,omitempty"`
+	SourceID                  string     `json:"source_id,omitempty"`
+	LastSeenAt                time.Time  `json:"last_seen_at"`
 	ExternalEventID           string     `json:"external_event_id,omitempty"`
 	ExternalObjectID          string     `json:"external_object_id,omitempty"`
 	Name                      string     `json:"name"`
@@ -79,37 +83,38 @@ type Activity struct {
 }
 
 type Incident struct {
-	ID                        string     `json:"id"`
-	NatureKey                 string     `json:"nature_key"`
-	NatureLabel               string     `json:"nature_label"`
-	NatureScope               string     `json:"nature_scope"`
-	NatureNamespace           string     `json:"nature_namespace"`
-	NatureFingerprint         string     `json:"nature_fingerprint"`
-	PropagationEligible       bool       `json:"propagation_eligible"`
-	Status                    string     `json:"status"`
-	PropagationStatus         string     `json:"propagation_status"`
-	Severity                  Severity   `json:"severity"`
-	OpenedAt                  time.Time  `json:"opened_at"`
-	LastImpactAt              time.Time  `json:"last_impact_at"`
-	PropagationWindowSeconds  int        `json:"propagation_window_seconds"`
-	PropagationEndsAt         time.Time  `json:"propagation_ends_at"`
-	PropagationClosedAt       *time.Time `json:"propagation_closed_at,omitempty"`
-	ResolvedAt                *time.Time `json:"resolved_at,omitempty"`
-	AcknowledgedAt            *time.Time `json:"acknowledged_at,omitempty"`
-	AcknowledgedBy            string     `json:"acknowledged_by,omitempty"`
-	AcknowledgementOrigin     string     `json:"acknowledgement_origin,omitempty"`
-	AcknowledgementSyncStatus string     `json:"acknowledgement_sync_status"`
-	AcknowledgementSyncError  string     `json:"acknowledgement_sync_error,omitempty"`
-	Extended                  bool       `json:"extended"`
-	ActiveImpactCount         int        `json:"active_impact_count"`
-	ImpactCount               int        `json:"impact_count"`
-	AffectedTargetCount       int        `json:"affected_target_count"`
-	MaxAffectedTargets        int        `json:"max_affected_targets"`
-	Revision                  int        `json:"revision"`
-	Impacts                   []Impact   `json:"impacts"`
-	Activity                  []Activity `json:"activity"`
-	CreatedAt                 time.Time  `json:"created_at"`
-	UpdatedAt                 time.Time  `json:"updated_at"`
+	ID                        string              `json:"id"`
+	NatureKey                 string              `json:"nature_key"`
+	NatureLabel               string              `json:"nature_label"`
+	NatureScope               string              `json:"nature_scope"`
+	NatureNamespace           string              `json:"nature_namespace"`
+	NatureFingerprint         string              `json:"nature_fingerprint"`
+	PropagationEligible       bool                `json:"propagation_eligible"`
+	Status                    string              `json:"status"`
+	PropagationStatus         string              `json:"propagation_status"`
+	Severity                  Severity            `json:"severity"`
+	OpenedAt                  time.Time           `json:"opened_at"`
+	LastImpactAt              time.Time           `json:"last_impact_at"`
+	PropagationWindowSeconds  int                 `json:"propagation_window_seconds"`
+	PropagationEndsAt         time.Time           `json:"propagation_ends_at"`
+	PropagationClosedAt       *time.Time          `json:"propagation_closed_at,omitempty"`
+	ResolvedAt                *time.Time          `json:"resolved_at,omitempty"`
+	AcknowledgedAt            *time.Time          `json:"acknowledged_at,omitempty"`
+	AcknowledgedBy            string              `json:"acknowledged_by,omitempty"`
+	AcknowledgementOrigin     string              `json:"acknowledgement_origin,omitempty"`
+	AcknowledgementSyncStatus string              `json:"acknowledgement_sync_status"`
+	AcknowledgementSyncError  string              `json:"acknowledgement_sync_error,omitempty"`
+	Extended                  bool                `json:"extended"`
+	ActiveImpactCount         int                 `json:"active_impact_count"`
+	ImpactCount               int                 `json:"impact_count"`
+	AffectedTargetCount       int                 `json:"affected_target_count"`
+	MaxAffectedTargets        int                 `json:"max_affected_targets"`
+	Revision                  int                 `json:"revision"`
+	Summary                   synthesis.Localized `json:"summary"`
+	Impacts                   []Impact            `json:"impacts"`
+	Activity                  []Activity          `json:"activity"`
+	CreatedAt                 time.Time           `json:"created_at"`
+	UpdatedAt                 time.Time           `json:"updated_at"`
 }
 
 type ZabbixSignal struct {

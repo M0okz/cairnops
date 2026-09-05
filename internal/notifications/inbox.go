@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/M0okz/cairnops/internal/incidents"
+	"github.com/M0okz/cairnops/internal/synthesis"
 )
 
 // La boîte de réception d'une personne. Elle ne dit que ce que cette personne a
@@ -17,22 +18,23 @@ import (
 const InboxLimit = 50
 
 type InboxEntry struct {
-	ID                  int64              `json:"id"`
-	IncidentID          string             `json:"incident_id"`
-	Revision            int                `json:"revision"`
-	TargetID            string             `json:"target_id,omitempty"`
-	EventKind           string             `json:"event_kind"`
-	TargetName          string             `json:"target_name"`
-	NatureKey           string             `json:"nature_key"`
-	NatureLabel         string             `json:"nature_label"`
-	Severity            incidents.Severity `json:"severity"`
-	ImpactCount         int                `json:"impact_count"`
-	AffectedTargetCount int                `json:"affected_target_count"`
-	MaxAffectedTargets  int                `json:"max_affected_targets"`
-	PropagationStatus   string             `json:"propagation_status"`
-	Extended            bool               `json:"extended"`
-	OccurredAt          time.Time          `json:"occurred_at"`
-	ReadAt              *time.Time         `json:"read_at"`
+	ID                  int64               `json:"id"`
+	IncidentID          string              `json:"incident_id"`
+	Revision            int                 `json:"revision"`
+	TargetID            string              `json:"target_id,omitempty"`
+	EventKind           string              `json:"event_kind"`
+	TargetName          string              `json:"target_name"`
+	NatureKey           string              `json:"nature_key"`
+	NatureLabel         string              `json:"nature_label"`
+	Severity            incidents.Severity  `json:"severity"`
+	ImpactCount         int                 `json:"impact_count"`
+	AffectedTargetCount int                 `json:"affected_target_count"`
+	MaxAffectedTargets  int                 `json:"max_affected_targets"`
+	PropagationStatus   string              `json:"propagation_status"`
+	Extended            bool                `json:"extended"`
+	OccurredAt          time.Time           `json:"occurred_at"`
+	ReadAt              *time.Time          `json:"read_at"`
+	Summary             synthesis.Localized `json:"summary"`
 }
 
 type Inbox struct {
@@ -81,6 +83,11 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		); err != nil {
 			return Inbox{}, fmt.Errorf("scan notification inbox: %w", err)
 		}
+		entry.Summary = synthesis.Localize(synthesis.Situation{
+			NatureKey: entry.NatureKey, NatureLabel: entry.NatureLabel, TargetName: entry.TargetName,
+			AffectedTargets: entry.AffectedTargetCount, MaxAffected: entry.MaxAffectedTargets,
+			Resolved: entry.EventKind == "resolved",
+		})
 		inbox.Entries = append(inbox.Entries, entry)
 	}
 	if err := rows.Err(); err != nil {

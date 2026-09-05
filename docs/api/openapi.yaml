@@ -114,13 +114,27 @@ components:
         activated_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    IncidentSummary:
+      description: Présentation factuelle commune au Web et aux Canaux, sans diagnostic de cause.
+      type: object
+      required: [fr, en]
+      properties:
+        fr: { $ref: '#/components/schemas/IncidentSummaryText' }
+        en: { $ref: '#/components/schemas/IncidentSummaryText' }
+    IncidentSummaryText:
+      type: object
+      required: [title, body]
+      properties:
+        title: { type: string }
+        body: { type: string }
     InboxEntry:
       description: >
         Une notification reçue par la personne connectée. Elle appartient à un
         compte : cette API ne rend jamais la boîte de quelqu'un d'autre.
       type: object
-      required: [id, incident_id, revision, event_kind, target_name, nature_key, nature_label, severity, impact_count, affected_target_count, max_affected_targets, propagation_status, extended, occurred_at, read_at]
+      required: [id, incident_id, revision, event_kind, target_name, nature_key, nature_label, severity, impact_count, affected_target_count, max_affected_targets, propagation_status, extended, occurred_at, read_at, summary]
       properties:
+        summary: { $ref: '#/components/schemas/IncidentSummary' }
         id: { type: integer, format: int64 }
         incident_id: { type: string, format: uuid }
         revision: { type: integer, minimum: 0 }
@@ -728,7 +742,7 @@ components:
         resolved_incidents: { type: integer, minimum: 0, description: Incidents clos faute de preuve après la suppression. }
     IncidentEvidence:
       type: object
-      required: [id, impact_id, target_id, origin, name, active, severity, opened_at, upstream_acknowledged, acknowledgement_sync_status]
+      required: [id, impact_id, target_id, origin, name, active, severity, opened_at, last_seen_at, upstream_acknowledged, acknowledgement_sync_status]
       properties:
         id: { type: string, format: uuid }
         impact_id: { type: string, format: uuid }
@@ -736,6 +750,8 @@ components:
         origin: { type: string, enum: [native, zabbix, uptime_kuma, patchmon, argus, webhook] }
         connector_id: { type: string, format: uuid }
         connector_name: { type: string }
+        source_id: { type: string, format: uuid }
+        last_seen_at: { type: string, format: date-time }
         external_event_id: { type: string }
         external_object_id: { type: string }
         name: { type: string }
@@ -788,8 +804,9 @@ components:
         Cycle commun d'une même Nature. Il agrège plusieurs Atteintes par
         Cible pendant sa fenêtre de propagation, sans déclarer de cause.
       type: object
-      required: [id, nature_key, nature_label, nature_scope, nature_namespace, nature_fingerprint, propagation_eligible, status, propagation_status, severity, opened_at, last_impact_at, propagation_window_seconds, propagation_ends_at, acknowledgement_sync_status, extended, active_impact_count, impact_count, affected_target_count, max_affected_targets, revision, impacts, activity, created_at, updated_at]
+      required: [id, nature_key, nature_label, nature_scope, nature_namespace, nature_fingerprint, propagation_eligible, status, propagation_status, severity, opened_at, last_impact_at, propagation_window_seconds, propagation_ends_at, acknowledgement_sync_status, extended, active_impact_count, impact_count, affected_target_count, max_affected_targets, revision, impacts, activity, created_at, updated_at, summary]
       properties:
+        summary: { $ref: '#/components/schemas/IncidentSummary' }
         id: { type: string, format: uuid }
         nature_key: { type: string }
         nature_label: { type: string }

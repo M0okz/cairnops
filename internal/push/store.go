@@ -25,6 +25,7 @@ type Delivery struct {
 	Revision            int
 	PresentationMode    string
 	TargetName          string
+	NatureKey           string
 	NatureLabel         string
 	Severity            string
 	ImpactCount         int
@@ -77,19 +78,20 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		       device.notification_content, inbox.event_kind,
 		       inbox.incident_id::text,
 		       claimed.revision, claimed.presentation,
-		       inbox.target_name, inbox.nature_label, inbox.severity,
+		       inbox.target_name, incident.nature_key, inbox.nature_label, inbox.severity,
 		       inbox.impact_count, inbox.affected_target_count,
 		       inbox.max_affected_targets, inbox.propagation_status,
 		       inbox.extended, inbox.occurred_at
 		FROM claimed
 		JOIN cairnops_devices device ON device.id = claimed.device_id
 		JOIN cairnops_notification_inbox inbox ON inbox.id = claimed.inbox_id
+		JOIN cairnops_incidents incident ON incident.id = inbox.incident_id
 	`, strings.TrimSpace(workerID)).Scan(
 		&delivery.ID, &delivery.DeviceID, &delivery.RecipientSealed,
 		&delivery.EncryptionPublicKey, &delivery.Locale,
 		&delivery.NotificationContent, &delivery.EventKind,
 		&delivery.IncidentID, &delivery.Revision,
-		&delivery.PresentationMode, &delivery.TargetName, &delivery.NatureLabel,
+		&delivery.PresentationMode, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureLabel,
 		&delivery.Severity, &delivery.ImpactCount, &delivery.AffectedTargets,
 		&delivery.MaxAffected, &delivery.PropagationStatus, &delivery.Extended,
 		&delivery.OccurredAt,

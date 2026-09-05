@@ -13,7 +13,7 @@
   import { incidentHref } from '$lib/incident-detail';
   import { session } from '$lib/session.svelte';
   import { natureLabel, severityTone, since, stamp } from '$lib/format';
-  import { plural, t } from '$lib/i18n.svelte';
+  import { i18n, plural, t } from '$lib/i18n.svelte';
 
   let open = $state(false);
   let anchor = $state<HTMLDivElement | null>(null);
@@ -107,11 +107,11 @@
               class="dot {entry.event_kind === 'resolved' ? 'ok' : severityTone(entry.severity)}"
             ></i>
             <span class="what">
-              <strong>{entry.target_name}</strong>
+              <strong>{entry.summary?.[i18n.locale].title ?? entry.target_name}</strong>
               <small class="faint">
-                {entry.event_kind === 'resolved'
+                {entry.summary?.[i18n.locale].body ?? (entry.event_kind === 'resolved'
                   ? t('inbox.resolved', { nature: natureLabel(entry) })
-                  : t('inbox.opened', { nature: natureLabel(entry) })}
+                  : t('inbox.opened', { nature: natureLabel(entry) }))}
               </small>
             </span>
             <span class="when num faint" title={stamp(entry.occurred_at)}>

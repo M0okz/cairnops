@@ -18,6 +18,22 @@ jobs:
   checks:
     name: Tests and static checks
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: cairnops_test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: cairnops_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cairnops_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CAIRNOPS_TEST_DATABASE_URL: postgres://cairnops_test:test@localhost:5432/cairnops_test?sslmode=disable
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
@@ -40,6 +56,9 @@ jobs:
 
       - name: Check the Web application
         run: npm --prefix web run check
+
+      - name: Test the Web application
+        run: npm --prefix web test
 
       - name: Build the Web application
         run: npm --prefix web run build

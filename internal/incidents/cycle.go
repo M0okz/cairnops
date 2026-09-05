@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/synthesis"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -51,8 +52,8 @@ func (store *PostgresStore) ReconcileZabbix(ctx context.Context, input Reconcile
 		}
 		nature := ConnectorNature(input.ConnectorID,
 			"zabbix:"+input.ConnectorID+":"+fingerprint, signal.Name, fingerprint)
-		if signal.CanonicalNature == NatureAvailability {
-			nature = CanonicalNature(NatureAvailability, NatureAvailabilityLabel)
+		if label, known := synthesis.NatureLabel(signal.CanonicalNature, "fr"); known {
+			nature = CanonicalNature(signal.CanonicalNature, label)
 		}
 		facts = append(facts, EvidenceFact{
 			Origin: "zabbix", ConnectorID: input.ConnectorID,
@@ -640,7 +641,8 @@ func extendPropagation(ctx context.Context, tx pgx.Tx, incidentID string, observ
 		UPDATE cairnops_incidents
 		SET last_impact_at = greatest(last_impact_at, $2),
 		    propagation_window_seconds = greatest(propagation_window_seconds, $3),
-		    propagation_ends_at = greatest(propagation_ends_at, $2 + make_interval(secs => $3)),
+		    propagation_ends_at = greatest(propagation_ends_at,
+		        greatest(last_impact_at, $2) + make_interval(secs => greatest(propagation_window_seconds, $3))),
 		    revision = revision + 1, updated_at = now()
 		WHERE id = $1::uuid AND propagation_status = 'open'
 	`, incidentID, observedAt, window); err != nil {

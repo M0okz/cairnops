@@ -173,7 +173,10 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		              AND now() BETWEEN maintenance.starts_at AND maintenance.ends_at
 		        )
 		  )
-		ON CONFLICT DO NOTHING
+		ON CONFLICT (incident_id, channel_id, event_key) DO UPDATE
+		SET status = 'pending', next_attempt_at = EXCLUDED.next_attempt_at,
+		    last_error = '', lease_owner = NULL, lease_until = NULL, updated_at = now()
+		WHERE cairnops_notification_outbox.status = 'cancelled'
 	`, store.stabilityDelaySeconds()); err != nil {
 		return fmt.Errorf("schedule incident openings: %w", err)
 	}
@@ -181,7 +184,8 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 	if _, err := tx.Exec(ctx, `
 		UPDATE cairnops_notification_outbox delivery
 		SET incident_revision = incident.revision,
-		    next_attempt_at = CASE WHEN incident.severity = 'critical' THEN now()
+		    next_attempt_at = CASE WHEN delivery.status = 'failed' THEN delivery.next_attempt_at
+		        WHEN incident.severity = 'critical' THEN now()
 		        ELSE incident.created_at + $1 * interval '1 second' END,
 		    target_name = CASE WHEN incident.affected_target_count > 1
 		        THEN incident.affected_target_count::text || ' Cibles affectées'
@@ -204,32 +208,44 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		return fmt.Errorf("refresh pending incident openings: %w", err)
 	}
 
-	// Une entrée intégrée est une projection révisable. Seuls une Gravité
-	// encore jamais signalée et le premier passage en Propagation étendue sont
-	// des alertes ; les autres révisions restent silencieuses.
+	// La même décision gouverne tous les Canaux. Les Canaux révisables
+	// reçoivent aussi les changements silencieux ; Mattermost n'envoie que
+	// les nouveaux Faits opérationnels.
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO cairnops_notification_outbox (
-			incident_id, incident_revision, channel_id, event_kind, event_key,
-			presentation, target_name, nature_label, severity, opened_at, resolved_at,
-			impact_count, affected_target_count, max_affected_targets,
-			propagation_status, extended
-		)
-		SELECT incident.id, incident.revision, opening.channel_id,
-		       'incident_update', 'revision:' || incident.revision::text,
-		       CASE WHEN incident.status = 'resolved' THEN 'silent'
+		WITH revisions AS (
+		SELECT incident.id, incident.revision, opening.channel_id, channel.kind,
+		       incident.severity = ANY(channel.severities) AS routed_severity,
+		       CASE WHEN incident.status = 'resolved' OR NOT EXISTS (
+		           SELECT 1 FROM cairnops_incident_impacts impact
+		           WHERE impact.incident_id = incident.id AND impact.status = 'active'
+		             AND NOT EXISTS (
+		                 SELECT 1 FROM cairnops_maintenance_targets membership
+		                 JOIN cairnops_maintenances maintenance ON maintenance.id = membership.maintenance_id
+		                 WHERE membership.target_id = impact.target_id
+		                   AND maintenance.cancelled_at IS NULL
+		                   AND now() BETWEEN maintenance.starts_at AND maintenance.ends_at
+		             )
+		       ) THEN 'silent'
 		            WHEN cairnops_severity_rank(incident.severity) > coalesce((
 		                SELECT max(cairnops_severity_rank(previous.severity))
 		                FROM cairnops_notification_outbox previous
 		                WHERE previous.incident_id = incident.id
 		                  AND previous.channel_id = opening.channel_id
-		                  AND previous.status = 'delivered'
+		                  AND previous.status = 'delivered' AND previous.presentation = 'alert'
 		            ), 0) OR (incident.extended AND NOT EXISTS (
 		                SELECT 1 FROM cairnops_notification_outbox previous
 		                WHERE previous.incident_id = incident.id
 		                  AND previous.channel_id = opening.channel_id
-		                  AND previous.status = 'delivered' AND previous.extended
-		            )) THEN 'alert' ELSE 'silent' END,
-		       CASE WHEN incident.status = 'resolved'
+		                  AND previous.status = 'delivered' AND previous.presentation = 'alert' AND previous.extended
+		            )) THEN 'alert' ELSE 'silent' END AS presentation,
+		       CASE WHEN incident.status = 'resolved' AND incident.max_affected_targets = 1
+		            THEN coalesce((
+		                SELECT target.name FROM cairnops_incident_impacts impact
+		                JOIN cairnops_targets target ON target.id = impact.target_id
+		                WHERE impact.incident_id = incident.id
+		                ORDER BY impact.opened_at, impact.id LIMIT 1
+		            ), opening.target_name)
+		            WHEN incident.status = 'resolved'
 		            THEN incident.max_affected_targets::text || ' Cibles affectées au maximum'
 		            WHEN incident.affected_target_count > 1
 		            THEN incident.affected_target_count::text || ' Cibles affectées'
@@ -238,17 +254,17 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		                JOIN cairnops_targets target ON target.id = impact.target_id
 		                WHERE impact.incident_id = incident.id AND impact.status = 'active'
 		                ORDER BY impact.opened_at, impact.id LIMIT 1
-		            ), opening.target_name) END,
+		            ), opening.target_name) END AS target_name,
 		       incident.nature_label, incident.severity, incident.opened_at,
 		       incident.resolved_at, incident.impact_count,
-		       incident.affected_target_count, greatest(incident.max_affected_targets, 1),
+		       incident.affected_target_count, greatest(incident.max_affected_targets, 1) AS max_affected_targets,
 		       incident.propagation_status, incident.extended
 		FROM cairnops_incidents incident
 		JOIN cairnops_notification_outbox opening
 		  ON opening.incident_id = incident.id AND opening.event_key = 'firing'
 		 AND opening.status = 'delivered'
 		JOIN cairnops_notification_channels channel
-		  ON channel.id = opening.channel_id AND channel.kind = 'in_app'
+		  ON channel.id = opening.channel_id
 		 AND channel.enabled AND channel.status <> 'disabled'
 		WHERE incident.revision > coalesce((
 		    SELECT max(previous.incident_revision)
@@ -257,9 +273,27 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		      AND previous.channel_id = opening.channel_id
 		      AND previous.status IN ('pending', 'failed', 'delivered')
 		), -1)
+		)
+		INSERT INTO cairnops_notification_outbox (
+			incident_id, incident_revision, channel_id, event_kind, event_key,
+			presentation, target_name, nature_label, severity, opened_at, resolved_at,
+			impact_count, affected_target_count, max_affected_targets,
+			propagation_status, extended, next_attempt_at, attempts
+		)
+		SELECT id, revision, channel_id, 'incident_update', 'revision:' || revision::text,
+		       presentation, target_name, nature_label, severity, opened_at, resolved_at,
+		       impact_count, affected_target_count, max_affected_targets, propagation_status, extended,
+		       coalesce((SELECT max(previous.next_attempt_at) FROM cairnops_notification_outbox previous
+		           WHERE previous.incident_id = revisions.id AND previous.channel_id = revisions.channel_id
+		             AND previous.event_kind = 'incident_update' AND previous.status = 'failed'), now()),
+		       coalesce((SELECT max(previous.attempts) FROM cairnops_notification_outbox previous
+		           WHERE previous.incident_id = revisions.id AND previous.channel_id = revisions.channel_id
+		             AND previous.event_kind = 'incident_update' AND previous.status = 'failed'), 0)
+		FROM revisions
+		WHERE kind = 'in_app' OR (presentation = 'alert' AND routed_severity)
 		ON CONFLICT DO NOTHING
 	`); err != nil {
-		return fmt.Errorf("schedule incident in-app updates: %w", err)
+		return fmt.Errorf("schedule incident updates: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -284,7 +318,13 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		)
 		SELECT incident.id, incident.revision, opening.channel_id,
 		       'resolved', 'resolved', 'alert',
-		       incident.max_affected_targets::text || ' Cibles affectées au maximum',
+		       CASE WHEN incident.max_affected_targets = 1 THEN coalesce((
+		           SELECT target.name FROM cairnops_incident_impacts impact
+		           JOIN cairnops_targets target ON target.id = impact.target_id
+		           WHERE impact.incident_id = incident.id
+		           ORDER BY impact.opened_at, impact.id LIMIT 1
+		       ), opening.target_name)
+		       ELSE incident.max_affected_targets::text || ' Cibles affectées au maximum' END,
 		       incident.nature_label, incident.severity, incident.opened_at,
 		       incident.resolved_at, incident.impact_count, 0,
 		       greatest(incident.max_affected_targets, 1),
@@ -342,16 +382,17 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		)
 		SELECT claimed.id, claimed.incident_id::text, claimed.incident_revision,
 		       claimed.channel_id::text, channel.kind, claimed.event_kind,
-		       claimed.presentation, claimed.target_name, claimed.nature_label,
+		       claimed.presentation, claimed.target_name, incident.nature_key, claimed.nature_label,
 		       claimed.severity, claimed.impact_count,
 		       claimed.affected_target_count, claimed.max_affected_targets,
 		       claimed.propagation_status, claimed.extended, claimed.opened_at,
 		       claimed.resolved_at, channel.credential_sealed
 		FROM claimed JOIN cairnops_notification_channels channel ON channel.id = claimed.channel_id
+		JOIN cairnops_incidents incident ON incident.id = claimed.incident_id
 	`, strings.TrimSpace(workerID)).Scan(
 		&delivery.ID, &delivery.IncidentID, &delivery.IncidentRevision,
 		&delivery.ChannelID, &delivery.ChannelKind, &delivery.EventKind,
-		&delivery.Presentation, &delivery.TargetName, &delivery.NatureLabel,
+		&delivery.Presentation, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureLabel,
 		&delivery.Severity, &delivery.ImpactCount, &delivery.AffectedTargets,
 		&delivery.MaxAffected, &delivery.PropagationStatus, &delivery.Extended,
 		&delivery.OpenedAt, &delivery.ResolvedAt, &delivery.CredentialSealed,

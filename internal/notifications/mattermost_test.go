@@ -25,12 +25,13 @@ func TestMattermostResolutionMessageKeepsOperationalContext(t *testing.T) {
 	if err := client.Send(context.Background(), server.URL, Message{
 		EventKind: "resolved", IncidentID: "incident-1", TargetName: "Nextcloud",
 		NatureLabel: "Réponse HTTP invalide", Severity: incidents.SeverityCritical,
-		PublicURL: "https://cairnops.example.test",
+		MaxAffected: 1,
+		PublicURL:   "https://cairnops.example.test",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	encoded, _ := json.Marshal(payload)
-	for _, expected := range []string{"RÉSOLU", "Nextcloud", "Réponse HTTP invalide", "même canal", "https://cairnops.example.test/incidents?incident=incident-1"} {
+	for _, expected := range []string{"Résolu", "Nextcloud", "Réponse HTTP invalide", "https://cairnops.example.test/incidents?incident=incident-1"} {
 		if !strings.Contains(string(encoded), expected) {
 			t.Fatalf("Mattermost payload does not contain %q: %s", expected, encoded)
 		}
@@ -57,7 +58,7 @@ func TestMattermostMultiTargetIncidentKeepsItsImpactSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded, _ := json.Marshal(payload)
-	for _, expected := range []string{"RÉSOLU", "jusqu’à 7 Cibles", "https://cairnops.example.test/incidents?incident=incident-1"} {
+	for _, expected := range []string{"Résolu", "Jusqu’à 7 Cibles", "https://cairnops.example.test/incidents?incident=incident-1"} {
 		if !strings.Contains(string(encoded), expected) {
 			t.Fatalf("Mattermost incident payload does not contain %q: %s", expected, encoded)
 		}

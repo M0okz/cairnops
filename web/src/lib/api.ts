@@ -696,6 +696,8 @@ export type WebhookApproval = {
 
 export type IncidentSeverity = 'information' | 'warning' | 'major' | 'critical';
 
+export type IncidentSummary = Record<'fr' | 'en', { title: string; body: string }>;
+
 export type IncidentEvidence = {
   id: string;
   impact_id: string;
@@ -703,6 +705,8 @@ export type IncidentEvidence = {
   origin: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'webhook' | 'native';
   connector_id?: string;
   connector_name?: string;
+  source_id?: string;
+  last_seen_at: string;
   external_event_id?: string;
   external_object_id?: string;
   name: string;
@@ -734,6 +738,7 @@ export type IncidentActivity = {
 
 export type Incident = {
   id: string;
+  summary?: IncidentSummary;
   nature_key: string;
   nature_label: string;
   nature_scope: 'canonical' | 'connector';
@@ -822,6 +827,7 @@ export type IncidentDay = {
  * serveur ne rend jamais que celle de la session qui demande. */
 export type InboxEntry = {
   id: number;
+  summary?: IncidentSummary;
   incident_id: string;
   revision: number;
   target_id?: string;

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/synthesis"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -180,7 +181,6 @@ func (store *PostgresStore) loadChildren(ctx context.Context, incidents []Incide
 	if err != nil {
 		return fmt.Errorf("load incident impacts: %w", err)
 	}
-	impacts := make(map[string]*Impact)
 	for rows.Next() {
 		var incidentID string
 		var impact Impact
@@ -196,13 +196,21 @@ func (store *PostgresStore) loadChildren(ctx context.Context, incidents []Incide
 		impact.Evidence = []Evidence{}
 		parent := byID[incidentID]
 		parent.Impacts = append(parent.Impacts, impact)
-		impacts[impact.ID] = &parent.Impacts[len(parent.Impacts)-1]
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
 		return fmt.Errorf("iterate incident impacts: %w", err)
 	}
 	rows.Close()
+	// Construire l'index une fois les slices complètes : append peut déplacer
+	// leur stockage et rendre les pointeurs précédents invisibles à la vue.
+	impacts := make(map[string]*Impact)
+	for index := range incidents {
+		for impactIndex := range incidents[index].Impacts {
+			impact := &incidents[index].Impacts[impactIndex]
+			impacts[impact.ID] = impact
+		}
+	}
 
 	rows, err = store.pool.Query(ctx, `
 		SELECT evidence.id::text, evidence.impact_id::text, evidence.target_id::text,
@@ -215,7 +223,7 @@ func (store *PostgresStore) loadChildren(ctx context.Context, incidents []Incide
 		       evidence.acknowledgement_sync_error,
 		       evidence.acknowledgement_synced_at, evidence.invalidated_at,
 		       coalesce(account.display_name, ''), evidence.invalidation_reason,
-		       evidence.rearmed_at
+		       evidence.rearmed_at, coalesce(evidence.source_id::text, ''), evidence.last_seen_at
 		FROM cairnops_incident_evidence evidence
 		LEFT JOIN cairnops_connectors connector ON connector.id = evidence.connector_id
 		LEFT JOIN cairnops_users account ON account.id = evidence.invalidated_by
@@ -239,7 +247,7 @@ func (store *PostgresStore) loadChildren(ctx context.Context, incidents []Incide
 			&evidence.AcknowledgementSyncError,
 			&evidence.AcknowledgementSyncedAt, &evidence.InvalidatedAt,
 			&evidence.InvalidatedBy, &evidence.InvalidationReason,
-			&evidence.RearmedAt,
+			&evidence.RearmedAt, &evidence.SourceID, &evidence.LastSeenAt,
 		); err != nil {
 			rows.Close()
 			return fmt.Errorf("scan incident evidence: %w", err)
@@ -299,6 +307,21 @@ func (store *PostgresStore) loadChildren(ctx context.Context, incidents []Incide
 		return fmt.Errorf("iterate incident activity: %w", err)
 	}
 	rows.Close()
+	for index := range incidents {
+		item := &incidents[index]
+		targetName := ""
+		for _, impact := range item.Impacts {
+			if impact.Status == "active" || item.Status == "resolved" {
+				targetName = impact.TargetName
+				break
+			}
+		}
+		item.Summary = synthesis.Localize(synthesis.Situation{
+			NatureKey: item.NatureKey, NatureLabel: item.NatureLabel, TargetName: targetName,
+			AffectedTargets: item.AffectedTargetCount, MaxAffected: item.MaxAffectedTargets,
+			Resolved: item.Status == "resolved",
+		})
+	}
 	return nil
 }
 

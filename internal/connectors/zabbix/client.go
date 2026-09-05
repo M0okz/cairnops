@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/M0okz/cairnops/internal/synthesis"
 )
 
 const (
@@ -95,9 +97,10 @@ type remoteTrigger struct {
 		Key    string `json:"key_"`
 	} `json:"items"`
 	Functions []struct {
-		ItemID    string `json:"itemid"`
-		Function  string `json:"function"`
-		Parameter string `json:"parameter"`
+		FunctionID string `json:"functionid"`
+		ItemID     string `json:"itemid"`
+		Function   string `json:"function"`
+		Parameter  string `json:"parameter"`
 	} `json:"functions"`
 	Tags []struct {
 		Tag   string `json:"tag"`
@@ -360,7 +363,7 @@ func (client *Client) Inspect(ctx context.Context, address, token string) (Inspe
 		"monitored":           true,
 		"selectDiscoveryData": []string{"parent_triggerid"},
 		"selectItems":         []string{"itemid", "key_"},
-		"selectFunctions":     []string{"itemid", "function", "parameter"},
+		"selectFunctions":     []string{"functionid", "itemid", "function", "parameter"},
 		"selectTags":          []string{"tag", "value"},
 		"limit":               1,
 	}, &natureProbe); err != nil {
@@ -737,13 +740,20 @@ func triggerCanonicalNature(triggerID string, known map[string]remoteTrigger, de
 		}
 		root = parent
 	}
+	canonical := ""
 	for _, tag := range root.Tags {
-		if strings.EqualFold(strings.TrimSpace(tag.Tag), "cairnops.nature") &&
-			strings.EqualFold(strings.TrimSpace(tag.Value), "availability") {
-			return "availability"
+		if strings.EqualFold(strings.TrimSpace(tag.Tag), "cairnops.nature") {
+			key := strings.ToLower(strings.TrimSpace(tag.Value))
+			if _, known := synthesis.NatureLabel(key, "fr"); !known || (canonical != "" && canonical != key) {
+				return ""
+			}
+			canonical = key
 		}
 	}
-	return ""
+	if canonical != "" {
+		return canonical
+	}
+	return standardTriggerNature(root)
 }
 
 var (
@@ -857,7 +867,7 @@ func (client *Client) Acknowledge(ctx context.Context, endpoint, token, eventID,
 		message = message[:512]
 	}
 	var result struct {
-		EventIDs []string `json:"eventids"`
+		EventIDs []json.Number `json:"eventids"`
 	}
 	if err := client.call(ctx, endpoint, token, "event.acknowledge", map[string]any{
 		"eventids": []string{eventID}, "action": 6, "message": message,
@@ -865,7 +875,7 @@ func (client *Client) Acknowledge(ctx context.Context, endpoint, token, eventID,
 		return fmt.Errorf("acknowledge Zabbix event: %w", err)
 	}
 	for _, returnedID := range result.EventIDs {
-		if returnedID == eventID {
+		if returnedID.String() == eventID {
 			return nil
 		}
 	}

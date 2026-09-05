@@ -107,6 +107,17 @@ func TestProblemsResolveHostsAndAcknowledgeEvent(t *testing.T) {
 	}
 }
 
+func TestAcknowledgementAcceptsNumericAndStringEventIdentities(t *testing.T) {
+	for _, eventIDs := range []string{`["9007199254740993"]`, `[9007199254740993]`} {
+		client := NewClientWithHTTP(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":{"eventids":` + eventIDs + `},"id":1}`))}, nil
+		})})
+		if err := client.Acknowledge(context.Background(), "https://zabbix.example.test", "test-token", "9007199254740993", "Acknowledged"); err != nil {
+			t.Errorf("%s: %v", eventIDs, err)
+		}
+	}
+}
+
 func TestProblemsUseTemplateRootUUIDAsTargetIndependentNature(t *testing.T) {
 	t.Parallel()
 	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
@@ -261,6 +272,26 @@ func TestCanonicalNatureRequiresTheReservedCairnOpsTag(t *testing.T) {
 	generic.Tags[0].Tag = "cairnops.nature"
 	if got := triggerCanonicalNature("101", map[string]remoteTrigger{"101": generic}, true); got != "availability" {
 		t.Fatalf("reserved tag did not declare canonical availability, got %q", got)
+	}
+}
+
+func TestCanonicalStorageNatureComesFromAnExplicitAncestorTag(t *testing.T) {
+	root := remoteTrigger{TriggerID: "root"}
+	if err := json.Unmarshal([]byte(`{"triggerid":"root","tags":[{"tag":"cairnops.nature","value":"storage.latency"}]}`), &root); err != nil {
+		t.Fatal(err)
+	}
+	child := remoteTrigger{TriggerID: "child", TemplateID: "root", Description: "VM-specific disk warning"}
+	known := map[string]remoteTrigger{"root": root, "child": child}
+	if got := triggerCanonicalNature("child", known, true); got != "storage.latency" {
+		t.Fatalf("got %q", got)
+	}
+	root.Tags[0].Value = "storage"
+	known["root"] = root
+	if got := triggerCanonicalNature("child", known, true); got != "" {
+		t.Fatalf("unknown meanings must stay local: %q", got)
+	}
+	if got := triggerCanonicalNature("child", known, false); got != "" {
+		t.Fatalf("incomplete discovery cannot assert a canonical nature: %q", got)
 	}
 }
 
