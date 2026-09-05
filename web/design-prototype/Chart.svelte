@@ -2,20 +2,23 @@
   // Intent : lire l'évolution sans confondre contexte et verdict.
   // Hiérarchie : courbe principale, puis valeur au curseur, puis grille.
   // Palette/surfaces : encre et bleu information, tokens partagés, aucun relief.
-  // Typographie : chiffres tabulaires 11/12 px. Espacement : grille de 4 px.
+  // Typographie : chiffres tabulaires 13/14 px, sans réduction avec la courbe.
   import { chartSeries } from './data';
-  let { range = '24h', mini = false, seed = 0, label = 'Temps de réponse de l’API publique', interactive = true, reveal = 1 }: {
-    range?: string; mini?: boolean; seed?: number; label?: string; interactive?: boolean; reveal?: number;
+  let { range = '24h', mini = false, seed = 0, label = 'Temps de réponse de l’API publique', interactive = true, reveal = 1, responsive = true }: {
+    range?: string; mini?: boolean; seed?: number; label?: string; interactive?: boolean; reveal?: number; responsive?: boolean;
   } = $props();
   const uid = $props.id();
   let hover = $state<number | null>(null);
   const values = $derived(chartSeries(range, seed));
-  const width = 800;
-  const height = $derived(mini ? 54 : 228);
+  let measuredWidth = $state(0);
+  const width = $derived(responsive && !mini ? Math.max(240, measuredWidth || 800) : 800);
+  const height = $derived(mini ? 54 : responsive && width >= 440 ? 280 : 228);
   const top = $derived(mini ? 4 : 18);
-  const bottom = $derived(mini ? 50 : 194);
-  const left = $derived(mini ? 0 : 36);
-  const right = $derived(mini ? width : 780);
+  const bottom = $derived(mini ? 50 : height - 34);
+  const left = $derived(mini ? 0 : responsive ? 44 : 36);
+  const right = $derived(mini ? width : width - 20);
+  const tooltipWidth = $derived(responsive ? 156 : 130);
+  const tooltipHeight = $derived(responsive ? 54 : 45);
   const x = (i: number) => left + i * (right - left) / (values.length - 1);
   const y = (v: number) => bottom - v / 220 * (bottom - top);
   const points = $derived(values.map((v, i) => [x(i), y(v)]));
@@ -43,7 +46,7 @@
   }
 </script>
 
-<div class:mini class="p-chart">
+<div class:mini class="p-chart" bind:clientWidth={measuredWidth}>
   <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio={mini ? 'none' : 'xMidYMid meet'} role="img" aria-label={label}>
     <defs>
       <linearGradient id={`${uid}-fill`} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="var(--p-chart-color)" stop-opacity="0.24"/><stop offset="100%" stop-color="var(--p-chart-color)" stop-opacity="0.015"/></linearGradient>
@@ -51,7 +54,11 @@
     </defs>
     {#if !mini}
       {#each [0, 50, 100, 150, 200] as tick}<line x1={left} x2={right} y1={y(tick)} y2={y(tick)} class="p-gridline"/><text x="0" y={y(tick)+4} class="p-axis">{tick}</text>{/each}
-      {#each ticks as tick, i}<text x={left + i*(right-left)/6} y="222" text-anchor={i===0?'start':i===6?'end':'middle'} class="p-axis">{tick}</text>{/each}
+      {#each ticks as tick, i}
+        {#if !responsive || width >= 600 || i % 2 === 0}
+          <text x={left + i*(right-left)/6} y={height - 6} text-anchor={i===0?'start':i===6?'end':'middle'} class="p-axis">{tick}</text>
+        {/if}
+      {/each}
     {/if}
     <g clip-path={`url(#${uid}-clip)`}>
       <path d={area} fill={`url(#${uid}-fill)`}/>
@@ -60,10 +67,10 @@
     {#if hover !== null && !mini}
       <line x1={x(selected)} x2={x(selected)} y1={top} y2={bottom} class="p-crosshair"/>
       <circle cx={x(selected)} cy={y(values[selected])} r="4" fill="var(--p-chart-color)" stroke="var(--p-surface)" stroke-width="3"/>
-      <g transform={`translate(${Math.max(40, Math.min(644, x(selected)-66))},${Math.max(3,y(values[selected])-58)})`}>
-        <rect width="130" height="45" rx="6" fill="var(--p-surface-raised)" stroke="var(--p-line-strong)"/>
-        <text x="12" y="17" class="p-axis">{selectedLabel}</text>
-        <text x="12" y="34" class="p-chart-value">{values[selected]} ms</text>
+      <g transform={`translate(${Math.max(left, Math.min(right-tooltipWidth, x(selected)-tooltipWidth/2))},${Math.max(3,y(values[selected])-tooltipHeight-13)})`}>
+        <rect width={tooltipWidth} height={tooltipHeight} rx="6" fill="var(--p-surface-raised)" stroke="var(--p-line-strong)"/>
+        <text x="12" y={responsive ? 21 : 17} class="p-axis">{selectedLabel}</text>
+        <text x="12" y={responsive ? 42 : 34} class="p-chart-value">{values[selected]} ms</text>
       </g>
     {/if}
   </svg>

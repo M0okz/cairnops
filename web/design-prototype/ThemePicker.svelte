@@ -36,12 +36,12 @@
 </script>
 
 <details class="p-theme" bind:this={details}>
-  <summary aria-label="Choisir l’apparence"><Icon name={dark ? 'moon' : 'sun'} size={17}/><span>{modes.find(item=>item.id===mode)?.label}</span><span class="p-chevron">⌄</span></summary>
+  <summary aria-label="Choisir l’apparence"><Icon name={dark ? 'moon' : 'sun'} size={20}/><span>{modes.find(item=>item.id===mode)?.label}</span><span class="p-chevron">⌄</span></summary>
   <div class="p-theme-panel">
     <strong>Apparence</strong><p>À l’aise, à toute heure.</p>
     <div class="p-theme-options" role="group" aria-label="Thème">
       {#each modes as item}
-        <button class:chosen={mode === item.id} aria-pressed={mode === item.id} onclick={()=>{mode=item.id; if(item.id!=='solar')details.open=false;}}><Icon name={item.icon} size={19}/>{item.label}</button>
+        <button class:chosen={mode === item.id} aria-pressed={mode === item.id} onclick={()=>{mode=item.id; if(item.id!=='solar')details.open=false;}}><Icon name={item.icon} size={22}/>{item.label}</button>
       {/each}
     </div>
     {#if mode === 'solar'}
