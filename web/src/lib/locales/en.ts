@@ -113,8 +113,8 @@ export const en: Record<MessageKey, string> = {
   'rail.language': 'Language',
   'rail.logout': 'Sign out',
   'topbar.breadcrumb': 'Breadcrumb',
-  'topbar.updateAction': 'Update',
-  'topbar.updateAvailableVersion': 'Version {version} available',
+  'rail.updateAction': 'Update',
+  'rail.updateAvailableVersion': 'Version {version} available',
 
   /* ── Palette ─────────────────────────────────────────────────────────── */
   'palette.title': 'Global search',

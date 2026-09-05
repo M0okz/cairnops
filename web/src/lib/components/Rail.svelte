@@ -148,6 +148,20 @@
     <span class="version">v{session.version}</span>
   </div>
 
+  {#if session.availableVersion}
+    <button
+      class="btn sm primary update-cta"
+      type="button"
+      title={t('rail.updateAvailableVersion', { version: session.availableVersion })}
+      aria-label={`${t('rail.updateAction')} · ${t('rail.updateAvailableVersion', { version: session.availableVersion })}`}
+      onclick={() => session.reloadForUpdate()}
+    >
+      <Icon name="worker" size={14} />
+      <span>{t('rail.updateAction')}</span>
+      <small>{session.availableVersion}</small>
+    </button>
+  {/if}
+
   <nav bind:this={navigation}>
     {#each items as item (item.href)}
       {#if item.apart}<span class="rule" role="separator"></span>{/if}

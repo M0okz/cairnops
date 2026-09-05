@@ -554,13 +554,17 @@ td.num,
 
 .update-cta {
   flex: none;
+  align-self: flex-start;
+  max-width: calc(100% - 2 * var(--s3));
+  margin: 0 var(--s3) var(--s3);
 }
 
 .update-cta small {
   font-family: var(--font-num);
   font-size: 0.6875rem;
   font-weight: 500;
-  opacity: 0.82;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Le déclencheur de la Palette a l'allure d'un champ sans en être un : ce qu'on
@@ -1425,8 +1429,9 @@ a.trow:hover .caret {
     width: 9rem;
   }
 
-  .update-cta small {
-    display: none;
+  .update-cta {
+    align-self: center;
+    margin: 0;
   }
 }
 
@@ -1459,6 +1464,18 @@ a.trow:hover .caret {
 
   .rail nav::-webkit-scrollbar {
     display: none;
+  }
+
+  .rail .update-cta {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  .rail:has(.update-cta) nav {
+    grid-row: 3;
+    padding-top: 0;
   }
 
   .rail nav a {

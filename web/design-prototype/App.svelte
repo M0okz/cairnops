@@ -24,6 +24,7 @@
   let acknowledged = $state<number[]>([]);
   let selected = $state<Target>(targets[0]);
   let toast = $state('');
+  let availableVersion = $state('0.1.80');
   let dialog = $state<HTMLDialogElement>(null!);
   let searchInput: HTMLInputElement;
   let toastTimer: ReturnType<typeof setTimeout>;
@@ -113,7 +114,16 @@
 
   <div class="p-app" data-variant={variant}>
     <a class="p-skip" href="#content">Aller au contenu</a>
-    <aside class="p-sidebar"><a class="p-brand" href="?variant=A" aria-label="CairnOps, vue d’ensemble"><span class="p-brand-full"><Brand width={150}/></span><span class="p-brand-compact">{@render logo()}</span></a><div class="p-space"><span class="p-space-icon">H</span><span><strong>Homeblack</strong><small>Espace opérationnel</small></span><span class="p-chevron">⌄</span></div><p class="p-nav-label">Supervision</p><nav aria-label="Navigation principale">{#each nav as item}<button class:current={section===item.id} aria-current={section===item.id?'page':undefined} onclick={()=>navigate(item.id)}><Icon name={item.icon} size={17}/><span>{item.label}</span>{#if item.count}<b class:hot={item.id==='incidents'}>{item.count}</b>{/if}</button>{/each}</nav><div class="p-sidebar-bottom"><div class="p-instance"><span class="p-dot ok"></span><span>Instance opérationnelle</span></div><div class="p-person"><span class="p-avatar">GN</span><span><strong>Grégory</strong><small>Administrateur · démo</small></span><Icon name="settings" size={16}/></div></div></aside>
+    <aside class="p-sidebar"><a class="p-brand" href="?variant=A" aria-label="CairnOps, vue d’ensemble"><span class="p-brand-full"><Brand width={150}/></span><span class="p-brand-compact">{@render logo()}</span></a>
+      {#if availableVersion}
+        <button class="p-btn p-primary p-update" type="button"
+          title={`Version ${availableVersion} disponible · démonstration`}
+          aria-label={`Mettre à jour · Version ${availableVersion} disponible`}
+          onclick={()=>{availableVersion='';notify('Mise à jour simulée dans la maquette.');}}>
+          <Icon name="worker" size={15}/><span>Mettre à jour</span><small>{availableVersion}</small>
+        </button>
+      {/if}
+      <div class="p-space"><span class="p-space-icon">H</span><span><strong>Homeblack</strong><small>Espace opérationnel</small></span><span class="p-chevron">⌄</span></div><p class="p-nav-label">Supervision</p><nav aria-label="Navigation principale">{#each nav as item}<button class:current={section===item.id} aria-current={section===item.id?'page':undefined} onclick={()=>navigate(item.id)}><Icon name={item.icon} size={17}/><span>{item.label}</span>{#if item.count}<b class:hot={item.id==='incidents'}>{item.count}</b>{/if}</button>{/each}</nav><div class="p-sidebar-bottom"><div class="p-instance"><span class="p-dot ok"></span><span>Instance opérationnelle</span></div><div class="p-person"><span class="p-avatar">GN</span><span><strong>Grégory</strong><small>Administrateur · démo</small></span><Icon name="settings" size={16}/></div></div></aside>
     <div class="p-workspace"><header class="p-topbar"><div class="p-breadcrumb"><span>Homeblack</span><span>/</span><strong>{nav.find(i=>i.id===section)?.label}</strong></div><div class="p-topbar-actions"><span class="p-demo-label">Données de démonstration</span><ThemePicker ontheme={themeChange}/><button class="p-icon-btn p-notifications" aria-label="Voir les incidents" onclick={()=>navigate('incidents')}><Icon name="bell" size={18}/>{#if pending>0}<i></i>{/if}</button></div></header>
     <main id="content" class="p-content" tabindex="-1">
       <header class="p-page-head"><div><div class="p-eyebrow">{section==='overview'?'Votre espace opérationnel':'Homeblack'}</div><h1>{nav.find(i=>i.id===section)?.label}</h1><p>{section==='overview'?'48 cibles. 64 sources. Une situation partagée.':section==='targets'?'Chaque cible, ses signaux, ses preuves.':section==='incidents'?'Comprendre, prendre en charge, suivre le rétablissement.':section==='connectors'?'Vos outils de supervision, réunis au même endroit.':'Anticiper les interventions, garder le contexte.'}</p></div><span class="p-date"><Icon name="changelog" size={15}/>5 septembre 2026</span></header>

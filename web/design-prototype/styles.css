@@ -44,6 +44,8 @@ body { background:var(--p-bg); color:var(--p-ink); font-family:var(--font); -web
 .p-sidebar { width:224px; flex-shrink:0; height:100vh; position:sticky; top:0; padding:24px 14px 12px; display:flex; flex-direction:column; border-right:1px solid var(--p-line); background:var(--p-bg); }
 .p-brand { display:flex; align-items:center; gap:9px; padding:0 12px 29px; font-size:20px!important; font-weight:650!important; letter-spacing:-.65px; }
 .p-brand-compact { display:none; }
+.p-update { align-self:flex-start; flex:none; margin:-12px 8px 24px; max-width:calc(100% - 16px); }
+.p-update small { font-family:var(--font-num); font-size:10px; font-weight:500; }
 .p-space { display:flex; align-items:center; gap:9px; padding:10px 8px; margin-bottom:30px; border:1px solid var(--p-line); border-radius:var(--p-radius-sm); }
 .p-space-icon { height:28px; width:28px; display:grid; place-items:center; border:1px solid var(--p-line-strong); border-radius:6px; background:var(--p-surface); font-weight:600; }
 .p-space strong,.p-space small { display:block; }
@@ -120,3 +122,16 @@ body { background:var(--p-bg); color:var(--p-ink); font-family:var(--font); -web
 @media(prefers-reduced-motion:reduce) {.p-app *,.p-app *::before,.p-app *::after {animation:none!important;transition:none!important;scroll-behavior:auto!important;}.p-app button:active:not(:disabled),.p-btn:active {transform:none;}}
 @media(max-width:600px) {.p-table-tools {display:grid;grid-template-columns:1fr;gap:10px;}.p-table-tools>.p-segments {justify-self:start;}.p-table-search {display:flex;width:100%;}.p-table-search input {flex:1;width:auto;}.p-table-search kbd {display:none;}}
 @media(pointer:coarse) {.p-btn,.p-icon-btn,.p-theme summary {min-height:40px;}.p-segments button {min-height:34px;}.p-theme-options>button {min-height:60px;}}
+
+@media(max-width:1080px) {
+  .p-update { width:42px; min-height:42px; padding:0; margin:-12px 0 24px; max-width:100%; }
+  .p-update>span,.p-update>small { display:none; }
+}
+@media(max-width:600px) {
+  .p-sidebar:has(.p-update) { height:106px; gap:4px; }
+  .p-update { width:100%; min-height:44px; margin:0; }
+  .p-update>span,.p-update>small { display:block; }
+  .p-app:has(.p-update) .p-prototype-bar { bottom:118px; }
+  .p-app:has(.p-update) .p-content { padding-bottom:180px; }
+  .p-app:has(.p-update) .p-toast { bottom:173px; }
+}

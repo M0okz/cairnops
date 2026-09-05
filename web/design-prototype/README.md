@@ -24,6 +24,8 @@ Identité Convergence · Titane retenue par Grégory. Le symbole et le mot-symbo
 
 Thèmes Clair, Sombre, Système et Solaire. Aucun emplacement déduit du seul fuseau horaire : choix explicite d’une ville. Calcul SunCalc local, heures affichées dans le fuseau de l’appareil, prise en compte des jours et nuits polaires, suivi des changements système et du retour au premier plan. Préférences gardées seulement en mémoire dans cette maquette.
 
+La pastille « Mettre à jour » figure dans le volet de navigation, sous la marque, avec une version fictive disponible. Son bouton simule le rechargement et fait disparaître la pastille. Sur tablette elle devient une icône nommée ; sur téléphone elle reste accessible au-dessus de la navigation. Dans l’application réelle, elle conserve le rechargement explicite vers la version détectée.
+
 ## Vidéo pour le site de présentation
 
 Le film est destiné au futur site de présentation de la solution. Son aperçu possède une entrée indépendante (`film.html`) ; aucun bouton ni lecteur vidéo ne figure dans l’interface CairnOps.
