@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
+	"github.com/M0okz/cairnops/internal/connectors/proxmox"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/secretbox"
@@ -26,11 +27,21 @@ type PatchMonClient interface {
 	Hosts(context.Context, string, patchmon.Credentials) ([]patchmon.Host, error)
 }
 
+type ProxmoxClient interface {
+	Resources(context.Context, string, proxmox.Credentials) ([]proxmox.Resource, error)
+}
+
+func (service *Service) WithProxmox(client ProxmoxClient) *Service {
+	service.proxmox = client
+	return service
+}
+
 type Service struct {
 	store      *Store
 	zabbix     ZabbixClient
 	uptimeKuma UptimeKumaClient
 	patchMon   PatchMonClient
+	proxmox    ProxmoxClient
 	secrets    *secretbox.Box
 	now        func() time.Time
 }
@@ -94,6 +105,23 @@ func (service *Service) Preview(ctx context.Context, connectorID string) (Config
 			index := ensureBinding(&configuration, byExternal, monitor.ID, monitor.Name)
 			configuration.Bindings[index].Candidates = uptimeCandidates(monitor)
 			sortCandidates(configuration.Bindings[index].Candidates)
+		}
+	case "proxmox":
+		if service.proxmox == nil {
+			return Configuration{}, fmt.Errorf("Proxmox VE client is unavailable")
+		}
+		var credentials proxmox.Credentials
+		if err := json.Unmarshal(credential, &credentials); err != nil {
+			return Configuration{}, fmt.Errorf("decode Proxmox VE credential: %w", err)
+		}
+		resources, err := service.proxmox.Resources(ctx, remote.Endpoint, credentials)
+		if err != nil {
+			return Configuration{}, err
+		}
+		for _, resource := range resources {
+			if index, imported := byExternal[resource.ID]; imported {
+				configuration.Bindings[index].Candidates = proxmoxCandidates(resource)
+			}
 		}
 	case "patchmon":
 		var credentials patchmon.Credentials

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
+	"github.com/M0okz/cairnops/internal/connectors/proxmox"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 )
@@ -148,4 +149,26 @@ func reportingReason(host patchmon.Host) string {
 		return "Dernière remontée non publiée"
 	}
 	return ""
+}
+
+func proxmoxCandidates(resource proxmox.Resource) []Candidate {
+	result := []Candidate{}
+	for key := range resource.Metrics() {
+		label, dimension := "Utilisation CPU", ""
+		if key == "memory.utilization" {
+			label = "Utilisation mémoire"
+			if resource.Guest() {
+				label, dimension = "Mémoire vue par l’hôte", "host"
+			}
+		}
+		if key == "filesystem.utilization" {
+			label, dimension = "Occupation du stockage", resource.Storage
+			if resource.Type == "node" {
+				label, dimension = "Système de fichiers du nœud", "/"
+			}
+		}
+		result = append(result, Candidate{SemanticKey: key, Label: label, ExternalID: key + ":" + resource.ID, Dimension: dimension, Unit: "percent", Recommended: key != "filesystem.utilization", Available: true, Metadata: resource.Metadata()})
+	}
+	sortCandidates(result)
+	return result
 }

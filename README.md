@@ -56,6 +56,15 @@ Ce dépôt partagé contient le serveur, le worker, l’interface Web, le Relais
 et leurs contrats. Le code du compagnon iOS est maintenu séparément et n’est pas
 inclus dans cette distribution.
 
+Le Connecteur **Proxmox VE** découvre les nœuds, VM, conteneurs et stockages,
+les rapproche explicitement des Cibles et apporte CPU, mémoire et occupation
+du stockage comme Indicateurs contextuels. Les nœuds hors ligne alertent ; un
+arrêt de VM n’alerte que si « Signaler un arrêt » a été activé pour cette VM.
+Les Incidents empruntent le même regroupement et les mêmes notifications que
+ceux des autres produits. L’accès permanent utilise `PVEAuditor` et HTTPS,
+avec approbation explicite des certificats privés. Voir
+[les décisions et limites de l’intégration](docs/adr/0045-observer-proxmox-ve-sans-piloter-les-machines.md).
+
 ## Ce que vise la V1
 
 - contrôles natifs HTTP/HTTPS, TCP, ICMP, DNS et Heartbeat, exécutés côté serveur ;

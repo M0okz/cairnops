@@ -12,6 +12,7 @@
   import UptimeKumaConnector from '$lib/components/UptimeKumaConnector.svelte';
   import PatchMonConnector from '$lib/components/PatchMonConnector.svelte';
   import ArgusConnector from '$lib/components/ArgusConnector.svelte';
+  import ProxmoxConnector from '$lib/components/ProxmoxConnector.svelte';
   import GenericWebhookConnector from '$lib/components/GenericWebhookConnector.svelte';
   import { session } from '$lib/session.svelte';
   import type { ConnectorImportResult } from '$lib/api';
@@ -21,6 +22,7 @@
     'uptime-kuma': 'Uptime Kuma',
     patchmon: 'PatchMon',
     argus: 'Argus',
+    proxmox: 'Proxmox VE',
     'generic-webhook': t('connector.genericWebhook')
   } as const;
 
@@ -40,7 +42,7 @@
     await Promise.all([session.loadTargets(), session.loadConnectors()]);
     session.showNotice(
       plural(
-        result.connector.kind === 'uptime_kuma'
+        result.connector.kind === 'proxmox' ? 'connectorPage.proxmoxImported' : result.connector.kind === 'uptime_kuma'
           ? 'connectorPage.kumaImported'
           : result.connector.kind === 'patchmon'
             ? 'connectorPage.patchmonImported'
@@ -81,6 +83,8 @@
   <UptimeKumaConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else if kind === 'patchmon'}
   <PatchMonConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
+{:else if kind === 'proxmox'}
+  <ProxmoxConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else if kind === 'argus'}
   <ArgusConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else}

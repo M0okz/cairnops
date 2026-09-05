@@ -14,6 +14,7 @@ import (
 	"github.com/M0okz/cairnops/internal/connectors"
 	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
+	"github.com/M0okz/cairnops/internal/connectors/proxmox"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/controlplane"
@@ -74,8 +75,9 @@ func run(logger *slog.Logger) error {
 	uptimeKumaClient := uptimekuma.NewClient()
 	patchMonClient := patchmon.NewClient()
 	argusClient := argus.NewClient()
+	proxmoxClient := proxmox.NewClient()
 	incidentStore := incidents.NewPostgresStore(pool)
-	connectorService := connectors.NewService(connectorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets, argusClient)
+	connectorService := connectors.NewService(connectorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets, argusClient).WithProxmox(proxmoxClient)
 	webhookService := connectors.NewWebhookService(connectorStore, incidentStore, secrets, cfg.PublicURL)
 	incidentService := incidents.NewService(incidentStore, connectors.NewAcknowledger(connectorStore, zabbixClient, secrets))
 	maintenanceService := maintenance.NewService(maintenance.NewPostgresStore(pool))
@@ -90,7 +92,7 @@ func run(logger *slog.Logger) error {
 		hostname = "local"
 	}
 	indicatorStore := indicators.NewStore(pool)
-	indicatorService := indicators.NewService(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets)
+	indicatorService := indicators.NewService(indicatorStore, zabbixClient, uptimeKumaClient, patchMonClient, secrets).WithProxmox(proxmoxClient)
 	reconciliationStore := reconciliation.NewStore(pool)
 	identityStore := identity.NewStore(pool)
 	oidcService := oidcauth.NewService(pool, secrets, identityStore, cfg.PublicURL, &http.Client{Timeout: 15 * time.Second})

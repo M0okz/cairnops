@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
+	"github.com/M0okz/cairnops/internal/connectors/proxmox"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/secretbox"
 )
@@ -17,6 +18,7 @@ type Collector struct {
 	zabbix     ZabbixClient
 	uptimeKuma UptimeKumaClient
 	patchMon   PatchMonClient
+	proxmox    ProxmoxClient
 	secrets    *secretbox.Box
 	logger     *slog.Logger
 	interval   time.Duration
@@ -28,6 +30,11 @@ func NewCollector(store *Store, zabbixClient ZabbixClient, uptimeKumaClient Upti
 		logger = slog.Default()
 	}
 	return &Collector{store: store, zabbix: zabbixClient, uptimeKuma: uptimeKumaClient, patchMon: patchMonClient, secrets: secrets, logger: logger, interval: time.Minute, now: time.Now}
+}
+
+func (collector *Collector) WithProxmox(client ProxmoxClient) *Collector {
+	collector.proxmox = client
+	return collector
 }
 
 func (collector *Collector) Run(ctx context.Context) error {
@@ -149,6 +156,31 @@ func (collector *Collector) collect(ctx context.Context, connector RuntimeConnec
 				} else {
 					missing[indicator.ID] = "Validité du certificat non publiée"
 				}
+			}
+		}
+	case "proxmox":
+		if collector.proxmox == nil {
+			return fmt.Errorf("Proxmox VE client is unavailable")
+		}
+		var credentials proxmox.Credentials
+		if err := json.Unmarshal(credential, &credentials); err != nil {
+			return fmt.Errorf("decode Proxmox VE credential: %w", err)
+		}
+		resources, err := collector.proxmox.Resources(ctx, connector.Endpoint, credentials)
+		if err != nil {
+			return err
+		}
+		values := map[string]float64{}
+		for _, resource := range resources {
+			for key, value := range resource.Metrics() {
+				values[key+":"+resource.ID] = value
+			}
+		}
+		for _, indicator := range connector.Indicators {
+			if value, found := values[indicator.ExternalID]; found {
+				readings = append(readings, Reading{IndicatorID: indicator.ID, Value: value, ObservedAt: now})
+			} else {
+				missing[indicator.ID] = "Proxmox VE ne publie pas cette valeur · aucune valeur estimée"
 			}
 		}
 	case "patchmon":

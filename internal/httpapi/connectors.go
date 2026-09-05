@@ -8,12 +8,18 @@ import (
 	"strings"
 
 	"github.com/M0okz/cairnops/internal/connectors"
+	"github.com/M0okz/cairnops/internal/connectors/proxmox"
 	identitymodel "github.com/M0okz/cairnops/internal/identity"
 )
 
 const maximumConnectorBody = 256 * 1024
 
 type Connectors interface {
+	ReapproveProxmoxCertificate(context.Context, string, string) error
+	ProxmoxCertificate(context.Context, string) (proxmox.Certificate, error)
+	PreviewProxmox(context.Context, connectors.ProxmoxPreviewInput) (connectors.ProxmoxPreview, error)
+	ImportProxmox(context.Context, string, connectors.ProxmoxImportInput) (connectors.ProxmoxImport, error)
+	RemoveProxmox(context.Context, string, proxmox.Credentials) (connectors.Removal, error)
 	List(context.Context) ([]connectors.Connector, error)
 	Suspend(context.Context, string) (connectors.Connector, error)
 	Resume(context.Context, string) (connectors.Connector, error)
@@ -27,6 +33,26 @@ type Connectors interface {
 	ImportPatchMon(context.Context, string, connectors.PatchMonImportInput) (connectors.PatchMonImport, error)
 	PreviewArgus(context.Context, connectors.ArgusPreviewInput) (connectors.ArgusPreview, error)
 	ImportArgus(context.Context, string, connectors.ArgusImportInput) (connectors.ArgusImport, error)
+}
+
+func (handler connectorHandler) approveProxmoxCertificate(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("connectorID")
+	if !validUUID(id) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		return
+	}
+	var input struct {
+		Fingerprint string `json:"fingerprint"`
+	}
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := handler.connectors.ReapproveProxmoxCertificate(r.Context(), id, input.Fingerprint); err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"approved": true})
 }
 
 type connectorHandler struct {
@@ -147,6 +173,39 @@ func (handler connectorHandler) importArgus(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusCreated, result)
 }
 
+func (handler connectorHandler) previewProxmox(w http.ResponseWriter, r *http.Request) {
+	var input connectors.ProxmoxPreviewInput
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	preview, err := handler.connectors.PreviewProxmox(r.Context(), input)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func (handler connectorHandler) importProxmox(w http.ResponseWriter, r *http.Request) {
+	principal, ok := r.Context().Value(principalContextKey{}).(identitymodel.Principal)
+	if !ok {
+		unauthorizedSession(w)
+		return
+	}
+	var input connectors.ProxmoxImportInput
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	result, err := handler.connectors.ImportProxmox(r.Context(), principal.ID, input)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
 func (handler connectorHandler) list(w http.ResponseWriter, r *http.Request) {
 	items, err := handler.connectors.List(r.Context())
 	if err != nil {
@@ -243,4 +302,39 @@ func (handler connectorHandler) writeError(w http.ResponseWriter, err error) {
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
+}
+
+func (handler connectorHandler) proxmoxCertificate(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Address string `json:"address"`
+	}
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	result, err := handler.connectors.ProxmoxCertificate(r.Context(), input.Address)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (handler connectorHandler) removeProxmox(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("connectorID")
+	if !validUUID(id) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		return
+	}
+	var input proxmox.Credentials
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	result, err := handler.connectors.RemoveProxmox(r.Context(), id, input)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }

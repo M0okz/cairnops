@@ -14,6 +14,7 @@ import (
 	"github.com/M0okz/cairnops/internal/connectors"
 	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
+	"github.com/M0okz/cairnops/internal/connectors/proxmox"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/database"
@@ -62,6 +63,7 @@ func run(logger *slog.Logger) error {
 	uptimeKumaClient := uptimekuma.NewClient()
 	patchMonClient := patchmon.NewClient()
 	argusClient := argus.NewClient()
+	proxmoxClient := proxmox.NewClient()
 	incidentStore := incidents.NewPostgresStore(pool)
 	incidentService := incidents.NewService(
 		incidentStore,
@@ -72,9 +74,10 @@ func run(logger *slog.Logger) error {
 	uptimeKumaSync := connectors.NewUptimeKumaSynchronizer(connectorStore, incidentStore, uptimeKumaClient, secrets, runnerOwner, logger)
 	patchMonSync := connectors.NewPatchMonSynchronizer(connectorStore, incidentStore, patchMonClient, secrets, runnerOwner, logger)
 	argusSync := connectors.NewArgusSynchronizer(connectorStore, incidentStore, argusClient, secrets, runnerOwner, logger)
+	proxmoxSync := connectors.NewProxmoxSynchronizer(connectorStore, incidentStore, proxmoxClient, secrets, runnerOwner, logger)
 	indicatorCollector := indicators.NewCollector(
 		indicators.NewStore(pool), zabbixClient, uptimeKumaClient, patchMonClient, secrets, logger,
-	)
+	).WithProxmox(proxmoxClient)
 	incidentRuntime := incidents.NewRuntime(incidentStore, incidentService, logger)
 
 	healthServer := httpapi.NewServer(httpapi.ServerOptions{
@@ -110,7 +113,7 @@ func run(logger *slog.Logger) error {
 			notificationDispatcher, pushDispatcher,
 			reconciliationDetector, reconciliationProcessor,
 		).WithSupervisedRunners(
-			connectorSync, uptimeKumaSync, patchMonSync, argusSync,
+			connectorSync, uptimeKumaSync, patchMonSync, argusSync, proxmoxSync,
 			indicatorCollector, incidentRuntime,
 		)
 		errCh <- runtime.Run(ctx)

@@ -172,7 +172,7 @@ export type TargetMeasures = {
 export type SourceMeasures = {
   source_id: string;
   name: string;
-  kind: SourceKind | 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'generic_webhook';
+  kind: SourceKind | 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'proxmox' | 'generic_webhook';
   origin: 'native' | 'integration';
   measures_availability: boolean;
   latest_outcome?: Outcome;
@@ -229,8 +229,9 @@ export type SystemHealth = {
 };
 
 export type Connector = {
+  credential_management?: 'provided' | 'managed';
   id: string;
-  kind: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'generic_webhook';
+  kind: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'proxmox' | 'generic_webhook';
   name: string;
   endpoint: string;
   status: 'connected' | 'degraded' | 'disabled';
@@ -702,7 +703,7 @@ export type IncidentEvidence = {
   id: string;
   impact_id: string;
   target_id: string;
-  origin: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'webhook' | 'native';
+  origin: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'proxmox' | 'webhook' | 'native';
   connector_id?: string;
   connector_name?: string;
   source_id?: string;
@@ -887,3 +888,17 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
+
+export type ProxmoxCertificate = {
+  endpoint: string; trusted: boolean; fingerprint: string; subject: string; issuer: string; expires_at: string;
+};
+export type ProxmoxResourcePreview = {
+  id: string; external_id: string; name: string; type: 'node' | 'qemu' | 'lxc' | 'storage'; node: string; vmid?: number;
+  status: string; template: number; importable: boolean; expected_running: boolean; already_imported: boolean;
+  already_imported_to?: TargetReference; suggested_target?: TargetReference; candidate_targets: TargetMatch[];
+};
+export type ProxmoxPreview = {
+  kind: 'proxmox'; name: string; endpoint: string; version: string; encrypted_transport: boolean; importable_count: number;
+  resources: ProxmoxResourcePreview[]; available_targets: TargetReference[]; receipt: string; expires_at: string;
+  access: { mode: 'automatic' | 'provided'; will_provision: boolean; remote_changes: string[] };
+};

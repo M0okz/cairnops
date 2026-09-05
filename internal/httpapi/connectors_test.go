@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/M0okz/cairnops/internal/connectors"
+	"github.com/M0okz/cairnops/internal/connectors/proxmox"
 	identitymodel "github.com/M0okz/cairnops/internal/identity"
 )
 
@@ -315,4 +316,21 @@ func TestConnectorRemovalRejectsOperatorAndMalformedIdentity(t *testing.T) {
 	if response.Code != http.StatusBadRequest || fake.deletedID != "" {
 		t.Fatalf("malformed identity unexpectedly reached the service: status=%d deleted=%q", response.Code, fake.deletedID)
 	}
+}
+
+func (fake *fakeConnectors) ProxmoxCertificate(_ context.Context, address string) (proxmox.Certificate, error) {
+	return proxmox.Certificate{Endpoint: address, Trusted: true}, nil
+}
+func (fake *fakeConnectors) PreviewProxmox(_ context.Context, input connectors.ProxmoxPreviewInput) (connectors.ProxmoxPreview, error) {
+	return connectors.ProxmoxPreview{Kind: "proxmox", Name: input.Name, Endpoint: input.Address}, nil
+}
+func (fake *fakeConnectors) ImportProxmox(_ context.Context, _ string, _ connectors.ProxmoxImportInput) (connectors.ProxmoxImport, error) {
+	return connectors.ProxmoxImport{Connector: connectors.Connector{Kind: "proxmox"}}, nil
+}
+func (fake *fakeConnectors) RemoveProxmox(_ context.Context, id string, _ proxmox.Credentials) (connectors.Removal, error) {
+	return connectors.Removal{ID: id, Kind: "proxmox"}, nil
+}
+
+func (fake *fakeConnectors) ReapproveProxmoxCertificate(context.Context, string, string) error {
+	return nil
 }

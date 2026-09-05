@@ -37,6 +37,7 @@ type EvidenceFact struct {
 type EvidenceSnapshot struct {
 	Origin            string
 	ConnectorID       string
+	LeaseOwner        string
 	ObservedAt        time.Time
 	CompleteConnector bool
 	ObservedScopes    []string
@@ -206,6 +207,14 @@ func (store *PostgresStore) ApplyEvidenceSnapshot(ctx context.Context, snapshot 
 		return fmt.Errorf("begin evidence cycle: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	if snapshot.LeaseOwner != "" {
+		var id string
+		if err := tx.QueryRow(ctx, `SELECT id::text FROM cairnops_connectors
+			WHERE id = $1::uuid AND lease_owner = $2 AND lease_until > now() AND status <> 'disabled'
+			FOR UPDATE`, snapshot.ConnectorID, snapshot.LeaseOwner).Scan(&id); err != nil {
+			return fmt.Errorf("connector observation lease is no longer valid: %w", err)
+		}
+	}
 
 	seen := make(map[string]struct{}, len(facts))
 	impacts := make(map[string]string)

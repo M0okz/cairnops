@@ -13,6 +13,7 @@ import (
 
 	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
+	"github.com/M0okz/cairnops/internal/connectors/proxmox"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/secretbox"
@@ -29,20 +30,21 @@ var (
 )
 
 type Connector struct {
-	ID                 string    `json:"id"`
-	Kind               string    `json:"kind"`
-	Name               string    `json:"name"`
-	Endpoint           string    `json:"endpoint"`
-	Status             string    `json:"status"`
-	RemoteVersion      string    `json:"remote_version"`
-	Compatibility      string    `json:"compatibility"`
-	EncryptedTransport bool      `json:"encrypted_transport"`
-	BindingCount       int       `json:"binding_count"`
-	QuarantineCount    int       `json:"quarantine_count"`
-	LastCheckedAt      time.Time `json:"last_checked_at"`
-	LastError          string    `json:"last_error,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	CredentialManagement string    `json:"credential_management,omitempty"`
+	ID                   string    `json:"id"`
+	Kind                 string    `json:"kind"`
+	Name                 string    `json:"name"`
+	Endpoint             string    `json:"endpoint"`
+	Status               string    `json:"status"`
+	RemoteVersion        string    `json:"remote_version"`
+	Compatibility        string    `json:"compatibility"`
+	EncryptedTransport   bool      `json:"encrypted_transport"`
+	BindingCount         int       `json:"binding_count"`
+	QuarantineCount      int       `json:"quarantine_count"`
+	LastCheckedAt        time.Time `json:"last_checked_at"`
+	LastError            string    `json:"last_error,omitempty"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 // Removal rend compte de ce qu'a emporté la suppression. Le décompte est celui
@@ -382,6 +384,7 @@ type Service struct {
 	uptimeKuma UptimeKumaClient
 	patchMon   PatchMonClient
 	argus      ArgusClient
+	proxmox    ProxmoxClient
 	secrets    *secretbox.Box
 	now        func() time.Time
 }
@@ -493,6 +496,12 @@ func (service *Service) PreviewExisting(ctx context.Context, connectorID string)
 			credentialManagement: credential.CredentialManagement,
 			managedCredentialID:  credential.ManagedCredentialID,
 		})
+	case "proxmox":
+		var credentials proxmox.Credentials
+		if err := json.Unmarshal(plaintext, &credentials); err != nil {
+			return nil, fmt.Errorf("decode Proxmox VE credential: %w", err)
+		}
+		return service.previewProxmox(ctx, proxmoxReceipt{ProxmoxPreviewInput: ProxmoxPreviewInput{Name: name, Address: credential.Endpoint, Mode: "provided", Credentials: credentials}, ExistingID: connectorID, ManagedUserID: credential.ManagedCredentialID})
 	case "argus":
 		var credentials argus.Credentials
 		if err := json.Unmarshal(plaintext, &credentials); err != nil {
@@ -534,6 +543,15 @@ func (service *Service) Delete(ctx context.Context, connectorID string) (Removal
 	connectorID = strings.TrimSpace(connectorID)
 	if connectorID == "" {
 		return Removal{}, fmt.Errorf("%w: connector identity is required", ErrInvalidInput)
+	}
+	if store, ok := service.store.(proxmoxStore); ok {
+		credential, err := store.RemovalCredential(ctx, connectorID)
+		if err != nil {
+			return Removal{}, err
+		}
+		if credential.Kind == "proxmox" && credential.CredentialManagement == "managed" {
+			return Removal{}, fmt.Errorf("%w: remove the managed Proxmox VE account through the remote cleanup action", ErrInvalidInput)
+		}
 	}
 	return service.store.Delete(ctx, connectorID)
 }

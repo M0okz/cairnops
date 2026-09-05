@@ -20,12 +20,15 @@
 
   let busy = $state(false);
   let error = $state('');
+  let tokenID = $state('');
+  let secret = $state('');
 
   const origins: Record<Connector['kind'], string> = {
     zabbix: 'Zabbix',
     uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon',
     argus: 'Argus',
+    proxmox: 'Proxmox VE',
     generic_webhook: t('suspension.webhookSender')
   };
 
@@ -37,7 +40,8 @@
     busy = true;
     error = '';
     try {
-      const removal = await api<ConnectorRemoval>(`/api/v1/connectors/${connector.id}`, { method: 'DELETE' });
+      const removal = connector.kind === 'proxmox' ? await api<ConnectorRemoval>(`/api/v1/connectors/${connector.id}/proxmox/remove`, { method: 'POST', body: JSON.stringify({ token_id: tokenID, secret }) }) : await api<ConnectorRemoval>(`/api/v1/connectors/${connector.id}`, { method: 'DELETE' });
+      secret = '';
       await onsuccess(removal);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : t('removal.failed');
@@ -84,6 +88,11 @@
         </section>
       </div>
 
+      {#if connector.kind === 'proxmox' && connector.credential_management === 'managed'}
+        <p>{t('proxmox.removalHint')}</p>
+        <div class="field"><label for="remove-pve-token">{t('proxmox.tokenID')}</label><input id="remove-pve-token" bind:value={tokenID} autocomplete="off" /></div>
+        <div class="field"><label for="remove-pve-secret">{t('proxmox.tokenSecret')}</label><input id="remove-pve-secret" type="password" bind:value={secret} autocomplete="off" /></div>
+      {/if}
       {#if error}<p class="error" role="alert">{error}</p>{/if}
     </div>
 
