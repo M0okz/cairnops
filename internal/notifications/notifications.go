@@ -166,6 +166,7 @@ type Delivery struct {
 	Presentation      string
 	TargetName        string
 	NatureKey         string
+	NatureScope       string
 	NatureLabel       string
 	Severity          incidents.Severity
 	ImpactCount       int
@@ -197,6 +198,7 @@ type Message struct {
 	IncidentID        string
 	TargetName        string
 	NatureKey         string
+	NatureScope       string
 	NatureLabel       string
 	Severity          incidents.Severity
 	ImpactCount       int
@@ -283,7 +285,8 @@ func (dispatcher *Dispatcher) deliver(ctx context.Context, delivery Delivery) er
 	return dispatcher.sender.Send(ctx, string(webhook), Message{
 		EventKind: delivery.EventKind, IncidentID: delivery.IncidentID,
 		TargetName: delivery.TargetName, NatureKey: delivery.NatureKey, NatureLabel: delivery.NatureLabel,
-		Severity: delivery.Severity, ImpactCount: delivery.ImpactCount,
+		NatureScope: delivery.NatureScope,
+		Severity:    delivery.Severity, ImpactCount: delivery.ImpactCount,
 		AffectedTargets: delivery.AffectedTargets, MaxAffected: delivery.MaxAffected,
 		PropagationStatus: delivery.PropagationStatus, Extended: delivery.Extended,
 		OpenedAt: delivery.OpenedAt, ResolvedAt: delivery.ResolvedAt, PublicURL: dispatcher.publicURL,

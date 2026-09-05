@@ -116,6 +116,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		WHERE delivery.incident_id = incident.id
 		  AND delivery.event_kind = 'firing'
 		  AND delivery.status IN ('pending', 'failed')
+		  AND (delivery.lease_until IS NULL OR delivery.lease_until < now())
 		  AND (
 		      incident.status = 'resolved' OR incident.acknowledged_at IS NOT NULL
 		      OR NOT EXISTS (
@@ -204,6 +205,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		FROM cairnops_incidents incident
 		WHERE delivery.incident_id = incident.id AND delivery.event_key = 'firing'
 		  AND delivery.status IN ('pending', 'failed')
+		  AND (delivery.lease_until IS NULL OR delivery.lease_until < now())
 	`, store.stabilityDelaySeconds()); err != nil {
 		return fmt.Errorf("refresh pending incident openings: %w", err)
 	}
@@ -215,17 +217,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		WITH revisions AS (
 		SELECT incident.id, incident.revision, opening.channel_id, channel.kind,
 		       incident.severity = ANY(channel.severities) AS routed_severity,
-		       CASE WHEN incident.status = 'resolved' OR NOT EXISTS (
-		           SELECT 1 FROM cairnops_incident_impacts impact
-		           WHERE impact.incident_id = incident.id AND impact.status = 'active'
-		             AND NOT EXISTS (
-		                 SELECT 1 FROM cairnops_maintenance_targets membership
-		                 JOIN cairnops_maintenances maintenance ON maintenance.id = membership.maintenance_id
-		                 WHERE membership.target_id = impact.target_id
-		                   AND maintenance.cancelled_at IS NULL
-		                   AND now() BETWEEN maintenance.starts_at AND maintenance.ends_at
-		             )
-		       ) THEN 'silent'
+		       CASE WHEN incident.status = 'resolved' OR NOT eligibility.notify THEN 'silent'
 		            WHEN cairnops_severity_rank(incident.severity) > coalesce((
 		                SELECT max(cairnops_severity_rank(previous.severity))
 		                FROM cairnops_notification_outbox previous
@@ -266,7 +258,19 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		JOIN cairnops_notification_channels channel
 		  ON channel.id = opening.channel_id
 		 AND channel.enabled AND channel.status <> 'disabled'
-		WHERE incident.revision > coalesce((
+		CROSS JOIN LATERAL (SELECT EXISTS (
+		           SELECT 1 FROM cairnops_incident_impacts impact
+		           WHERE impact.incident_id = incident.id AND impact.status = 'active'
+		             AND NOT EXISTS (
+		                 SELECT 1 FROM cairnops_maintenance_targets membership
+		                 JOIN cairnops_maintenances maintenance ON maintenance.id = membership.maintenance_id
+		                 WHERE membership.target_id = impact.target_id
+		                   AND maintenance.cancelled_at IS NULL
+		                   AND now() BETWEEN maintenance.starts_at AND maintenance.ends_at
+		             )
+		       ) AS notify) eligibility
+		WHERE (eligibility.notify OR incident.status = 'resolved' OR incident.active_impact_count = 0)
+		  AND incident.revision > coalesce((
 		    SELECT max(previous.incident_revision)
 		    FROM cairnops_notification_outbox previous
 		    WHERE previous.incident_id = incident.id
@@ -285,10 +289,10 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		       impact_count, affected_target_count, max_affected_targets, propagation_status, extended,
 		       coalesce((SELECT max(previous.next_attempt_at) FROM cairnops_notification_outbox previous
 		           WHERE previous.incident_id = revisions.id AND previous.channel_id = revisions.channel_id
-		             AND previous.event_kind = 'incident_update' AND previous.status = 'failed'), now()),
+		             AND previous.event_kind = 'incident_update' AND previous.status IN ('pending', 'failed') AND previous.attempts > 0), now()),
 		       coalesce((SELECT max(previous.attempts) FROM cairnops_notification_outbox previous
 		           WHERE previous.incident_id = revisions.id AND previous.channel_id = revisions.channel_id
-		             AND previous.event_kind = 'incident_update' AND previous.status = 'failed'), 0)
+		             AND previous.event_kind = 'incident_update' AND previous.status IN ('pending', 'failed') AND previous.attempts > 0), 0)
 		FROM revisions
 		WHERE kind = 'in_app' OR (presentation = 'alert' AND routed_severity)
 		ON CONFLICT DO NOTHING
@@ -304,6 +308,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		WHERE delivery.incident_id = incident.id
 		  AND delivery.event_kind = 'incident_update'
 		  AND delivery.status IN ('pending', 'failed')
+		  AND (delivery.lease_until IS NULL OR delivery.lease_until < now())
 		  AND delivery.incident_revision < incident.revision
 	`); err != nil {
 		return fmt.Errorf("replace stale incident updates: %w", err)
@@ -349,6 +354,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		FROM cairnops_notification_channels channel
 		WHERE delivery.channel_id = channel.id
 		  AND delivery.status IN ('pending', 'failed')
+		  AND (delivery.lease_until IS NULL OR delivery.lease_until < now())
 		  AND (NOT channel.enabled OR channel.status = 'disabled')
 	`); err != nil {
 		return fmt.Errorf("cancel disabled channel notifications: %w", err)
@@ -382,7 +388,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		)
 		SELECT claimed.id, claimed.incident_id::text, claimed.incident_revision,
 		       claimed.channel_id::text, channel.kind, claimed.event_kind,
-		       claimed.presentation, claimed.target_name, incident.nature_key, claimed.nature_label,
+		       claimed.presentation, claimed.target_name, incident.nature_key, incident.nature_scope, claimed.nature_label,
 		       claimed.severity, claimed.impact_count,
 		       claimed.affected_target_count, claimed.max_affected_targets,
 		       claimed.propagation_status, claimed.extended, claimed.opened_at,
@@ -392,7 +398,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 	`, strings.TrimSpace(workerID)).Scan(
 		&delivery.ID, &delivery.IncidentID, &delivery.IncidentRevision,
 		&delivery.ChannelID, &delivery.ChannelKind, &delivery.EventKind,
-		&delivery.Presentation, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureLabel,
+		&delivery.Presentation, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureScope, &delivery.NatureLabel,
 		&delivery.Severity, &delivery.ImpactCount, &delivery.AffectedTargets,
 		&delivery.MaxAffected, &delivery.PropagationStatus, &delivery.Extended,
 		&delivery.OpenedAt, &delivery.ResolvedAt, &delivery.CredentialSealed,
@@ -532,6 +538,65 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 	}
 
 	if affected > 0 {
+		// Le dispatcher Push peut attendre le relais après avoir loué une ligne.
+		// Verrouiller les anciennes révisions avant leur remplacement empêche
+		// une nouvelle Claim de passer entre ce contrôle et leur annulation.
+		// Une livraison en vol est laissée finir ; l'entrée intégrée sera
+		// reprise avec sa temporisation habituelle, sans perdre aucun état.
+		rows, err := tx.Query(ctx, `
+			SELECT outgoing.lease_until
+			FROM cairnops_push_outbox outgoing
+			JOIN cairnops_notification_inbox inbox ON inbox.id = outgoing.inbox_id
+			WHERE inbox.incident_id = $1::uuid AND outgoing.revision < $2
+			  AND outgoing.status IN ('pending', 'failed')
+			ORDER BY outgoing.id FOR UPDATE OF outgoing
+		`, delivery.IncidentID, delivery.IncidentRevision)
+		if err != nil {
+			return 0, fmt.Errorf("lock previous incident pushes: %w", err)
+		}
+		inFlight := false
+		for rows.Next() {
+			var leaseUntil *time.Time
+			if err := rows.Scan(&leaseUntil); err != nil {
+				rows.Close()
+				return 0, err
+			}
+			inFlight = inFlight || (leaseUntil != nil && leaseUntil.After(time.Now()))
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return 0, fmt.Errorf("read incident push leases: %w", err)
+		}
+		if inFlight {
+			return 0, fmt.Errorf("une livraison Push est en cours ; révision différée")
+		}
+
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO cairnops_push_outbox (device_id, inbox_id, revision, presentation, next_attempt_at, attempts)
+			SELECT device.id, inbox.id, $2,
+			       CASE WHEN inbox.event_kind = 'resolved' THEN 'silent'
+			            WHEN $3 = 'alert' OR pending.alert THEN 'alert' ELSE 'silent' END,
+			       coalesce(pending.next_attempt_at, now()), coalesce(pending.attempts, 0)
+			FROM cairnops_notification_inbox inbox
+			JOIN cairnops_devices device ON device.user_id = inbox.user_id
+			JOIN cairnops_users users ON users.id = device.user_id
+			LEFT JOIN LATERAL (
+			    SELECT bool_or(previous.presentation = 'alert') AS alert,
+			           max(previous.next_attempt_at) FILTER (WHERE previous.attempts > 0) AS next_attempt_at,
+			           max(previous.attempts) AS attempts
+			    FROM cairnops_push_outbox previous
+			    WHERE previous.device_id = device.id AND previous.inbox_id = inbox.id
+			      AND previous.status IN ('pending', 'failed') AND previous.revision < $2
+			) pending ON true
+			WHERE inbox.incident_id = $1::uuid
+			  AND device.revoked_at IS NULL AND device.push_disabled_at IS NULL
+			  AND device.push_recipient_sealed IS NOT NULL
+			  AND users.deactivated_at IS NULL AND users.external_suspended_at IS NULL
+			ON CONFLICT (device_id, inbox_id, revision) DO NOTHING
+		`, delivery.IncidentID, delivery.IncidentRevision, presentation); err != nil {
+			return 0, fmt.Errorf("schedule incident push: %w", err)
+		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE cairnops_push_outbox outgoing
 			SET status = 'cancelled', last_error = 'révision d’Incident remplacée',
@@ -541,20 +606,6 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 			  AND outgoing.status IN ('pending', 'failed') AND outgoing.revision < $2
 		`, delivery.IncidentID, delivery.IncidentRevision); err != nil {
 			return 0, fmt.Errorf("replace stale incident pushes: %w", err)
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO cairnops_push_outbox (device_id, inbox_id, revision, presentation)
-			SELECT device.id, inbox.id, $2, $3
-			FROM cairnops_notification_inbox inbox
-			JOIN cairnops_devices device ON device.user_id = inbox.user_id
-			JOIN cairnops_users users ON users.id = device.user_id
-			WHERE inbox.incident_id = $1::uuid
-			  AND device.revoked_at IS NULL AND device.push_disabled_at IS NULL
-			  AND device.push_recipient_sealed IS NOT NULL
-			  AND users.deactivated_at IS NULL AND users.external_suspended_at IS NULL
-			ON CONFLICT (device_id, inbox_id, revision) DO NOTHING
-		`, delivery.IncidentID, delivery.IncidentRevision, presentation); err != nil {
-			return 0, fmt.Errorf("schedule incident push: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
 			SELECT cairnops_append_event('notification.changed', 'notification', $1)

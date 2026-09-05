@@ -67,6 +67,7 @@ func presentationFor(delivery Delivery) Presentation {
 	default:
 		text := synthesis.Render(synthesis.Situation{
 			NatureKey: delivery.NatureKey, NatureLabel: delivery.NatureLabel,
+			NatureScope: delivery.NatureScope, Severity: delivery.Severity,
 			TargetName: delivery.TargetName, AffectedTargets: delivery.AffectedTargets,
 			MaxAffected: delivery.MaxAffected, Resolved: delivery.EventKind == "resolved",
 		}, delivery.Locale)

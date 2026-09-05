@@ -30,7 +30,9 @@ func NatureLabel(key, locale string) (string, bool) {
 // Une seule Preuve suffit ; aucun quorum ni enrichissement n'est requis.
 type Situation struct {
 	NatureKey       string
+	NatureScope     string
 	NatureLabel     string
+	Severity        string
 	TargetName      string
 	AffectedTargets int
 	MaxAffected     int
@@ -54,6 +56,7 @@ func Localize(s Situation) Localized {
 func Render(s Situation, locale string) Text {
 	english := locale == "en"
 	title, known := NatureLabel(s.NatureKey, locale)
+	known = known && s.NatureScope == "canonical"
 	if !known {
 		// Le libellé source est attribué comme signalement, sans devenir une
 		// conclusion canonique ni une identité de regroupement.
@@ -109,8 +112,23 @@ func Render(s Situation, locale string) Text {
 				body = "Recovery confirmed"
 			}
 		}
+	} else if severity, ok := severityLabel(s.Severity, english); ok {
+		body = fmt.Sprintf("%s · %s", body, severity)
 	}
 	return Text{Title: title, Body: body}
+}
+
+func severityLabel(severity string, english bool) (string, bool) {
+	labels, ok := map[string][2]string{
+		"information": {"information", "information"},
+		"warning":     {"avertissement", "warning"},
+		"major":       {"gravité majeure", "major severity"},
+		"critical":    {"gravité critique", "critical severity"},
+	}[severity]
+	if english {
+		return labels[1], ok
+	}
+	return labels[0], ok
 }
 
 func oneLine(value string, limit int) string {

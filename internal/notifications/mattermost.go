@@ -34,13 +34,14 @@ func (client *MattermostClient) Test(ctx context.Context, webhookURL string) err
 
 func (client *MattermostClient) Send(ctx context.Context, webhookURL string, message Message) error {
 	resolved := message.EventKind == "resolved" || message.ResolvedAt != nil
-	color, label, icon := severityPresentation(string(message.Severity))
+	color, _, icon := severityPresentation(string(message.Severity))
 	summary := synthesis.Render(synthesis.Situation{
 		NatureKey: message.NatureKey, NatureLabel: message.NatureLabel,
+		NatureScope: message.NatureScope, Severity: string(message.Severity),
 		TargetName: message.TargetName, AffectedTargets: message.AffectedTargets,
 		MaxAffected: message.MaxAffected, Resolved: resolved,
 	}, "fr")
-	title := fmt.Sprintf("%s [%s] %s", icon, label, summary.Title)
+	title := fmt.Sprintf("%s %s", icon, summary.Title)
 	if resolved {
 		color, title = "#39d98a", fmt.Sprintf("✅ %s", summary.Title)
 	}

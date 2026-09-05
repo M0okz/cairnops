@@ -132,7 +132,7 @@ components:
         Une notification reçue par la personne connectée. Elle appartient à un
         compte : cette API ne rend jamais la boîte de quelqu'un d'autre.
       type: object
-      required: [id, incident_id, revision, event_kind, target_name, nature_key, nature_label, severity, impact_count, affected_target_count, max_affected_targets, propagation_status, extended, occurred_at, read_at, summary]
+      required: [id, incident_id, revision, event_kind, target_name, nature_key, nature_scope, nature_label, severity, impact_count, affected_target_count, max_affected_targets, propagation_status, extended, occurred_at, read_at, summary]
       properties:
         summary: { $ref: '#/components/schemas/IncidentSummary' }
         id: { type: integer, format: int64 }
@@ -142,6 +142,7 @@ components:
         event_kind: { type: string, enum: [firing, resolved] }
         target_name: { type: string }
         nature_key: { type: string }
+        nature_scope: { type: string, enum: [canonical, connector] }
         nature_label: { type: string }
         severity: { type: string, enum: [information, warning, major, critical] }
         impact_count: { type: integer, minimum: 0 }

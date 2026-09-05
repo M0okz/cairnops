@@ -8,6 +8,7 @@ import (
 
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/notifications"
+	"github.com/M0okz/cairnops/internal/push"
 	"github.com/M0okz/cairnops/internal/testsupport"
 	"golang.org/x/crypto/curve25519"
 )
@@ -56,6 +57,93 @@ func TestIntegratedDeliverySchedulesOnePushPerActiveDevice(t *testing.T) {
 	}
 	if pushes != 1 {
 		t.Fatalf("expected one per-device push, got %d", pushes)
+	}
+}
+
+func TestSilentRevisionsPreserveAnUndeliveredPushAndItsBackoff(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	user := seedAccount(t, pool, "operator")
+	_, id := seedActiveIncident(t, pool, "major")
+	if _, err := pool.Exec(ctx, `INSERT INTO cairnops_devices (user_id,name,platform,encryption_public_key,push_recipient_sealed,token_digest)
+		VALUES ($1::uuid,'Test phone','ios',$2,'sealed-recipient-with-sufficient-length',$3)`, user, curve25519.Basepoint, make([]byte, 32)); err != nil {
+		t.Fatal(err)
+	}
+	store := immediateNotificationStore(pool)
+	pushes := push.NewPostgresStore(pool)
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	claimAndDeliver(t, ctx, store, "firing", "alert")
+	first, err := pushes.Claim(ctx, "push-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pushes.Fail(ctx, first.ID, "push-test", "relay unavailable"); err != nil {
+		t.Fatal(err)
+	}
+	var before time.Time
+	if err := pool.QueryRow(ctx, `SELECT next_attempt_at FROM cairnops_push_outbox WHERE id=$1`, first.ID).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if _, err := pool.Exec(ctx, `UPDATE cairnops_incidents SET revision=revision+1 WHERE id=$1::uuid`, id); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.Schedule(ctx); err != nil {
+			t.Fatal(err)
+		}
+		claimAndDeliver(t, ctx, store, "incident_update", "silent")
+		var presentation string
+		var after time.Time
+		var attempts int
+		if err := pool.QueryRow(ctx, `SELECT presentation,next_attempt_at,attempts FROM cairnops_push_outbox WHERE status IN ('pending','failed')`).Scan(&presentation, &after, &attempts); err != nil {
+			t.Fatal(err)
+		}
+		if presentation != "alert" || !after.Equal(before) || attempts != 1 {
+			t.Fatalf("lost push intent or backoff: %s %s %d", presentation, after, attempts)
+		}
+	}
+}
+
+func TestInFlightPushFinishesBeforeItsSilentReplacement(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	user := seedAccount(t, pool, "operator")
+	seedActiveIncident(t, pool, "major")
+	if _, err := pool.Exec(ctx, `INSERT INTO cairnops_devices (user_id,name,platform,encryption_public_key,push_recipient_sealed,token_digest)
+		VALUES ($1::uuid,'Test phone','ios',$2,'sealed-recipient-with-sufficient-length',$3)`, user, curve25519.Basepoint, make([]byte, 32)); err != nil {
+		t.Fatal(err)
+	}
+	store := immediateNotificationStore(pool)
+	pushes := push.NewPostgresStore(pool)
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	opening := claimAndDeliver(t, ctx, store, "firing", "alert")
+	first, err := pushes.Claim(ctx, "push-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	update := opening
+	update.IncidentRevision++
+	update.EventKind = "incident_update"
+	update.Presentation = "silent"
+	if _, err := store.Deliver(ctx, update); err == nil {
+		t.Fatal("replaced a push still being sent")
+	}
+	if err := pushes.Complete(ctx, first.ID, "push-test"); err != nil {
+		t.Fatalf("in-flight lease was destroyed: %v", err)
+	}
+	if _, err := store.Deliver(ctx, update); err != nil {
+		t.Fatal(err)
+	}
+	next, err := pushes.Claim(ctx, "push-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.PresentationMode != "silent" {
+		t.Fatalf("already delivered alert was repeated: %#v", next)
 	}
 }
 

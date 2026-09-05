@@ -28,7 +28,7 @@ func storageLatencyCondition(trigger remoteTrigger) bool {
 	// Les versions qui rendent des identifiants de fonctions sont traduites
 	// uniquement avec les items et fonctions effectivement décrits par l'API.
 	for _, function := range trigger.Functions {
-		if function.FunctionID == "" || function.Function != "min" || function.Parameter != "15m" {
+		if function.FunctionID == "" || function.Function != "min" || (function.Parameter != "15m" && function.Parameter != "$,15m") {
 			continue
 		}
 		for _, item := range trigger.Items {

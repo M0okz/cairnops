@@ -88,7 +88,7 @@ func TestZabbixAndKumaShareAnIncidentWithoutRequiringConsensus(t *testing.T) {
 	if item.Status != "active" || item.AffectedTargetCount != 2 {
 		t.Fatalf("partial recovery erased another source's evidence: %#v", item)
 	}
-	if item.Summary.FR.Body != "2 Cibles concernées" {
+	if item.Summary.FR.Body != "2 Cibles concernées · gravité majeure" {
 		t.Fatalf("wrong common summary: %#v", item.Summary)
 	}
 }

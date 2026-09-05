@@ -117,7 +117,7 @@ func TestDiskBurstProducesOneOpeningForFifteenTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(inbox.Entries) != 1 || inbox.Entries[0].Summary.FR.Body != "15 Cibles concernées" {
+	if len(inbox.Entries) != 1 || inbox.Entries[0].Summary.FR.Body != "15 Cibles concernées · gravité majeure" {
 		t.Fatalf("unexpected inbox: %#v", inbox)
 	}
 }
@@ -148,18 +148,20 @@ func TestIncidentUpdateRetainsBackoffAcrossRevisions(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT next_attempt_at FROM cairnops_notification_outbox WHERE id=$1`, delivery.ID).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE cairnops_incidents SET revision=revision+1 WHERE id=$1::uuid`, id); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Schedule(ctx); err != nil {
-		t.Fatal(err)
-	}
-	var attempts int
-	if err := pool.QueryRow(ctx, `SELECT next_attempt_at, attempts FROM cairnops_notification_outbox WHERE incident_id=$1::uuid AND status IN ('pending','failed')`, id).Scan(&after, &attempts); err != nil {
-		t.Fatal(err)
-	}
-	if !before.Equal(after) || attempts != 1 {
-		t.Fatalf("revision reset retry: %s -> %s, attempts %d", before, after, attempts)
+	for range 3 {
+		if _, err := pool.Exec(ctx, `UPDATE cairnops_incidents SET revision=revision+1 WHERE id=$1::uuid`, id); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.Schedule(ctx); err != nil {
+			t.Fatal(err)
+		}
+		var attempts int
+		if err := pool.QueryRow(ctx, `SELECT next_attempt_at, attempts FROM cairnops_notification_outbox WHERE incident_id=$1::uuid AND status IN ('pending','failed')`, id).Scan(&after, &attempts); err != nil {
+			t.Fatal(err)
+		}
+		if !before.Equal(after) || attempts != 1 {
+			t.Fatalf("revision reset retry: %s -> %s, attempts %d", before, after, attempts)
+		}
 	}
 }
 
@@ -234,4 +236,39 @@ func TestMattermostOnlyInterruptsForNewOperationalFacts(t *testing.T) {
 			t.Fatalf("ordinary revision interrupted Mattermost: %#v, %v", delivery, err)
 		}
 	}
+}
+
+func TestWorseningDuringMaintenanceIsNotConsumedBeforeExpiry(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	store := immediateNotificationStore(pool)
+	target, id := seedActiveIncident(t, pool, "major")
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	claimAndDeliver(t, ctx, store, "firing", "alert")
+	var maintenance string
+	if err := pool.QueryRow(ctx, `INSERT INTO cairnops_maintenances (name,reason,starts_at,ends_at)
+		VALUES ('Test maintenance','Maintenance test fixture',now()-interval '1 minute',now()+interval '1 hour') RETURNING id::text`).Scan(&maintenance); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO cairnops_maintenance_targets (maintenance_id,target_id) VALUES ($1::uuid,$2::uuid)`, maintenance, target); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE cairnops_incidents SET severity='critical',revision=revision+1 WHERE id=$1::uuid`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Claim(ctx, "incident-cycle-worker"); err != notifications.ErrNoDelivery {
+		t.Fatalf("maintenance consumed the worsening: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE cairnops_maintenances SET ends_at=now()-interval '1 second' WHERE id=$1::uuid`, maintenance); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	claimAndDeliver(t, ctx, store, "incident_update", "alert")
 }

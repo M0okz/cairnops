@@ -26,6 +26,7 @@ type Delivery struct {
 	PresentationMode    string
 	TargetName          string
 	NatureKey           string
+	NatureScope         string
 	NatureLabel         string
 	Severity            string
 	ImpactCount         int
@@ -78,7 +79,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		       device.notification_content, inbox.event_kind,
 		       inbox.incident_id::text,
 		       claimed.revision, claimed.presentation,
-		       inbox.target_name, incident.nature_key, inbox.nature_label, inbox.severity,
+		       inbox.target_name, incident.nature_key, incident.nature_scope, inbox.nature_label, inbox.severity,
 		       inbox.impact_count, inbox.affected_target_count,
 		       inbox.max_affected_targets, inbox.propagation_status,
 		       inbox.extended, inbox.occurred_at
@@ -91,7 +92,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		&delivery.EncryptionPublicKey, &delivery.Locale,
 		&delivery.NotificationContent, &delivery.EventKind,
 		&delivery.IncidentID, &delivery.Revision,
-		&delivery.PresentationMode, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureLabel,
+		&delivery.PresentationMode, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureScope, &delivery.NatureLabel,
 		&delivery.Severity, &delivery.ImpactCount, &delivery.AffectedTargets,
 		&delivery.MaxAffected, &delivery.PropagationStatus, &delivery.Extended,
 		&delivery.OccurredAt,

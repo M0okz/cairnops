@@ -10,8 +10,9 @@ pas les notifications. Une seule Source peut ouvrir un Incident. Un manque
 d'enrichissement ne bloque jamais l'ouverture ni le signalement.
 
 Le module `internal/synthesis` rend les mêmes faits pour la boîte intégrée,
-le détail Web, le Push et Mattermost : Nature constatée et Cibles distinctes
-concernées. Le détail conserve le libellé original et les Preuves par Atteinte.
+le détail Web, le Push et Mattermost : Nature constatée, Cibles distinctes
+concernées et Gravité. Une aggravation change donc aussi le texte visible.
+Le détail conserve le libellé original et les Preuves par Atteinte.
 Les messages ne contiennent ni rapport périodique, ni conseil, ni cause supposée.
 La Résolution indique le nombre maximal de Cibles concernées ; un simple
 passage à zéro pendant la Propagation ne dit pas que l'Incident est résolu.
@@ -45,7 +46,13 @@ Résolution vers le Canal qui a reçu l'ouverture. Aucun rappel automatique
 n'est ajouté.
 
 Les reprises de livraison gardent leur temporisation exponentielle, y compris
-lorsqu'une révision remplace un message en échec. Une ouverture annulée lors
+lorsque plusieurs révisions remplacent successivement un message en échec.
+Une révision silencieuse conserve l'intention interruptive d'un Push encore
+non livré, sauf si l'Incident s'est résolu. Un Push en cours de transmission
+termine avant son remplacement. Une aggravation survenue entièrement Sous
+maintenance reste à notifier à sa sortie si elle demeure active ; le détail
+Web continue d'en montrer les Preuves pendant la maintenance.
+Une ouverture annulée lors
 d'un passage transitoire sans Atteinte ou d'une maintenance peut redevenir
 éligible si le même Incident redevient actif et non acquitté.
 

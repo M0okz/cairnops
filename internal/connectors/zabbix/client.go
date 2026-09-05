@@ -516,7 +516,7 @@ func (client *Client) triggerObjects(ctx context.Context, endpoint, token, metho
 		"triggerids":          triggerIDs,
 		"selectDiscoveryData": []string{"parent_triggerid"},
 		"selectItems":         []string{"itemid", "key_"},
-		"selectFunctions":     []string{"itemid", "function", "parameter"},
+		"selectFunctions":     []string{"functionid", "itemid", "function", "parameter"},
 		"selectTags":          []string{"tag", "value"},
 	}
 	if hosts {
@@ -724,12 +724,22 @@ func triggerCanonicalNature(triggerID string, known map[string]remoteTrigger, de
 	if !exists {
 		return ""
 	}
+	canonical := ""
 	visited := make(map[string]struct{})
 	for {
 		if _, loop := visited[root.TriggerID]; loop {
 			return ""
 		}
 		visited[root.TriggerID] = struct{}{}
+		for _, tag := range root.Tags {
+			if strings.EqualFold(strings.TrimSpace(tag.Tag), "cairnops.nature") {
+				key := strings.ToLower(strings.TrimSpace(tag.Value))
+				if _, known := synthesis.NatureLabel(key, "fr"); !known || (canonical != "" && canonical != key) {
+					return ""
+				}
+				canonical = key
+			}
+		}
 		parentID := discoveryParent(root.DiscoveryData)
 		if parentID == "" || parentID == "0" {
 			parentID = strings.TrimSpace(root.TemplateID)
@@ -740,16 +750,7 @@ func triggerCanonicalNature(triggerID string, known map[string]remoteTrigger, de
 		}
 		root = parent
 	}
-	canonical := ""
-	for _, tag := range root.Tags {
-		if strings.EqualFold(strings.TrimSpace(tag.Tag), "cairnops.nature") {
-			key := strings.ToLower(strings.TrimSpace(tag.Value))
-			if _, known := synthesis.NatureLabel(key, "fr"); !known || (canonical != "" && canonical != key) {
-				return ""
-			}
-			canonical = key
-		}
-	}
+
 	if canonical != "" {
 		return canonical
 	}

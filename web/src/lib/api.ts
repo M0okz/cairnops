@@ -834,6 +834,7 @@ export type InboxEntry = {
   event_kind: 'firing' | 'resolved';
   target_name: string;
   nature_key: string;
+  nature_scope: 'canonical' | 'connector';
   nature_label: string;
   severity: IncidentSeverity;
   impact_count: number;

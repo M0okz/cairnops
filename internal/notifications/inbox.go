@@ -25,6 +25,7 @@ type InboxEntry struct {
 	EventKind           string              `json:"event_kind"`
 	TargetName          string              `json:"target_name"`
 	NatureKey           string              `json:"nature_key"`
+	NatureScope         string              `json:"nature_scope"`
 	NatureLabel         string              `json:"nature_label"`
 	Severity            incidents.Severity  `json:"severity"`
 	ImpactCount         int                 `json:"impact_count"`
@@ -54,7 +55,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 	rows, err := store.pool.Query(ctx, `
 		SELECT inbox.id, inbox.incident_id::text,
 		       inbox.revision, coalesce(inbox.target_id::text, ''),
-		       inbox.event_kind, inbox.target_name, incident.nature_key,
+		       inbox.event_kind, inbox.target_name, incident.nature_key, incident.nature_scope,
 		       inbox.nature_label, inbox.severity, inbox.impact_count,
 		       inbox.affected_target_count, inbox.max_affected_targets,
 		       inbox.propagation_status, inbox.extended,
@@ -76,7 +77,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		if err := rows.Scan(
 			&entry.ID, &entry.IncidentID, &entry.Revision,
 			&entry.TargetID, &entry.EventKind,
-			&entry.TargetName, &entry.NatureKey, &entry.NatureLabel, &entry.Severity,
+			&entry.TargetName, &entry.NatureKey, &entry.NatureScope, &entry.NatureLabel, &entry.Severity,
 			&entry.ImpactCount, &entry.AffectedTargetCount,
 			&entry.MaxAffectedTargets, &entry.PropagationStatus, &entry.Extended,
 			&entry.OccurredAt, &entry.ReadAt,
@@ -85,6 +86,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		}
 		entry.Summary = synthesis.Localize(synthesis.Situation{
 			NatureKey: entry.NatureKey, NatureLabel: entry.NatureLabel, TargetName: entry.TargetName,
+			NatureScope: entry.NatureScope, Severity: string(entry.Severity),
 			AffectedTargets: entry.AffectedTargetCount, MaxAffected: entry.MaxAffectedTargets,
 			Resolved: entry.EventKind == "resolved",
 		})

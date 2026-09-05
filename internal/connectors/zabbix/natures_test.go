@@ -1,7 +1,10 @@
 package zabbix
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -22,13 +25,70 @@ func TestOfficialStorageLatencyRequiresItsUnmodifiedCondition(t *testing.T) {
 	}
 }
 
+func TestRuntimeProblemsRequestFunctionIdentities(t *testing.T) {
+	client := NewClientWithHTTP(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var request struct {
+			Method string                     `json:"method"`
+			Params map[string]json.RawMessage `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		result := `[{"eventid":"9","objectid":"2","clock":"1786700000","name":"Disk slow","severity":"3"}]`
+		if request.Method == "trigger.get" {
+			var fields []string
+			if err := json.Unmarshal(request.Params["selectFunctions"], &fields); err != nil {
+				t.Fatal(err)
+			}
+			hasID := false
+			for _, field := range fields {
+				hasID = hasID || field == "functionid"
+			}
+			if !hasID {
+				t.Fatal("runtime did not request the function identities needed to translate the rule")
+			}
+			result = `[{"triggerid":"2","uuid":"eb6230f786d04b658ce62c30a9309a34","hosts":[{"hostid":"1"}],
+			"expression":"{1}>{$VFS.DEV.READ.AWAIT.WARN:\"{#DEVNAME}\"} or {2}>{$VFS.DEV.WRITE.AWAIT.WARN:\"{#DEVNAME}\"}",
+			"items":[{"itemid":"11","key_":"vfs.dev.read.await[{#DEVNAME}]"},{"itemid":"12","key_":"vfs.dev.write.await[{#DEVNAME}]"}],
+			"functions":[{"functionid":"1","itemid":"11","function":"min","parameter":"$,15m"},{"functionid":"2","itemid":"12","function":"min","parameter":"$,15m"}]}]`
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":` + result + `,"id":1}`))}, nil
+	})})
+	problems, err := client.Problems(context.Background(), "https://zabbix.example.test", "test-token", []string{"1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(problems) != 1 || problems[0].CanonicalNature != "storage.latency" {
+		t.Fatalf("runtime failed to normalize the official condition: %#v", problems)
+	}
+}
+
+func TestCanonicalTagIsReadOnIntermediateTriggersAndRejectsConflicts(t *testing.T) {
+	var child remoteTrigger
+	if err := json.Unmarshal([]byte(`{"triggerid":"child","templateid":"root","tags":[{"tag":"cairnops.nature","value":"storage.latency"}]}`), &child); err != nil {
+		t.Fatal(err)
+	}
+	root := remoteTrigger{TriggerID: "root"}
+	known := map[string]remoteTrigger{"child": child, "root": root}
+	if got := triggerCanonicalNature("child", known, true); got != "storage.latency" {
+		t.Fatalf("child declaration ignored: %q", got)
+	}
+	if err := json.Unmarshal([]byte(`{"triggerid":"root","tags":[{"tag":"cairnops.nature","value":"availability"}]}`), &root); err != nil {
+		t.Fatal(err)
+	}
+	known["root"] = root
+	if got := triggerCanonicalNature("child", known, true); got != "" {
+		t.Fatalf("conflicting meanings were accepted: %q", got)
+	}
+}
+
 func TestStorageLatencyAcceptsAPIIdentityExpressions(t *testing.T) {
 	var trigger remoteTrigger
 	if err := json.Unmarshal([]byte(`{
 		"uuid":"eb6230f786d04b658ce62c30a9309a34",
 		"expression":"{1}>{$VFS.DEV.READ.AWAIT.WARN:\"{#DEVNAME}\"} or {2}>{$VFS.DEV.WRITE.AWAIT.WARN:\"{#DEVNAME}\"}",
 		"items":[{"itemid":"11","key_":"vfs.dev.read.await[{#DEVNAME}]"},{"itemid":"12","key_":"vfs.dev.write.await[{#DEVNAME}]"}],
-		"functions":[{"functionid":"1","itemid":"11","function":"min","parameter":"15m"},{"functionid":"2","itemid":"12","function":"min","parameter":"15m"}]
+		"functions":[{"functionid":"1","itemid":"11","function":"min","parameter":"$,15m"},{"functionid":"2","itemid":"12","function":"min","parameter":"$,15m"}]
 	}`), &trigger); err != nil {
 		t.Fatal(err)
 	}
