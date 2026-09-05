@@ -24,7 +24,9 @@ Fond graphite/pierre et accent cuivre conservés. Icônes de CairnOps réutilis�
 
 Thèmes Clair, Sombre, Système et Solaire. Aucun emplacement déduit du seul fuseau horaire : choix explicite d’une ville. Calcul SunCalc local, heures affichées dans le fuseau de l’appareil, prise en compte des jours et nuits polaires, suivi des changements système et du retour au premier plan. Préférences gardées seulement en mémoire dans cette maquette.
 
-## Vidéo
+## Vidéo pour le site de présentation
+
+Le film est destiné au futur site de présentation de la solution. Son aperçu possède une entrée indépendante (`film.html`) ; aucun bouton ni lecteur vidéo ne figure dans l’interface CairnOps.
 
 Premier film de direction : format 16:9, textes français, sans voix off. Marque → situation opérationnelle → courbe et preuves → Acquittement → clair/sombre → composants Svelte et vérifications → marque. L’utilisateur a choisi une présentation avec les coulisses du développement. Les données et le produit filmé sont ceux du prototype. L’export de présentation définitif doit être refait avec l’interface intégrée et validée.
 
@@ -35,7 +37,7 @@ Premier film de direction : format 16:9, textes français, sans voix off. Marque
 3. Intégrer la coque, les thèmes, les graphiques et le détail avec les données réelles, en conservant les contrats et la sémantique métier.
 4. Vérifier les états vides, erreurs, données périmées, clavier, mouvements réduits et petits écrans, en clair/sombre.
 5. Exécuter les validations du dépôt, intégrer et observer le déploiement ; vérifier l’interface dans le navigateur externe connecté.
-6. Produire le film de présentation définitif à partir du produit vérifié.
+6. Produire le film définitif pour le site de présentation à partir du produit vérifié.
 
 Références : https://shadcn-svelte.com/examples/dashboard ; https://github.com/mourner/suncalc ; docs/DESIGN-DIRECTION.md ; ADR 0012 et 0035 (indicateurs).
 
@@ -45,6 +47,6 @@ Première phase de la refonte, sur `codex/dashboard-design`. La composition rest
 
 Vérifications : trois compositions en clair/sombre ; largeurs 320, 390, 768, 1024 et 1440 px ; graphique au clavier ; filtre, recherche, vide, pagination ; détail et retour du focus ; Acquittement sans Résolution ; changement système en direct ; solaire jour/nuit et jours/nuits polaires. Compilation Svelte sans erreur ni avertissement. Les contrôles web et Go du dépôt ont aussi été exécutés.
 
-Le film dure 42,5 secondes : MP4 H.264, 1920 × 1080, 30 images/s, sans piste audio. `render-film.py` expose `--preview` pour les sept plans fixes. Les scripts Python nécessitent Playwright ; FFmpeg doit être disponible pour l’export. `CAIRNOPS_DESIGN_OUTPUT` permet de choisir le dossier de sortie. L’aperçu animé est accessible par `?film=1` et respecte la préférence de réduction des mouvements en attendant une lecture explicite.
+Le film dure 42,5 secondes : MP4 H.264, 1920 × 1080, 30 images/s, sans piste audio. `render-film.py` expose `--preview` pour les sept plans fixes. Les scripts Python nécessitent Playwright ; FFmpeg doit être disponible pour l’export. `CAIRNOPS_DESIGN_OUTPUT` permet de choisir le dossier de sortie. L’aperçu animé séparé est accessible par `/film.html` et respecte la préférence de réduction des mouvements en attendant une lecture explicite.
 
 Les sources de la maquette, les captures et le MP4 sont conservés comme éléments de travail. La prochaine phase porte sur les jetons communs, les écrans réels et les parcours complets. La branche reste active tant que cette intégration n’est pas terminée.

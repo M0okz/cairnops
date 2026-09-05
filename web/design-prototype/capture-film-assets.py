@@ -10,7 +10,7 @@ with sync_playwright() as p:
     for theme in ['light','dark']:
         page.goto(f'http://127.0.0.1:5186/?variant=A&theme={theme}')
         page.wait_for_load_state('networkidle')
-        page.add_style_tag(content='.p-prototype-bar,.p-demo-label,.p-page-actions{visibility:hidden!important}')
+        page.add_style_tag(content='.p-prototype-bar,.p-demo-label,.p-date{visibility:hidden!important}')
         page.screenshot(path=str(out/f'overview-{theme}.png'))
     page.locator('.p-incident-title').filter(has_text='API publique').click()
     page.get_by_role('dialog').screenshot(path=str(out/'incident.png'))

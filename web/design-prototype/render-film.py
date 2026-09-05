@@ -16,7 +16,7 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={'width':1920,'height':1080},device_scale_factor=1)
     errors=[]
     page.on('pageerror',lambda e:errors.append(str(e)))
-    page.goto('http://127.0.0.1:5186/?film=1&capture=1')
+    page.goto('http://127.0.0.1:5186/film.html?capture=1')
     page.wait_for_load_state('networkidle')
     page.evaluate('document.fonts.ready')
     page.wait_for_function("typeof window.__setFilmTime === 'function'")
