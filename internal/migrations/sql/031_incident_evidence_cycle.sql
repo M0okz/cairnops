@@ -375,6 +375,12 @@ CREATE INDEX cairnops_push_outbox_due_idx
     ON cairnops_push_outbox (next_attempt_at, id)
     WHERE status IN ('pending', 'failed');
 
+-- Les événements temps réel sont éphémères. Les lignes de l'ancien module
+-- Rafale doivent disparaître avant de resserrer les contraintes, y compris sur
+-- une instance déjà utilisée où elles peuvent encore être présentes.
+DELETE FROM cairnops_events
+WHERE kind = 'burst.changed' OR entity_type = 'burst';
+
 ALTER TABLE cairnops_events DROP CONSTRAINT cairnops_events_kind_check;
 ALTER TABLE cairnops_events ADD CONSTRAINT cairnops_events_kind_check CHECK (kind IN (
     'target.changed', 'source.changed', 'observation.created', 'component.heartbeat',
