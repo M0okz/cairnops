@@ -419,3 +419,65 @@ func TestPostgresInAppChannelIsUnique(t *testing.T) {
 		t.Fatal("un second Canal intégré a été accepté")
 	}
 }
+
+func TestPostgresInboxSummaryReadsLegacySingleTargetResolutions(t *testing.T) {
+	for _, scenario := range []struct{ legacy, multipleTargets bool }{{true, false}, {false, false}, {true, true}} {
+		t.Run(fmt.Sprintf("legacy=%t/multipleTargets=%t", scenario.legacy, scenario.multipleTargets), func(t *testing.T) {
+			ctx := context.Background()
+			pool := testsupport.Pool(t)
+			store := immediateNotificationStore(pool)
+			userID := seedAccount(t, pool, "operator")
+			targetID, incidentID := seedActiveIncident(t, pool, "major")
+			resolveSeedIncident(t, pool, incidentID)
+			if _, err := pool.Exec(ctx, `UPDATE cairnops_targets SET name = 'NAS' WHERE id = $1::uuid`, targetID); err != nil {
+				t.Fatal(err)
+			}
+			storedName, expectedFR, expectedEN := "NAS at delivery", "NAS at delivery", "NAS at delivery"
+			impactCount := 1
+			if scenario.legacy {
+				storedName, expectedFR, expectedEN = "1 Cibles affectées au maximum", "NAS", "NAS"
+			}
+			if scenario.multipleTargets {
+				// Un maximum simultané de 1 ne prouve pas que la même Cible était
+				// seule affectée pendant toute la Propagation.
+				otherTargetID, _ := seedTarget(t, pool)
+				if _, err := pool.Exec(ctx, `
+					INSERT INTO cairnops_incident_impacts (
+						incident_id, target_id, status, source_severity,
+						effective_severity, opened_at, resolved_at
+					) VALUES ($1::uuid, $2::uuid, 'resolved', 'major', 'major', now(), now())
+				`, incidentID, otherTargetID); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := pool.Exec(ctx, `UPDATE cairnops_incidents SET impact_count = 2 WHERE id = $1::uuid`, incidentID); err != nil {
+					t.Fatal(err)
+				}
+				impactCount, expectedFR, expectedEN = 2, "Jusqu’à 1 Cible concernée à la fois", "Up to 1 affected target at a time"
+			}
+			if _, err := pool.Exec(ctx, `
+				INSERT INTO cairnops_notification_inbox (
+					user_id, incident_id, event_kind, target_name, nature_label,
+					severity, impact_count, affected_target_count, max_affected_targets,
+					propagation_status, occurred_at, read_at
+				) VALUES ($1::uuid, $2::uuid, 'resolved', $3, 'Load average',
+					'major', $4, 0, 1, 'closed', now(), now())
+			`, userID, incidentID, storedName, impactCount); err != nil {
+				t.Fatal(err)
+			}
+			inbox, err := store.Inbox(ctx, userID, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(inbox.Entries) != 1 {
+				t.Fatalf("expected one historical notification: %+v", inbox)
+			}
+			entry := inbox.Entries[0]
+			if entry.Summary.FR.Body != expectedFR || entry.Summary.EN.Body != expectedEN {
+				t.Fatalf("resolution summary used a generated label instead of the target: %+v", entry.Summary)
+			}
+			if entry.TargetName != storedName || entry.ReadAt == nil || inbox.Unread != 0 {
+				t.Fatalf("reading the summary changed delivery history: %+v", inbox)
+			}
+		})
+	}
+}

@@ -40,6 +40,7 @@ func (client *MattermostClient) Send(ctx context.Context, webhookURL string, mes
 		NatureScope: message.NatureScope, Severity: string(message.Severity),
 		TargetName: message.TargetName, AffectedTargets: message.AffectedTargets,
 		MaxAffected: message.MaxAffected, Resolved: resolved,
+		TotalTargets: message.ImpactCount,
 	}, "fr")
 	title := fmt.Sprintf("%s %s", icon, summary.Title)
 	if resolved {

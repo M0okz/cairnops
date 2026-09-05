@@ -320,7 +320,8 @@ func (store *PostgresStore) loadChildren(ctx context.Context, incidents []Incide
 			NatureKey: item.NatureKey, NatureLabel: item.NatureLabel, TargetName: targetName,
 			NatureScope: item.NatureScope, Severity: string(item.Severity),
 			AffectedTargets: item.AffectedTargetCount, MaxAffected: item.MaxAffectedTargets,
-			Resolved: item.Status == "resolved",
+			TotalTargets: item.ImpactCount,
+			Resolved:     item.Status == "resolved",
 		})
 	}
 	return nil

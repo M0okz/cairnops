@@ -36,6 +36,7 @@ type Situation struct {
 	TargetName      string
 	AffectedTargets int
 	MaxAffected     int
+	TotalTargets    int // Cibles distinctes sur tout le cycle, pas seulement au pic.
 	Resolved        bool
 }
 
@@ -86,7 +87,7 @@ func Render(s Situation, locale string) Text {
 		if english {
 			body = "1 affected target"
 		}
-		if name := oneLine(s.TargetName, 120); name != "" {
+		if name := oneLine(s.TargetName, 120); name != "" && (!s.Resolved || s.TotalTargets <= 1) {
 			body = name
 		}
 	} else if count > 1 {
@@ -101,7 +102,12 @@ func Render(s Situation, locale string) Text {
 		} else {
 			title = fmt.Sprintf("Résolu · %s", title)
 		}
-		if count > 1 {
+		if count == 1 && s.TotalTargets > 1 {
+			body = "Jusqu’à 1 Cible concernée à la fois"
+			if english {
+				body = "Up to 1 affected target at a time"
+			}
+		} else if count > 1 {
 			body = fmt.Sprintf("Jusqu’à %d Cibles concernées", count)
 			if english {
 				body = fmt.Sprintf("Up to %d affected targets", count)

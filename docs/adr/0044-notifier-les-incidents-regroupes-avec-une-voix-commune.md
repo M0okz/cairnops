@@ -16,6 +16,11 @@ Le détail conserve le libellé original et les Preuves par Atteinte.
 Les messages ne contiennent ni rapport périodique, ni conseil, ni cause supposée.
 La Résolution indique le nombre maximal de Cibles concernées ; un simple
 passage à zéro pendant la Propagation ne dit pas que l'Incident est résolu.
+Une Cible n'est nommée à la Résolution que si elle est la seule atteinte sur
+tout le cycle : un pic simultané de une Cible peut masquer plusieurs Cibles
+successives. Les anciennes entrées dont le nom stocké était un compteur
+français retrouvent leur Cible unique dans la Synthèse, sans réécriture de
+l'historique de livraison.
 
 Le premier catalogue canonique distingue l'indisponibilité, la latence de
 stockage, l'espace insuffisant, l'échec de sauvegarde, l'ancienneté excessive

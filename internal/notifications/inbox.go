@@ -59,7 +59,16 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		       inbox.nature_label, inbox.severity, inbox.impact_count,
 		       inbox.affected_target_count, inbox.max_affected_targets,
 		       inbox.propagation_status, inbox.extended,
-		       inbox.occurred_at, inbox.read_at
+		       inbox.occurred_at, inbox.read_at,
+		       CASE WHEN inbox.event_kind = 'resolved' AND inbox.max_affected_targets = 1
+		                 AND inbox.target_id IS NULL
+		                 AND inbox.target_name = '1 Cibles affectées au maximum'
+		            THEN coalesce((
+		                SELECT min(target.name) FROM cairnops_incident_impacts impact
+		                JOIN cairnops_targets target ON target.id = impact.target_id
+		                WHERE impact.incident_id = inbox.incident_id
+		                HAVING count(DISTINCT impact.target_id) = 1
+		            ), '') ELSE inbox.target_name END
 		FROM cairnops_notification_inbox inbox
 		JOIN cairnops_incidents incident ON incident.id = inbox.incident_id
 		WHERE inbox.user_id = $1::uuid AND inbox.dismissed_at IS NULL
@@ -74,21 +83,25 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 	inbox := Inbox{Entries: make([]InboxEntry, 0, limit)}
 	for rows.Next() {
 		var entry InboxEntry
+		// Les anciennes Résolutions stockaient un compteur français comme nom.
+		// Seule la Synthèse retrouve leur Cible unique ; l'entrée reçue reste intacte.
+		var summaryTargetName string
 		if err := rows.Scan(
 			&entry.ID, &entry.IncidentID, &entry.Revision,
 			&entry.TargetID, &entry.EventKind,
 			&entry.TargetName, &entry.NatureKey, &entry.NatureScope, &entry.NatureLabel, &entry.Severity,
 			&entry.ImpactCount, &entry.AffectedTargetCount,
 			&entry.MaxAffectedTargets, &entry.PropagationStatus, &entry.Extended,
-			&entry.OccurredAt, &entry.ReadAt,
+			&entry.OccurredAt, &entry.ReadAt, &summaryTargetName,
 		); err != nil {
 			return Inbox{}, fmt.Errorf("scan notification inbox: %w", err)
 		}
 		entry.Summary = synthesis.Localize(synthesis.Situation{
-			NatureKey: entry.NatureKey, NatureLabel: entry.NatureLabel, TargetName: entry.TargetName,
+			NatureKey: entry.NatureKey, NatureLabel: entry.NatureLabel, TargetName: summaryTargetName,
 			NatureScope: entry.NatureScope, Severity: string(entry.Severity),
 			AffectedTargets: entry.AffectedTargetCount, MaxAffected: entry.MaxAffectedTargets,
-			Resolved: entry.EventKind == "resolved",
+			TotalTargets: entry.ImpactCount,
+			Resolved:     entry.EventKind == "resolved",
 		})
 		inbox.Entries = append(inbox.Entries, entry)
 	}

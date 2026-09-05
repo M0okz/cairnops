@@ -70,6 +70,7 @@ func presentationFor(delivery Delivery) Presentation {
 			NatureScope: delivery.NatureScope, Severity: delivery.Severity,
 			TargetName: delivery.TargetName, AffectedTargets: delivery.AffectedTargets,
 			MaxAffected: delivery.MaxAffected, Resolved: delivery.EventKind == "resolved",
+			TotalTargets: delivery.ImpactCount,
 		}, delivery.Locale)
 		return Presentation{Title: text.Title, Body: text.Body}
 	}
