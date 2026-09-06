@@ -280,6 +280,7 @@
 
 <style>
   .cols {
+    container-type: inline-size;
     --cols: minmax(0, 1.4fr) 7.25rem 8.75rem 4.125rem 5.5rem minmax(0, 1.1fr) var(--table-action-width);
   }
 
@@ -287,9 +288,9 @@
     justify-self: end;
   }
 
-  @media (max-width: 68rem) {
+  @media (max-width: 100rem) {
     .cols {
-      --cols: minmax(0, 1fr) 5rem 6rem 3.5rem 5.5rem var(--table-action-width);
+      --cols: minmax(0, 1fr) 7.25rem 7.5rem 4.125rem 5.5rem var(--table-action-width);
     }
 
     .cols :global(.log) {
@@ -298,6 +299,22 @@
   }
 
   @media (max-width: 48rem) {
+    .cols :global(.trow > .btn:last-child) {
+      justify-self: auto;
+    }
+  }
+
+  @container (max-width: 44rem) {
+    .thead,
+    .trow > .hide-sm {
+      display: none;
+    }
+
+    .trow {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: var(--s3);
+    }
+
     .cols :global(.trow > .btn:last-child) {
       justify-self: auto;
     }

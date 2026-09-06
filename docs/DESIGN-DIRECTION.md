@@ -53,9 +53,10 @@ Le tracé s’interpole en 400 ms à l’arrivée des données et au changement 
 
 ## Densité adaptative
 
-- Desktop : rail de 264 px, barre supérieure de 64 px avec fil d’Ariane, recherche, apparence et notifications. Contenu limité à 1920 px, gouttières de 40 px, contrôles de 40–44 px. Texte courant 16 px, commandes 14 px, métadonnées 12–13 px, titres 32/18 px et métriques 40 px. La base reste à 16 px quel que soit le moniteur ; le zoom appartient au navigateur.
-- Sous 68 rem : volet compact de 80 px avec icônes et noms accessibles ; la recherche conserve son déclencheur. Sous 48 rem, identité et compte passent en haut, et toutes les routes restent accessibles dans une navigation horizontale défilante. Les contrôles se replient avant de déborder.
-- Sous 48 rem : l'en-tête de table disparaît, chaque ligne se replie sur deux colonnes et les colonnes secondaires — Nature, Latence, Dispo. 24 h, Sources, Tendance — sont masquées plutôt que comprimées.
+- Bureau au-delà de 68 rem : échelle de lecture à 125 % de la police par défaut du navigateur, soit une base de 20 px avec le réglage usuel. Rail de 330 px, barre supérieure de 80 px, gouttières de 50 px et contrôles de 50–55 px. Commandes et noms de Cibles à 17,5 px, métadonnées à 15–16,25 px, titres à 40/22,5 px et métriques à 50 px. Le contenu occupe la largeur disponible jusqu’à 2400 px. Cette échelle répond à la lecture trop petite à 100 % sur le MacBook ; elle ne dépend ni du modèle d’écran ni de son ratio de pixels. Le zoom et la police par défaut du navigateur restent respectés.
+- Fenêtres de 68 rem ou moins : base à 100 % de la police du navigateur, soit 16 px par défaut, avec les contrôles de 40–44 px et le repli mobile existants.
+- Sous 85 rem : volet compact de 5 rem avec icônes et noms accessibles ; la recherche conserve son déclencheur. Sous 100 rem, les Incidents masquent la colonne du Journal pour réserver de la place aux Cibles, et les cartes de synthèse se replient. Sous 48 rem, identité et compte passent en haut, et toutes les routes restent accessibles dans une navigation horizontale défilante. Les contrôles se replient avant de déborder.
+- Les listes des Cibles et Incidents se replient selon la largeur de leur table : sous 44 rem, l’en-tête disparaît, les lignes passent sur deux colonnes et les informations secondaires restent dans le détail. Les Cibles masquent déjà Nature et Tendance sous 65 rem pour préserver leur nom. Le repli mobile général demeure sous 48 rem.
 - La densité est unique et assumée. L'ancien réglage Confortable/Compact est retiré : deux densités concurrentes empêchaient de régler la seule qui compte.
 
 ## Apparence et mises à jour

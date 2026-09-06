@@ -1393,13 +1393,13 @@
     margin-left: auto;
   }
 
-  @media (max-width: 80rem) {
+  @media (max-width: 100rem) {
     .kpis {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 
-  @media (max-width: 68rem) {
+  @media (max-width: 85rem) {
     .split {
       grid-template-columns: minmax(0, 1fr);
     }

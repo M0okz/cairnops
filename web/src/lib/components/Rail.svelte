@@ -390,7 +390,7 @@
     font-style: normal;
   }
 
-  @media (max-width: 68rem) {
+  @media (max-width: 85rem) {
     .account-button .who, .account-button .chev { display: none; }
     .account-button { justify-content: center; padding: var(--s3); }
   }

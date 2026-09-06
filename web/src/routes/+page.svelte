@@ -222,7 +222,7 @@
   .instance-health > span:first-child { display: flex; align-items: center; gap: var(--s3); }
   .components { margin-left: auto; display: flex; flex-wrap: wrap; gap: var(--s5); }
   .components > span { display: flex; align-items: center; gap: var(--s3); }
-  @media (max-width: 80rem) { .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .overview-analysis { grid-template-columns: minmax(0, 1.6fr) minmax(17rem, 1fr); } .target-grid { gap: var(--s4); grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, .6fr) minmax(0, 1fr) 1rem; } .target-sources { display: none; } .availability-top :global(.uptime) { display: none; } }
+  @media (max-width: 100rem) { .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .overview-analysis { grid-template-columns: minmax(0, 1.6fr) minmax(17rem, 1fr); } .target-grid { gap: var(--s4); grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, .6fr) minmax(0, 1fr) 1rem; } .target-sources { display: none; } .availability-top :global(.uptime) { display: none; } }
   @media (max-width: 60rem) { .overview-analysis { grid-template-columns: minmax(0, 1fr); } .incident-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); } .incident-summary { border-top: 0; padding-top: var(--s3); } .verdict-detail { display: none; } }
   @media (max-width: 48rem) {
     .overview-page { gap: var(--s4); } .intro { align-items: flex-start; } .intro time { display: none; } h1 { font-size: 1.75rem; }

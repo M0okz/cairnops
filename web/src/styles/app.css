@@ -229,11 +229,17 @@
   box-sizing: border-box;
 }
 
-/* Une base stable à 16 px : les proportions viennent des composants et le
- * zoom reste un choix du navigateur. Aucun ajustement à la taille du moniteur. */
+/* Échelle de lecture du bureau : les textes, contrôles et espacements en rem
+ * grandissent ensemble. Le pourcentage respecte la police par défaut choisie
+ * dans le navigateur, sans dépendre du ratio de pixels de l'écran. */
 html {
   height: 100%;
-  font-size: 16px;
+  font-size: 125%;
+}
+
+/* Les fenêtres étroites conservent leur échelle et leur repli éprouvés. */
+@media (max-width: 68rem) {
+  html { font-size: 100%; }
 }
 
 body {
@@ -1335,7 +1341,7 @@ a.trow:hover .caret {
 
 /* ── Densité adaptative ─────────────────────────────────────────────────── */
 
-@media (max-width: 68rem) {
+@media (max-width: 85rem) {
   .shell { grid-template-columns: 5rem minmax(0, 1fr); }
   .rail { padding: var(--s4) var(--s3); }
   .brand-full, .instance-card, .nav-label, .rail .nav-item-label, .rail .version, .realtime span { display: none; }

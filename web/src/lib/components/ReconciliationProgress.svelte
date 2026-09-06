@@ -63,5 +63,5 @@
   .progress i { width: .5rem; height: .5rem; border-radius: 50%; background: var(--accent); }
   .progress span { max-width: 13rem; overflow: hidden; text-overflow: ellipsis; }
   .review b { min-width: 1.125rem; height: 1.125rem; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-ink); font: .625rem var(--font-num); }
-  @media (max-width: 68rem) { .progress span, .review span { display: none; } }
+  @media (max-width: 85rem) { .progress span, .review span { display: none; } }
 </style>

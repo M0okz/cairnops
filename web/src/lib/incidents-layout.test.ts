@@ -54,12 +54,12 @@ test('le ratio des Atteintes explique son numérateur et son dénominateur', () 
 test('la largeur intermédiaire réserve de la place à la Cible', () => {
   assert.match(
     page,
-    /@media\s*\(max-width:\s*68rem\)[\s\S]*?\.cols\s*\{[^}]*--cols:\s*minmax\(0,\s*1fr\)[^;}]*;/,
+    /@media\s*\(max-width:\s*100rem\)[\s\S]*?\.cols\s*\{[^}]*--cols:\s*minmax\(0,\s*1fr\)[^;}]*;/,
     'la grille intermédiaire doit donner toute la largeur restante à la Cible'
   );
   assert.match(
     page,
-    /@media\s*\(max-width:\s*68rem\)[\s\S]*?\.cols\s+:global\(\.log\)\s*\{[^}]*display:\s*none;/,
+    /@media\s*\(max-width:\s*100rem\)[\s\S]*?\.cols\s+:global\(\.log\)\s*\{[^}]*display:\s*none;/,
     'le Journal doit se masquer avant de comprimer le nom de la Cible'
   );
 });

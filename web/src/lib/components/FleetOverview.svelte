@@ -330,7 +330,7 @@
     font-size: 0.6875rem;
   }
 
-  @media (max-width: 68rem) {
+  @media (max-width: 85rem) {
     .fleet-card {
       grid-template-columns: minmax(0, 1fr);
     }

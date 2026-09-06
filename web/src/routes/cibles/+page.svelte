@@ -203,11 +203,11 @@
     <div class="thead">
       <span>{t('targets.column.target')}</span>
       <span>{t('targets.column.state')}</span>
-      <span class="hide-sm">{t('targets.column.natureSeverity')}</span>
+      <span class="hide-sm nature">{t('targets.column.natureSeverity')}</span>
       <span class="hide-sm">{t('targets.column.averageLatency')}</span>
       <span class="hide-sm">{t('targets.column.availabilityCoverage')}</span>
       <span class="hide-sm">{t('targets.column.sources')}</span>
-      <span class="hide-sm">{t('targets.column.trend')}</span>
+      <span class="hide-sm trend-column">{t('targets.column.trend')}</span>
       <span></span>
     </div>
 
@@ -324,7 +324,7 @@
           </span>
         </span>
 
-        <span class="hide-sm trend {stateTones[row.state]}">
+        <span class="hide-sm trend trend-column {stateTones[row.state]}">
           <Spark values={row.trend} />
         </span>
 
@@ -374,6 +374,7 @@
 
 <style>
   .cols {
+    container-type: inline-size;
     /* Le nom garde assez de place pour son origine sans devenir le seul
        réceptacle de toute la largeur libre. Nature et Tendance absorbent le
        reste là où cet espace aide réellement la lecture. */
@@ -382,6 +383,32 @@
        qui vivaient du rognage — le fond de l'en-tête et celui de la dernière
        ligne survolée — reprennent l'arrondi à leur compte. */
     overflow: visible;
+  }
+
+  /* La largeur réellement disponible dans la table décide du repli : le
+     nom et l'état restent lisibles avec le rail complet ou compact. */
+  @container (max-width: 65rem) {
+    .thead,
+    .trow {
+      --cols: minmax(0, 1fr) 7.25rem 5.25rem 7.25rem 5.5rem 1.25rem;
+    }
+
+    .nature,
+    .trend-column {
+      display: none;
+    }
+  }
+
+  @container (max-width: 44rem) {
+    .thead,
+    .trow > .hide-sm {
+      display: none;
+    }
+
+    .trow {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: var(--s3);
+    }
   }
 
   .thead {

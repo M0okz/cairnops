@@ -207,6 +207,6 @@
   .weak summary { cursor: pointer; font-size: .75rem; }
   .weak p { margin-top: var(--s3); font-size: .6875rem; }
   .error { margin-top: var(--s4); color: var(--crit); }
-  @media (max-width: 68rem) { .suggestion { grid-template-columns: 1fr 1fr; } .actions { justify-content: flex-start; } }
+  @media (max-width: 85rem) { .suggestion { grid-template-columns: 1fr 1fr; } .actions { justify-content: flex-start; } }
   @media (max-width: 48rem) { .summary, .suggestion { grid-template-columns: 1fr; } }
 </style>
