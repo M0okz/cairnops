@@ -55,6 +55,10 @@ func Localize(s Situation) Localized {
 }
 
 func Render(s Situation, locale string) Text {
+	return render(s, locale, false)
+}
+
+func render(s Situation, locale string, notification bool) Text {
 	english := locale == "en"
 	title, known := NatureLabel(s.NatureKey, locale)
 	known = known && s.NatureScope == "canonical"
@@ -73,6 +77,9 @@ func Render(s Situation, locale string) Text {
 				title = fmt.Sprintf("Reported: %s", label)
 			}
 		}
+	}
+	if notification && !known {
+		title = notificationSourceTitle(s, locale)
 	}
 	count := s.AffectedTargets
 	if s.Resolved {
@@ -119,7 +126,24 @@ func Render(s Situation, locale string) Text {
 			}
 		}
 	} else if severity, ok := severityLabel(s.Severity, english); ok {
+		if notification {
+			switch s.Severity {
+			case "major":
+				severity = "majeur"
+				if english {
+					severity = "major"
+				}
+			case "critical":
+				severity = "critique"
+				if english {
+					severity = "critical"
+				}
+			}
+		}
 		body = fmt.Sprintf("%s · %s", body, severity)
+	}
+	if notification {
+		title = oneLine(title, 80)
 	}
 	return Text{Title: title, Body: body}
 }

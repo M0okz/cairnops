@@ -481,3 +481,44 @@ func TestPostgresInboxSummaryReadsLegacySingleTargetResolutions(t *testing.T) {
 		})
 	}
 }
+
+func TestPostgresInboxUsesTheCompactTemplateWithoutRewritingTheIncident(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	store := immediateNotificationStore(pool)
+	user := seedAccount(t, pool, "operator")
+	target, incident := seedActiveIncident(t, pool, "major")
+	label := "Linux: Load average is too high (per CPU load over 1.5 for 5m)"
+	if _, err := pool.Exec(ctx, `UPDATE cairnops_incidents SET nature_key = 'zabbix:connector:load',
+		nature_scope = 'connector', nature_label = $2 WHERE id = $1::uuid`, incident, label); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE cairnops_targets SET name = 'VictoriaLogs' WHERE id = $1::uuid`, target); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	delivery := claimAndDeliver(t, ctx, store, "firing", "alert")
+	inbox, err := store.Inbox(ctx, user, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inbox.Entries) != 1 {
+		t.Fatalf("expected one notification: %+v", inbox)
+	}
+	entry := inbox.Entries[0]
+	if entry.Summary.FR.Title != "Charge système élevée" || entry.Summary.FR.Body != "VictoriaLogs · majeur" || entry.Summary.EN.Title != "High system load" || entry.Summary.EN.Body != "VictoriaLogs · major" {
+		t.Fatalf("inbox diverged from the shared template: %+v", entry.Summary)
+	}
+	if entry.IncidentID != incident || entry.NatureScope != "connector" || entry.NatureLabel != label || delivery.NatureLabel != label || entry.Revision != delivery.IncidentRevision || inbox.Unread != 1 {
+		t.Fatalf("presentation changed delivery facts: %+v, %+v", entry, delivery)
+	}
+	var natureKey, natureScope, natureLabel string
+	if err := pool.QueryRow(ctx, `SELECT nature_key, nature_scope, nature_label FROM cairnops_incidents WHERE id = $1::uuid`, incident).Scan(&natureKey, &natureScope, &natureLabel); err != nil {
+		t.Fatal(err)
+	}
+	if natureKey != "zabbix:connector:load" || natureScope != "connector" || natureLabel != label {
+		t.Fatalf("presentation reclassified the Incident: %s / %s / %s", natureKey, natureScope, natureLabel)
+	}
+}

@@ -96,7 +96,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		); err != nil {
 			return Inbox{}, fmt.Errorf("scan notification inbox: %w", err)
 		}
-		entry.Summary = synthesis.Localize(synthesis.Situation{
+		entry.Summary = synthesis.LocalizeNotification(synthesis.Situation{
 			NatureKey: entry.NatureKey, NatureLabel: entry.NatureLabel, TargetName: summaryTargetName,
 			NatureScope: entry.NatureScope, Severity: string(entry.Severity),
 			AffectedTargets: entry.AffectedTargetCount, MaxAffected: entry.MaxAffectedTargets,

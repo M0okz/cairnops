@@ -131,6 +131,9 @@ components:
       description: >
         Une notification reçue par la personne connectée. Elle appartient à un
         compte : cette API ne rend jamais la boîte de quelqu'un d'autre.
+        Sa summary utilise le gabarit compact partagé avec le Push et Mattermost :
+        problème en title, Cible ou nombre de Cibles et gravité en body.
+        Le libellé source complet reste disponible dans nature_label.
       type: object
       required: [id, incident_id, revision, event_kind, target_name, nature_key, nature_scope, nature_label, severity, impact_count, affected_target_count, max_affected_targets, propagation_status, extended, occurred_at, read_at, summary]
       properties:

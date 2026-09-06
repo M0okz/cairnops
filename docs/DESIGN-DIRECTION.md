@@ -97,6 +97,22 @@ Visuellement, la chronologie s'appuie sur un filet vertical discret le long duqu
 
 Le parcours suit trois strates stables — Adresse, Autorisation, Aperçu — et montre les vérifications effectuées par CairnOps avant l'import. L'utilisateur voit le niveau d'accès, la compatibilité et les Cibles découvertes sans devoir comprendre le format des événements ou configurer un mapping. Toute écriture éventuelle vers l'outil externe est annoncée avant confirmation.
 
+## Gabarit des notifications
+
+Les notifications complètes partagent deux lignes : le problème en titre, puis
+« Cible · gravité ». Les quatre libellés courts sont « information »,
+« avertissement », « majeur » et « critique ». Une notification concernant
+plusieurs Cibles affiche leur nombre à la place d'un nom individuel.
+
+Le Push, la boîte intégrée et Mattermost utilisent le même rendu de
+`internal/synthesis`. Les titres de notification omettent le préambule
+« Signalement : ». Un libellé source connu peut être traduit et abrégé, comme
+« Charge système élevée » ; les autres sont conservés sur une ligne, bornée à
+80 caractères. Le détail conserve le texte original attribué à sa Source.
+
+La Résolution reste explicite dans le titre et conserve le contexte des Cibles
+concernées. Les modes discret et masqué gardent leurs messages confidentiels.
+
 ## Association d'un appareil
 
 Le QR code occupe une dalle dédiée et reste accompagné de son expiration et de sa portée. Les trois confirmations — scan, authentification navigateur, confirmation Web — sont décrites séparément afin que la simplicité du parcours ne masque jamais son modèle de sécurité. La liste des appareils rappelle que chaque identité est individuelle et révocable.

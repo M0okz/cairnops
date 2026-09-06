@@ -117,7 +117,7 @@ func TestDiskBurstProducesOneOpeningForFifteenTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(inbox.Entries) != 1 || inbox.Entries[0].Summary.FR.Body != "15 Cibles concernées · gravité majeure" {
+	if len(inbox.Entries) != 1 || inbox.Entries[0].Summary.FR.Body != "15 Cibles concernées · majeur" {
 		t.Fatalf("unexpected inbox: %#v", inbox)
 	}
 }

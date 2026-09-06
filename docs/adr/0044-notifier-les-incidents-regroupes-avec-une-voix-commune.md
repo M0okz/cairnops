@@ -40,6 +40,17 @@ et ne permet pas de conclure à la saturation d'un datastore ou à une cause com
 Les libellés de Natures locales sont présentés comme des signalements, sans
 être promus au rang de conclusions canoniques. Une intégration ultérieure
 pourra exploiter le catalogue si ses données établissent le même sens.
+
+La présentation compacte des notifications suit le gabarit « problème » puis
+« Cible · gravité », dans la boîte intégrée, le Push et Mattermost. Elle omet le
+préambule « Signalement : » et peut traduire un libellé source connu en un titre
+plus court ; le détail conserve son attribution et son texte original. Cette
+adaptation appartient à `internal/synthesis` et ne reclassifie aucune Nature,
+ne regroupe aucun Incident et ne change pas les décisions de notification.
+Les libellés inconnus restent littéraux, sur une ligne bornée. La charge système
+du template Linux Zabbix est ainsi abrégée sans devenir une nouvelle Nature
+canonique ni être confondue avec l'utilisation CPU.
+
 Proxmox VE, Proxmox Backup Server et Checkmk ne sont pas livrés par ce chantier.
 
 La décision de notification est commune à tous les Canaux : ouverture après

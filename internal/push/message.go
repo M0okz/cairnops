@@ -65,7 +65,7 @@ func presentationFor(delivery Delivery) Presentation {
 		}
 		return Presentation{Title: "CairnOps", Body: "Un Incident demande votre attention."}
 	default:
-		text := synthesis.Render(synthesis.Situation{
+		text := synthesis.RenderNotification(synthesis.Situation{
 			NatureKey: delivery.NatureKey, NatureLabel: delivery.NatureLabel,
 			NatureScope: delivery.NatureScope, Severity: delivery.Severity,
 			TargetName: delivery.TargetName, AffectedTargets: delivery.AffectedTargets,

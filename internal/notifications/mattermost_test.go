@@ -64,3 +64,27 @@ func TestMattermostMultiTargetIncidentKeepsItsImpactSummary(t *testing.T) {
 		}
 	}
 }
+
+func TestMattermostUsesTheCompactNotificationTemplate(t *testing.T) {
+	var payload struct {
+		Attachments []struct{ Title, Text string } `json:"attachments"`
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Error(err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	if err := NewMattermostClient(server.Client()).Send(context.Background(), server.URL, Message{
+		EventKind: "firing", IncidentID: "incident-load", TargetName: "VictoriaLogs",
+		NatureKey: "zabbix:connector:load", NatureScope: "connector",
+		NatureLabel: "Linux: Load average is too high (per CPU load over 1.5 for 5m)",
+		Severity:    incidents.SeverityMajor, AffectedTargets: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Attachments) != 1 || payload.Attachments[0].Title != "⚠️ Charge système élevée" || payload.Attachments[0].Text != "VictoriaLogs · majeur" {
+		t.Fatalf("Mattermost diverged from the shared template: %+v", payload)
+	}
+}

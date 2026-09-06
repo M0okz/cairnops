@@ -291,10 +291,9 @@
   }
 
   @media (max-width: 48rem) {
-    /* Le panneau s'aligne sur la fenêtre, au-delà de l'avatar et de la
-       gouttière de la barre, au lieu de déborder à gauche de l'écran. */
+    /* La cloche termine la barre : son bord droit est déjà dans la gouttière.
+       Conserver right: 0 aligne le panneau dans cette même gouttière. */
     .panel {
-      right: calc(-1.625rem - var(--s3) - var(--s5));
       width: calc(100vw - var(--s4) - var(--s4));
       max-width: none;
     }

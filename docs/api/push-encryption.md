@@ -20,6 +20,11 @@ Le JSON déchiffré contient `version`, `event_kind`, `incident_id`, `severity`,
 `title` et `body` ; son niveau de détail dépend du mode `complete`, `discreet` ou
 `masked` enregistré pour l'appareil.
 
+En mode `complete`, le rendu est commun à la boîte intégrée et à Mattermost :
+un titre de problème concis, puis « Cible · gravité » (ou le nombre de Cibles).
+Les résolutions restent explicitement nommées et conservent leur contexte.
+Les textes `discreet` et `masked` ne révèlent ni Cible, ni Nature, ni Gravité.
+
 Le Relais Push ne participe à aucune de ces opérations cryptographiques. Il
 reçoit l'enveloppe telle quelle et la remet à APNs ou FCM pour le destinataire
 opaque indiqué par l'instance.
