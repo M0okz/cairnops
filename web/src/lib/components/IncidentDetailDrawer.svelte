@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { prefersReducedMotion } from 'svelte/motion';
   import Icon from './Icon.svelte';
-  import IndicatorAreaChart from './IndicatorAreaChart.svelte';
+  import IndicatorHistoryChart from './IndicatorHistoryChart.svelte';
   import { APIError, api, type Incident, type IncidentEvidence, type IncidentIndicators } from '$lib/api';
   import {
     diverges,
@@ -44,6 +45,13 @@
   let projectedOnce = $state(false);
   let now = $state(new Date());
   let requestVersion = 0;
+  let closing = $state(false);
+  let dismissed = false;
+  let dismissTimer: ReturnType<typeof setTimeout> | undefined;
+  const metricTimeBounds = $derived.by((): [number, number] | null => {
+    const opening = Date.parse(indicators?.opened_at ?? incident?.opened_at ?? '');
+    return Number.isFinite(opening) ? [opening - 2 * 3_600_000, opening + 2 * 3_600_000] : null;
+  });
 
   const titleID = $derived(`incident-detail-title-${incidentId}`);
   const descriptionID = $derived(`incident-detail-description-${incidentId}`);
@@ -162,12 +170,23 @@
     await loadIncident(false);
   }
 
+  function finishDismiss() {
+    if (dismissed) return;
+    dismissed = true;
+    clearTimeout(dismissTimer);
+    ondismiss();
+  }
+
   function requestDismiss() {
     if (invalidationFor) {
       cancelInvalidation();
       return;
     }
-    ondismiss();
+    if (closing || dismissed) return;
+    if (prefersReducedMotion.current) { finishDismiss(); return; }
+    closing = true;
+    // Fallback for a removed/overridden CSS transition; normally transitionend finishes first.
+    dismissTimer = setTimeout(finishDismiss, 250);
   }
 
   function restoreFocus(dismissedIncidentID: string) {
@@ -175,6 +194,26 @@
       document.querySelectorAll<HTMLElement>('[data-incident-trigger]')
     ).find((candidate) => candidate.dataset.incidentTrigger === dismissedIncidentID);
     (trigger ?? document.getElementById('main-content'))?.focus();
+  }
+
+  function trapFocus(event: KeyboardEvent) {
+    if (event.key !== 'Tab' || !dialog) return;
+    const controls = Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button, a[href], input, select, textarea, summary, [tabindex]'
+    )).filter((element) => {
+      if (element.tabIndex < 0 || element.matches(':disabled') || element.closest('[inert]')) return false;
+      const hiddenDetails = element.closest('details:not([open])');
+      if (hiddenDetails && hiddenDetails.querySelector('summary') !== element) return false;
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== 'hidden';
+    });
+    const first = controls[0];
+    const last = controls.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault(); last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first?.focus();
+    }
   }
 
   $effect(() => {
@@ -207,6 +246,7 @@
     return () => {
       requestVersion += 1;
       clearInterval(timer);
+      clearTimeout(dismissTimer);
       if (dialog?.open) dialog.close();
       requestAnimationFrame(() => restoreFocus(mountedIncidentID));
     };
@@ -221,17 +261,20 @@
 
 <dialog
   bind:this={dialog}
-  class="incident-modal"
+  class="incident-drawer"
+  class:closing
+  ontransitionend={(event) => { if (closing && event.target === dialog && event.propertyName === 'opacity') finishDismiss(); }}
   aria-labelledby={titleID}
   aria-describedby={descriptionID}
   aria-busy={incidentLoading || acknowledging || invalidating}
+  onkeydown={trapFocus}
   oncancel={(event) => {
     event.preventDefault();
     requestDismiss();
   }}
-  onclick={(event) => event.currentTarget === event.target && !invalidationFor && ondismiss()}
+  onclick={(event) => event.currentTarget === event.target && !invalidationFor && requestDismiss()}
 >
-  <header class="modal-head">
+  <header class="drawer-head">
     <div class="title-copy">
       <span class="eyebrow">{t('incidents.detail.title')}</span>
       <h2 id={titleID}>{incident?.summary?.[i18n.locale].title ?? incidentTitle}</h2>
@@ -264,7 +307,7 @@
     </button>
   </header>
 
-  <div class="modal-body">
+  <div class="drawer-body">
     {#if incidentLoading && !incident}
       <div class="detail-state" role="status">{t('incidents.detail.loading')}</div>
     {:else if incidentError && !incident}
@@ -370,12 +413,12 @@
                     {t('incidents.detail.snapshotAt', { date: stamp(row.snapshot!.observed_at) })}
                   </small>
                   {#if row.points.length > 0}
-                    <IndicatorAreaChart
+                    <IndicatorHistoryChart
                       compact
-                      interactive
                       points={row.points}
                       unit={row.unit}
                       label={t('incidents.detail.chartLabel', { label: row.label })}
+                      timeBounds={metricTimeBounds}
                       {marker}
                     />
                   {:else}
@@ -400,12 +443,12 @@
                       <small>{t('incidents.detail.noSnapshot')}</small>
                     </div>
                     {#if row.points.length > 0}
-                      <IndicatorAreaChart
+                      <IndicatorHistoryChart
                         compact
-                        interactive
                         points={row.points}
                         unit={row.unit}
                         label={t('incidents.detail.chartLabel', { label: row.label })}
+                        timeBounds={metricTimeBounds}
                         {marker}
                       />
                     {:else}
@@ -599,7 +642,7 @@
   </div>
 
   {#if incident}
-    <footer class="modal-actions">
+    <footer class="drawer-actions">
       <span class="note">
         {incident.status === 'active'
           ? t('incidents.detail.liveNote')
@@ -618,14 +661,21 @@
 </dialog>
 
 <style>
-  .incident-modal {
-    width: calc(100vw - 2 * var(--s5));
-    max-width: 64rem;
-    max-height: calc(100vh - 2 * var(--s5));
-    max-height: calc(100dvh - 2 * var(--s5));
+  .incident-drawer {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    margin: 0;
+    width: min(100%, var(--incident-drawer-width));
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
     padding: 0;
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-l);
+    border: 0;
+    border-inline-start: 1px solid var(--line-strong);
+    border-radius: 0;
     background: var(--surface);
     color: var(--ink);
     box-shadow: var(--shadow);
@@ -633,17 +683,19 @@
     overscroll-behavior: contain;
   }
 
-  .incident-modal[open] {
+  .incident-drawer[open] {
     display: flex;
     flex-direction: column;
   }
 
-  .incident-modal::backdrop {
-    background: rgb(0 0 0 / 0.55);
+  .incident-drawer::backdrop {
+    background: var(--drawer-backdrop);
   }
 
-  .modal-head {
+  .drawer-head {
+    flex: none;
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     gap: var(--s4);
     padding: var(--s4) var(--s5);
@@ -660,24 +712,27 @@
     display: block;
     margin-bottom: var(--s1);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
     font-weight: var(--weight-semibold);
   }
 
-  .modal-head h2 {
-    font-size: 1rem;
+  .drawer-head h2 {
+    overflow-wrap: anywhere;
+    font-size: var(--text-md);
   }
 
-  .modal-head p {
+  .drawer-head p {
     margin-top: var(--s1);
     color: var(--muted);
     font-size: var(--text-sm);
   }
 
   .head-status {
+    order: 3;
+    width: 100%;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: var(--s3);
     flex-wrap: wrap;
   }
@@ -706,8 +761,10 @@
     color: var(--ink);
   }
 
-  .modal-body {
+  .drawer-body {
+    flex: 1;
     min-height: 0;
+    container-type: inline-size;
     padding: var(--s5);
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -750,7 +807,7 @@
 
   .date-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .date-grid > div {
@@ -759,9 +816,8 @@
     border-inline-end: 1px solid var(--line-row);
   }
 
-  .date-grid > div:last-child {
-    border-inline-end: 0;
-  }
+  .date-grid > div:nth-child(even) { border-inline-end: 0; }
+  .date-grid > div:nth-child(-n+2) { border-bottom: 1px solid var(--line-row); }
 
   .date-grid span,
   .date-grid strong,
@@ -772,7 +828,7 @@
   .date-grid span {
     margin-bottom: var(--s2);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
   }
 
   .date-grid strong {
@@ -785,7 +841,7 @@
   .date-grid small {
     margin-top: var(--s1);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
   }
 
   .summary-notes {
@@ -796,7 +852,7 @@
     padding: var(--s3) var(--s5);
     border-top: 1px solid var(--line-row);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
     flex-wrap: wrap;
   }
 
@@ -804,7 +860,7 @@
     padding: var(--s3) var(--s5);
     border-top: 1px solid var(--line-row);
     color: var(--muted);
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
     line-height: 1.5;
   }
 
@@ -828,7 +884,7 @@
   .section-head p {
     margin-top: var(--s1);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
   }
 
   .section-count {
@@ -850,14 +906,20 @@
     border-inline-end: 1px solid var(--line-row);
   }
 
+  .metric-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    border-inline-end: 0;
+  }
+
   .metric-title {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: var(--s4);
   }
 
   .metric-title > span {
-    min-width: 0;
+    min-width: 8rem;
     flex: 1;
   }
 
@@ -874,7 +936,7 @@
   .metric-title small,
   .snapshot-time {
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
   }
 
   .metric-title b {
@@ -882,7 +944,7 @@
   }
 
   .snapshot-time {
-    margin-top: var(--s1);
+    margin-block: var(--s2) var(--s4);
   }
 
   .curve-empty {
@@ -893,7 +955,7 @@
     border: 1px dashed var(--line-strong);
     border-radius: var(--r-m);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
   }
 
   .additional-metrics {
@@ -922,7 +984,7 @@
     padding: var(--s3) var(--s5);
     border-top: 1px solid var(--line);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
   }
 
   .impact-group + .impact-group {
@@ -957,7 +1019,7 @@
   .impact-count {
     margin-top: var(--s1);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
   }
 
   .section-state.compact {
@@ -966,7 +1028,7 @@
 
   .source-row {
     display: grid;
-    grid-template-columns: minmax(10rem, 1fr) auto minmax(22rem, 1.4fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--s4);
     padding: var(--s4) var(--s5);
@@ -996,16 +1058,18 @@
   }
 
   .source-identity strong {
+    overflow-wrap: anywhere;
     font-size: var(--text-sm);
   }
 
   .source-identity small {
     margin-top: var(--s1);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
   }
 
   .source-dates {
+    grid-column: 1 / -1;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--s4);
@@ -1014,21 +1078,23 @@
 
   .source-dates dt {
     color: var(--faint);
-    font-size: 0.5625rem;
+    font-size: var(--chart-text-size);
   }
 
   .source-dates dd {
     margin: var(--s1) 0 0;
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
   }
 
   .source-action {
-    justify-self: end;
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 
   .invalidation-copy {
-    max-width: 18rem;
-    font-size: 0.625rem;
+    grid-column: 1 / -1;
+    max-width: 100%;
+    font-size: var(--chart-text-size);
   }
 
   .invalidation-copy strong,
@@ -1049,7 +1115,7 @@
     display: block;
     margin-top: var(--s2);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
     overflow-wrap: anywhere;
   }
 
@@ -1124,7 +1190,7 @@
 
   .timeline-entry time {
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
     white-space: normal;
   }
 
@@ -1141,10 +1207,11 @@
   .timeline-entry small {
     margin-top: var(--s1);
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: var(--chart-text-size);
   }
 
-  .modal-actions {
+  .drawer-actions {
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -1156,28 +1223,16 @@
     flex-wrap: wrap;
   }
 
-  .modal-actions .note {
+  .drawer-actions .note {
     min-width: 12rem;
     flex: 1;
     margin-inline-end: auto;
     color: var(--faint);
-    font-size: 0.625rem;
-  }
-
-  @media (max-width: 68rem) {
-    .source-row {
-      grid-template-columns: minmax(10rem, 1fr) auto minmax(18rem, 1.4fr);
-    }
-
-    .source-action,
-    .invalidation-copy {
-      grid-column: 1 / -1;
-      justify-self: start;
-    }
+    font-size: var(--chart-text-size);
   }
 
   @media (max-width: 48rem) {
-    .incident-modal {
+    .incident-drawer {
       width: 100vw;
       max-width: none;
       height: 100vh;
@@ -1187,7 +1242,7 @@
       border-radius: 0;
     }
 
-    .modal-head {
+    .drawer-head {
       padding-top: max(var(--s4), env(safe-area-inset-top));
     }
 
@@ -1202,14 +1257,18 @@
       justify-content: flex-start;
     }
 
-    .modal-head {
+    .drawer-head {
       flex-wrap: wrap;
     }
 
-    .modal-body {
+    .drawer-body {
       padding: var(--s4);
     }
+    .drawer-actions .note { flex-basis: 100%; }
 
+  }
+
+  @container (max-width: 32rem) {
     .date-grid,
     .metric-grid,
     .source-dates {
@@ -1300,8 +1359,26 @@
       grid-column: 2;
     }
 
-    .modal-actions .note {
-      flex-basis: 100%;
+  }
+
+  :global(body:has(.incident-drawer[open])) { overflow: hidden; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .incident-drawer {
+      opacity: 1;
+      transform: translateX(0);
+      transition: transform var(--d2) ease-out, opacity var(--d2) ease-out;
+    }
+    .incident-drawer::backdrop { transition: background-color var(--d2) ease-out; }
+    .incident-drawer.closing {
+      opacity: 0;
+      transform: translateX(var(--s4));
+      transition-duration: var(--d1);
+    }
+    .incident-drawer.closing::backdrop { background: transparent; }
+    @starting-style {
+      .incident-drawer[open] { opacity: 0; transform: translateX(var(--s5)); }
+      .incident-drawer[open]::backdrop { background: transparent; }
     }
   }
 

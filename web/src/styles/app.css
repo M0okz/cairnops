@@ -57,8 +57,11 @@
   --chart-maximum: color-mix(in srgb, var(--ink) 65%, var(--bg));
   --chart-popover: #0c0c0b;
   --chart-history-height: 17.5rem;
+  --chart-history-compact-height: 12rem;
   --chart-text-size: 0.75rem;
   --r-chart: 1rem;
+  --incident-drawer-width: 52rem;
+  --drawer-backdrop: rgb(0 0 0 / 0.3);
 
   /* Sémantique — réservée à l'État de santé et à la Gravité. */
   --ok: #34d399;

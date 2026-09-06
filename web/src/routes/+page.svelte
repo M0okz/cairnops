@@ -5,7 +5,7 @@
   import Uptime from '$lib/components/Uptime.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import IndicatorOverview from '$lib/components/IndicatorOverview.svelte';
-  import IncidentDetailModal from '$lib/components/IncidentDetailModal.svelte';
+  import IncidentDetailDrawer from '$lib/components/IncidentDetailDrawer.svelte';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import { session } from '$lib/session.svelte';
   import { dashboardCoverage, dashboardHealth, type HealthState } from '$lib/dashboard';
@@ -145,7 +145,7 @@
 
   <a class="instance-health" href="/sante"><span><Icon name="health" size={18} />{t('dashboard.instanceHealth')}</span><span class="components">{#each session.system?.components ?? [] as component}<span><i class="dot {component.status === 'operational' ? 'ok' : component.status === 'stale' ? 'warn' : 'crit'}"></i>{component.name} · {t(`component.status.${component.status}`)}</span>{:else}{t('overview.healthUnread')}{/each}</span><span aria-hidden="true">→</span></a>
 </div>
-{#if selectedIncidentID}<IncidentDetailModal incidentId={selectedIncidentID} seed={selectedIncident} ondismiss={dismissIncident} />{/if}
+{#if selectedIncidentID}<IncidentDetailDrawer incidentId={selectedIncidentID} seed={selectedIncident} ondismiss={dismissIncident} />{/if}
 
 <style>
   .overview-page { display: flex; flex-direction: column; gap: var(--s5); }

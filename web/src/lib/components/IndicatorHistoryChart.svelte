@@ -4,16 +4,18 @@
   import { cubicOut } from 'svelte/easing';
   import type { IndicatorPoint, IndicatorUnit } from '$lib/api';
   import { chartCoordinates, chartSegments, monotoneChartPath, nearestChartPoint, type ChartCoordinate } from '$lib/chart-geometry';
-  import { CHART_TWEEN_DURATION, indicatorTimeTicks, interpolateChartCoordinates, maximumCoordinates, stepChartPath } from '$lib/indicator-history';
+  import { CHART_TWEEN_DURATION, indicatorMarkerX, indicatorTimeTicks, interpolateChartCoordinates, maximumCoordinates, stepChartPath } from '$lib/indicator-history';
   import { formatIndicator, indicatorBounds } from '$lib/indicator-format';
   import { localeTag, t } from '$lib/i18n.svelte';
 
-  let { points, unit, label, timeBounds, hourly = false }: {
+  let { points, unit, label, timeBounds, hourly = false, compact = false, marker = null }: {
     points: IndicatorPoint[];
     unit: IndicatorUnit;
     label: string;
     timeBounds: [number, number] | null;
     hourly?: boolean;
+    compact?: boolean;
+    marker?: { at: string; label: string; tone: 'info' | 'warn' | 'crit' } | null;
   } = $props();
 
   const id = $props.id();
@@ -53,6 +55,7 @@
   const coordinates = $derived(width ? chartCoordinates(points, { width, height, insetX: inset, insetTop: top, insetBottom: height - baseline, bounds: range, timeBounds: domain }) : []);
   const maximum = $derived(hourly ? maximumCoordinates(points, coordinates, range, top, baseline) : []);
   const ticks = $derived(indicatorTimeTicks(domain, width - inset * 2));
+  const markerX = $derived(marker ? indicatorMarkerX(marker.at, domain, width, inset) : null);
   const gap = $derived(hourly ? 90 * 60_000 : 5 * 60_000);
   const drawnValues = $derived(chartSegments(values.current, gap));
   const drawnMaxima = $derived(chartSegments(maxima.current, gap));
@@ -105,7 +108,10 @@
   function clear() { selectedTime = null; pointer = null; dismissed = false; }
 
   function move(event: KeyboardEvent) {
-    if (event.key === 'Escape') { clear(); dismissed = true; event.preventDefault(); return; }
+    if (event.key === 'Escape') {
+      if (selectedTime && !dismissed) { clear(); dismissed = true; event.preventDefault(); event.stopPropagation(); }
+      return;
+    }
     if (!coordinates.length) return;
     let index = Math.max(0, coordinates.findIndex((point) => point.at === selectedTime));
     if (event.key === 'Home') index = 0;
@@ -143,12 +149,11 @@
 <!-- The SVG is one keyboard stop; arrows inspect real samples, Escape dismisses. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<svg bind:this={chart} class="area-chart history-chart" viewBox="0 0 {width || 640} {height}" role="img" tabindex="0"
-  aria-label={`${label}${pickedLabel ? `. ${pickedLabel}` : ''}`} aria-describedby={`chart-help-${id}`}
+<svg bind:this={chart} class="area-chart history-chart" class:compact viewBox="0 0 {width || 640} {height}" role="img" tabindex="0"
+  aria-label={`${label}${marker && markerX !== null ? `. ${marker.label} : ${timestamp(marker.at)}` : ''}${pickedLabel ? `. ${pickedLabel}` : ''}`} aria-describedby={`chart-help-${id}`}
   onpointermove={pick} onpointerdown={pick} onpointerleave={() => { if (!keyboard) clear(); }}
   onfocus={() => { keyboard = true; selectedTime ??= coordinates.at(-1)?.at ?? null; dismissed = false; settle(); }}
   onblur={() => { keyboard = false; clear(); }} onkeydown={move}>
-  <title>{label}</title>
   <defs>
     <linearGradient id={`history-value-${id}`} x1="0" x2="0" y1={top} y2={baseline} gradientUnits="userSpaceOnUse">
       <stop class="fill-start" offset="0%" /><stop class="fill-end" offset="100%" />
@@ -187,6 +192,16 @@
     {/each}
   </g>
 
+  {#if marker && markerX !== null}
+    <g class="incident-marker {marker.tone}" aria-hidden="true">
+      <line x1={markerX} x2={markerX} y1={top} y2={baseline} />
+      <g transform={`translate(${Math.max(4, Math.min(width - 116, markerX - 56))},${top})`}>
+        <rect width="112" height="24" rx="4" />
+        <text x="56" y="16" text-anchor="middle">{t('chart.incidentMarker')}</text>
+      </g>
+    </g>
+  {/if}
+
   {#if picked}
     <g class="selection" role="tooltip" aria-label={pickedLabel}>
       <line class="cursor-guide" x1={picked.x} x2={picked.x} y1={top} y2={baseline} />
@@ -213,7 +228,8 @@
 <style>
   /* A definite flex basis prevents the SVG's initial viewBox ratio from
      inflating the entire dashboard row on a wide viewport. */
-  .history-chart { display: block; flex: 1 1 var(--chart-history-height); width: 100%; height: var(--chart-history-height); min-height: var(--chart-history-height); color: var(--chart-series); overflow: visible; touch-action: pan-y; cursor: crosshair; }
+  .history-chart { --history-height: var(--chart-history-height); display: block; flex: 1 1 var(--history-height); width: 100%; height: var(--history-height); min-height: var(--history-height); color: var(--chart-series); overflow: visible; touch-action: pan-y; cursor: crosshair; }
+  .history-chart.compact { --history-height: var(--chart-history-compact-height); }
   .history-chart:focus-visible { outline-offset: var(--s2); border-radius: var(--r-m); }
   .grid line { stroke: var(--line); stroke-width: 1; }
   .axis text { fill: var(--faint); font-family: var(--font); font-size: var(--chart-text-size); font-variant-numeric: tabular-nums; }
@@ -223,6 +239,13 @@
   .maximum-end { stop-color: var(--chart-maximum); stop-opacity: 0.025; }
   .line { fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
   .maximum { color: var(--chart-maximum); }
+  .incident-marker { pointer-events: none; }
+  .incident-marker.info { color: var(--info); }
+  .incident-marker.warn { color: var(--warn); }
+  .incident-marker.crit { color: var(--crit); }
+  .incident-marker line { stroke: currentColor; stroke-width: 1; stroke-dasharray: 3 4; }
+  .incident-marker rect { fill: var(--surface); stroke: currentColor; stroke-width: 1; }
+  .incident-marker text { fill: var(--ink); font: var(--weight-medium) var(--chart-text-size) var(--font); }
   .single-point { fill: currentColor; }
   .selection { pointer-events: none; }
   .cursor-guide { stroke: var(--line-strong); stroke-width: 1; }

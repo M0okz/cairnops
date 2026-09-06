@@ -5,6 +5,14 @@ export type IndicatorPeriod = '1h' | '24h' | '7d';
 export const CHART_TWEEN_DURATION = 400;
 const hour = 3_600_000;
 
+/** A temporal marker does not snap to a sample or invent a measured value. */
+export function indicatorMarkerX(at: string, bounds: [number, number], width: number, inset = 8): number | null {
+  const time = Date.parse(at);
+  const [start, end] = bounds;
+  if (![time, start, end, width].every(Number.isFinite) || end <= start || width <= inset * 2 || time < start || time > end) return null;
+  return inset + (time - start) / (end - start) * (width - inset * 2);
+}
+
 export function indicatorTimeBounds(generatedAt: string, period: IndicatorPeriod): [number, number] | null {
   const end = Date.parse(generatedAt);
   if (!Number.isFinite(end)) return null;

@@ -3,7 +3,7 @@
 
   import { afterNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
-  import IncidentDetailModal from '$lib/components/IncidentDetailModal.svelte';
+  import IncidentDetailDrawer from '$lib/components/IncidentDetailDrawer.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
@@ -270,7 +270,7 @@
 
 {#if selectedIncidentID}
   {#key selectedIncidentID}
-    <IncidentDetailModal
+    <IncidentDetailDrawer
       incidentId={selectedIncidentID}
       seed={selectedIncident}
       ondismiss={dismissIncident}

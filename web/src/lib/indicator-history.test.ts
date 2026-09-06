@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { chartCoordinates, chartSegments } from './chart-geometry.ts';
-import { indicatorTimeBounds, indicatorTimeTicks, indicatorWindowPoints, interpolateChartCoordinates, maximumCoordinates, stepChartPath } from './indicator-history.ts';
+import { indicatorMarkerX, indicatorTimeBounds, indicatorTimeTicks, indicatorWindowPoints, interpolateChartCoordinates, maximumCoordinates, stepChartPath } from './indicator-history.ts';
 
 const generated = '2026-09-06T12:30:00Z';
 const end = Date.parse(generated);
@@ -74,4 +74,17 @@ test('missing collection remains a gap throughout animation and booleans remain 
   assert.deepEqual(segments.map((segment) => segment.length), [2, 1]);
   assert.match(stepChartPath(points), /^M0,100H/);
   assert.ok(!stepChartPath(points).includes('C'));
+});
+
+
+test('incident markers keep their exact time in collection gaps and disappear outside the window', () => {
+  const bounds = [end - 4 * 3_600_000, end];
+  assert.equal(indicatorMarkerX(sample(-120).at, bounds, 400), 200);
+  assert.equal(indicatorMarkerX(sample(-240).at, bounds, 400), 8);
+  assert.equal(indicatorMarkerX(sample(0).at, bounds, 400), 392);
+  assert.equal(indicatorMarkerX(sample(-241).at, bounds, 400), null);
+  assert.equal(indicatorMarkerX(sample(1).at, bounds, 400), null);
+  assert.equal(indicatorMarkerX('invalid', bounds, 400), null);
+  assert.equal(indicatorMarkerX(sample(-120).at, [end, end], 400), null);
+  assert.equal(indicatorMarkerX(sample(-120).at, bounds, 0), null);
 });

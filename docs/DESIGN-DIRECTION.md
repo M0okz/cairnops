@@ -41,9 +41,11 @@ La Vue d’ensemble garde les exceptions prioritaires : verdict et fraîcheur, q
 
 Les métriques globales portent sur les Cibles opérationnelles, la Couverture pondérée par les Observations attendues sur 24 heures, les Incidents actifs et les Sources configurées. La latence médiane du prototype est exclue : les agrégats réels ne permettent pas de la calculer. Les indicateurs choisis dans la vue d’ensemble se consultent sur 1 heure, 24 heures ou 7 jours, avec leur provenance, leur fraîcheur et les erreurs de collecte. La première heure filtre les relevés détaillés selon l’heure de la projection serveur. Leur sélection personnelle reste disponible.
 
-### Graphique de la Vue d’ensemble
+### Graphiques contextuels
 
 La carte reprend le [graphique interactif du dashboard shadcn-svelte](https://github.com/huntabyte/shadcn-svelte/blob/main/docs/src/lib/registry/blocks/dashboard-01/components/chart-area-interactive.svelte) : arrondi de 16 px, commandes segmentées, grille horizontale continue, axes temporels adaptatifs, traits neutres de 1 px et aires en dégradé. Une infobulle compacte réunit la date et les valeurs, avec leurs repères sur les courbes. Les couleurs et la typographie suivent les jetons Titane dans les deux thèmes.
+
+La Vue d’ensemble, les Indicateurs des Cibles et les courbes du détail d’Incident utilisent le même composant. Chaque Indicateur de Cible dispose de sa carte et partage la sélection de période 1 h / 24 h / 7 jours. Les métadonnées restent lisibles, les épingles personnelles et la provenance restent accessibles. Dans un Incident, la courbe compacte garde une fenêtre fixe de deux heures avant et après l’ouverture ; les valeurs capturées à l’ouverture restent distinctes des relevés du graphique. Le repère d’ouverture se place à son instant exact, même dans une interruption de collecte, sans inventer une mesure sur la courbe.
 
 Les courbes restent des projections des données réelles. Sur sept jours, `value` est la **dernière valeur de l’heure**, jamais sa moyenne ; `maximum`, lorsqu’il existe, fournit la seconde série. Ces deux valeurs se superposent sans être additionnées. Les absences de collecte restent des interruptions, un maximum absent reste absent, et les booléens se dessinent par paliers. Le domaine temporel conserve les bornes de la période même lorsque la collecte est partielle.
 
@@ -71,6 +73,12 @@ La liste principale affiche le nom, l'État de santé, la Nature et la Gravité 
 Une ligne d'Incident affiche sa Nature, sa plus forte Gravité effective active, l'état d'Acquittement, l'heure de début et la durée, le nombre d'Atteintes actives sur le total, le nombre de Cibles distinctes et une éventuelle Propagation étendue. Son développement révèle les Atteintes dans une structure comparable : Cible, Gravité, instants, nombre de Preuves actives, contradictions ou données manquantes et dernière transition significative.
 
 Le détail explique à la demande pourquoi les Atteintes partagent l'Incident, dans une phrase lisible fondée sur l'identité de Nature et l'intervalle observé. Il n'affiche ni score de confiance, ni réglage, ni action de fusion ou séparation, et aucun code couleur ni vocabulaire ne suggère une cause commune. Le détail d'une Cible montre les Incidents qui l'affectent en donnant la priorité à son Atteinte ; la boîte intégrée et le Push conservent une entrée unique par Incident, actualisée silencieusement hors nouveau Fait opérationnel.
+
+### Volet de détail d’Incident
+
+Depuis la liste ou la Vue d’ensemble, le détail s’ouvre à droite dans un volet de 52 rem au maximum, sur toute la hauteur disponible. La liste reste visible derrière un voile discret. Sur mobile, le volet remplit l’écran. Son en-tête et ses actions restent visibles ; seule la zone de contenu défile. Dates, preuves et chronologie se replient selon la largeur du volet.
+
+L’ouverture et la fermeture utilisent des transitions courtes et interruptibles ; la réduction des animations les supprime. Le dialogue natif conserve l’arrière-plan inerte, le focus dans le volet et le retour au déclencheur. Échap ferme d’abord une infobulle ou un formulaire d’Invalidation actif, puis le volet. Le lien direct d’un Incident et les actions métier restent identiques.
 
 ## Chronologie d'Incident
 
