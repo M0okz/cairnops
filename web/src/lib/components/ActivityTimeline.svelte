@@ -9,6 +9,10 @@
     evidence_added: 'timeline.evidence_added', evidence_resolved: 'timeline.evidence_resolved',
     invalidated: 'timeline.invalidated', impact_joined: 'timeline.impact_joined', impact_reopened: 'timeline.impact_reopened'
   };
+  const emptyMessageLabels: Record<string, MessageKey> = {
+    ack_sync_succeeded: 'timeline.ackSyncSucceeded',
+    ack_sync_failed: 'timeline.ackSyncFailed'
+  };
   const date = (at: string) => new Intl.DateTimeFormat(localeTag(), {
     day: 'numeric', month: 'long', year: 'numeric'
   }).format(new Date(at));
@@ -30,7 +34,7 @@
             </time>
             <span class="event-marker" class:restored={marker.restored} aria-hidden="true"><Icon name={marker.icon} size={16} /></span>
             <div class="event-body">
-              <p class="event-message">{entry.message}</p>
+              <p class="event-message">{entry.message.trim() ? entry.message : t(emptyMessageLabels[entry.kind] ?? 'timeline.recordedEvent')}</p>
               <div class="event-meta">
                 {#if detailLabels[entry.kind]}
                   <span>{t(detailLabels[entry.kind])}</span>
