@@ -122,4 +122,9 @@
         color var(--d1) var(--ease);
     }
   }
+  @media (max-width: 48rem) {
+    .segmented-control { max-width: 100%; flex-wrap: wrap; height: auto; }
+    button { flex: 1 1 auto; min-height: calc(var(--ctl-h) - 2px); }
+    .compact button { min-height: 1.75rem; }
+  }
 </style>

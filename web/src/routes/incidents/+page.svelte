@@ -306,7 +306,7 @@
   .nature {
     font-family: var(--font);
     color: var(--faint);
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
   }
 
   .incident-link {
@@ -320,7 +320,7 @@
   }
 
   .ack-cell {
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
   }
 
   .ack {
@@ -338,7 +338,7 @@
     border-radius: 50%;
     background: var(--surface-3);
     color: var(--ok);
-    font-size: 0.5625rem;
+    font-size: 0.75rem;
     font-style: normal;
   }
 
@@ -349,7 +349,7 @@
   }
 
   .log {
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -358,7 +358,7 @@
   .under {
     margin-top: var(--s4);
     color: var(--faint);
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
   }
 
   .under a {

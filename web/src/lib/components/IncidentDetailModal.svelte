@@ -170,10 +170,10 @@
     ondismiss();
   }
 
-  function restoreFocus() {
+  function restoreFocus(dismissedIncidentID: string) {
     const trigger = Array.from(
       document.querySelectorAll<HTMLElement>('[data-incident-trigger]')
-    ).find((candidate) => candidate.dataset.incidentTrigger === incidentId);
+    ).find((candidate) => candidate.dataset.incidentTrigger === dismissedIncidentID);
     (trigger ?? document.getElementById('main-content'))?.focus();
   }
 
@@ -192,6 +192,7 @@
   });
 
   onMount(() => {
+    const mountedIncidentID = incidentId;
     if (seed?.id === incidentId) {
       incident = seed;
       incidentLoading = false;
@@ -207,7 +208,7 @@
       requestVersion += 1;
       clearInterval(timer);
       if (dialog?.open) dialog.close();
-      requestAnimationFrame(restoreFocus);
+      requestAnimationFrame(() => restoreFocus(mountedIncidentID));
     };
   });
 </script>

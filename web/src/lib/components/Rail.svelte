@@ -4,6 +4,7 @@
   import Icon, { type IconName } from './Icon.svelte';
   import Odometer from './Odometer.svelte';
   import SegmentedControl from './ui/SegmentedControl.svelte';
+  import AppearanceSettings from './AppearanceSettings.svelte';
   import { session } from '$lib/session.svelte';
   import { i18n, locales, t } from '$lib/i18n.svelte';
 
@@ -50,7 +51,7 @@
       if (anchor && !anchor.contains(event.target as Node)) menuOpen = false;
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') menuOpen = false;
+      if (event.key === 'Escape') { menuOpen = false; anchor?.querySelector<HTMLButtonElement>('.account-button')?.focus(); }
     };
 
     document.addEventListener('pointerdown', away);
@@ -140,13 +141,10 @@
 </script>
 
 <aside class="rail">
-  <div class="rail-brand">
-    <Brand width={24} symbolOnly />
-    <!-- Le rail nomme l'instance, pas le produit : c'est ce qui distingue deux
-         onglets ouverts côte à côte. -->
-    <strong title={session.instanceLabel}>{session.instanceLabel}</strong>
-    <span class="version">v{session.version}</span>
-  </div>
+  <a class="rail-brand" href="/" aria-label="CairnOps">
+    <span class="brand-full"><Brand width={176} /></span>
+    <span class="brand-symbol"><Brand width={32} symbolOnly /></span>
+  </a>
 
   {#if session.availableVersion}
     <button
@@ -156,18 +154,24 @@
       aria-label={`${t('rail.updateAction')} · ${t('rail.updateAvailableVersion', { version: session.availableVersion })}`}
       onclick={() => session.reloadForUpdate()}
     >
-      <Icon name="worker" size={14} />
+      <Icon name="worker" size={18} />
       <span>{t('rail.updateAction')}</span>
       <small>{session.availableVersion}</small>
     </button>
   {/if}
 
-  <nav bind:this={navigation}>
+  <div class="instance-card" title={session.instanceLabel}>
+    <span class="instance-mark">{session.instanceLabel.charAt(0).toLocaleUpperCase(i18n.locale)}</span>
+    <span class="instance-copy"><strong>{session.instanceLabel}</strong><small>{t('rail.workspace')}</small></span>
+    <span class="version">v{session.version}</span>
+  </div>
+  <p class="nav-label">{t('rail.supervision')}</p>
+  <nav bind:this={navigation} aria-label={t('rail.supervision')}>
     {#each items as item (item.href)}
       {#if item.apart}<span class="rule" role="separator"></span>{/if}
-      <a href={item.href} aria-current={current(item.href) ? 'page' : undefined}>
-        <Icon name={item.icon} />
-        {item.label}
+      <a href={item.href} title={item.label} aria-label={item.label} aria-current={current(item.href) ? 'page' : undefined}>
+        <Icon name={item.icon} size={20} />
+        <span class="nav-item-label">{item.label}</span>
         {#if item.dot || item.count !== undefined}
           <span class="rail-indicator">
             {#if item.dot}
@@ -191,7 +195,7 @@
          supervision : thème, documentation, session. -->
     <div class="account" bind:this={anchor}>
       {#if menuOpen}
-        <div class="menu" role="menu" aria-label={t('rail.account')}>
+        <div class="menu" aria-label={t('rail.account')}>
           <div class="menu-head">
             <span class="workspace-mark">{initials}</span>
             <span class="who">
@@ -200,23 +204,7 @@
             </span>
           </div>
 
-          <div class="menu-row theme">
-            <span
-              ><Icon name={session.lightTheme ? 'sun' : 'moon'} size={15} />{t('rail.theme')}</span
-            >
-            <SegmentedControl
-              label={t('rail.theme')}
-              value={session.lightTheme ? 'light' : 'dark'}
-              items={[
-                { value: 'dark', label: t('rail.dark') },
-                { value: 'light', label: t('rail.light') }
-              ]}
-              size="compact"
-              onValueChange={(value) => {
-                if ((value === 'light') !== session.lightTheme) session.toggleTheme();
-              }}
-            />
-          </div>
+          <div class="account-appearance"><AppearanceSettings /></div>
 
           <!-- La langue vit à côté du thème : ce sont les deux réglages qui
                changent l'écran sans rien changer à la supervision. -->
@@ -231,24 +219,24 @@
             />
           </div>
 
-          <a class="menu-row" role="menuitem" href={CHANGELOG_URL} target="_blank" rel="noreferrer noopener">
+          <a class="menu-row" href={CHANGELOG_URL} target="_blank" rel="noreferrer noopener">
             <span><Icon name="changelog" size={15} />Changelog</span>
             <i class="ext" aria-hidden="true">↗</i>
           </a>
 
-          <a class="menu-row" role="menuitem" href={DOCS_URL} target="_blank" rel="noreferrer noopener">
+          <a class="menu-row" href={DOCS_URL} target="_blank" rel="noreferrer noopener">
             <span><Icon name="book" size={15} />Documentation</span>
             <i class="ext" aria-hidden="true">↗</i>
           </a>
 
-          <button class="menu-row danger" role="menuitem" type="button"
+          <button class="menu-row danger" type="button"
             onclick={() => { menuOpen = false; void session.logout(); }}>
             <span><Icon name="logout" size={15} />{t('rail.logout')}</span>
           </button>
         </div>
       {/if}
 
-      <button class="account-button" type="button" aria-expanded={menuOpen} aria-haspopup="menu"
+      <button class="account-button" type="button" aria-label={t('rail.account')} aria-expanded={menuOpen}
         onclick={() => (menuOpen = !menuOpen)}>
         <span class="workspace-mark">{initials}</span>
         <span class="who">
@@ -304,7 +292,7 @@
 
   .who strong {
     display: block;
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -313,7 +301,7 @@
 
   .who small {
     display: block;
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -321,7 +309,7 @@
 
   .chev {
     color: var(--dim);
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
   }
 
   /* Le menu déborde volontairement la largeur du rail : la ligne Thème ne
@@ -330,9 +318,11 @@
     position: absolute;
     bottom: calc(100% + 0.375rem);
     left: 0;
-    width: 15.5rem;
+    width: 22rem;
     max-width: calc(100vw - 1.5rem);
     z-index: 40;
+    max-height: calc(100dvh - 7rem);
+    overflow-y: auto;
     display: grid;
     gap: 1px;
     padding: 0.25rem;
@@ -351,8 +341,10 @@
     border-bottom: 1px solid var(--line);
   }
 
+  .account-appearance { padding: var(--s3); }
+
   .menu-head .who strong {
-    font-size: 0.8125rem;
+    font-size: var(--text-sm);
   }
 
   .menu-row {
@@ -366,7 +358,7 @@
     border-radius: var(--r-s);
     background: none;
     color: var(--muted);
-    font-size: 0.8125rem;
+    font-size: var(--text-sm);
     text-align: left;
     transition: background var(--d1) var(--ease), color var(--d1) var(--ease);
   }
@@ -394,8 +386,13 @@
 
   .ext {
     color: var(--dim);
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
     font-style: normal;
+  }
+
+  @media (max-width: 68rem) {
+    .account-button .who, .account-button .chev { display: none; }
+    .account-button { justify-content: center; padding: var(--s3); }
   }
 
   @media (max-width: 48rem) {

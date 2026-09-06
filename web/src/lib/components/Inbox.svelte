@@ -75,7 +75,7 @@
     bind:this={triggerElement}
     onclick={toggle}
   >
-    <Icon name="bell" size={14} />
+    <Icon name="bell" size={20} />
     {#if session.unread > 0}<span class="count">{badge}</span>{/if}
   </button>
 
@@ -139,8 +139,8 @@
     position: relative;
     display: grid;
     place-items: center;
-    width: 1.75rem;
-    height: 1.75rem;
+    width: var(--ctl-h-lg);
+    height: var(--ctl-h-lg);
     border: 1px solid var(--line);
     border-radius: var(--r-m);
     background: none;

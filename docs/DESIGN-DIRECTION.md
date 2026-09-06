@@ -2,12 +2,12 @@
 
 CairnOps doit inspirer confiance avant de chercher à impressionner. Son interface est fonctionnelle, précise et soigneusement finie ; le mouvement agrémente la navigation et confirme les actions sans détourner l'attention de l'état opérationnel.
 
-L’identité retenue est **Convergence · Titane**, décrite dans [le guide de marque](brand/BRAND-GUIDE.md). Elle remplace les pistes cuivre et Framboise et le cairn en pierres empilées. La grille des huit « Écrans » reste la base de l’application ; les compositions A/B/C de `web/design-prototype` sont encore à comparer. Le choix de marque ne choisit pas une composition. Les jetons de `web/src/styles/app.css` portent la traduction commune aux écrans et au prototype.
+L’identité retenue est **Convergence · Titane**, décrite dans [le guide de marque](brand/BRAND-GUIDE.md). Elle remplace les pistes cuivre et Framboise et le cairn en pierres empilées. La **composition A** de `web/design-prototype` et son échelle de lecture ont été retenues pour l’application : synthèse, analyse et incidents côte à côte, puis Cibles. Les autres compositions restent des explorations dans l’atelier. Les jetons de `web/src/styles/app.css` portent la traduction commune aux écrans et au prototype.
 
 ## Identité
 
-- Le symbole Convergence représente trois signaux orientés vers un même état. Ses trois formes restent angulaires, avec leurs proportions et leur dégagement d’origine. Le composant `Brand.svelte` reprend le signe et le mot-symbole vectorisés du kit, sans dépendre d’une police installée. Le rail et la connexion associent le signe au nom de l’instance.
-- Fond Titane sombre `#1C1B19`, fond clair `#FAF8F4`, texte principal inversé entre les deux. Les surfaces et bordures déclinent ces neutres dans les jetons communs, sans changer la grille ni la densité.
+- Le symbole Convergence représente trois signaux orientés vers un même état. Ses trois formes restent angulaires, avec leurs proportions et leur dégagement d’origine. Le composant `Brand.svelte` reprend le signe et le mot-symbole vectorisés du kit, sans dépendre d’une police installée. Le rail porte le mot-symbole CairnOps et distingue le nom de l’instance dans un cartouche ; la connexion associe le signe au nom de l’instance.
+- Fond Titane sombre `#1C1B19`, fond clair `#FAF8F4`, texte principal inversé entre les deux. Les surfaces et bordures déclinent ces neutres dans les jetons communs, avec la même grille et la même échelle de lecture dans les deux thèmes.
 - Accent de marque `#CCC6BC` en sombre, `#58534C` en clair. Le texte sur accent utilise respectivement `#1C1B19` et `#FFFFFF`. Les textes secondaires suivent le kit : `#BBC3CC` en sombre et `#706A61` en clair. L’accent distingue l’action principale et la route courante.
 - Vert, orange et rouge réservés à l'État de santé et à la Gravité. Le bleu signale l'information et la maintenance. Aucune couleur de Connecteur n'entre dans ce registre.
 - Formes solides et discrètement arrondies : 4 px pour les micro-contrôles, 6 px pour les contrôles, 8 px pour les dalles, pastilles pleinement arrondies.
@@ -37,14 +37,22 @@ L'exception vaut d'être nommée : les tendances sont rendues en SVG et non en b
 
 ## Hiérarchie
 
-La Vue d'ensemble est orientée exceptions : État global et fraîcheur, Incidents non acquittés puis acquittés, Défaillances de supervision, Cibles problématiques, puis résumé replié des Cibles Opérationnelles.
+La Vue d’ensemble garde les exceptions prioritaires : verdict et fraîcheur, quatre métriques issues de la projection réelle, puis grande courbe contextuelle et incidents à traiter. Les six premières Cibles sont triées par état, avec un filtre et un lien vers la liste complète. La Santé de l’instance reste accessible dans le volet et en bas de page. Une supervision vide ou partiellement inconnue ne donne jamais un verdict global opérationnel.
+
+Les métriques globales portent sur les Cibles opérationnelles, la Couverture pondérée par les Observations attendues sur 24 heures, les Incidents actifs et les Sources configurées. La latence médiane du prototype est exclue : les agrégats réels ne permettent pas de la calculer. Les indicateurs choisis dans la vue d’ensemble se consultent sur 24 heures ou 7 jours, avec leur provenance, leur fraîcheur et les erreurs de collecte. Leur sélection personnelle reste disponible.
 
 ## Densité adaptative
 
-- Desktop : rail fixe de 224 px, barre supérieure de 48 px portant le fil d'Ariane, la recherche et l'identité, puis un contenu en tables denses. Contrôles à 30 px, actions de tête à 32 px.
-- Sous 68 rem : le rail bascule en barre horizontale défilante, l'espace de travail et le compteur de fraîcheur s'effacent, la recherche se réduit.
+- Desktop : rail de 264 px, barre supérieure de 64 px avec fil d’Ariane, recherche, apparence et notifications. Contenu limité à 1920 px, gouttières de 40 px, contrôles de 40–44 px. Texte courant 16 px, commandes 14 px, métadonnées 12–13 px, titres 32/18 px et métriques 40 px. La base reste à 16 px quel que soit le moniteur ; le zoom appartient au navigateur.
+- Sous 68 rem : volet compact de 80 px avec icônes et noms accessibles ; la recherche conserve son déclencheur. Sous 48 rem, identité et compte passent en haut, et toutes les routes restent accessibles dans une navigation horizontale défilante. Les contrôles se replient avant de déborder.
 - Sous 48 rem : l'en-tête de table disparaît, chaque ligne se replie sur deux colonnes et les colonnes secondaires — Nature, Latence, Dispo. 24 h, Sources, Tendance — sont masquées plutôt que comprimées.
 - La densité est unique et assumée. L'ancien réglage Confortable/Compact est retiré : deux densités concurrentes empêchaient de régler la seule qui compte.
+
+## Apparence et mises à jour
+
+Clair, Sombre, Système et Auto partagent les mêmes jetons. Système suit les changements de l’appareil. Auto calcule le lever et le coucher du soleil pour une ville explicitement choisie, affiche les heures dans le fuseau de l’appareil et gère les jours et nuits polaires. Un fuseau ne suffit pas à localiser l’utilisateur ; sans ville valide, Auto suit le système. Les préférences restent locales, survivent au rechargement et se synchronisent entre les onglets. Elles sont disponibles dans la barre supérieure, le compte et les Réglages.
+
+La mise à jour disponible est signalée dans le volet, sous le logo. Le bouton recharge l’application pour lire la version déjà servie ; il ne déclenche aucune installation ni aucun redéploiement.
 
 ## Ligne de Cible
 

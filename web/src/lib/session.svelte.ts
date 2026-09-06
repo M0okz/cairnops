@@ -29,6 +29,7 @@ import { i18n, t } from './i18n.svelte';
 import { pinnedIndicatorIDs } from './overview';
 import { incidentMembershipChanged } from './resolved-incidents';
 import { absorbObservedVersion } from './version-state';
+import { appearance } from './appearance.svelte';
 
 export type GateState = 'loading' | 'setup' | 'login' | 'unavailable' | 'app';
 export type RealtimeState = 'connecting' | 'online' | 'offline';
@@ -111,7 +112,7 @@ class Session {
    * lourde au reste de l'application. */
   incidentRevision = $state(0);
 
-  lightTheme = $state(false);
+  get lightTheme() { return appearance.theme === 'light'; }
   identityBusy = $state(false);
   identityError = $state('');
   notice = $state('');
@@ -211,16 +212,8 @@ class Session {
 
   /* ── Thème ────────────────────────────────────────────────────────────── */
 
-  applyTheme() {
-    document.documentElement.dataset.theme = this.lightTheme ? 'light' : 'dark';
-    const background = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', background);
-  }
-
   toggleTheme() {
-    this.lightTheme = !this.lightTheme;
-    localStorage.setItem('cairnops-theme', this.lightTheme ? 'light' : 'dark');
-    this.applyTheme();
+    appearance.choose(this.lightTheme ? 'dark' : 'light');
   }
 
   /* ── Nom de l'instance ────────────────────────────────────────────────── */
@@ -243,8 +236,7 @@ class Session {
     /* La langue et le thème se posent avant tout appel : ce sont les deux
      * réglages que l'écran porte dès sa première image. */
     i18n.boot();
-    this.lightTheme = localStorage.getItem('cairnops-theme') === 'light';
-    this.applyTheme();
+    appearance.boot();
     document.addEventListener('visibilitychange', this.#visibilityProbe);
     await Promise.all([this.loadInfrastructure(), this.loadIdentity()]);
   }
@@ -859,6 +851,7 @@ class Session {
   }
 
   teardown() {
+    appearance.teardown();
     this.stopRealtime();
     document.removeEventListener('visibilitychange', this.#visibilityProbe);
     if (this.#noticeTimer) clearTimeout(this.#noticeTimer);

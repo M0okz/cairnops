@@ -21,6 +21,7 @@
     interactive = false,
     focusable = interactive,
     compact = false,
+    expanded = false,
     label = 'Courbe de l’Indicateur',
     marker = null,
     tone = 'source',
@@ -32,9 +33,10 @@
     interactive?: boolean;
     focusable?: boolean;
     compact?: boolean;
+    expanded?: boolean;
     label?: string;
     marker?: { at: string; label: string; tone: 'info' | 'warn' | 'crit' } | null;
-    tone?: 'source' | 'ok';
+    tone?: 'source' | 'ok' | 'context';
     bounds?: [number, number] | null;
     gapThresholdMilliseconds?: number | null;
   } = $props();
@@ -42,10 +44,10 @@
   const chartID = $props.id();
   const fillID = `chart-fill-${chartID}`;
   const clipID = `chart-clip-${chartID}`;
-  const height = $derived(compact ? 64 : 132);
-  const insetX = $derived(compact ? 3 : 8);
+  const height = $derived(compact ? 64 : expanded ? 280 : 132);
+  const insetX = $derived(compact ? 3 : expanded ? 48 : 8);
   const insetTop = $derived(compact ? 4 : 10);
-  const insetBottom = $derived(compact ? 4 : 20);
+  const insetBottom = $derived(compact ? 4 : expanded ? 30 : 20);
   const tooltipWidth = $derived(compact ? 148 : 188);
   const tooltipHeight = $derived(compact ? 36 : 46);
   let selected = $state<number | null>(null);
@@ -79,6 +81,7 @@
     const baseline = height - insetBottom;
     const segments = chartSegments(coordinates, gapThresholdMilliseconds);
     return {
+      range,
       width: renderedWidth,
       coordinates,
       segments: segments.map((segment) => ({
@@ -121,10 +124,14 @@
     pointerX = geometry.coordinates[next]?.x ?? null;
   }
 
+  const multiDay = $derived(points.length > 1 &&
+    new Date(points.at(-1)!.at).getTime() - new Date(points[0].at).getTime() > 36 * 60 * 60_000);
+
   function timestamp(at: string, axis = false): string {
     const date = new Date(at);
     if (!Number.isFinite(date.getTime())) return '';
     if (axis) {
+      if (expanded && multiDay) return new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'short' }).format(date);
       return new Intl.DateTimeFormat(localeTag(), {
         hour: '2-digit',
         minute: '2-digit'
@@ -187,6 +194,7 @@
   bind:this={chart}
   class="area-chart tone-{tone}"
   class:compact
+  class:expanded
   class:interactive
   viewBox="0 0 {geometry.width} {height}"
   role="img"
@@ -226,6 +234,11 @@
         vector-effect="non-scaling-stroke"
       />
     {/each}
+    {#if expanded && geometry.range && geometry.coordinates.length > 0}
+      {#each [0, 0.25, 0.5, 0.75, 1] as ratio}
+        <text class="value-tick" x={insetX - 10} y={insetTop + (height - insetTop - insetBottom) * ratio + 4} text-anchor="end">{new Intl.NumberFormat(localeTag(), { notation: 'compact', maximumFractionDigits: 1 }).format(geometry.range[1] - (geometry.range[1] - geometry.range[0]) * ratio)}</text>
+      {/each}
+    {/if}
   </g>
 
   {#if geometry.coordinates.length > 0}
@@ -312,6 +325,13 @@
   .area-chart.compact {
     height: 4rem;
   }
+
+  .area-chart.expanded { height: 17.5rem; }
+  .area-chart.tone-context { color: var(--chart-context); }
+  .expanded .axis text, .value-tick { font-size: 13px; fill: var(--faint); font-family: var(--font); }
+  .expanded .tooltip-time { font-size: 12px; }
+  .expanded .tooltip-value { font-size: 14px; }
+  .expanded .grid line { stroke-dasharray: 3 6; }
 
   .area-chart.interactive {
     cursor: crosshair;

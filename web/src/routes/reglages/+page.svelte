@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AppearanceSettings from '$lib/components/AppearanceSettings.svelte';
   /* Réglages.
    * Les Écrans placent « Réglages » dans la navigation et font passer les
    * Connecteurs par lui. S'y ajoutent les gestes qui portent sur les comptes,
@@ -318,19 +319,9 @@
     </div>
     {#if renameError}<p class="error" role="alert">{renameError}</p>{/if}
 
-    <!-- Clair et sombre se choisissent, ils ne se basculent pas : le segment
-         montre les deux états et dit lequel tient. -->
-    <div class="row">
-      <span class="id">
-        <strong>{t('rail.theme')}</strong>
-        <small class="faint">{t('settings.themeHint')}</small>
-      </span>
-      <div class="act segments" role="group" aria-label={t('rail.theme')}>
-        <button type="button" aria-pressed={session.lightTheme}
-          onclick={() => session.lightTheme || session.toggleTheme()}>{t('settings.themeLight')}</button>
-        <button type="button" aria-pressed={!session.lightTheme}
-          onclick={() => session.lightTheme && session.toggleTheme()}>{t('settings.themeDark')}</button>
-      </div>
+    <div class="row appearance-row">
+      <span class="id"><strong>{t('appearance.title')}</strong><small class="faint">{t('appearance.deviceHint')}</small></span>
+      <div class="settings-appearance"><AppearanceSettings /></div>
     </div>
 
     <!-- La langue se choisit ici comme dans le menu du rail : c'est le même
@@ -637,6 +628,8 @@
 {/if}
 
 <style>
+  .settings-appearance { width: 24rem; max-width: 100%; }
+  .appearance-row { align-items: flex-start; flex-wrap: wrap; }
   .band {
     margin: var(--s6) 0 var(--s4);
     font-size: 0.9375rem;
@@ -663,7 +656,7 @@
 
   .band-note {
     color: var(--faint);
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
   }
 
   /* Le nom de l'instance se corrige sur place : le champ occupe la colonne du
@@ -725,17 +718,17 @@
 
   .id strong {
     display: block;
-    font-size: 0.8125rem;
+    font-size: var(--text-sm);
     font-weight: 600;
   }
 
   .id small {
     display: block;
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
   }
 
   .self {
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
   }
 
   /* Compte · Rôle · Dernière activité · Sessions · commandes. La colonne des
@@ -761,7 +754,7 @@
 
   .role select {
     padding: 0.25rem var(--s3);
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
   }
 
   /* La règle que l'instance tient se dit sous les comptes qu'elle contraint,
@@ -774,17 +767,17 @@
     border-top: 1px solid var(--line);
     background: var(--bg);
     color: var(--faint);
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
   }
 
   h3 {
-    font-size: 0.8125rem;
+    font-size: var(--text-sm);
     font-weight: 600;
   }
 
   .lead {
     margin: 0.25rem 0 var(--s4);
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
   }
 
   .grid {
@@ -805,7 +798,7 @@
     align-items: center;
     gap: var(--s4);
     margin-top: var(--s5);
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
   }
 
   /* Les deux notes de bas d'écran : la doctrine, et ce qu'on fait quand on
@@ -827,13 +820,13 @@
   .note strong {
     display: block;
     margin-bottom: 0.375rem;
-    font-size: 0.8125rem;
+    font-size: var(--text-sm);
     font-weight: 600;
   }
 
   .note p {
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
     line-height: 1.55;
   }
 

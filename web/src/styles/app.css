@@ -1,8 +1,8 @@
 /* CairnOps — feuille de style unique.
  *
  * Identité : Convergence · Titane (docs/brand/BRAND-GUIDE.md).
- * La grille des Écrans reste la base ; les compositions de la refonte sont
- * comparées séparément dans web/design-prototype.
+ * Composition A : verdict, indicateurs, analyse et incidents, puis Cibles.
+ * Échelle de lecture validée dans web/design-prototype, partagée par les routes.
  *
  * Tout passe par les jetons ci-dessous. Aucune couleur littérale sous ce bloc. */
 
@@ -80,9 +80,9 @@
   /* Typographie */
   --font: system-ui, -apple-system, 'Segoe UI', 'IBM Plex Sans', sans-serif;
   --font-num: ui-monospace, SFMono-Regular, Menlo, monospace;
-  --text-xs: 0.6875rem;
-  --text-sm: 0.75rem;
-  --text-md: 0.8125rem;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
   --weight-medium: 500;
   --weight-semibold: 600;
 
@@ -90,9 +90,9 @@
   --s1: 2px;
   --s2: 0.25rem;
   --s3: 0.5rem;
-  --s4: 0.875rem;
-  --s5: 1.25rem;
-  --s6: 1.625rem;
+  --s4: 1rem;
+  --s5: 1.5rem;
+  --s6: 2rem;
   --s7: 2.5rem;
 
   /* Formes */
@@ -103,10 +103,10 @@
   --line-width: 1px;
 
   /* Ossature */
-  --rail-w: 14rem;
-  --topbar-h: 3rem;
-  --ctl-h: 1.875rem;
-  --ctl-h-lg: 2rem;
+  --rail-w: 16.5rem;
+  --topbar-h: 4rem;
+  --ctl-h: 2.5rem;
+  --ctl-h-lg: 2.75rem;
   --counter-slot-w: 1.75rem;
   --counter-pill-h: 1.125rem;
   /* Les en-têtes de table gardent une piste vide pour les actions. Sa largeur
@@ -219,26 +219,8 @@
   box-sizing: border-box;
 }
 
-/* L'échelle de toute l'interface.
- *
- * Les Écrans ont été dessinés sur un canevas de 1400 px : à cette largeur, la
- * densité est juste. Au-delà — et particulièrement sur un écran Retina réglé
- * en « plus d'espace », où le pixel CSS est physiquement petit — la même
- * densité devient illisible.
- *
- * Toutes les dimensions de l'interface sont exprimées en rem, donc ce seul
- * réglage fait grossir ensemble la typographie, les contrôles, les gouttières,
- * le rail et les colonnes de tableau, sans jamais déformer les proportions.
- * Les filets de 1 px restent des filets.
- *
- * Les points de rupture de mise en page restent en rem : une media query évalue
- * toujours le rem à sa valeur initiale (16 px), jamais à celle de :root. Ils ne
- * se déplacent donc pas quand l'échelle change. */
-/* L'échelle de base. La valeur réelle est posée par le script d'app.html, qui
- * la tire de la largeur de l'écran et non de celle de la fenêtre : 16 px sous
- * 1600 px, un pixel de plus par centaine, 22,5 px au plafond. Celle-ci ne sert
- * qu'aux rendus sans script. Redimensionner la fenêtre ne change donc plus
- * rien à la taille du texte, du rail, ni d'aucun contrôle. */
+/* Une base stable à 16 px : les proportions viennent des composants et le
+ * zoom reste un choix du navigateur. Aucun ajustement à la taille du moniteur. */
 html {
   height: 100%;
   font-size: 16px;
@@ -250,7 +232,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font);
-  font-size: 0.8125rem;
+  font-size: var(--text-md);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -294,7 +276,7 @@ td.num,
 .mono {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 /* ── Ossature applicative ───────────────────────────────────────────────── */
@@ -313,28 +295,18 @@ td.num,
   border-right: 1px solid var(--line);
   position: sticky;
   top: 0;
-  height: 100vh;
+  height: 100dvh;
+  z-index: 30;
 }
 
-.rail-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.375rem var(--s3) var(--s4);
-}
-
-/* Le rail porte le nom de l'instance, qui peut être long là où « CairnOps »
-   tenait toujours : il se coupe plutôt que de pousser la pastille de version
-   hors du rail. */
-.rail-brand > strong {
-  font-size: 0.875rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
+.rail-brand { display: flex; align-items: center; padding: var(--s3) var(--s3) var(--s5); }
+.brand-symbol { display: none; }
+.instance-card { display: flex; align-items: center; gap: var(--s3); margin: var(--s4) 0 var(--s5); padding: var(--s3); min-height: 4rem; border: 1px solid var(--line); border-radius: var(--r-m); }
+.instance-mark { display: grid; place-items: center; flex: none; width: 2rem; height: 2rem; border: 1px solid var(--line-strong); border-radius: var(--r-s); font-size: var(--text-sm); }
+.instance-copy { min-width: 0; }
+.instance-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); font-weight: 600; }
+.instance-copy small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--s1); color: var(--faint); font-size: 0.75rem; }
+.nav-label { padding: 0 var(--s3) var(--s3); font-size: var(--text-xs); color: var(--faint); }
 
 .cairnops-brand {
   display: block;
@@ -346,14 +318,14 @@ td.num,
 
 .version {
   flex: none;
-  max-width: 5.5rem;
+  max-width: 4.5rem;
   margin-left: auto;
   padding: var(--s1) 0.375rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-s);
   color: var(--faint);
   font-family: var(--font-num);
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -370,28 +342,29 @@ td.num,
   border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
   background: var(--surface);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   width: 100%;
   text-align: left;
 }
 
 .workspace-mark {
-  width: 1rem;
-  height: 1rem;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
   display: grid;
   place-items: center;
   border-radius: 0.1875rem;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 0.5625rem;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
 .workspace > span:last-child {
   margin-left: auto;
   color: var(--dim);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
 }
 
 .rail nav,
@@ -406,38 +379,38 @@ td.num,
   border-top: 1px solid var(--line);
 }
 
-.rail a {
+.rail nav a {
   display: flex;
   align-items: center;
-  gap: 0.5625rem;
-  height: 2rem;
+  gap: 0.75rem;
+  height: 2.75rem;
   padding: 0 var(--s3);
   border-radius: var(--r-m);
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   transition: background var(--d1) var(--ease), color var(--d1) var(--ease);
 }
 
-.rail a svg {
-  width: 0.9375rem;
-  height: 0.9375rem;
+.rail nav a svg {
+  width: 1.25rem;
+  height: 1.25rem;
   flex: none;
   stroke: var(--icon);
   transition: stroke var(--d1) var(--ease);
 }
 
-.rail a:hover {
+.rail nav a:hover {
   background: var(--surface);
   color: var(--ink);
 }
 
-.rail a[aria-current='page'] {
+.rail nav a[aria-current='page'] {
   background: var(--surface-2);
   color: var(--ink);
 }
 
-.rail a[aria-current='page'] svg {
+.rail nav a[aria-current='page'] svg {
   stroke: var(--accent);
 }
 
@@ -455,7 +428,7 @@ td.num,
   place-items: center;
   color: var(--faint);
   font-family: var(--font-num);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   line-height: 1;
 }
@@ -467,10 +440,10 @@ td.num,
   border-radius: var(--r-pill);
   background: var(--crit-bg);
   color: var(--crit);
-  font-size: 0.625rem;
+  font-size: 0.75rem;
 }
 
-.rail a > i.dot {
+.rail nav a > i.dot {
   margin-left: auto;
 }
 
@@ -481,51 +454,27 @@ td.num,
   height: 2.25rem;
   padding: 0 var(--s3);
   color: var(--faint);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
 }
 
 /* ── Barre supérieure ───────────────────────────────────────────────────── */
 
 .topbar {
   height: var(--topbar-h);
-  padding: 0 var(--s5);
+  padding: 0 var(--s7);
   display: flex;
   align-items: center;
   gap: 0.625rem;
   border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  background: var(--bg);
   position: sticky;
   top: 0;
   z-index: 20;
 }
 
-/* Le fil monte avec le défilement : invisible tant que le titre de l'écran est
- * à sa place, il prend le relais quand celui-ci passe sous la barre. Il reste
- * dans le flux pour que rien ne bouge autour de lui. */
-.crumb {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  min-width: 0;
-  font-size: 0.8125rem;
-  opacity: 0;
-  transform: translateY(0.375rem);
-  pointer-events: none;
-  transition: opacity var(--d2) var(--ease), transform var(--d2) var(--ease);
-}
-
-.crumb.shown {
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .crumb {
-    transform: none;
-    transition: opacity var(--d1) var(--ease);
-  }
-}
+.crumb { display: flex; align-items: center; gap: var(--s4); min-width: 0; font-size: var(--text-xs); }
+.crumb > :not(.sep) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crumb .sep { flex: none; }
 
 .crumb > a,
 .crumb > span:not(.sep):not(:last-child) {
@@ -561,7 +510,7 @@ td.num,
 
 .update-cta small {
   font-family: var(--font-num);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -581,7 +530,7 @@ td.num,
   border-radius: var(--r-m);
   background: var(--bg);
   color: var(--dim);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   text-align: left;
 }
 
@@ -603,7 +552,7 @@ kbd {
   padding: 1px 0.3125rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-s);
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   color: var(--dim);
 }
 
@@ -615,22 +564,14 @@ kbd {
   border-radius: 50%;
   background: var(--surface-3);
   color: var(--ink);
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   font-weight: 600;
   flex: none;
 }
 
 /* ── Contenu ────────────────────────────────────────────────────────────── */
 
-/* La mesure des écrans. La gouttière est une part de la place, pas une largeur
- * plafonnée : un plafond en rem se déplace avec l'échelle du texte et saute
- * quand elle change, là où une part reste la même à toutes les largeurs. Le
- * contenu garde près de 95 % de ce qui est à droite du rail — assez pour que le bord
- * respire, pas au point que l'écran paraisse à moitié vide. Sous les fenêtres
- * étroites, la gouttière de garde reprend la main. */
-.page {
-  padding: var(--s6) max(var(--s5), 2.7%) var(--s7);
-}
+.page { width: 100%; max-width: 120rem; margin: 0 auto; padding: var(--s7); }
 
 .page-head {
   display: flex;
@@ -642,13 +583,13 @@ kbd {
 }
 
 .page-head h1 {
-  font-size: 1.375rem;
+  font-size: 2rem;
   margin-bottom: 0.375rem;
 }
 
 .page-head p {
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .page-actions {
@@ -669,7 +610,7 @@ kbd {
   border-radius: var(--r-m);
   background: var(--surface);
   color: var(--ink);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   white-space: nowrap;
   transition: background var(--d1) var(--ease), border-color var(--d1) var(--ease);
@@ -745,7 +686,7 @@ kbd {
 .filters .note {
   margin-left: auto;
   color: var(--faint);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 /* Le filtre local partage la hauteur et le dessin des segments voisins : il
@@ -759,7 +700,7 @@ kbd {
   background: var(--surface);
   color: var(--ink);
   font: inherit;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .filter input::placeholder {
@@ -795,7 +736,7 @@ kbd {
   border-radius: var(--r-pill);
   background: var(--surface-2);
   color: var(--muted);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -842,7 +783,7 @@ kbd {
 .card > header .note {
   margin-left: auto;
   color: var(--faint);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .card-body {
@@ -863,7 +804,7 @@ kbd {
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   color: var(--faint);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   line-height: 1;
 }
@@ -896,7 +837,7 @@ a.trow:hover {
 
 .cell-name strong {
   display: block;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -904,13 +845,13 @@ a.trow:hover {
   display: block;
   margin-top: var(--s1);
   color: var(--faint);
-  font-family: var(--font-num);
-  font-size: 0.6875rem;
+  font-family: var(--font);
+  font-size: var(--text-xs);
 }
 
 .caret {
   color: var(--icon);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   justify-self: end;
 }
 
@@ -946,7 +887,7 @@ a.trow:hover .caret {
   display: block;
   margin-top: 0.1875rem;
   color: var(--faint);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
 }
 
 /* ── États vides et messages ────────────────────────────────────────────── */
@@ -955,7 +896,7 @@ a.trow:hover .caret {
   padding: var(--s7) var(--s5);
   text-align: center;
   color: var(--faint);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .empty strong {
@@ -993,7 +934,7 @@ a.trow:hover .caret {
   border-radius: var(--r-l);
   background: var(--surface-2);
   color: var(--ink);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   box-shadow: var(--shadow);
   animation: rise var(--d2) var(--ease);
 }
@@ -1027,7 +968,7 @@ a.trow:hover .caret {
 }
 
 .gate-card h1 {
-  font-size: 1.375rem;
+  font-size: 2rem;
   margin-bottom: var(--s3);
 }
 
@@ -1044,7 +985,7 @@ a.trow:hover .caret {
 }
 
 .gate-card .field label {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .gate-card .field input {
@@ -1061,7 +1002,7 @@ a.trow:hover .caret {
 
 .field label {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -1075,7 +1016,7 @@ a.trow:hover .caret {
   background: var(--bg);
   color: var(--ink);
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .field textarea {
@@ -1092,7 +1033,7 @@ a.trow:hover .caret {
 
 .field small {
   color: var(--faint);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
 }
 
 .error {
@@ -1102,7 +1043,7 @@ a.trow:hover .caret {
   border-radius: var(--r-m);
   background: var(--crit-bg);
   color: var(--crit);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 /* ── Modales ────────────────────────────────────────────────────────────── */
@@ -1180,7 +1121,7 @@ a.trow:hover .caret {
 .modal header p {
   margin-top: 0.25rem;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 /* Sans align-items, la note du pied s'étire sur toute la hauteur de la ligne
@@ -1204,7 +1145,7 @@ a.trow:hover .caret {
   margin-right: auto;
   padding-right: var(--s4);
   max-width: 44ch;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   line-height: 1.45;
 }
 
@@ -1296,7 +1237,7 @@ a.trow:hover .caret {
   gap: var(--s2);
   padding: 0 var(--s4) var(--s2);
   color: var(--faint);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -1328,7 +1269,7 @@ a.trow:hover .caret {
 }
 
 .palette-hit-text strong {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1337,7 +1278,7 @@ a.trow:hover .caret {
 
 .palette-hit-text small {
   color: var(--faint);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1346,7 +1287,7 @@ a.trow:hover .caret {
 .palette-empty {
   padding: var(--s5) var(--s4);
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -1354,7 +1295,7 @@ a.trow:hover .caret {
   display: block;
   margin-bottom: var(--s2);
   color: var(--ink);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -1365,7 +1306,7 @@ a.trow:hover .caret {
   padding: var(--s3) var(--s4);
   border-top: 1px solid var(--line);
   color: var(--faint);
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
   flex: none;
 }
 
@@ -1385,57 +1326,42 @@ a.trow:hover .caret {
 /* ── Densité adaptative ─────────────────────────────────────────────────── */
 
 @media (max-width: 68rem) {
-  .shell {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .rail {
-    position: static;
-    height: auto;
-    flex-direction: row;
-    align-items: center;
-    gap: var(--s3);
-    padding: var(--s3) var(--s4);
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    overflow-x: auto;
-  }
-
-  .rail-brand,
-  .rail nav,
-  .rail-foot {
-    padding: 0;
-    margin: 0;
-    border: 0;
-  }
-
-  .rail nav,
-  .rail-foot {
-    display: flex;
-    gap: var(--s1);
-  }
-
-  .rail-foot {
-    margin-left: auto;
-  }
-
-  .workspace,
-  .version,
-  .realtime span {
-    display: none;
-  }
-
-  .search {
-    width: 9rem;
-  }
-
-  .update-cta {
-    align-self: center;
-    margin: 0;
-  }
+  .shell { grid-template-columns: 5rem minmax(0, 1fr); }
+  .rail { padding: var(--s4) var(--s3); }
+  .brand-full, .instance-card, .nav-label, .rail .nav-item-label, .rail .version, .realtime span { display: none; }
+  .brand-symbol { display: block; }
+  .rail-brand { justify-content: center; padding: var(--s3) 0 var(--s5); }
+  .rail nav a { justify-content: center; position: relative; }
+  .rail-indicator { position: absolute; right: 0; top: 0; width: auto; height: auto; }
+  .rail-indicator > b:not(.hot) { display: none; }
+  .rail-indicator > b.hot { padding: 0 var(--s2); }
+  .realtime { justify-content: center; }
+  .search { width: var(--ctl-h-lg); justify-content: center; }
+  .search > span, .search kbd { display: none; }
+  .update-cta { align-self: center; justify-content: center; max-width: 100%; margin: 0 0 var(--s3); width: var(--ctl-h-lg); }
+  .update-cta > span, .update-cta > small { display: none; }
+  .page { padding: var(--s6); }
+  .topbar { padding: 0 var(--s6); }
 }
 
 @media (max-width: 48rem) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: var(--s4); }
+  .brand-full { display: block; }
+  .brand-symbol { display: none; }
+  .rail .nav-item-label { display: inline; }
+  .rail-brand { padding: 0; justify-content: flex-start; }
+  .rail-brand .cairnops-brand { width: 9rem; height: auto; }
+  .rail-foot { border: 0; padding: 0; }
+  .rail .realtime { display: none; }
+  .rail nav { display: flex; gap: var(--s2); }
+  .rail-indicator { position: static; margin-left: var(--s2); }
+  .topbar { padding: 0 var(--s4); gap: var(--s3); }
+  .topbar .instance-crumb, .topbar .instance-crumb + .sep { display: none; }
+  .topbar-right { gap: var(--s2); flex: none; }
+  .update-cta > span, .update-cta > small { display: inline; }
+  .update-cta { width: auto; margin-bottom: 0; }
+
   /* Le rail devient un en-tête sur deux lignes : identité et compte en haut,
    * routes dans un ruban dessous. Les réunir sur une seule ligne écrasait le
    * contenu et cachait systématiquement la route active sur un téléphone. */

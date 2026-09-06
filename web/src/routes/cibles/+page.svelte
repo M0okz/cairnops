@@ -397,14 +397,14 @@
   .stacked small {
     display: block;
     margin-top: 2px;
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
   }
 
   .nature {
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
   }
 
-  .cell-name .contextual { color: var(--accent); font-size: .625rem; }
+  .cell-name .contextual { color: var(--accent); font-size: var(--text-xs); }
   .cell-name .contextual b { font-weight: 600; }
 
   .sources {
@@ -418,7 +418,7 @@
   }
 
   .sources > small {
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
   }
 
   .source-dot.cairnops { background: var(--source-cairnops) }
@@ -442,7 +442,7 @@
     border-radius: var(--r-m);
     background: var(--surface);
     box-shadow: var(--shadow);
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
     line-height: 1.35;
     opacity: 0;
     visibility: hidden;
@@ -515,14 +515,14 @@
   .tip-metrics small {
     overflow: hidden;
     color: var(--faint);
-    font-size: 0.625rem;
+    font-size: 0.75rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .tip-metrics b {
     font-family: var(--font-num);
-    font-size: 0.6875rem;
+    font-size: var(--text-xs);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -539,7 +539,7 @@
   .loading {
     margin-top: var(--s4);
     color: var(--faint);
-    font-size: 0.75rem;
+    font-size: var(--text-sm);
   }
 
   .action-count {

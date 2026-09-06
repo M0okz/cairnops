@@ -1,6 +1,6 @@
 # CairnOps — atelier d’interface
 
-Proposition interactive en Svelte 5, données de démonstration, aucun accès réseau à CairnOps. Le code est séparé du bundle de production. Il sert à choisir une direction avant son intégration dans les écrans réels.
+Proposition interactive en Svelte 5, données de démonstration, aucun accès réseau à CairnOps. Le code est séparé du bundle de production. Il conserve les explorations ayant conduit à la composition A et à l’échelle de lecture désormais reprises dans les écrans réels.
 
 ## Lancer
 
@@ -14,7 +14,7 @@ Un opérateur vient comprendre ce qui nécessite une action, comparer les preuve
 - Couleurs : Titane sombre et clair, accent minéral de la marque, vert des états établis, ambre des avertissements, rouge des indisponibilités, bleu des informations contextuelles.
 - Signature : passer du verdict aux preuves dans le même axe de lecture ; chaque nombre rappelle son périmètre et sa fraîcheur.
 - Alternatives aux automatismes : les métriques ont une fonction opérationnelle ; les graphiques restent contextuels ; les incidents conservent leur état après Acquittement.
-- Composition A : synthèse, puis graphique et incidents côte à côte. Recommandée.
+- Composition A : synthèse, puis graphique et incidents côte à côte. Retenue pour l’intégration.
 - Composition B : incidents en premier, puis les tendances. Pour une utilisation pendant une intervention.
 - Composition C : analyse en grand, synthèse compacte et liste en dessous. Pour explorer les données.
 
@@ -34,7 +34,7 @@ Premier film de direction : format 16:9, textes français, sans voix off. Marque
 
 ## Suite d’intégration
 
-1. Choisir la composition et ajuster le specimen ; la marque Convergence · Titane est déjà choisie.
+1. Composition A, marque Convergence · Titane et échelle de lecture validées.
 2. Reporter les choix de composition et de densité dans les jetons et la direction visuelle.
 3. Intégrer la coque, les thèmes, les graphiques et le détail avec les données réelles, en conservant les contrats et la sémantique métier.
 4. Vérifier les états vides, erreurs, données périmées, clavier, mouvements réduits et petits écrans, en clair/sombre.
@@ -45,10 +45,10 @@ Références : https://shadcn-svelte.com/examples/dashboard ; https://github.com
 
 ## État et vérification de cette proposition
 
-Première phase de la refonte, sur `codex/dashboard-design`. La marque, les jetons Titane, les favicons et les icônes sont repris dans les composants Web partagés de cette branche ; les écrans métier conservent leur composition actuelle. La composition reste à choisir avant de reporter la proposition dans les écrans métier. Le prototype est une entrée indépendante de l’application, avec ses propres fixtures ; il ne constitue pas une intégration de la refonte en production.
+Première phase de la refonte, sur `codex/dashboard-design`. La marque, les jetons Titane, les favicons et les icônes sont repris dans les composants Web partagés de cette branche ; la Vue d’ensemble adopte A et les listes Cibles/Incidents partagent sa densité. La composition A est choisie et reprise dans la Vue d’ensemble réelle, avec les thèmes persistants et l’échelle commune. Le prototype est une entrée indépendante de l’application, avec ses propres fixtures ; il ne constitue pas une intégration de la refonte en production.
 
 Vérifications : trois compositions en clair/sombre ; largeurs 320, 390, 768, 1024 et 1440 px ; graphique au clavier ; filtre, recherche, vide, pagination ; détail et retour du focus ; Acquittement sans Résolution ; changement système en direct ; solaire jour/nuit et jours/nuits polaires. Compilation Svelte sans erreur ni avertissement. Les contrôles web et Go du dépôt ont aussi été exécutés.
 
 Le film dure 42,5 secondes : MP4 H.264, 1920 × 1080, 30 images/s, sans piste audio. `render-film.py` expose `--preview` pour les sept plans fixes. Les scripts Python nécessitent Playwright ; FFmpeg doit être disponible pour l’export. `CAIRNOPS_DESIGN_OUTPUT` permet de choisir le dossier de sortie. L’aperçu animé séparé est accessible par `/film.html` et respecte la préférence de réduction des mouvements en attendant une lecture explicite.
 
-Les sources de la maquette, les captures et le MP4 sont conservés comme éléments de travail. La prochaine phase porte sur les jetons communs, les écrans réels et les parcours complets. La branche reste active tant que cette intégration n’est pas terminée.
+Les sources de la maquette, les captures et le MP4 sont conservés comme éléments de travail. Le film définitif pour le site vitrine sera dérivé du produit après validation de son intégration.
