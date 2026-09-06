@@ -15,6 +15,7 @@ type ChartGeometry = {
   insetTop: number;
   insetBottom: number;
   bounds: [number, number];
+  timeBounds?: [number, number];
 };
 
 const rounded = (value: number) => Math.round(value * 100) / 100;
@@ -28,13 +29,14 @@ export function chartCoordinates(
   points: Array<Pick<IndicatorPoint, 'at' | 'value'>>,
   geometry: ChartGeometry
 ): ChartCoordinate[] {
-  const { width, height, insetX, insetTop, insetBottom, bounds } = geometry;
+  const { width, height, insetX, insetTop, insetBottom, bounds, timeBounds } = geometry;
   if (points.length === 0) return [];
 
   const times = points.map((point) => new Date(point.at).getTime());
   const timed = times.every(Number.isFinite) && times.at(-1)! > times[0];
-  const firstTime = timed ? times[0] : 0;
-  const timeSpan = timed ? times.at(-1)! - firstTime : Math.max(1, points.length - 1);
+  const fixedTime = timeBounds && timeBounds.every(Number.isFinite) && timeBounds[1] > timeBounds[0];
+  const firstTime = fixedTime ? timeBounds[0] : timed ? times[0] : 0;
+  const timeSpan = fixedTime ? timeBounds[1] - firstTime : timed ? times.at(-1)! - firstTime : Math.max(1, points.length - 1);
   const plotWidth = Math.max(0, width - insetX * 2);
   const plotHeight = Math.max(0, height - insetTop - insetBottom);
   const low = Math.min(bounds[0], bounds[1]);
@@ -42,7 +44,7 @@ export function chartCoordinates(
   const valueSpan = Math.max(1e-9, high - low);
 
   return points.map((point, index) => {
-    const progress = timed
+    const progress = fixedTime || timed
       ? (times[index] - firstTime) / timeSpan
       : points.length === 1
         ? 0.5

@@ -39,7 +39,15 @@ L'exception vaut d'être nommée : les tendances sont rendues en SVG et non en b
 
 La Vue d’ensemble garde les exceptions prioritaires : verdict et fraîcheur, quatre métriques issues de la projection réelle, puis grande courbe contextuelle et incidents à traiter. Les six premières Cibles sont triées par état, avec un filtre et un lien vers la liste complète. La Santé de l’instance reste accessible dans le volet et en bas de page. Une supervision vide ou partiellement inconnue ne donne jamais un verdict global opérationnel.
 
-Les métriques globales portent sur les Cibles opérationnelles, la Couverture pondérée par les Observations attendues sur 24 heures, les Incidents actifs et les Sources configurées. La latence médiane du prototype est exclue : les agrégats réels ne permettent pas de la calculer. Les indicateurs choisis dans la vue d’ensemble se consultent sur 24 heures ou 7 jours, avec leur provenance, leur fraîcheur et les erreurs de collecte. Leur sélection personnelle reste disponible.
+Les métriques globales portent sur les Cibles opérationnelles, la Couverture pondérée par les Observations attendues sur 24 heures, les Incidents actifs et les Sources configurées. La latence médiane du prototype est exclue : les agrégats réels ne permettent pas de la calculer. Les indicateurs choisis dans la vue d’ensemble se consultent sur 1 heure, 24 heures ou 7 jours, avec leur provenance, leur fraîcheur et les erreurs de collecte. La première heure filtre les relevés détaillés selon l’heure de la projection serveur. Leur sélection personnelle reste disponible.
+
+### Graphique de la Vue d’ensemble
+
+La carte reprend le [graphique interactif du dashboard shadcn-svelte](https://github.com/huntabyte/shadcn-svelte/blob/main/docs/src/lib/registry/blocks/dashboard-01/components/chart-area-interactive.svelte) : arrondi de 16 px, commandes segmentées, grille horizontale continue, axes temporels adaptatifs, traits neutres de 1 px et aires en dégradé. Une infobulle compacte réunit la date et les valeurs, avec leurs repères sur les courbes. Les couleurs et la typographie suivent les jetons Titane dans les deux thèmes.
+
+Les courbes restent des projections des données réelles. Sur sept jours, `value` est la **dernière valeur de l’heure**, jamais sa moyenne ; `maximum`, lorsqu’il existe, fournit la seconde série. Ces deux valeurs se superposent sans être additionnées. Les absences de collecte restent des interruptions, un maximum absent reste absent, et les booléens se dessinent par paliers. Le domaine temporel conserve les bornes de la période même lorsque la collecte est partielle.
+
+Le tracé s’interpole en 400 ms à l’arrivée des données et au changement de période. Le mouvement est interruptible ; le survol ou le clavier donnent immédiatement les valeurs exactes. Redimensionnement, booléens et réduction des animations désactivent l’interpolation. Les chiffres annoncés ne sont jamais interpolés. Cette animation demandée pour le graphique est une exception ciblée à l’absence d’animation d’entrée générale. Le rendu SVG et les primitives de mouvement Svelte préservent la politique CSP sans ajouter de dépendance de graphique.
 
 ## Densité adaptative
 

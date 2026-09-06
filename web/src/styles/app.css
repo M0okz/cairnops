@@ -53,6 +53,12 @@
   --accent: #ccc6bc;
   --accent-ink: #1c1b19;
   --chart-context: color-mix(in srgb, var(--info) 35%, var(--muted));
+  --chart-series: color-mix(in srgb, var(--ink) 85%, var(--bg));
+  --chart-maximum: color-mix(in srgb, var(--ink) 65%, var(--bg));
+  --chart-popover: #0c0c0b;
+  --chart-history-height: 17.5rem;
+  --chart-text-size: 0.75rem;
+  --r-chart: 1rem;
 
   /* Sémantique — réservée à l'État de santé et à la Gravité. */
   --ok: #34d399;
@@ -149,6 +155,7 @@
 }
 
 :root[data-theme='light'] {
+  --chart-popover: #ffffff;
   --bg: #faf8f4;
   --surface: #ffffff;
   --surface-2: color-mix(in srgb, var(--ink) 3%, var(--bg));
