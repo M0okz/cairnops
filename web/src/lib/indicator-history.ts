@@ -25,7 +25,10 @@ export function indicatorTimeTicks(bounds: [number, number], plotWidth: number):
   const count = Math.max(2, Math.floor(plotWidth / 72));
   const target = (end - start) / count;
   const steps = [1, 5, 10, 15, 30, 60, 120, 180, 240, 360, 720, 1440, 2880, 10080].map((minutes) => minutes * 60_000);
-  const step = steps.find((value) => value >= target * 0.8) ?? steps.at(-1)!;
+  // Multi-day axes show dates without hours: two ticks in a day would have
+  // identical labels, even when the viewport has room for more ticks.
+  const minimumStep = end - start > 36 * hour ? 24 * hour : 60_000;
+  const step = steps.find((value) => value >= Math.max(minimumStep, target * 0.8)) ?? steps.at(-1)!;
   const ticks: number[] = [];
   for (let time = Math.ceil(start / step) * step; time <= end; time += step) ticks.push(time);
   return ticks;

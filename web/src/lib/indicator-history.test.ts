@@ -46,6 +46,13 @@ test('hourly latest values and maxima stay distinct, missing maxima do not becom
   assert.deepEqual(maximumCoordinates([sample(0)], chartCoordinates([sample(0)], geometry), [0, 100], 0, 100), []);
 });
 
+test('a wide weekly axis never repeats date labels with invisible half-day ticks', () => {
+  const ticks = indicatorTimeTicks(indicatorTimeBounds(generated, '7d'), 1200);
+  const labels = ticks.map((time) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }).format(time));
+  assert.equal(new Set(labels).size, labels.length);
+  assert.ok(ticks.length >= 6);
+});
+
 test('animation accepts a different sample count and can be interrupted without mutating evidence', () => {
   const before = chartCoordinates([sample(-60, 10), sample(0, 50)], geometry);
   const after = chartCoordinates([sample(-60, 40), sample(-30, 20), sample(0, 80)], geometry);
