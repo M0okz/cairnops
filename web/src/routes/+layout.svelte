@@ -1,5 +1,6 @@
 <script lang="ts">
   import '../styles/app.css';
+  import '../styles/chart.css';
   import { onMount } from 'svelte';
   import Commissioning from '$lib/components/Commissioning.svelte';
   import Palette from '$lib/components/Palette.svelte';

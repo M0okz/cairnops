@@ -5,6 +5,7 @@
 
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import ActivityTimeline from '$lib/components/ActivityTimeline.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
   import Spark from '$lib/components/Spark.svelte';
   import Uptime from '$lib/components/Uptime.svelte';
@@ -511,7 +512,7 @@
                 </button>
               {/if}
             </header>
-            <div class="card-body log">
+            <div class:card-body={observationsOpen} class:log={observationsOpen}>
               {#if observationsOpen}
                 {#each observations as observation (observation.id)}
                   {@const argus = argusPosture(observation.details)}
@@ -546,20 +547,9 @@
                   <p class="faint">{t('target.noObservations')}</p>
                 {/each}
               {:else}
-                {#each journal.slice(0, 6) as item (item.entry.id)}
-                  <div class="entry">
-                    <span class="when num">{clock(item.entry.occurred_at)}</span>
-                    <span class="what">
-                      <strong>{item.entry.message}</strong>
-                      <small class="faint">
-                        {natureLabel(item.incident)} · {t('target.origin', { origin: item.entry.origin })}
-                        {#if item.entry.actor_name}· {item.entry.actor_name}{/if}
-                      </small>
-                    </span>
-                  </div>
-                {:else}
-                  <p class="faint">{t('target.noEntries')}</p>
-                {/each}
+                <ActivityTimeline entries={journal.slice(0, 6).map(({ entry, incident }) => ({
+                  ...entry, id: `${incident.id}:${entry.id}`, context: natureLabel(incident)
+                }))} />
               {/if}
             </div>
           </div>
@@ -791,32 +781,10 @@
       </div>
     {:else if tab === 'log'}
       <div class="card">
-        <div class="card-body log">
-          {#each targetActivity as entry (`target-${entry.id}`)}
-            <div class="entry">
-              <span class="when num">{stamp(entry.occurred_at)}</span>
-              <span class="what">
-                <strong>{entry.message}</strong>
-                <small class="faint">{t('target.identity')}{#if entry.actor_name} · {entry.actor_name}{/if}</small>
-              </span>
-            </div>
-          {/each}
-          {#each journal as item (item.entry.id)}
-            <div class="entry">
-              <span class="when num">{stamp(item.entry.occurred_at)}</span>
-              <span class="what">
-                <strong>{item.entry.message}</strong>
-                <small class="faint">
-                  {natureLabel(item.incident)} · {t('target.origin', { origin: item.entry.origin })}
-                  {#if item.entry.actor_name}· {item.entry.actor_name}{/if}
-                </small>
-              </span>
-            </div>
-          {/each}
-          {#if targetActivity.length === 0 && journal.length === 0}
-            <p class="faint">{t('target.noEntries')}</p>
-          {/if}
-        </div>
+        <ActivityTimeline entries={[
+          ...targetActivity.map((entry) => ({ ...entry, id: `target:${entry.id}`, origin: '', context: t('target.identity') })),
+          ...journal.map(({ entry, incident }) => ({ ...entry, id: `${incident.id}:${entry.id}`, context: natureLabel(incident) }))
+        ]} />
       </div>
     {:else}
       <div class="card">

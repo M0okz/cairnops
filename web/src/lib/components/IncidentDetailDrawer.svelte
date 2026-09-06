@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { prefersReducedMotion } from 'svelte/motion';
   import Icon from './Icon.svelte';
+  import ActivityTimeline from './ActivityTimeline.svelte';
   import IndicatorHistoryChart from './IndicatorHistoryChart.svelte';
   import { APIError, api, type Incident, type IncidentEvidence, type IncidentIndicators } from '$lib/api';
   import {
@@ -620,23 +621,7 @@
           </div>
           <span class="section-count num">{activity.length}</span>
         </div>
-        <div class="timeline">
-          {#each activity as entry (entry.id)}
-            <article class="timeline-entry">
-              <i aria-hidden="true"></i>
-              <time class="num" datetime={entry.occurred_at}>{stamp(entry.occurred_at)}</time>
-              <div>
-                <strong>{entry.message}</strong>
-                <small>
-                  {t('target.origin', { origin: entry.origin })}
-                  {#if entry.actor_name}· {entry.actor_name}{/if}
-                </small>
-              </div>
-            </article>
-          {:else}
-            <div class="section-state">{t('target.noEntries')}</div>
-          {/each}
-        </div>
+        <ActivityTimeline entries={activity} />
       </section>
     {/if}
   </div>
@@ -1147,69 +1132,6 @@
     padding-bottom: var(--s1);
   }
 
-  .timeline {
-    padding: var(--s3) var(--s5) var(--s4);
-  }
-
-  .timeline-entry {
-    position: relative;
-    display: grid;
-    grid-template-columns: 0.75rem 8.75rem minmax(0, 1fr);
-    gap: var(--s3);
-    min-height: 3rem;
-    padding: var(--s3) 0;
-  }
-
-  .timeline-entry::before {
-    content: '';
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 0.34375rem;
-    width: 1px;
-    background: var(--line-strong);
-  }
-
-  .timeline-entry:first-child::before {
-    inset-block-start: 50%;
-  }
-
-  .timeline-entry:last-child::before {
-    inset-block-end: 50%;
-  }
-
-  .timeline-entry > i {
-    position: relative;
-    z-index: 1;
-    width: 0.5rem;
-    height: 0.5rem;
-    margin-top: var(--s2);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-pill);
-    background: var(--surface);
-  }
-
-  .timeline-entry time {
-    color: var(--faint);
-    font-size: var(--chart-text-size);
-    white-space: normal;
-  }
-
-  .timeline-entry strong,
-  .timeline-entry small {
-    display: block;
-  }
-
-  .timeline-entry strong {
-    font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
-  }
-
-  .timeline-entry small {
-    margin-top: var(--s1);
-    color: var(--faint);
-    font-size: var(--chart-text-size);
-  }
-
   .drawer-actions {
     flex: none;
     display: flex;
@@ -1346,19 +1268,6 @@
     .form-actions {
       justify-content: flex-end;
     }
-
-    .timeline-entry {
-      grid-template-columns: 0.75rem minmax(0, 1fr);
-    }
-
-    .timeline-entry time {
-      grid-column: 2;
-    }
-
-    .timeline-entry > div {
-      grid-column: 2;
-    }
-
   }
 
   :global(body:has(.incident-drawer[open])) { overflow: hidden; }

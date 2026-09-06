@@ -1,0 +1,17 @@
+/* Only the copied shadcn chart primitives use Tailwind. No global preflight. */
+@import 'tailwindcss/theme.css' layer(theme);
+@source '../lib/components/ui/chart';
+@theme inline {
+  --color-background: var(--chart-popover);
+  --color-foreground: var(--ink);
+  --color-muted-foreground: var(--faint);
+  --color-border: var(--line-strong);
+  --font-mono: var(--font-num);
+  --text-xs: var(--chart-text-size);
+}
+@scope (.shadcn-chart) {
+  @tailwind utilities source(none);
+}
+.shadcn-chart { width: 100%; height: 100%; }
+.shadcn-chart .lc-tooltip-root { max-width: 100%; line-height: 1.5; color: var(--ink); }
+.shadcn-chart [role='tooltip'] { max-width: 100%; }

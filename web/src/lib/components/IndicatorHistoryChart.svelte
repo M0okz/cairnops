@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { ChartCore } from 'layerchart';
+  import * as Chart from './ui/chart';
+  import OfficialChartTooltip from './OfficialChartTooltip.svelte';
   import { untrack } from 'svelte';
   import { Tween, prefersReducedMotion } from 'svelte/motion';
   import { cubicOut } from 'svelte/easing';
@@ -29,6 +32,7 @@
   let selectedTime = $state<string | null>(null);
   let pointer = $state<{ x: number; y: number } | null>(null);
   let keyboard = $state(false);
+  let touchSelection = $state(false);
   let dismissed = $state(false);
   const values = new Tween<ChartCoordinate[]>([], { duration: CHART_TWEEN_DURATION, easing: cubicOut, interpolate: interpolateChartCoordinates });
   const maxima = new Tween<ChartCoordinate[]>([], { duration: CHART_TWEEN_DURATION, easing: cubicOut, interpolate: interpolateChartCoordinates });
@@ -60,8 +64,6 @@
   const drawnValues = $derived(chartSegments(values.current, gap));
   const drawnMaxima = $derived(chartSegments(maxima.current, gap));
   const hasMaximum = $derived(maximum.length > 0);
-  const tooltipWidth = $derived(Math.min(232, Math.max(180, width - 16)));
-  const tooltipHeight = $derived(hasMaximum ? 86 : 64);
 
   let lastWidth = 0;
   let lastDrawing = '';
@@ -101,11 +103,21 @@
     pointer = { x: Math.max(inset, Math.min(width - inset, event.clientX - rect.left)), y: event.clientY - rect.top };
     selectedTime = nearestChartPoint(coordinates, pointer.x)?.at ?? null;
     keyboard = false;
+    touchSelection = event.pointerType === 'touch';
     dismissed = false;
     settle();
   }
 
-  function clear() { selectedTime = null; pointer = null; dismissed = false; }
+  function clear() { selectedTime = null; pointer = null; touchSelection = false; dismissed = false; }
+
+  $effect(() => {
+    if (!touchSelection) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !chart?.contains(event.target)) clear();
+    };
+    document.addEventListener('pointerdown', dismissOutside);
+    return () => document.removeEventListener('pointerdown', dismissOutside);
+  });
 
   function move(event: KeyboardEvent) {
     if (event.key === 'Escape') {
@@ -123,15 +135,13 @@
     selectedTime = coordinates[index].at;
     pointer = null;
     keyboard = true;
+    touchSelection = false;
     dismissed = false;
     settle();
   }
 
   const picked = $derived(dismissed ? null : coordinates.find((point) => point.at === selectedTime) ?? null);
   const pickedMaximum = $derived(picked ? maximum.find((point) => point.index === picked.index) : undefined);
-  const tooltipX = $derived(Math.max(4, Math.min(width - tooltipWidth - 4,
-    (pointer?.x ?? picked?.x ?? 0) + 12 + tooltipWidth < width ? (pointer?.x ?? picked?.x ?? 0) + 12 : (pointer?.x ?? picked?.x ?? 0) - tooltipWidth - 12)));
-  const tooltipY = $derived(Math.max(4, Math.min(baseline - tooltipHeight, (pointer?.y ?? picked?.y ?? 0) - tooltipHeight / 2)));
   const valueLabel = $derived(t(hourly ? 'chart.hourlyLatest' : 'chart.value'));
   const pickedLabel = $derived(picked ? `${timestamp(picked.at)}. ${valueLabel} : ${formatIndicator(picked.value, unit)}${hasMaximum ? `. ${t('chart.hourlyMaximum')} : ${formatIndicator(pickedMaximum?.value, unit)}` : ''}` : '');
 
@@ -146,12 +156,15 @@
   function area(segment: ChartCoordinate[]) { return `${line(segment)}L${segment.at(-1)!.x},${baseline}L${segment[0].x},${baseline}Z`; }
 </script>
 
+<div class="history-frame" class:compact>
+<Chart.Container config={{ value: { label: valueLabel }, maximum: { label: t('chart.maximum') } }} class="shadcn-chart block aspect-auto">
+  <ChartCore data={points} x={(point) => Date.parse(point.at)} y="value" xDomain={domain} yDomain={range} padding={0} tooltipContext={{ mode: 'manual', locked: true }}>
 <!-- The SVG is one keyboard stop; arrows inspect real samples, Escape dismisses. -->
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <svg bind:this={chart} class="area-chart history-chart" class:compact viewBox="0 0 {width || 640} {height}" role="img" tabindex="0"
   aria-label={`${label}${marker && markerX !== null ? `. ${marker.label} : ${timestamp(marker.at)}` : ''}${pickedLabel ? `. ${pickedLabel}` : ''}`} aria-describedby={`chart-help-${id}`}
-  onpointermove={pick} onpointerdown={pick} onpointerleave={() => { if (!keyboard) clear(); }}
+  onpointermove={pick} onpointerdown={pick} onpointercancel={clear} onpointerleave={() => { if (!keyboard && !touchSelection) clear(); }}
   onfocus={() => { keyboard = true; selectedTime ??= coordinates.at(-1)?.at ?? null; dismissed = false; settle(); }}
   onblur={() => { keyboard = false; clear(); }} onkeydown={move}>
   <defs>
@@ -162,10 +175,9 @@
       <stop class="maximum-start" offset="0%" /><stop class="maximum-end" offset="100%" />
     </linearGradient>
     <clipPath id={`history-clip-${id}`}><rect x={inset - 2} y={top - 2} width={Math.max(0, width - inset * 2 + 4)} height={baseline - top + 4} /></clipPath>
-    <clipPath id={`history-label-${id}`}><rect x="21" y="28" width={tooltipWidth - 112} height="50" /></clipPath>
   </defs>
 
-  <g class="grid" aria-hidden="true">
+  <g class="chart-grid" aria-hidden="true">
     {#each [0, 0.25, 0.5, 0.75] as ratio}
       <line x1={inset} x2={Math.max(inset, width - inset)} y1={top + (baseline - top) * ratio} y2={top + (baseline - top) * ratio} />
     {/each}
@@ -203,35 +215,30 @@
   {/if}
 
   {#if picked}
-    <g class="selection" role="tooltip" aria-label={pickedLabel}>
+    <g class="selection" aria-hidden="true">
       <line class="cursor-guide" x1={picked.x} x2={picked.x} y1={top} y2={baseline} />
       {#if pickedMaximum}<circle class="selected-point maximum" cx={pickedMaximum.x} cy={pickedMaximum.y} r="4" />{/if}
       <circle class="selected-point" cx={picked.x} cy={picked.y} r="4" />
-      <g class="tooltip" transform={`translate(${tooltipX},${tooltipY})`}>
-        <rect class="tooltip-surface" width={tooltipWidth} height={tooltipHeight} rx="8" />
-        <text class="tooltip-time" x="12" y="21">{timestamp(picked.at)}</text>
-        <rect class="swatch" x="12" y="34" width="3" height="13" rx="1.5" />
-        <text class="tooltip-name" x="22" y="45" clip-path={`url(#history-label-${id})`}>{valueLabel}</text>
-        <text class="tooltip-value" x={tooltipWidth - 12} y="45" text-anchor="end">{formatIndicator(picked.value, unit)}</text>
-        {#if hasMaximum}
-          <rect class="swatch maximum" x="12" y="56" width="3" height="13" rx="1.5" />
-          <text class="tooltip-name" x="22" y="67" clip-path={`url(#history-label-${id})`}>{t('chart.maximum')}</text>
-          <text class="tooltip-value" x={tooltipWidth - 12} y="67" text-anchor="end">{formatIndicator(pickedMaximum?.value, unit)}</text>
-        {/if}
-      </g>
     </g>
   {/if}
 </svg>
+    <OfficialChartTooltip {picked} maximum={pickedMaximum} {pointer} {valueLabel} {unit} {timestamp} />
+  </ChartCore>
+</Chart.Container>
+</div>
 <span class="visually-hidden" id={`chart-help-${id}`}>{t('chart.keyboardHelp')}</span>
 <span class="visually-hidden" role="status">{keyboard ? pickedLabel : ''}</span>
 
 <style>
+  .history-frame { --history-height: var(--chart-history-height); width: 100%; height: var(--history-height); min-height: var(--history-height); flex: 1 1 var(--history-height); }
+  .history-frame.compact { --history-height: var(--chart-history-compact-height); }
+
   /* A definite flex basis prevents the SVG's initial viewBox ratio from
      inflating the entire dashboard row on a wide viewport. */
   .history-chart { --history-height: var(--chart-history-height); display: block; flex: 1 1 var(--history-height); width: 100%; height: var(--history-height); min-height: var(--history-height); color: var(--chart-series); overflow: visible; touch-action: pan-y; cursor: crosshair; }
   .history-chart.compact { --history-height: var(--chart-history-compact-height); }
   .history-chart:focus-visible { outline-offset: var(--s2); border-radius: var(--r-m); }
-  .grid line { stroke: var(--line); stroke-width: 1; }
+  .chart-grid line { stroke: var(--line); stroke-width: 1; }
   .axis text { fill: var(--faint); font-family: var(--font); font-size: var(--chart-text-size); font-variant-numeric: tabular-nums; }
   .fill-start { stop-color: var(--chart-series); stop-opacity: 0.38; }
   .fill-end { stop-color: var(--chart-series); stop-opacity: 0.025; }
@@ -250,12 +257,6 @@
   .selection { pointer-events: none; }
   .cursor-guide { stroke: var(--line-strong); stroke-width: 1; }
   .selected-point { fill: currentColor; stroke: var(--surface); stroke-width: 1.5; }
-  .tooltip-surface { fill: var(--chart-popover); stroke: var(--line); stroke-width: 1; filter: drop-shadow(var(--chart-tooltip-shadow)); }
-  .tooltip text { font-size: var(--chart-text-size); font-family: var(--font); font-variant-numeric: tabular-nums; }
-  .tooltip-time { fill: var(--ink); font-weight: var(--weight-medium); }
-  .tooltip-name { fill: var(--faint); }
-  .tooltip .tooltip-value { fill: var(--ink); font-family: var(--font-num); font-weight: var(--weight-medium); }
-  .swatch { fill: currentColor; }
   @media (prefers-reduced-motion: no-preference) {
     .selection { animation: tooltip-in var(--d1) ease-out; }
     @keyframes tooltip-in { from { opacity: 0; } to { opacity: 1; } }
@@ -265,9 +266,8 @@
     .line { stroke: CanvasText; }
     .maximum .line { stroke-dasharray: 4 3; }
     .fill { display: none; }
-    .grid line, .cursor-guide { stroke: GrayText; }
-    .tooltip-surface { fill: Canvas; stroke: CanvasText; }
-    .tooltip text, .axis text { fill: CanvasText; }
+    .chart-grid line, .cursor-guide { stroke: GrayText; }
+    .axis text { fill: CanvasText; }
     .selected-point { fill: CanvasText; stroke: Canvas; }
   }
 </style>
