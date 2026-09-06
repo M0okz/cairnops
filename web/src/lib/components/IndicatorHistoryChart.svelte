@@ -211,7 +211,9 @@
 <span class="visually-hidden" role="status">{keyboard ? pickedLabel : ''}</span>
 
 <style>
-  .history-chart { display: block; flex: 1; width: 100%; height: var(--chart-history-height); min-height: var(--chart-history-height); color: var(--chart-series); overflow: visible; touch-action: pan-y; cursor: crosshair; }
+  /* A definite flex basis prevents the SVG's initial viewBox ratio from
+     inflating the entire dashboard row on a wide viewport. */
+  .history-chart { display: block; flex: 1 1 var(--chart-history-height); width: 100%; height: var(--chart-history-height); min-height: var(--chart-history-height); color: var(--chart-series); overflow: visible; touch-action: pan-y; cursor: crosshair; }
   .history-chart:focus-visible { outline-offset: var(--s2); border-radius: var(--r-m); }
   .grid line { stroke: var(--line); stroke-width: 1; }
   .axis text { fill: var(--faint); font-family: var(--font); font-size: var(--chart-text-size); font-variant-numeric: tabular-nums; }
