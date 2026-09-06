@@ -204,7 +204,8 @@ func TestSynchronizerProjectsProblemsThroughImportedBindings(t *testing.T) {
 	reconciler := &incidentReconciler{}
 	synchronizer := NewSynchronizer(store, reconciler, problemClient{problems: []zabbix.Problem{{
 		EventID: "20427", TriggerID: "15112", Name: "Database unavailable", Severity: 4,
-		StartedAt: time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC), HostIDs: []string{"10084"},
+		EvaluationWindow: 15 * time.Minute,
+		StartedAt:        time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC), HostIDs: []string{"10084"},
 	}}}, box, "server-one", nil)
 	synchronizer.now = func() time.Time { return time.Date(2026, 8, 14, 12, 1, 0, 0, time.UTC) }
 
@@ -217,6 +218,9 @@ func TestSynchronizerProjectsProblemsThroughImportedBindings(t *testing.T) {
 	projected := reconciler.input.Signals[0]
 	if projected.TargetID != "target-one" || projected.BindingID != "binding-one" || projected.Severity != incidents.SeverityCritical {
 		t.Fatalf("unexpected projected signal: %#v", projected)
+	}
+	if projected.EvaluationWindow != 15*time.Minute {
+		t.Fatalf("synchronizer lost the condition period: %s", projected.EvaluationWindow)
 	}
 
 	// Un hôte importé qui porte un problème actif conclut une Observation en

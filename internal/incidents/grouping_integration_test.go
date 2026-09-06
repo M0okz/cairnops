@@ -84,3 +84,45 @@ func TestPropagationKeepsTheLongestCadenceAfterAFasterSourceJoins(t *testing.T) 
 		t.Fatalf("propagation ends at %s, want %s", items[0].PropagationEndsAt, want)
 	}
 }
+
+func TestEvaluationWindowGroupsStaggeredEvidenceButKeepsLaterEpisodesSeparate(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	store := NewPostgresStore(pool)
+	at := time.Now().UTC().Truncate(time.Second)
+	first := webhookEvidence("slow-condition", insertCycleTarget(t, ctx, pool, "First VM"), at)
+	first.EvaluationWindow = 15 * time.Minute
+	apply := func(fact EvidenceFact, observedAt time.Time) {
+		t.Helper()
+		if err := store.ApplyEvidenceSnapshot(ctx, EvidenceSnapshot{Origin: "webhook", ObservedAt: observedAt, Facts: []EvidenceFact{fact}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply(first, at)
+	apply(first, at.Add(3*time.Minute)) // Relecture du même fait, sans nouvelle Atteinte.
+	items, err := store.List(ctx, "active", 20)
+	if err != nil || len(items) != 1 || !items[0].PropagationEndsAt.Equal(at.Add(5*time.Minute)) {
+		t.Fatalf("repeated evidence extended propagation or exceeded the bound: %#v (%v)", items, err)
+	}
+	second := webhookEvidence("second", insertCycleTarget(t, ctx, pool, "Second VM"), at.Add(4*time.Minute))
+	apply(second, second.OpenedAt) // Une Source sans période conserve la plus longue fenêtre déjà établie.
+	items, err = store.List(ctx, "active", 20)
+	if err != nil || len(items) != 1 || items[0].AffectedTargetCount != 2 || !items[0].PropagationEndsAt.Equal(at.Add(9*time.Minute)) {
+		t.Fatalf("compatible late target split the group: %#v (%v)", items, err)
+	}
+	if err := store.Advance(ctx, at.Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	third := webhookEvidence("third", insertCycleTarget(t, ctx, pool, "Third VM"), at.Add(10*time.Minute))
+	third.EvaluationWindow = 24 * time.Hour
+	apply(third, third.OpenedAt)
+	items, err = store.List(ctx, "active", 20)
+	if err != nil || len(items) != 2 {
+		t.Fatalf("a later episode was absorbed into the original incident: %#v (%v)", items, err)
+	}
+	for _, item := range items {
+		if item.PropagationWindowSeconds != 300 {
+			t.Fatalf("condition escaped the five-minute bound: %d", item.PropagationWindowSeconds)
+		}
+	}
+}

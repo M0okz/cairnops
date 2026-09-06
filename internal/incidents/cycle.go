@@ -32,6 +32,10 @@ type EvidenceFact struct {
 	OpenedAt             time.Time
 	UpstreamAcknowledged bool
 	Metadata             map[string]any
+
+	// EvaluationWindow est la durée vérifiée sur laquelle la Source évalue
+	// sa condition. Zéro signifie inconnue, jamais une durée déduite du titre.
+	EvaluationWindow time.Duration
 }
 
 type EvidenceSnapshot struct {
@@ -64,6 +68,7 @@ func (store *PostgresStore) ReconcileZabbix(ctx context.Context, input Reconcile
 			ExternalObjectID: signal.ExternalObjectID, Nature: nature,
 			Name: signal.Name, Severity: signal.Severity,
 			OpenedAt:             signal.OpenedAt,
+			EvaluationWindow:     signal.EvaluationWindow,
 			UpstreamAcknowledged: signal.UpstreamAcknowledged,
 			Metadata:             map[string]any{"suppressed": signal.Suppressed},
 		})
@@ -675,7 +680,7 @@ func evidenceWindow(ctx context.Context, tx pgx.Tx, fact EvidenceFact) (int, err
 			return 0, fmt.Errorf("load connector cadence: %w", err)
 		}
 	}
-	window := interval * 2
+	window := max(interval*2, int(min(fact.EvaluationWindow, 5*time.Minute)/time.Second))
 	if window < 60 {
 		window = 60
 	}

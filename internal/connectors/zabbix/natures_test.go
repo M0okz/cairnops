@@ -7,7 +7,24 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/M0okz/cairnops/internal/testsupport"
 )
+
+func TestDiscoveredDiskRuleWithZabbixFunctionProjectionBug(t *testing.T) {
+	api := testsupport.DiskLatencyAPI(t)
+	problems, err := NewClient().Problems(context.Background(), api.URL, "test-token", []string{"10"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(problems) != 1 || problems[0].CanonicalNature != "storage.latency" {
+		t.Fatalf("discovered official disk rule was not recognized: %#v", problems)
+	}
+	if problems[0].EvaluationWindow != 15*time.Minute {
+		t.Fatalf("lost the active condition period: %s", problems[0].EvaluationWindow)
+	}
+}
 
 func TestOfficialStorageLatencyRequiresItsUnmodifiedCondition(t *testing.T) {
 	expression := `min(/Linux by Zabbix agent/vfs.dev.read.await[{#DEVNAME}],15m) > {$VFS.DEV.READ.AWAIT.WARN:"{#DEVNAME}"} or min(/Linux by Zabbix agent/vfs.dev.write.await[{#DEVNAME}],15m) > {$VFS.DEV.WRITE.AWAIT.WARN:"{#DEVNAME}"}`
@@ -36,16 +53,8 @@ func TestRuntimeProblemsRequestFunctionIdentities(t *testing.T) {
 		}
 		result := `[{"eventid":"9","objectid":"2","clock":"1786700000","name":"Disk slow","severity":"3"}]`
 		if request.Method == "trigger.get" {
-			var fields []string
-			if err := json.Unmarshal(request.Params["selectFunctions"], &fields); err != nil {
-				t.Fatal(err)
-			}
-			hasID := false
-			for _, field := range fields {
-				hasID = hasID || field == "functionid"
-			}
-			if !hasID {
-				t.Fatal("runtime did not request the function identities needed to translate the rule")
+			if string(request.Params["selectFunctions"]) != `"extend"` {
+				t.Fatal("runtime did not request complete function identities")
 			}
 			result = `[{"triggerid":"2","uuid":"eb6230f786d04b658ce62c30a9309a34","hosts":[{"hostid":"1"}],
 			"expression":"{1}>{$VFS.DEV.READ.AWAIT.WARN:\"{#DEVNAME}\"} or {2}>{$VFS.DEV.WRITE.AWAIT.WARN:\"{#DEVNAME}\"}",

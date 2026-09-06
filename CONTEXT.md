@@ -173,7 +173,7 @@ Situation opérationnelle réunissant une ou plusieurs Atteintes de Cibles qui p
 _Éviter_ : Observation, Atteinte de Cible, panne d'une Source
 
 **Propagation d'un Incident** :
-Phase initiale et glissante durant laquelle de nouvelles Atteintes de même Nature peuvent rejoindre un Incident. Chaque nouvelle Atteinte retarde sa fermeture dans une tolérance bornée adaptée à la cadence des Sources ; sa fermeture fige l'appartenance, et toute Atteinte ultérieure ouvre un nouvel Incident sans résoudre celui qui reste actif.
+Phase initiale et glissante durant laquelle de nouvelles Atteintes de même Nature peuvent rejoindre un Incident. Chaque nouvelle Atteinte retarde sa fermeture dans une tolérance bornée adaptée à la cadence des Sources et à la durée vérifiée de leurs conditions ; sa fermeture fige l'appartenance, et toute Atteinte ultérieure ouvre un nouvel Incident sans résoudre celui qui reste actif.
 _Éviter_ : Durée d'un Incident, Fenêtre de maintenance, corrélation causale
 
 **Propagation étendue** :

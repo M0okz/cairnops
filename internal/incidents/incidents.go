@@ -124,6 +124,7 @@ type ZabbixSignal struct {
 	ExternalObjectID     string
 	NatureFingerprint    string
 	CanonicalNature      string
+	EvaluationWindow     time.Duration
 	Name                 string
 	Severity             Severity
 	OpenedAt             time.Time

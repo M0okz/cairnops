@@ -70,6 +70,7 @@ type Problem struct {
 	TriggerID         string
 	NatureFingerprint string
 	CanonicalNature   string
+	EvaluationWindow  time.Duration
 	Name              string
 	Severity          int
 	Acknowledged      bool
@@ -363,7 +364,7 @@ func (client *Client) Inspect(ctx context.Context, address, token string) (Inspe
 		"monitored":           true,
 		"selectDiscoveryData": []string{"parent_triggerid"},
 		"selectItems":         []string{"itemid", "key_"},
-		"selectFunctions":     []string{"functionid", "itemid", "function", "parameter"},
+		"selectFunctions":     "extend",
 		"selectTags":          []string{"tag", "value"},
 		"limit":               1,
 	}, &natureProbe); err != nil {
@@ -491,6 +492,7 @@ func (client *Client) Problems(ctx context.Context, endpoint, token string, host
 			EventID: remote.EventID, TriggerID: remote.ObjectID,
 			NatureFingerprint: triggerFingerprint(remote.ObjectID, triggerByID, detailed),
 			CanonicalNature:   triggerCanonicalNature(remote.ObjectID, triggerByID, detailed),
+			EvaluationWindow:  triggerEvaluationWindow(triggerByID[remote.ObjectID]),
 			Name:              name, Severity: severity,
 			Acknowledged: remote.Acknowledged == "1", Suppressed: remote.Suppressed == "1",
 			StartedAt: time.Unix(clock, 0).UTC(), HostIDs: problemHosts,
@@ -516,8 +518,10 @@ func (client *Client) triggerObjects(ctx context.Context, endpoint, token, metho
 		"triggerids":          triggerIDs,
 		"selectDiscoveryData": []string{"parent_triggerid"},
 		"selectItems":         []string{"itemid", "key_"},
-		"selectFunctions":     []string{"functionid", "itemid", "function", "parameter"},
-		"selectTags":          []string{"tag", "value"},
+		// ZBX-23578 : la projection explicite de « function » omet sa valeur
+		// sur certaines versions. « extend » conserve le sens de la condition.
+		"selectFunctions": "extend",
+		"selectTags":      []string{"tag", "value"},
 	}
 	if hosts {
 		params["selectHosts"] = []string{"hostid"}
