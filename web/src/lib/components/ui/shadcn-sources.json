@@ -1,0 +1,18 @@
+{
+  "toggle": {
+    "url": "https://shadcn-svelte.com/registry/toggle.json",
+    "sha256": "09c9e864dacfdfc2641f4b2abfb78b1a1ef6cb36879c355adc5357637c916143"
+  },
+  "toggle-group": {
+    "url": "https://shadcn-svelte.com/registry/toggle-group.json",
+    "sha256": "6478533fc512263325c6ae83b7845d7f379bb19d65f3862fbe9a697e6a487905"
+  },
+  "input": {
+    "url": "https://shadcn-svelte.com/registry/input.json",
+    "sha256": "d45adc6adcaab47170be808a6cc76cc9944c7cf9bf6920008cc343a2545510a8"
+  },
+  "button": {
+    "url": "https://shadcn-svelte.com/registry/button.json",
+    "sha256": "95869e8a59206a941268ba21cdf1e053d80e064c92ec9432b2d00e41bce9a281"
+  }
+}

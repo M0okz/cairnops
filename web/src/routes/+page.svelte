@@ -6,6 +6,7 @@
   import Odometer from '$lib/components/Odometer.svelte';
   import IndicatorOverview from '$lib/components/IndicatorOverview.svelte';
   import IncidentDetailDrawer from '$lib/components/IncidentDetailDrawer.svelte';
+  import { Input } from '$lib/components/ui/input/index.js';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import { session } from '$lib/session.svelte';
   import { dashboardCoverage, dashboardHealth, type HealthState } from '$lib/dashboard';
@@ -128,7 +129,7 @@
 
   <section class="card overview-targets" aria-labelledby="overview-targets-title">
     <header><div><h2 id="overview-targets-title">{t('nav.targets')}</h2><p>{t('dashboard.targetsLead')}</p></div>
-      <div class="target-tools"><SegmentedControl label={t('targets.scope')} value={scope} items={[{ value: 'all', label: t('targets.scope.all'), count: health.total }, { value: 'watch', label: t('dashboard.watch'), count: health.watched }]} onValueChange={(value) => (scope = value)} /><label class="target-search"><Icon name="search" size={18} /><input type="search" bind:value={filter} aria-label={t('targets.filterLabel')} placeholder={t('dashboard.targetSearch')} /></label></div>
+      <div class="target-tools"><SegmentedControl label={t('targets.scope')} value={scope} items={[{ value: 'all', label: t('targets.scope.all'), count: health.total }, { value: 'watch', label: t('dashboard.watch'), count: health.watched }]} onValueChange={(value) => (scope = value)} /><label class="target-search shadcn-control"><Icon name="search" size={18} /><Input class="pl-9" type="search" bind:value={filter} aria-label={t('targets.filterLabel')} placeholder={t('dashboard.targetSearch')} /></label></div>
     </header>
     <div class="target-head target-grid" aria-hidden="true"><span>{t('targets.column.target')}</span><span>{t('targets.column.state')}</span><span class="target-latency">{t('targets.column.averageLatency')}</span><span class="target-availability">{t('targets.column.availabilityCoverage')}</span><span class="target-sources">{t('targets.column.sources')}</span><span></span></div>
     {#each targetRows.slice(0, 6) as row (row.target.id)}
@@ -199,8 +200,8 @@
   .overview-targets { overflow: hidden; }
   .overview-targets > header { align-items: center; flex-wrap: wrap; }
   .target-tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s4); }
-  .target-search { height: var(--ctl-h); display: flex; align-items: center; gap: var(--s3); padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--r-m); color: var(--faint); }
-  .target-search input { width: 12rem; min-width: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-sm); outline-offset: var(--s2); }
+  .target-search { position: relative; width: 15rem; max-width: 100%; }
+  .target-search :global(svg) { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
   .target-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.6fr) minmax(0, 1.25fr) 4.5rem 1rem; gap: var(--s5); align-items: center; padding: var(--s4) var(--s5); }
   .target-head { border-block: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 35%, var(--surface)); font-size: var(--text-xs); color: var(--faint); }
   .overview-target-row { min-height: 5.5rem; border-top: 1px solid var(--line); font-size: var(--text-sm); transition: background var(--d1) var(--ease); }
@@ -231,7 +232,7 @@
     .metric { padding: var(--s4); gap: var(--s4); } .metric-value b { font-size: 2.25rem; } .metric-label h2 { font-size: var(--text-sm); } .metric-label :global(svg) { display: none; } .metric-value > span { font-size: 0.75rem; } .metric small { font-size: 0.75rem; }
     .incident-list { display: block; padding-inline: var(--s4); } .incident-summary + .incident-summary { border-top: 1px solid var(--line); padding-top: var(--s4); }
     .current-incidents > header, .overview-targets > header { padding: var(--s4); }
-    .target-tools, .target-search { width: 100%; } .target-search input { width: 100%; font-size: 1rem; }
+    .target-tools, .target-search { width: 100%; }
     .target-head { display: none; } .target-grid { grid-template-columns: minmax(0, 1fr) auto; gap: var(--s3); padding: var(--s4); } .target-name { grid-column: 1; gap: var(--s3); } .target-name strong { white-space: normal; overflow-wrap: anywhere; } .target-state { grid-column: 1; margin-left: 3rem; } .row-arrow { grid-column: 2; grid-row: 1 / span 2; } .target-latency, .target-availability { display: none; }
     footer { flex-wrap: wrap; padding: var(--s4); } .components { margin-left: 0; gap: var(--s3); }
   }

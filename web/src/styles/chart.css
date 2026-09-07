@@ -1,17 +1,39 @@
-/* Only the copied shadcn chart primitives use Tailwind. No global preflight. */
+/* Official shadcn primitives only: utilities stay scoped, no global reset. */
 @import 'tailwindcss/theme.css' layer(theme);
-@source '../lib/components/ui/chart';
+@source '../lib/components/ui';
+@source '../routes/+page.svelte';
+@source '../routes/cibles/+page.svelte';
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 @theme inline {
-  --color-background: var(--chart-popover);
+  --color-background: var(--shadcn-background, var(--surface));
+  --color-input: var(--line-strong);
+  --color-ring: var(--accent);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-ink);
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--surface-2);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--crit);
   --color-foreground: var(--ink);
   --color-muted-foreground: var(--faint);
   --color-border: var(--line-strong);
   --font-mono: var(--font-num);
   --text-xs: var(--chart-text-size);
 }
-@scope (.shadcn-chart) {
+@scope (.shadcn-chart, .shadcn-control) {
   @tailwind utilities source(none);
 }
-.shadcn-chart { width: 100%; height: 100%; }
+.shadcn-chart { --shadcn-background: var(--chart-popover); width: 100%; height: 100%; }
 .shadcn-chart .lc-tooltip-root { max-width: 100%; line-height: 1.5; color: var(--ink); }
 .shadcn-chart [role='tooltip'] { max-width: 100%; }
+
+/* Minimal element defaults normally supplied by Tailwind preflight. Kept in
+   the base layer and limited to these primitives, preserving the application. */
+@layer base {
+  .shadcn-control, .shadcn-control * {
+    border: 0 solid var(--line-strong);
+    font: inherit;
+  }
+}

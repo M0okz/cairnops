@@ -7,6 +7,8 @@
   import Topbar from '$lib/components/Topbar.svelte';
   import Spark from '$lib/components/Spark.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import { Button } from '$lib/components/ui/button/index.js';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
   import ConnectorChooser from '$lib/components/ConnectorChooser.svelte';
@@ -162,23 +164,23 @@
         {#if decisionCount > 0}· {plural('targets.awaitingDecision', decisionCount)}{/if}
       </p>
     </div>
-    <div class="page-actions">
+    <div class="page-actions shadcn-control">
       {#if session.user?.role === 'administrator'}
-        <a class="btn" href="/cibles/rapprochements">
+        <Button variant="outline" href="/cibles/rapprochements">
           {t('reconciliation.title')}
           {#if reconciliationState.actionable.length > 0}<b class="action-count">{reconciliationState.actionable.length}</b>{/if}
-        </a>
+        </Button>
       {/if}
-      <button class="btn" type="button" onclick={() => (chooserOpen = true)}>
+      <Button variant="outline" type="button" onclick={() => (chooserOpen = true)}>
         {t('targets.importFromConnector')}
-      </button>
-      <button class="btn primary" type="button" onclick={() => (workshopOpen = true)}>
+      </Button>
+      <Button type="button" onclick={() => (workshopOpen = true)}>
         {t('targets.new')}
-      </button>
+      </Button>
     </div>
   </div>
 
-  <div class="filters">
+  <div class="filters shadcn-control">
     <SegmentedControl
       label={t('targets.scope')}
       value={scope}
@@ -189,12 +191,12 @@
       ]}
       onValueChange={(value) => (scope = value)}
     />
-    <button class="btn sm" type="button" aria-pressed={divergentOnly} onclick={() => (divergentOnly = !divergentOnly)}>
+    <Button variant={divergentOnly ? 'secondary' : 'outline'} type="button" aria-pressed={divergentOnly} onclick={() => (divergentOnly = !divergentOnly)}>
       {t('targets.divergence')} {divergentOnly ? '·' : '⌄'}
-    </button>
-    <label class="filter">
+    </Button>
+    <label class="target-filter">
       <span class="visually-hidden">{t('targets.filterLabel')}</span>
-      <input bind:value={filter} type="search" placeholder={t('targets.filterPlaceholder')} />
+      <Input bind:value={filter} type="search" placeholder={t('targets.filterPlaceholder')} />
     </label>
     <span class="note">{t('targets.sortedBySeverity')}</span>
   </div>
@@ -373,6 +375,8 @@
 {/if}
 
 <style>
+  .target-filter { width: 13rem; max-width: 100%; }
+  @media (max-width: 48rem) { .target-filter { width: 100%; } }
   .cols {
     container-type: inline-size;
     /* Le nom garde assez de place pour son origine sans devenir le seul
