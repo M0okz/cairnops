@@ -113,6 +113,7 @@
 
   /* Ossature */
   --rail-w: 16.5rem;
+  --rail-brand-w: 12rem;
   --topbar-h: 4rem;
   --ctl-h: 2.5rem;
   --ctl-h-lg: 2.75rem;
@@ -315,7 +316,9 @@ td.num,
   z-index: 30;
 }
 
-.rail-brand { display: flex; align-items: center; padding: var(--s3) var(--s3) var(--s5); }
+.rail-brand { display: flex; align-items: center; justify-content: center; padding: var(--s4) var(--s3); }
+.rail-brand .brand-full { width: min(100%, var(--rail-brand-w)); }
+.rail-brand .brand-full .cairnops-brand { width: 100%; height: auto; }
 .brand-symbol { display: none; }
 .instance-card { display: flex; align-items: center; gap: var(--s3); margin: var(--s4) 0 var(--s5); padding: var(--s3); min-height: 4rem; border: 1px solid var(--line); border-radius: var(--r-m); }
 .instance-mark { display: grid; place-items: center; flex: none; width: 2rem; height: 2rem; border: 1px solid var(--line-strong); border-radius: var(--r-s); font-size: var(--text-sm); }
@@ -1367,7 +1370,7 @@ a.trow:hover .caret {
   .brand-symbol { display: none; }
   .rail .nav-item-label { display: inline; }
   .rail-brand { padding: 0; justify-content: flex-start; }
-  .rail-brand .cairnops-brand { width: 9rem; height: auto; }
+  .rail-brand .brand-full { width: min(100%, 9rem); }
   .rail-foot { border: 0; padding: 0; }
   .rail .realtime { display: none; }
   .rail nav { display: flex; gap: var(--s2); }

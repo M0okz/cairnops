@@ -1,14 +1,15 @@
 <script lang="ts">
   // Géométrie vectorisée du kit Convergence · Titane, sans police à charger.
+  // Le cadre laisse des marges latérales égales autour du dessin.
   // Le signe conserve ses trois formes angulaires ; seuls les pictogrammes sont arrondis.
   let { width = 140, symbolOnly = false }: { width?: number; symbolOnly?: boolean } = $props();
 </script>
 
 <svg
   class="cairnops-brand"
-  viewBox={symbolOnly ? '0 0 128 128' : '0 0 420 96'}
+  viewBox={symbolOnly ? '0 0 128 128' : '0 0 388 96'}
   {width}
-  height={symbolOnly ? width : width * 96 / 420}
+  height={symbolOnly ? width : width * 96 / 388}
   aria-hidden="true"
   focusable="false"
 >
