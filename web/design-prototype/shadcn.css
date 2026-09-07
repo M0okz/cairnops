@@ -1,0 +1,36 @@
+/* Official shadcn-svelte controls, themed with the existing CairnOps palette. */
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@source './lib';
+@source './App.svelte';
+@source './ThemePicker.svelte';
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+@theme inline {
+  --color-background: var(--p-bg);
+  --color-foreground: var(--p-ink);
+  --color-card: var(--p-surface);
+  --color-card-foreground: var(--p-ink);
+  --color-popover: var(--p-surface-raised);
+  --color-popover-foreground: var(--p-ink);
+  --color-primary: var(--p-accent);
+  --color-primary-foreground: var(--p-accent-text);
+  --color-secondary: var(--p-surface-raised);
+  --color-secondary-foreground: var(--p-ink);
+  --color-muted: var(--p-surface);
+  --color-muted-foreground: var(--p-muted);
+  --color-accent: var(--p-accent-wash);
+  --color-accent-foreground: var(--p-ink);
+  --color-destructive: var(--p-crit);
+  --color-border: var(--p-line);
+  --color-input: var(--p-line-strong);
+  --color-ring: var(--p-accent);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+@layer base {
+  * { border-color: var(--p-line); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot] { animation: none !important; transition: none !important; }
+}

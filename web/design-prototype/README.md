@@ -4,7 +4,7 @@ Proposition interactive en Svelte 5, données de démonstration, aucun accès r�
 
 ## Lancer
 
-Depuis ce dossier : `npm install`, puis `npm run dev`. Les dépendances Svelte/Vite proviennent de `web` (`npm ci --prefix web` à la racine si nécessaire). Adresse : http://127.0.0.1:5186. Cette commande compile puis sert la maquette ; après modification, `npm run build` actualise l’aperçu. Le prototype utilise trois compositions partageables par `?variant=A`, `B` ou `C`.
+Depuis la racine : `npm ci --prefix web`, `npm --prefix web exec svelte-kit sync`, puis `npm ci --prefix web/design-prototype`. Depuis ce dossier : `npm run dev`. Les dépendances Svelte/Vite proviennent de `web` (`npm ci --prefix web` à la racine si nécessaire). Adresse : http://127.0.0.1:5186. Cette commande compile puis sert la maquette ; après modification, `npm run build` actualise l’aperçu. Le prototype utilise trois compositions partageables par `?variant=A`, `B` ou `C`.
 
 ## Intention et question
 
@@ -52,3 +52,11 @@ Vérifications : trois compositions en clair/sombre ; largeurs 320, 390, 768, 10
 Le film dure 42,5 secondes : MP4 H.264, 1920 × 1080, 30 images/s, sans piste audio. `render-film.py` expose `--preview` pour les sept plans fixes. Les scripts Python nécessitent Playwright ; FFmpeg doit être disponible pour l’export. `CAIRNOPS_DESIGN_OUTPUT` permet de choisir le dossier de sortie. L’aperçu animé séparé est accessible par `/film.html` et respecte la préférence de réduction des mouvements en attendant une lecture explicite.
 
 Les sources de la maquette, les captures et le MP4 sont conservés comme éléments de travail. Le film définitif pour le site vitrine sera dérivé du produit après validation de son intégration.
+
+## Contrôles shadcn-svelte
+
+Les boutons, champs, groupes de filtres, menus d’apparence, sélecteur de composition et volet de détail proviennent du registre officiel shadcn-svelte (installation manuelle). Leurs classes et variantes visuelles sont conservées ; `shadcn.css` raccorde leurs jetons à la palette Titane. Les styles locaux règlent seulement leur disposition.
+
+Sources : https://shadcn-svelte.com/docs/components/button et `https://shadcn-svelte.com/registry/{name}.json`. `shadcn-sources.json` consigne les empreintes des réponses téléchargées ; la licence MIT accompagne les composants dans `lib/components/ui/LICENSE.md`. Adaptations locales : résolution des alias d’import, libellé de fermeture en français et getters réactifs du contexte ToggleGroup pour Svelte 5. Les menus et le volet respectent aussi la réduction des mouvements.
+
+La vérification de ce remplacement a été effectuée dans le navigateur externe connecté, sur la maquette locale : boutons officiels, filtres au clavier, recherche vide et pagination, apparence, ville solaire, composition, acquittement et fermeture du volet avec retour du focus. `verify.py` conserve un scénario automatisable réservé à la maquette ; il ne remplace pas la vérification visuelle dans le navigateur utilisateur.

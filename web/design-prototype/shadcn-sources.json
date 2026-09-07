@@ -1,0 +1,34 @@
+{
+  "button": {
+    "url": "https://shadcn-svelte.com/registry/button.json",
+    "sha256": "95869e8a59206a941268ba21cdf1e053d80e064c92ec9432b2d00e41bce9a281"
+  },
+  "toggle-group": {
+    "url": "https://shadcn-svelte.com/registry/toggle-group.json",
+    "sha256": "6478533fc512263325c6ae83b7845d7f379bb19d65f3862fbe9a697e6a487905"
+  },
+  "input": {
+    "url": "https://shadcn-svelte.com/registry/input.json",
+    "sha256": "d45adc6adcaab47170be808a6cc76cc9944c7cf9bf6920008cc343a2545510a8"
+  },
+  "select": {
+    "url": "https://shadcn-svelte.com/registry/select.json",
+    "sha256": "870bfb1b629e3f41757752929f410b473aeaf3bff7820ed118382787fd106b9c"
+  },
+  "dropdown-menu": {
+    "url": "https://shadcn-svelte.com/registry/dropdown-menu.json",
+    "sha256": "20b815dc0526b1b1967fc9da6eb9f7f13b0381d7cfa9fe7c8e15ed6b07921ea6"
+  },
+  "sheet": {
+    "url": "https://shadcn-svelte.com/registry/sheet.json",
+    "sha256": "5468fab197c81818593e74c80b46356b3b6e6634468db39faeecb85112a1927b"
+  },
+  "toggle": {
+    "url": "https://shadcn-svelte.com/registry/toggle.json",
+    "sha256": "09c9e864dacfdfc2641f4b2abfb78b1a1ef6cb36879c355adc5357637c916143"
+  },
+  "separator": {
+    "url": "https://shadcn-svelte.com/registry/separator.json",
+    "sha256": "afab285078092587235d345a0d90097cbaf384ce17c0dd755166f0d761cf1262"
+  }
+}

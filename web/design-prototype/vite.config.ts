@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite';
+import tailwindcss from '@tailwindcss/vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
-  plugins: [svelte({ configFile: false })],
+  plugins: [tailwindcss(), svelte({ configFile: false })],
+  resolve: { alias: { '$lib': fileURLToPath(new URL('./lib', import.meta.url)) } },
   base: './',
   publicDir: '../static',
   optimizeDeps: { entries: ['./index.html', './film.html'] },

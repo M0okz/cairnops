@@ -3,6 +3,8 @@
   // Hiérarchie : 4 choix explicites puis la ville du mode solaire.
   // Palette/depth : surface élevée, Titane de sélection, bordure faible.
   // Typographie : système 13/12 px. Espacement : 4/8/12/16 px.
+  import { Button } from '$lib/components/ui/button';
+  import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import { onMount } from 'svelte';
   import * as SunCalc from 'suncalc';
   import Icon from '../src/lib/components/Icon.svelte';
@@ -12,7 +14,6 @@
   let cityName = $state('');
   let systemDark = $state(false);
   let now = $state(new Date());
-  let details: HTMLDetailsElement;
   const city = $derived(cities.find((entry) => entry.name === cityName));
   const solar = $derived(city ? SunCalc.getTimes(now, city.lat, city.lon) : null);
   const solarDark = $derived(solar ? solar.alwaysDown || (!solar.alwaysUp && solar.sunrise !== null && solar.sunset !== null && (now < solar.sunrise || now >= solar.sunset)) : systemDark);
@@ -35,23 +36,42 @@
   });
 </script>
 
-<details class="p-theme" bind:this={details}>
-  <summary aria-label="Choisir l’apparence"><Icon name={dark ? 'moon' : 'sun'} size={20}/><span>{modes.find(item=>item.id===mode)?.label}</span><span class="p-chevron">⌄</span></summary>
-  <div class="p-theme-panel">
-    <strong>Apparence</strong><p>À l’aise, à toute heure.</p>
-    <div class="p-theme-options" role="group" aria-label="Thème">
+<DropdownMenu.Root>
+  <DropdownMenu.Trigger>
+    {#snippet child({ props })}
+      <Button {...props} variant="ghost" class="p-theme-trigger" aria-label="Choisir l’apparence">
+        <Icon name={dark ? 'moon' : 'sun'} size={20}/>
+        <span class="hidden sm:inline">{modes.find(item=>item.id===mode)?.label}</span>
+      </Button>
+    {/snippet}
+  </DropdownMenu.Trigger>
+  <DropdownMenu.Content align="end" class="w-64">
+    <DropdownMenu.Label>Apparence</DropdownMenu.Label>
+    <DropdownMenu.RadioGroup bind:value={mode}>
       {#each modes as item}
-        <button class:chosen={mode === item.id} aria-pressed={mode === item.id} onclick={()=>{mode=item.id; if(item.id!=='solar')details.open=false;}}><Icon name={item.icon} size={22}/>{item.label}</button>
+        <DropdownMenu.RadioItem value={item.id}><Icon name={item.icon} size={18}/>{item.label}</DropdownMenu.RadioItem>
       {/each}
-    </div>
+    </DropdownMenu.RadioGroup>
     {#if mode === 'solar'}
-      <label class="p-city-label" for="solar-city">Ville de référence</label>
-      <select id="solar-city" bind:value={cityName}><option value="">Choisir une ville</option>{#each cities as entry}<option>{entry.name}</option>{/each}</select>
-      {#if solar}
-        <div class="p-solar-times"><span><Icon name="sun"/>Lever <b>{time(solar.sunrise)}</b></span><span><Icon name="moon"/>Coucher <b>{time(solar.sunset)}</b></span></div>
-        <p>{solar.alwaysUp ? 'Le soleil ne se couche pas aujourd’hui.' : solar.alwaysDown ? 'Le soleil ne se lève pas aujourd’hui.' : 'Le thème bascule au lever et au coucher du soleil.'}</p>
-        <p class="p-small">Heures dans le fuseau de cet appareil : {Intl.DateTimeFormat().resolvedOptions().timeZone}.</p>
-      {:else}<p>Choisis une ville pour activer le rythme solaire. En attendant, le thème suit le système.</p>{/if}
-    {:else if mode === 'system'}<p>Suit l’apparence de ton appareil, y compris lorsqu’elle change.</p>{/if}
-  </div>
-</details>
+      <DropdownMenu.Separator/>
+      <DropdownMenu.Sub>
+        <DropdownMenu.SubTrigger>Ville : {cityName || 'à choisir'}</DropdownMenu.SubTrigger>
+        <DropdownMenu.SubContent>
+          <DropdownMenu.RadioGroup bind:value={cityName}>
+            {#each cities as entry}<DropdownMenu.RadioItem value={entry.name}>{entry.name}</DropdownMenu.RadioItem>{/each}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.SubContent>
+      </DropdownMenu.Sub>
+      <div class="px-2 py-2 text-xs text-muted-foreground leading-relaxed">
+        {#if solar}
+          <p>Lever {time(solar.sunrise)} · Coucher {time(solar.sunset)}</p>
+          <p>{solar.alwaysUp ? 'Le soleil ne se couche pas aujourd’hui.' : solar.alwaysDown ? 'Le soleil ne se lève pas aujourd’hui.' : 'Le thème suit le lever et le coucher du soleil.'}</p>
+          <p>Fuseau : {Intl.DateTimeFormat().resolvedOptions().timeZone}.</p>
+        {:else}<p>Choisis une ville. En attendant, le thème suit le système.</p>{/if}
+      </div>
+    {:else if mode === 'system'}
+      <DropdownMenu.Separator/>
+      <p class="px-2 py-2 text-xs text-muted-foreground leading-relaxed">Suit l’apparence de ton appareil.</p>
+    {/if}
+  </DropdownMenu.Content>
+</DropdownMenu.Root>

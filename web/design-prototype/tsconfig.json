@@ -1,9 +1,30 @@
 {
   "compilerOptions": {
-    "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler",
-    "strict": true, "skipLibCheck": true, "allowJs": true,
-    "esModuleInterop": true, "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"]
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "esModuleInterop": true,
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "vite/client"
+    ],
+    "paths": {
+      "$lib/*": [
+        "./lib/*"
+      ]
+    }
   },
-  "include": ["*.ts", "*.svelte"]
+  "include": [
+    "*.ts",
+    "*.svelte",
+    "lib/**/*.ts",
+    "lib/**/*.svelte"
+  ]
 }
