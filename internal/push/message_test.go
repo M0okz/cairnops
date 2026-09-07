@@ -11,8 +11,8 @@ func TestCompleteNotificationsUseTheApprovedTwoLineTemplate(t *testing.T) {
 		delivery Delivery
 		want     Presentation
 	}{
-		{"approved storage notification", Delivery{NatureKey: "storage.latency", NatureScope: "canonical", NatureLabel: "Latence de stockage élevée", TargetName: "dmz-docker-01", Severity: "warning"}, Presentation{"Latence de stockage élevée", "dmz-docker-01 · avertissement"}},
-		{"reported load notification", Delivery{NatureKey: "zabbix:connector:load", NatureScope: "connector", NatureLabel: "Linux: Load average is too high (per CPU load over 1.5 for 5m)", TargetName: "VictoriaLogs", Severity: "major"}, Presentation{"Charge système élevée", "VictoriaLogs · majeur"}},
+		{"approved storage notification", Delivery{NatureKey: "storage.latency", NatureScope: "canonical", NatureLabel: "Latence de stockage élevée", TargetName: "dmz-docker-01", Severity: "warning"}, Presentation{"Latence disque élevée", "dmz-docker-01 · avertissement"}},
+		{"reported load notification", Delivery{NatureKey: "zabbix:connector:load", NatureScope: "connector", NatureLabel: "Linux: Load average is too high (per CPU load over 1.5 for 5m)", TargetName: "VictoriaLogs", Severity: "major"}, Presentation{"Charge système moyenne élevée", "VictoriaLogs · majeur"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			delivery := tt.delivery

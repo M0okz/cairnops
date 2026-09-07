@@ -13,8 +13,8 @@ import (
 func NatureLabel(key, locale string) (string, bool) {
 	labels, ok := map[string][2]string{
 		"availability":     {"Indisponibilité", "Unavailability"},
-		"storage.latency":  {"Latence de stockage élevée", "High storage latency"},
-		"storage.capacity": {"Espace de stockage insuffisant", "Low storage space"},
+		"storage.latency":  {"Latence disque élevée", "High disk latency"},
+		"storage.capacity": {"Espace disque insuffisant", "Low disk space"},
 		"backup.failure":   {"Échec de sauvegarde", "Backup failure"},
 		"backup.freshness": {"Sauvegarde trop ancienne", "Outdated backup"},
 		"tls.expiry":       {"Expiration de certificat proche", "Certificate nearing expiry"},

@@ -508,7 +508,7 @@ func TestPostgresInboxUsesTheCompactTemplateWithoutRewritingTheIncident(t *testi
 		t.Fatalf("expected one notification: %+v", inbox)
 	}
 	entry := inbox.Entries[0]
-	if entry.Summary.FR.Title != "Charge système élevée" || entry.Summary.FR.Body != "VictoriaLogs · majeur" || entry.Summary.EN.Title != "High system load" || entry.Summary.EN.Body != "VictoriaLogs · major" {
+	if entry.Summary.FR.Title != "Charge système moyenne élevée" || entry.Summary.FR.Body != "VictoriaLogs · majeur" || entry.Summary.EN.Title != "High average system load" || entry.Summary.EN.Body != "VictoriaLogs · major" {
 		t.Fatalf("inbox diverged from the shared template: %+v", entry.Summary)
 	}
 	if entry.IncidentID != incident || entry.NatureScope != "connector" || entry.NatureLabel != label || delivery.NatureLabel != label || entry.Revision != delivery.IncidentRevision || inbox.Unread != 1 {

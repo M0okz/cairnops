@@ -84,7 +84,7 @@ func TestMattermostUsesTheCompactNotificationTemplate(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(payload.Attachments) != 1 || payload.Attachments[0].Title != "⚠️ Charge système élevée" || payload.Attachments[0].Text != "VictoriaLogs · majeur" {
+	if len(payload.Attachments) != 1 || payload.Attachments[0].Title != "⚠️ Charge système moyenne élevée" || payload.Attachments[0].Text != "VictoriaLogs · majeur" {
 		t.Fatalf("Mattermost diverged from the shared template: %+v", payload)
 	}
 }

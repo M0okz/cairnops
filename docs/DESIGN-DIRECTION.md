@@ -107,8 +107,13 @@ plusieurs Cibles affiche leur nombre à la place d'un nom individuel.
 Le Push, la boîte intégrée et Mattermost utilisent le même rendu de
 `internal/synthesis`. Les titres de notification omettent le préambule
 « Signalement : ». Un libellé source connu peut être traduit et abrégé, comme
-« Charge système élevée » ; les autres sont conservés sur une ligne, bornée à
+« Charge système moyenne élevée » ; les autres sont conservés sur une ligne, bornée à
 80 caractères. Le détail conserve le texte original attribué à sa Source.
+
+Le [lexique de supervision](notification-lexicon.md) fixe les termes connus :
+« disque » pour les accès et l’espace disque, « CPU » pour son utilisation,
+« charge système moyenne » pour le load average. Les noms de produits, les
+sigles usuels et les messages inconnus ne sont pas traduits à l’aveugle.
 
 La Résolution reste explicite dans le titre et conserve le contexte des Cibles
 concernées. Les modes discret et masqué gardent leurs messages confidentiels.

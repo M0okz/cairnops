@@ -51,6 +51,12 @@ Les libellés inconnus restent littéraux, sur une ligne bornée. La charge syst
 du template Linux Zabbix est ainsi abrégée sans devenir une nouvelle Nature
 canonique ni être confondue avec l'utilisation CPU.
 
+Le [lexique de supervision](../notification-lexicon.md) fixe les libellés
+français et anglais : « Latence disque élevée », « Espace disque insuffisant »,
+« Charge système moyenne élevée » et « Utilisation CPU élevée » selon le sens
+reconnu. Les clés canoniques `storage.latency` et `storage.capacity` restent
+stables ; ce changement de vocabulaire ne réécrit aucune Preuve.
+
 Proxmox VE, Proxmox Backup Server et Checkmk ne sont pas livrés par ce chantier.
 
 La décision de notification est commune à tous les Canaux : ouverture après

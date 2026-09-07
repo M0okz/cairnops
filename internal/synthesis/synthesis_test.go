@@ -8,13 +8,13 @@ func TestMinimalFactualPresentation(t *testing.T) {
 		situation    Situation
 		want         Text
 	}{
-		{"group", "fr", Situation{NatureScope: "canonical", NatureKey: "storage.latency", NatureLabel: "VM 1: vda slow", AffectedTargets: 15}, Text{"Latence de stockage élevée", "15 Cibles concernées"}},
-		{"english", "en", Situation{NatureScope: "canonical", NatureKey: "storage.latency", AffectedTargets: 15}, Text{"High storage latency", "15 affected targets"}},
+		{"group", "fr", Situation{NatureScope: "canonical", NatureKey: "storage.latency", NatureLabel: "VM 1: vda slow", AffectedTargets: 15}, Text{"Latence disque élevée", "15 Cibles concernées"}},
+		{"english", "en", Situation{NatureScope: "canonical", NatureKey: "storage.latency", AffectedTargets: 15}, Text{"High disk latency", "15 affected targets"}},
 		{"one source suffices", "fr", Situation{NatureScope: "canonical", NatureKey: "availability", TargetName: "API", AffectedTargets: 1}, Text{"Indisponibilité", "API"}},
-		{"partial recovery", "fr", Situation{NatureScope: "canonical", NatureKey: "storage.latency", AffectedTargets: 3, MaxAffected: 15}, Text{"Latence de stockage élevée", "3 Cibles concernées"}},
-		{"resolved", "fr", Situation{NatureScope: "canonical", NatureKey: "storage.latency", Resolved: true, MaxAffected: 15}, Text{"Résolu · Latence de stockage élevée", "Jusqu’à 15 Cibles concernées"}},
-		{"resolved sequential targets", "fr", Situation{NatureScope: "canonical", NatureKey: "storage.latency", Resolved: true, MaxAffected: 1, TotalTargets: 2, TargetName: "First VM"}, Text{"Résolu · Latence de stockage élevée", "Jusqu’à 1 Cible concernée à la fois"}},
-		{"resolved sequential targets english", "en", Situation{NatureScope: "canonical", NatureKey: "storage.latency", Resolved: true, MaxAffected: 1, TotalTargets: 2, TargetName: "First VM"}, Text{"Resolved · High storage latency", "Up to 1 affected target at a time"}},
+		{"partial recovery", "fr", Situation{NatureScope: "canonical", NatureKey: "storage.latency", AffectedTargets: 3, MaxAffected: 15}, Text{"Latence disque élevée", "3 Cibles concernées"}},
+		{"resolved", "fr", Situation{NatureScope: "canonical", NatureKey: "storage.latency", Resolved: true, MaxAffected: 15}, Text{"Résolu · Latence disque élevée", "Jusqu’à 15 Cibles concernées"}},
+		{"resolved sequential targets", "fr", Situation{NatureScope: "canonical", NatureKey: "storage.latency", Resolved: true, MaxAffected: 1, TotalTargets: 2, TargetName: "First VM"}, Text{"Résolu · Latence disque élevée", "Jusqu’à 1 Cible concernée à la fois"}},
+		{"resolved sequential targets english", "en", Situation{NatureScope: "canonical", NatureKey: "storage.latency", Resolved: true, MaxAffected: 1, TotalTargets: 2, TargetName: "First VM"}, Text{"Resolved · High disk latency", "Up to 1 affected target at a time"}},
 		{"local nature", "fr", Situation{NatureScope: "canonical", NatureKey: "zabbix:local", NatureLabel: "Disk\nwarning", AffectedTargets: 2}, Text{"Signalement : Disk warning", "2 Cibles concernées"}},
 		{"no invented recovery", "fr", Situation{NatureScope: "canonical", NatureKey: "availability"}, Text{"Indisponibilité", "Aucune Cible encore affectée · rétablissement en cours de confirmation"}},
 	} {

@@ -102,7 +102,7 @@ func TestRecordedStaggeredDiskBurstHasOneOpening(t *testing.T) {
 	if openings != 1 || alerts != 1 || len(inbox.Entries) != 1 {
 		t.Fatalf("recorded disk burst produced %d openings, %d alerts and %d inbox entries; want 1 of each", openings, alerts, len(inbox.Entries))
 	}
-	if inbox.Entries[0].Summary.FR.Title != "Résolu · Latence de stockage élevée" {
+	if inbox.Entries[0].Summary.FR.Title != "Résolu · Latence disque élevée" {
 		t.Fatalf("inbox lost the normalized disk condition: %#v", inbox.Entries[0].Summary)
 	}
 	items, err := cycle.List(ctx, "resolved", 50)
