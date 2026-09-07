@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/synthesis"
 )
 
@@ -29,29 +30,31 @@ const (
 )
 
 type Evidence struct {
-	ID                        string     `json:"id"`
-	ImpactID                  string     `json:"impact_id"`
-	TargetID                  string     `json:"target_id"`
-	Origin                    string     `json:"origin"`
-	ConnectorID               string     `json:"connector_id,omitempty"`
-	ConnectorName             string     `json:"connector_name,omitempty"`
-	SourceID                  string     `json:"source_id,omitempty"`
-	LastSeenAt                time.Time  `json:"last_seen_at"`
-	ExternalEventID           string     `json:"external_event_id,omitempty"`
-	ExternalObjectID          string     `json:"external_object_id,omitempty"`
-	Name                      string     `json:"name"`
-	Active                    bool       `json:"active"`
-	Severity                  Severity   `json:"severity"`
-	OpenedAt                  time.Time  `json:"opened_at"`
-	ResolvedAt                *time.Time `json:"resolved_at,omitempty"`
-	UpstreamAcknowledged      bool       `json:"upstream_acknowledged"`
-	AcknowledgementSyncStatus string     `json:"acknowledgement_sync_status"`
-	AcknowledgementSyncError  string     `json:"acknowledgement_sync_error,omitempty"`
-	AcknowledgementSyncedAt   *time.Time `json:"acknowledgement_synced_at,omitempty"`
-	InvalidatedAt             *time.Time `json:"invalidated_at,omitempty"`
-	InvalidatedBy             string     `json:"invalidated_by,omitempty"`
-	InvalidationReason        string     `json:"invalidation_reason,omitempty"`
-	RearmedAt                 *time.Time `json:"rearmed_at,omitempty"`
+	Alert                     alerttext.Fact      `json:"-"`
+	Presentation              alerttext.Localized `json:"presentation"`
+	ID                        string              `json:"id"`
+	ImpactID                  string              `json:"impact_id"`
+	TargetID                  string              `json:"target_id"`
+	Origin                    string              `json:"origin"`
+	ConnectorID               string              `json:"connector_id,omitempty"`
+	ConnectorName             string              `json:"connector_name,omitempty"`
+	SourceID                  string              `json:"source_id,omitempty"`
+	LastSeenAt                time.Time           `json:"last_seen_at"`
+	ExternalEventID           string              `json:"external_event_id,omitempty"`
+	ExternalObjectID          string              `json:"external_object_id,omitempty"`
+	Name                      string              `json:"name"`
+	Active                    bool                `json:"active"`
+	Severity                  Severity            `json:"severity"`
+	OpenedAt                  time.Time           `json:"opened_at"`
+	ResolvedAt                *time.Time          `json:"resolved_at,omitempty"`
+	UpstreamAcknowledged      bool                `json:"upstream_acknowledged"`
+	AcknowledgementSyncStatus string              `json:"acknowledgement_sync_status"`
+	AcknowledgementSyncError  string              `json:"acknowledgement_sync_error,omitempty"`
+	AcknowledgementSyncedAt   *time.Time          `json:"acknowledgement_synced_at,omitempty"`
+	InvalidatedAt             *time.Time          `json:"invalidated_at,omitempty"`
+	InvalidatedBy             string              `json:"invalidated_by,omitempty"`
+	InvalidationReason        string              `json:"invalidation_reason,omitempty"`
+	RearmedAt                 *time.Time          `json:"rearmed_at,omitempty"`
 }
 
 type Impact struct {
@@ -83,6 +86,8 @@ type Activity struct {
 }
 
 type Incident struct {
+	Presentation              alerttext.Localized `json:"presentation"`
+	AlertKind                 alerttext.Kind      `json:"-"`
 	ID                        string              `json:"id"`
 	NatureKey                 string              `json:"nature_key"`
 	NatureLabel               string              `json:"nature_label"`
@@ -118,6 +123,7 @@ type Incident struct {
 }
 
 type ZabbixSignal struct {
+	Alert                alerttext.Fact
 	TargetID             string
 	BindingID            string
 	ExternalEventID      string

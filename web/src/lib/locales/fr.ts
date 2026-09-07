@@ -421,6 +421,7 @@ export const fr = {
   'incidents.detail.openingMarker': 'Ouverture de l’Incident',
   'incidents.detail.correlationNote':
     'Repère temporel uniquement : ces Indicateurs ne prouvent pas la cause de l’Incident.',
+  'incidents.detail.originalMessage': 'Message original',
   'incidents.detail.sourceOpened': 'Déclenchement',
   'incidents.detail.sourceRecovered': 'Rétablissement',
   'incidents.detail.upstreamAck': 'Acquittement amont',

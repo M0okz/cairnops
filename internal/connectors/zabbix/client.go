@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/synthesis"
 )
 
@@ -66,6 +67,7 @@ type ManagedCredential struct {
 }
 
 type Problem struct {
+	Alert             alerttext.Fact
 	EventID           string
 	TriggerID         string
 	NatureFingerprint string
@@ -95,6 +97,7 @@ type remoteTrigger struct {
 	} `json:"hosts"`
 	Items []struct {
 		ItemID string `json:"itemid"`
+		HostID string `json:"hostid"`
 		Key    string `json:"key_"`
 	} `json:"items"`
 	Functions []struct {
@@ -363,7 +366,7 @@ func (client *Client) Inspect(ctx context.Context, address, token string) (Inspe
 		"hostids":             hostIDs,
 		"monitored":           true,
 		"selectDiscoveryData": []string{"parent_triggerid"},
-		"selectItems":         []string{"itemid", "key_"},
+		"selectItems":         []string{"itemid", "hostid", "key_"},
 		"selectFunctions":     "extend",
 		"selectTags":          []string{"tag", "value"},
 		"limit":               1,
@@ -492,6 +495,7 @@ func (client *Client) Problems(ctx context.Context, endpoint, token string, host
 			EventID: remote.EventID, TriggerID: remote.ObjectID,
 			NatureFingerprint: triggerFingerprint(remote.ObjectID, triggerByID, detailed),
 			CanonicalNature:   triggerCanonicalNature(remote.ObjectID, triggerByID, detailed),
+			Alert:             triggerPresentation(remote.ObjectID, triggerByID, detailed),
 			EvaluationWindow:  triggerEvaluationWindow(triggerByID[remote.ObjectID]),
 			Name:              name, Severity: severity,
 			Acknowledged: remote.Acknowledged == "1", Suppressed: remote.Suppressed == "1",
@@ -517,7 +521,7 @@ func (client *Client) triggerObjects(ctx context.Context, endpoint, token, metho
 		},
 		"triggerids":          triggerIDs,
 		"selectDiscoveryData": []string{"parent_triggerid"},
-		"selectItems":         []string{"itemid", "key_"},
+		"selectItems":         []string{"itemid", "hostid", "key_"},
 		// ZBX-23578 : la projection explicite de « function » omet sa valeur
 		// sur certaines versions. « extend » conserve le sens de la condition.
 		"selectFunctions": "extend",

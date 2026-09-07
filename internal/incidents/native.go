@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
@@ -61,6 +62,7 @@ func ApplyNativeObservation(ctx context.Context, tx pgx.Tx, observation NativeOb
 	switch {
 	case decision.Triggered:
 		incidentID, impactID, err := applyEvidenceFact(ctx, tx, EvidenceFact{
+			Alert:  alerttext.Fact{Kind: alerttext.Unavailable},
 			Origin: "native", SourceID: observation.SourceID,
 			IdentityScope: observation.SourceID, IdentityKey: NatureAvailability,
 			TargetID: observation.TargetID,

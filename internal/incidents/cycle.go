@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/synthesis"
 	"github.com/jackc/pgx/v5"
 )
@@ -17,6 +18,7 @@ import (
 // IdentityScope et IdentityKey rendent une Preuve idempotente sans exposer au
 // cycle la manière dont Zabbix, Kuma ou un Contrôle natif nomment leurs objets.
 type EvidenceFact struct {
+	Alert                alerttext.Fact
 	Origin               string
 	ConnectorID          string
 	BindingID            string
@@ -61,6 +63,7 @@ func (store *PostgresStore) ReconcileZabbix(ctx context.Context, input Reconcile
 			nature = CanonicalNature(signal.CanonicalNature, label)
 		}
 		facts = append(facts, EvidenceFact{
+			Alert:  signal.Alert.Normalize(),
 			Origin: "zabbix", ConnectorID: input.ConnectorID,
 			BindingID: signal.BindingID, IdentityScope: signal.BindingID,
 			IdentityKey: signal.ExternalEventID, TargetID: signal.TargetID,
@@ -83,6 +86,7 @@ func (store *PostgresStore) ReconcileUptimeKuma(ctx context.Context, input Recon
 	facts := make([]EvidenceFact, 0, len(input.Signals))
 	for _, signal := range input.Signals {
 		facts = append(facts, EvidenceFact{
+			Alert:  alerttext.Fact{Kind: alerttext.Unavailable},
 			Origin: "uptime_kuma", ConnectorID: input.ConnectorID,
 			BindingID: signal.BindingID, IdentityScope: signal.BindingID,
 			IdentityKey: "availability", TargetID: signal.TargetID,
@@ -102,6 +106,7 @@ func (store *PostgresStore) ReconcilePatchMon(ctx context.Context, input Reconci
 	facts := make([]EvidenceFact, 0, len(input.Signals))
 	for _, signal := range input.Signals {
 		facts = append(facts, EvidenceFact{
+			Alert:  patchMonPresentation(signal),
 			Origin: "patchmon", ConnectorID: input.ConnectorID,
 			BindingID: signal.BindingID, IdentityScope: signal.BindingID,
 			IdentityKey: signal.ConditionKey, TargetID: signal.TargetID,
@@ -126,6 +131,7 @@ func (store *PostgresStore) ReconcileArgus(ctx context.Context, input ReconcileA
 		metadata["deployed_version"] = signal.DeployedVersion
 		metadata["latest_version"] = signal.LatestVersion
 		facts = append(facts, EvidenceFact{
+			Alert:  alerttext.Fact{Kind: alerttext.SoftwareUpdate, CurrentVersion: signal.DeployedVersion, AvailableVersion: signal.LatestVersion},
 			Origin: "argus", ConnectorID: input.ConnectorID,
 			BindingID: signal.BindingID, IdentityScope: signal.BindingID,
 			IdentityKey: "software_update", TargetID: signal.TargetID,
@@ -383,10 +389,10 @@ func applyEvidenceFact(ctx context.Context, tx pgx.Tx, fact EvidenceFact, observ
 			        ) THEN NULL
 			        ELSE acknowledgement_synced_at
 			    END,
-			    last_seen_at = $7, metadata = $8::jsonb, updated_at = now()
+			    last_seen_at = $7, metadata = $8::jsonb, alert_facts = $9::jsonb, updated_at = now()
 			WHERE id = $1::uuid
 		`, existingID, fact.Name, fact.Severity, fact.ExternalEventID,
-			fact.ExternalObjectID, fact.UpstreamAcknowledged, observedAt, metadata); err != nil {
+			fact.ExternalObjectID, fact.UpstreamAcknowledged, observedAt, metadata, fact.Alert.Normalize()); err != nil {
 			return "", "", fmt.Errorf("refresh incident evidence: %w", err)
 		}
 		if fact.UpstreamAcknowledged {
@@ -442,18 +448,18 @@ func applyEvidenceFact(ctx context.Context, tx pgx.Tx, fact EvidenceFact, observ
 			connector_binding_id, source_id, identity_scope, identity_key,
 			external_event_id, external_object_id, name, active, severity,
 			opened_at, upstream_acknowledged, acknowledgement_sync_status,
-			acknowledgement_synced_at, last_seen_at, metadata
+			acknowledgement_synced_at, last_seen_at, metadata, alert_facts
 		) VALUES (
 			$1::uuid, $2::uuid, $3::uuid, $4, $5::uuid, $6::uuid, $7::uuid,
 			$8, $9, $10, $11, $12, true, $13, $14, $15, $16, $17,
-			$18, $19::jsonb
+			$18, $19::jsonb, $20::jsonb
 		) RETURNING id::text
 	`, incidentID, impactID, fact.TargetID, fact.Origin, nullableUUID(fact.ConnectorID),
 		nullableUUID(fact.BindingID), nullableUUID(fact.SourceID),
 		fact.IdentityScope, fact.IdentityKey, fact.ExternalEventID,
 		fact.ExternalObjectID, fact.Name, fact.Severity, fact.OpenedAt,
 		fact.UpstreamAcknowledged, acknowledgementStatus(fact.UpstreamAcknowledged),
-		acknowledgementTime(fact.UpstreamAcknowledged, observedAt), observedAt, metadata).Scan(&evidenceID)
+		acknowledgementTime(fact.UpstreamAcknowledged, observedAt), observedAt, metadata, fact.Alert.Normalize()).Scan(&evidenceID)
 	if err != nil {
 		return "", "", fmt.Errorf("insert incident evidence: %w", err)
 	}
@@ -867,6 +873,9 @@ func recomputeIncident(ctx context.Context, tx pgx.Tx, incidentID string, observ
 		return fmt.Errorf("count active targets: %w", err)
 	}
 	extended := previousExtended || active >= 20 || (active >= 5 && targetCount > 0 && active*5 >= targetCount)
+	if err := refreshIncidentPresentation(ctx, tx, incidentID, active == 0); err != nil {
+		return err
+	}
 	changed := status != previousStatus || propagation != previousPropagation ||
 		severity != previousSeverity || active != previousActive || total != previousTotal ||
 		maxAffected != previousMax || extended != previousExtended

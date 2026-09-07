@@ -422,6 +422,7 @@ export const en: Record<MessageKey, string> = {
   'incidents.detail.openingMarker': 'Incident opened',
   'incidents.detail.correlationNote':
     'Time reference only: these Indicators do not prove what caused the Incident.',
+  'incidents.detail.originalMessage': 'Original message',
   'incidents.detail.sourceOpened': 'Triggered',
   'incidents.detail.sourceRecovered': 'Recovered',
   'incidents.detail.upstreamAck': 'Upstream acknowledgement',

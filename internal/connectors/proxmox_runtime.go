@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/connectors/proxmox"
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/secretbox"
@@ -144,7 +145,7 @@ func (s *ProxmoxSynchronizer) syncOne(parent context.Context, connector RuntimeC
 			if resource.Type == "node" {
 				name = "Nœud hors ligne dans Proxmox VE"
 			}
-			snapshot.Facts = append(snapshot.Facts, incidents.EvidenceFact{Origin: "proxmox", ConnectorID: connector.ID, BindingID: binding.ID, IdentityScope: binding.ID, IdentityKey: "availability", TargetID: binding.TargetID, ExternalEventID: resource.ID, ExternalObjectID: resource.ID, Nature: incidents.CanonicalNature(incidents.NatureAvailability, incidents.NatureAvailabilityLabel), Name: name, Severity: incidents.SeverityMajor, OpenedAt: observedAt, Metadata: details})
+			snapshot.Facts = append(snapshot.Facts, incidents.EvidenceFact{Alert: alerttext.Fact{Kind: alerttext.Unavailable}, Origin: "proxmox", ConnectorID: connector.ID, BindingID: binding.ID, IdentityScope: binding.ID, IdentityKey: "availability", TargetID: binding.TargetID, ExternalEventID: resource.ID, ExternalObjectID: resource.ID, Nature: incidents.CanonicalNature(incidents.NatureAvailability, incidents.NatureAvailabilityLabel), Name: name, Severity: incidents.SeverityMajor, OpenedAt: observedAt, Metadata: details})
 		}
 	}
 	if err := s.incidents.ApplyEvidenceSnapshot(ctx, snapshot); err != nil {

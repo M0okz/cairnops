@@ -36,7 +36,7 @@
     stateTones,
     windowLabel
   } from '$lib/format';
-  import { plural, t } from '$lib/i18n.svelte';
+  import { i18n, plural, t } from '$lib/i18n.svelte';
   import { api, type IncidentEvidence, type MeasureWindow, type ReconciliationSourceSummary, type TargetReconciliationActivity } from '$lib/api';
 
   type Tab = 'view' | 'sources' | 'checks' | 'log' | 'settings';
@@ -449,12 +449,13 @@
 
             {#each proofs as proof (proof.signal.id)}
               {@const dead = Boolean(proof.signal.invalidated_at)}
+              {@const presented = proof.signal.presentation?.[i18n.locale]}
               <div class="trow" class:invalidated={dead}>
                 <span class="cell-name">
                   <i class="dot {dead ? 'idle' : proof.signal.active ? severityTone(proof.signal.severity) : 'ok'}"></i>
                   <span>
-                    <strong>{proof.signal.name}</strong>
-                    <small class="nature">{natureLabel(proof.incident)}</small>
+                    <strong>{presented?.title || proof.signal.name}</strong>
+                    <small class="nature">{presented?.title ? presented.description || proof.signal.name : natureLabel(proof.incident)}</small>
                   </span>
                 </span>
 
@@ -1179,12 +1180,39 @@
 
   /* L'en-tête et les lignes sont des grilles indépendantes : une largeur
      stable pour l'action empêche le bouton de décaler les autres colonnes. */
-  .cols-proof  { --cols: minmax(0, 1.4fr) 7.5rem 5.625rem 8.125rem 5.5rem }
+  .cols-proof {
+    container: proofs / inline-size;
+    --cols: minmax(0, 1.4fr) 7.5rem 5.625rem 8.125rem 5.5rem;
+  }
   .cols-source { --cols: minmax(0, 1.4fr) 6rem 7.5rem 5.25rem 5.25rem 5.75rem 8.125rem }
   .cols-check  { --cols: minmax(0, 1.4fr) 7.5rem 5.25rem 5.25rem 8.75rem 5.25rem auto }
 
   .proof-action {
     justify-self: end;
+  }
+
+  .cols-proof .cell-name {
+    overflow-wrap: anywhere;
+  }
+
+  /* La carte peut être étroite même sur bureau, à côté de la disponibilité. */
+  @container proofs (max-width: 44rem) {
+    .thead {
+      display: none;
+    }
+
+    .trow {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: var(--s2);
+    }
+
+    .trow .hide-sm {
+      display: none;
+    }
+
+    .proof-action {
+      grid-column: 2;
+    }
   }
 
   .row-actions {

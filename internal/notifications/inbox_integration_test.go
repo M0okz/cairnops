@@ -490,7 +490,7 @@ func TestPostgresInboxUsesTheCompactTemplateWithoutRewritingTheIncident(t *testi
 	target, incident := seedActiveIncident(t, pool, "major")
 	label := "Linux: Load average is too high (per CPU load over 1.5 for 5m)"
 	if _, err := pool.Exec(ctx, `UPDATE cairnops_incidents SET nature_key = 'zabbix:connector:load',
-		nature_scope = 'connector', nature_label = $2 WHERE id = $1::uuid`, incident, label); err != nil {
+		nature_scope = 'connector', alert_kind = 'system.load.high', nature_label = $2 WHERE id = $1::uuid`, incident, label); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `UPDATE cairnops_targets SET name = 'VictoriaLogs' WHERE id = $1::uuid`, target); err != nil {

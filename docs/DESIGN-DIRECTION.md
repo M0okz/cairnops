@@ -106,7 +106,7 @@ plusieurs Cibles affiche leur nombre à la place d'un nom individuel.
 
 Le Push, la boîte intégrée et Mattermost utilisent le même rendu de
 `internal/synthesis`. Les titres de notification omettent le préambule
-« Signalement : ». Un libellé source connu peut être traduit et abrégé, comme
+« Signalement : ». Un sens vérifié à partir des faits du Connecteur peut être traduit et abrégé, comme
 « Charge système moyenne élevée » ; les autres sont conservés sur une ligne, bornée à
 80 caractères. Le détail conserve le texte original attribué à sa Source.
 

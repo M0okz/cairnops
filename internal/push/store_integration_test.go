@@ -72,10 +72,20 @@ func TestExpiredRelayRecipientDisablesOnlyItsDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The incident can have newer recognition than the notification snapshot.
+	if _, err := pool.Exec(ctx, `UPDATE cairnops_incidents SET alert_kind = 'cpu.usage.high' WHERE id = $1::uuid`, incidentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE cairnops_notification_inbox SET alert_kind = 'disk.latency.high' WHERE id = $1::bigint`, inboxID); err != nil {
+		t.Fatal(err)
+	}
 	store := NewPostgresStore(pool)
 	delivery, err := store.Claim(ctx, "push-worker")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if string(delivery.AlertKind) != "disk.latency.high" {
+		t.Fatalf("push borrowed the current incident meaning: %+v", delivery)
 	}
 	if err := store.DisableDevice(ctx, delivery.ID, "push-worker", "push relay returned HTTP 410"); err != nil {
 		t.Fatal(err)

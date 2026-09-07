@@ -699,7 +699,10 @@ export type IncidentSeverity = 'information' | 'warning' | 'major' | 'critical';
 
 export type IncidentSummary = Record<'fr' | 'en', { title: string; body: string }>;
 
+export type AlertPresentation = Record<'fr' | 'en', { title: string; description?: string }>;
+
 export type IncidentEvidence = {
+  presentation?: AlertPresentation;
   id: string;
   impact_id: string;
   target_id: string;
@@ -738,6 +741,7 @@ export type IncidentActivity = {
 };
 
 export type Incident = {
+  presentation?: AlertPresentation;
   id: string;
   summary?: IncidentSummary;
   nature_key: string;

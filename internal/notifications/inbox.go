@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/synthesis"
 )
@@ -18,6 +19,7 @@ import (
 const InboxLimit = 50
 
 type InboxEntry struct {
+	AlertKind           alerttext.Kind      `json:"-"`
 	ID                  int64               `json:"id"`
 	IncidentID          string              `json:"incident_id"`
 	Revision            int                 `json:"revision"`
@@ -56,7 +58,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		SELECT inbox.id, inbox.incident_id::text,
 		       inbox.revision, coalesce(inbox.target_id::text, ''),
 		       inbox.event_kind, inbox.target_name, incident.nature_key, incident.nature_scope,
-		       inbox.nature_label, inbox.severity, inbox.impact_count,
+		       inbox.nature_label, inbox.alert_kind, inbox.severity, inbox.impact_count,
 		       inbox.affected_target_count, inbox.max_affected_targets,
 		       inbox.propagation_status, inbox.extended,
 		       inbox.occurred_at, inbox.read_at,
@@ -89,7 +91,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		if err := rows.Scan(
 			&entry.ID, &entry.IncidentID, &entry.Revision,
 			&entry.TargetID, &entry.EventKind,
-			&entry.TargetName, &entry.NatureKey, &entry.NatureScope, &entry.NatureLabel, &entry.Severity,
+			&entry.TargetName, &entry.NatureKey, &entry.NatureScope, &entry.NatureLabel, &entry.AlertKind, &entry.Severity,
 			&entry.ImpactCount, &entry.AffectedTargetCount,
 			&entry.MaxAffectedTargets, &entry.PropagationStatus, &entry.Extended,
 			&entry.OccurredAt, &entry.ReadAt, &summaryTargetName,
@@ -97,7 +99,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 			return Inbox{}, fmt.Errorf("scan notification inbox: %w", err)
 		}
 		entry.Summary = synthesis.LocalizeNotification(synthesis.Situation{
-			NatureKey: entry.NatureKey, NatureLabel: entry.NatureLabel, TargetName: summaryTargetName,
+			AlertKind: entry.AlertKind, NatureKey: entry.NatureKey, NatureLabel: entry.NatureLabel, TargetName: summaryTargetName,
 			NatureScope: entry.NatureScope, Severity: string(entry.Severity),
 			AffectedTargets: entry.AffectedTargetCount, MaxAffected: entry.MaxAffectedTargets,
 			TotalTargets: entry.ImpactCount,

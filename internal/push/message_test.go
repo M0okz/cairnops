@@ -3,6 +3,8 @@ package push
 import (
 	"strings"
 	"testing"
+
+	"github.com/M0okz/cairnops/internal/alerttext"
 )
 
 func TestCompleteNotificationsUseTheApprovedTwoLineTemplate(t *testing.T) {
@@ -12,7 +14,7 @@ func TestCompleteNotificationsUseTheApprovedTwoLineTemplate(t *testing.T) {
 		want     Presentation
 	}{
 		{"approved storage notification", Delivery{NatureKey: "storage.latency", NatureScope: "canonical", NatureLabel: "Latence de stockage élevée", TargetName: "dmz-docker-01", Severity: "warning"}, Presentation{"Latence disque élevée", "dmz-docker-01 · avertissement"}},
-		{"reported load notification", Delivery{NatureKey: "zabbix:connector:load", NatureScope: "connector", NatureLabel: "Linux: Load average is too high (per CPU load over 1.5 for 5m)", TargetName: "VictoriaLogs", Severity: "major"}, Presentation{"Charge système moyenne élevée", "VictoriaLogs · majeur"}},
+		{"reported load notification", Delivery{AlertKind: alerttext.SystemLoad, NatureKey: "zabbix:connector:load", NatureScope: "connector", NatureLabel: "Linux: Load average is too high (per CPU load over 1.5 for 5m)", TargetName: "VictoriaLogs", Severity: "major"}, Presentation{"Charge système moyenne élevée", "VictoriaLogs · majeur"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			delivery := tt.delivery

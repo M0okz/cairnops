@@ -36,6 +36,7 @@ func (client *MattermostClient) Send(ctx context.Context, webhookURL string, mes
 	resolved := message.EventKind == "resolved" || message.ResolvedAt != nil
 	color, _, icon := severityPresentation(string(message.Severity))
 	summary := synthesis.RenderNotification(synthesis.Situation{
+		AlertKind: message.AlertKind,
 		NatureKey: message.NatureKey, NatureLabel: message.NatureLabel,
 		NatureScope: message.NatureScope, Severity: string(message.Severity),
 		TargetName: message.TargetName, AffectedTargets: message.AffectedTargets,

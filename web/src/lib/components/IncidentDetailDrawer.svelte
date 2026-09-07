@@ -502,6 +502,7 @@
               <div class="source-list">
                 {#each impact.evidence as signal (signal.id)}
                   {@const invalidated = Boolean(signal.invalidated_at)}
+                  {@const presented = signal.presentation?.[i18n.locale]}
                   <article class="source-row" class:invalidated>
                     <div class="source-identity">
                       <i
@@ -509,7 +510,8 @@
                         aria-hidden="true"
                       ></i>
                       <span>
-                        <strong>{signal.name}</strong>
+                        <strong>{presented?.title || signal.name}</strong>
+                        {#if presented?.description}<small>{presented.description}</small>{/if}
                         <small>{signal.connector_name ?? origins[signal.origin]}</small>
                       </span>
                     </div>
@@ -520,6 +522,12 @@
                           ? t('target.failing')
                           : t('target.verdict.recovered')}
                     </span>
+                    {#if presented?.title && presented.title !== signal.name}
+                      <details class="source-ids source-original">
+                        <summary>{t('incidents.detail.originalMessage')}</summary>
+                        <p>{signal.name}</p>
+                      </details>
+                    {/if}
                     <dl class="source-dates">
                       <div>
                         <dt>{t('incidents.detail.sourceOpened')}</dt>
@@ -1094,6 +1102,14 @@
 
   .source-ids {
     grid-column: 1 / -1;
+  }
+
+  .source-original p {
+    margin: var(--s2) 0 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--muted);
+    font-size: var(--text-sm);
   }
 
   .source-ids code {

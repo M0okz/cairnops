@@ -78,6 +78,17 @@ func TestProxmoxStormRecoveryAndIncompleteReads(t *testing.T) {
 		}
 	}
 	assertEvidence(15)
+	presented, err := incidentStore.List(ctx, "active", 10)
+	if err != nil || len(presented) != 1 {
+		t.Fatalf("presented Proxmox incident: %+v %v", presented, err)
+	}
+	for _, impact := range presented[0].Impacts {
+		for _, proof := range impact.Evidence {
+			if proof.Presentation.EN.Title != "Unavailability" || proof.Name != "Machine arrêtée dans Proxmox VE" {
+				t.Fatalf("Proxmox presentation lost the source fact: %+v", proof)
+			}
+		}
+	}
 	if _, err := store.SetStatus(ctx, imported.Connector.ID, "disabled"); err != nil {
 		t.Fatal(err)
 	}

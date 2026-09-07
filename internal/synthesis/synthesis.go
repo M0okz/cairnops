@@ -5,30 +5,33 @@ package synthesis
 import (
 	"fmt"
 	"strings"
+
+	"github.com/M0okz/cairnops/internal/alerttext"
 )
 
 // NatureLabel est le catalogue fermé des conclusions indépendantes d'un
 // produit. Un adapter ne choisit une clé que si ses données établissent ce sens.
 // Une clé inconnue reste locale au Connecteur.
 func NatureLabel(key, locale string) (string, bool) {
-	labels, ok := map[string][2]string{
-		"availability":     {"Indisponibilité", "Unavailability"},
-		"storage.latency":  {"Latence disque élevée", "High disk latency"},
-		"storage.capacity": {"Espace disque insuffisant", "Low disk space"},
-		"backup.failure":   {"Échec de sauvegarde", "Backup failure"},
-		"backup.freshness": {"Sauvegarde trop ancienne", "Outdated backup"},
-		"tls.expiry":       {"Expiration de certificat proche", "Certificate nearing expiry"},
+	kind, ok := map[string]alerttext.Kind{
+		"availability":     alerttext.Unavailable,
+		"storage.latency":  alerttext.DiskLatency,
+		"storage.capacity": alerttext.DiskSpace,
+		"backup.failure":   alerttext.BackupFailure,
+		"backup.freshness": alerttext.BackupFreshness,
+		"tls.expiry":       alerttext.CertificateExpiry,
 	}[key]
-	if locale == "en" {
-		return labels[1], ok
+	if !ok {
+		return "", false
 	}
-	return labels[0], ok
+	return alerttext.Title(kind, locale)
 }
 
 // Situation contient exclusivement les faits établis par le cycle d'Incident.
 // Les compteurs portent sur les Cibles distinctes, jamais sur les Preuves.
 // Une seule Preuve suffit ; aucun quorum ni enrichissement n'est requis.
 type Situation struct {
+	AlertKind       alerttext.Kind
 	NatureKey       string
 	NatureScope     string
 	NatureLabel     string
@@ -48,6 +51,22 @@ type Text struct {
 type Localized struct {
 	FR Text `json:"fr"`
 	EN Text `json:"en"`
+}
+
+// Presentation describes a verified meaning independently of the incident's
+// lifecycle. Empty titles instruct clients to keep the original source label.
+func Presentation(s Situation) alerttext.Localized {
+	return alerttext.Localized{FR: alerttext.Text{Title: presentationTitle(s, "fr")}, EN: alerttext.Text{Title: presentationTitle(s, "en")}}
+}
+
+func presentationTitle(s Situation, locale string) string {
+	if s.NatureScope == "canonical" {
+		if title, ok := NatureLabel(s.NatureKey, locale); ok {
+			return title
+		}
+	}
+	title, _ := alerttext.Title(s.AlertKind, locale)
+	return title
 }
 
 func Localize(s Situation) Localized {
@@ -80,6 +99,9 @@ func render(s Situation, locale string, notification bool) Text {
 	}
 	if notification && !known {
 		title = notificationSourceTitle(s, locale)
+	}
+	if translated := presentationTitle(s, locale); translated != "" {
+		title = translated
 	}
 	count := s.AffectedTargets
 	if s.Resolved {

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/M0okz/cairnops/internal/alerttext"
 )
 
 func TestNotificationKeepsTheIncidentFactsInBothLanguages(t *testing.T) {
@@ -32,39 +34,6 @@ func TestNotificationKeepsTheIncidentFactsInBothLanguages(t *testing.T) {
 	}
 }
 
-func TestNotificationAbbreviationPreservesLocalMeaningAndDetailedEvidence(t *testing.T) {
-	label := "Linux: Load average is too high (per CPU load over 1.5 for 5m)"
-	s := Situation{NatureKey: "zabbix:connector:load", NatureScope: "connector", NatureLabel: label, TargetName: "VictoriaLogs", AffectedTargets: 1, Severity: "major"}
-	if got := LocalizeNotification(s); got.FR != (Text{"Charge système moyenne élevée", "VictoriaLogs · majeur"}) || got.EN != (Text{"High average system load", "VictoriaLogs · major"}) {
-		t.Fatalf("wrong load presentation: %#v", got)
-	}
-	if got := Render(s, "fr"); got.Title != "Signalement : "+label || s.NatureLabel != label || s.NatureScope != "connector" {
-		t.Fatalf("abbreviation changed the detailed facts: %#v, %#v", s, got)
-	}
-	// A description that merely resembles the known wording must remain literal.
-	for _, label := range []string{
-		"Linux: Load average is too high - false positive",
-		"Linux: Load average is too high (but memory is healthy)",
-		"Linux: Load average is not too high",
-		"Local storage condition",
-		"Linux: High CPU utilization - false positive",
-		"Linux: High CPU utilization (over 90% for 5m) but disabled",
-		"Linux: High CPU utilization (over 90% for 10m)",
-		"Linux: FS [/srv]: Space is not low",
-		"Linux: sda: Disk read/write request responses are too high - ignored",
-		"Linux: sda: Disk read/write request responses are not too high",
-	} {
-		s.NatureLabel = label
-		if got := RenderNotification(s, "fr"); got.Title != label {
-			t.Fatalf("invented a meaning for %q: %#v", label, got)
-		}
-	}
-	s.NatureKey, s.NatureLabel = "storage.latency", "Provider-specific condition"
-	if got := RenderNotification(s, "en"); got.Title != s.NatureLabel {
-		t.Fatalf("a local key was promoted to a canonical conclusion: %#v", got)
-	}
-}
-
 func TestUnknownNotificationTitlesAreReadableAndBounded(t *testing.T) {
 	s := Situation{NatureScope: "connector", NatureLabel: "  Préfixe\n" + strings.Repeat("é", 100), TargetName: "\t API\n publique  ", AffectedTargets: 1, Severity: "future"}
 	got := RenderNotification(s, "fr")
@@ -77,30 +46,39 @@ func TestUnknownNotificationTitlesAreReadableAndBounded(t *testing.T) {
 	}
 }
 
-func TestReportedNotificationLabelsStayFactual(t *testing.T) {
-	for _, tt := range []struct{ label, fr, en string }{
-		{"Linux: FS [/srv/nextcloud-data]: Space is critically low (used > 90%, total 97.9GB)", "Espace disque insuffisant", "Low disk space"},
-		{"Linux: FS [/volume5]: Space is low (used > 80%, total 3554.9GB)", "Espace disque insuffisant", "Low disk space"},
-		{"Proxmox VE: Node [pve-forum]: QEMU [dmz-nextcloud-01][/srv/nextcloud-data]: Filesystem used high", "Occupation disque élevée", "High filesystem usage"},
-		{"Linux: sda: Disk read/write request responses are too high", "Latence disque élevée", "High disk latency"},
-		{"Linux: nvme0n1: Disk read/write request responses are too high (read > 20 ms for 15m or write > 25.5 ms for 15m)", "Latence disque élevée", "High disk latency"},
-		{"Linux: High CPU utilization", "Utilisation CPU élevée", "High CPU utilization"},
-		{"Linux: High CPU utilization (over 90% for 5m)", "Utilisation CPU élevée", "High CPU utilization"},
-		{"Linux: High CPU utilization (over {$CPU.UTIL.CRIT}% for 5m)", "Utilisation CPU élevée", "High CPU utilization"},
-		{"Linux: Number of installed packages has been changed", "Paquets installés modifiés", "Installed packages changed"},
+func TestNotificationTranslationsRequireStructuredFacts(t *testing.T) {
+	for _, tt := range []struct {
+		kind          alerttext.Kind
+		label, fr, en string
+	}{
+		{alerttext.SystemLoad, "Linux: Load average is too high (per CPU load over 1.5 for 5m)", "Charge système moyenne élevée", "High average system load"},
+		{alerttext.CPUUsage, "A user-renamed standard CPU condition", "Utilisation CPU élevée", "High CPU utilization"},
+		{alerttext.DiskLatency, "Linux: sda: Disk read/write request responses are too high", "Latence disque élevée", "High disk latency"},
+		{alerttext.DiskSpace, "Custom wording for a recognized filesystem condition", "Espace disque insuffisant", "Low disk space"},
 	} {
-		s := Situation{NatureScope: "connector", NatureKey: "zabbix:connector:local", NatureLabel: tt.label, TargetName: "Host", AffectedTargets: 1, Severity: "major"}
+		s := Situation{AlertKind: tt.kind, NatureScope: "connector", NatureKey: "provider:local", NatureLabel: tt.label, TargetName: "Host", AffectedTargets: 1, Severity: "major"}
 		got := LocalizeNotification(s)
-		if got.FR.Title != tt.fr || got.EN.Title != tt.en || got.FR.Body != "Host · majeur" || got.EN.Body != "Host · major" || s.NatureLabel != tt.label {
-			t.Fatalf("incorrect abbreviation of %q: %#v", tt.label, got)
+		if got.FR.Title != tt.fr || got.EN.Title != tt.en || got.FR.Body != "Host · majeur" || got.EN.Body != "Host · major" {
+			t.Fatalf("wrong translation: %+v", got)
 		}
-		if detail := Render(s, "fr"); detail.Title != "Signalement : "+oneLine(tt.label, 150) {
-			t.Fatalf("changed source wording in detail: %#v", detail)
+		if Render(s, "fr").Title != tt.fr || s.NatureLabel != tt.label {
+			t.Fatal("detail diverged or source text was overwritten")
 		}
-		// Do not apply a source-specific translation to another integration.
-		s.NatureKey = "webhook:custom"
-		if got := RenderNotification(s, "fr"); got.Title != oneLine(tt.label, 80) {
-			t.Fatalf("translated another integration's label: %#v", got)
+		// The exact same source text cannot establish a meaning without enrichment.
+		s.AlertKind = ""
+		for _, scope := range []string{"zabbix:connector:local", "webhook:custom", "storage.latency"} {
+			s.NatureKey = scope
+			if got := RenderNotification(s, "fr"); got.Title != oneLine(tt.label, 80) {
+				t.Fatalf("source text guessed a meaning: %+v", got)
+			}
+		}
+	}
+}
+
+func TestPresentationCatalogCannotExpandCanonicalNatures(t *testing.T) {
+	for _, key := range []string{"cpu.usage.high", "system.load.high", "disk.latency.high", "software.security_updates", "certificate.invalid"} {
+		if _, known := NatureLabel(key, "fr"); known {
+			t.Fatalf("presentation key became a canonical Nature: %s", key)
 		}
 	}
 }

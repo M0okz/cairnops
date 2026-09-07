@@ -6,9 +6,9 @@
  * Intl : une date se dit dans le fuseau de l'utilisateur et dans sa langue,
  * jamais dans celle du serveur. */
 
-import type { Incident, IncidentSeverity, Measure, MeasureWindow, Target } from './api';
+import type { AlertPresentation, Incident, IncidentSeverity, Measure, MeasureWindow, Target } from './api';
 import { formatCalendarDay } from './calendar-day';
-import { localeTag, t } from './i18n.svelte';
+import { i18n, localeTag, t } from './i18n.svelte';
 
 export type Tone = 'ok' | 'warn' | 'crit' | 'info' | 'idle';
 
@@ -30,7 +30,9 @@ export const severityLabel = (severity: IncidentSeverity) => t(`severity.${sever
 export const severityTone = (severity: IncidentSeverity): Tone => severityTones[severity];
 export const severityWeight = (severity: IncidentSeverity) => severityRank[severity];
 
-export function natureLabel(nature: { nature_key: string; nature_label: string }): string {
+export function natureLabel(nature: { nature_key: string; nature_label: string; presentation?: AlertPresentation }): string {
+  const title = nature.presentation?.[i18n.locale].title;
+  if (title) return title;
   if (nature.nature_key === 'software-update-available') {
     return t('nature.softwareUpdateAvailable');
   }

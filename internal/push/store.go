@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -14,6 +15,7 @@ import (
 var ErrNoDelivery = errors.New("no push delivery due")
 
 type Delivery struct {
+	AlertKind           alerttext.Kind
 	ID                  int64
 	DeviceID            string
 	RecipientSealed     string
@@ -79,7 +81,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		       device.notification_content, inbox.event_kind,
 		       inbox.incident_id::text,
 		       claimed.revision, claimed.presentation,
-		       inbox.target_name, incident.nature_key, incident.nature_scope, inbox.nature_label, inbox.severity,
+		       inbox.target_name, incident.nature_key, incident.nature_scope, inbox.nature_label, inbox.alert_kind, inbox.severity,
 		       inbox.impact_count, inbox.affected_target_count,
 		       inbox.max_affected_targets, inbox.propagation_status,
 		       inbox.extended, inbox.occurred_at
@@ -92,7 +94,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		&delivery.EncryptionPublicKey, &delivery.Locale,
 		&delivery.NotificationContent, &delivery.EventKind,
 		&delivery.IncidentID, &delivery.Revision,
-		&delivery.PresentationMode, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureScope, &delivery.NatureLabel,
+		&delivery.PresentationMode, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureScope, &delivery.NatureLabel, &delivery.AlertKind,
 		&delivery.Severity, &delivery.ImpactCount, &delivery.AffectedTargets,
 		&delivery.MaxAffected, &delivery.PropagationStatus, &delivery.Extended,
 		&delivery.OccurredAt,

@@ -83,6 +83,11 @@ func TestPostgresCompleteFeedsTheIncidentCycle(t *testing.T) {
 		t.Fatalf("unexpected incident: %#v", incident)
 	}
 
+	proof := incident.Impacts[0].Evidence[0]
+	if proof.Presentation.EN.Title != "Unavailability" || proof.Name != "Public endpoint" {
+		t.Fatalf("native evidence lost the shared meaning or original source: %+v", proof)
+	}
+
 	run(domain.OutcomeHealthy)
 	if err := incidents.NewPostgresStore(pool).Advance(ctx, time.Now().UTC().Add(10*time.Minute)); err != nil {
 		t.Fatal(err)

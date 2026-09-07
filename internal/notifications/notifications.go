@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/secretbox"
 )
@@ -157,6 +158,7 @@ func normalizeSeverities(values []incidents.Severity) ([]incidents.Severity, err
 const KindInApp = "in_app"
 
 type Delivery struct {
+	AlertKind         alerttext.Kind
 	ID                int64
 	IncidentID        string
 	IncidentRevision  int
@@ -194,6 +196,7 @@ type Sender interface {
 }
 
 type Message struct {
+	AlertKind         alerttext.Kind
 	EventKind         string
 	IncidentID        string
 	TargetName        string
@@ -283,6 +286,7 @@ func (dispatcher *Dispatcher) deliver(ctx context.Context, delivery Delivery) er
 		return err
 	}
 	return dispatcher.sender.Send(ctx, string(webhook), Message{
+		AlertKind: delivery.AlertKind,
 		EventKind: delivery.EventKind, IncidentID: delivery.IncidentID,
 		TargetName: delivery.TargetName, NatureKey: delivery.NatureKey, NatureLabel: delivery.NatureLabel,
 		NatureScope: delivery.NatureScope,

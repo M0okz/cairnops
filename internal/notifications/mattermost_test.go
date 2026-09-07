@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/incidents"
 )
 
@@ -78,7 +79,7 @@ func TestMattermostUsesTheCompactNotificationTemplate(t *testing.T) {
 	defer server.Close()
 	if err := NewMattermostClient(server.Client()).Send(context.Background(), server.URL, Message{
 		EventKind: "firing", IncidentID: "incident-load", TargetName: "VictoriaLogs",
-		NatureKey: "zabbix:connector:load", NatureScope: "connector",
+		AlertKind: alerttext.SystemLoad, NatureKey: "zabbix:connector:load", NatureScope: "connector",
 		NatureLabel: "Linux: Load average is too high (per CPU load over 1.5 for 5m)",
 		Severity:    incidents.SeverityMajor, AffectedTargets: 1,
 	}); err != nil {

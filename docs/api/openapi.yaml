@@ -745,6 +745,22 @@ components:
         bindings: { type: integer, minimum: 0, description: Sources externes déliées. Les Cibles correspondantes sont conservées. }
         quarantined: { type: integer, minimum: 0, description: Identités en quarantaine emportées sans décision. }
         resolved_incidents: { type: integer, minimum: 0, description: Incidents clos faute de preuve après la suppression. }
+    AlertPresentation:
+      description: >-
+        Présentation factuelle FR/EN produite par le serveur. Un titre vide
+        signifie qu'aucun sens standard n'est établi : conserver le libellé
+        source. Ne définit ni l'identité de Nature ni le cycle d'Incident.
+      type: object
+      required: [fr, en]
+      properties:
+        fr: { $ref: '#/components/schemas/AlertPresentationText' }
+        en: { $ref: '#/components/schemas/AlertPresentationText' }
+    AlertPresentationText:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
     IncidentEvidence:
       type: object
       required: [id, impact_id, target_id, origin, name, active, severity, opened_at, last_seen_at, upstream_acknowledged, acknowledgement_sync_status]
@@ -759,7 +775,8 @@ components:
         last_seen_at: { type: string, format: date-time }
         external_event_id: { type: string }
         external_object_id: { type: string }
-        name: { type: string }
+        name: { type: string, description: Message original du connecteur conservé sans traduction. }
+        presentation: { $ref: '#/components/schemas/AlertPresentation' }
         active: { type: boolean }
         severity: { type: string, enum: [information, warning, major, critical] }
         opened_at: { type: string, format: date-time }
@@ -812,6 +829,7 @@ components:
       required: [id, nature_key, nature_label, nature_scope, nature_namespace, nature_fingerprint, propagation_eligible, status, propagation_status, severity, opened_at, last_impact_at, propagation_window_seconds, propagation_ends_at, acknowledgement_sync_status, extended, active_impact_count, impact_count, affected_target_count, max_affected_targets, revision, impacts, activity, created_at, updated_at, summary]
       properties:
         summary: { $ref: '#/components/schemas/IncidentSummary' }
+        presentation: { $ref: '#/components/schemas/AlertPresentation' }
         id: { type: string, format: uuid }
         nature_key: { type: string }
         nature_label: { type: string }

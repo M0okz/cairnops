@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/synthesis"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -43,7 +44,7 @@ func (store *PostgresStore) list(ctx context.Context, status, targetID string, l
 		       incident.acknowledgement_sync_error, incident.extended,
 		       incident.active_impact_count, incident.impact_count,
 		       incident.affected_target_count, incident.max_affected_targets,
-		       incident.revision, incident.created_at, incident.updated_at
+		       incident.revision, incident.created_at, incident.updated_at, incident.alert_kind
 		FROM cairnops_incidents incident
 		LEFT JOIN cairnops_users account ON account.id = incident.acknowledged_by
 		WHERE ($1 = '' OR incident.status = $1)
@@ -95,7 +96,7 @@ func (store *PostgresStore) Get(ctx context.Context, incidentID string) (Inciden
 		       incident.acknowledgement_sync_error, incident.extended,
 		       incident.active_impact_count, incident.impact_count,
 		       incident.affected_target_count, incident.max_affected_targets,
-		       incident.revision, incident.created_at, incident.updated_at
+		       incident.revision, incident.created_at, incident.updated_at, incident.alert_kind
 		FROM cairnops_incidents incident
 		LEFT JOIN cairnops_users account ON account.id = incident.acknowledged_by
 		WHERE incident.id = $1::uuid
@@ -223,7 +224,7 @@ func (store *PostgresStore) loadChildren(ctx context.Context, incidents []Incide
 		       evidence.acknowledgement_sync_error,
 		       evidence.acknowledgement_synced_at, evidence.invalidated_at,
 		       coalesce(account.display_name, ''), evidence.invalidation_reason,
-		       evidence.rearmed_at, coalesce(evidence.source_id::text, ''), evidence.last_seen_at
+		       evidence.rearmed_at, coalesce(evidence.source_id::text, ''), evidence.last_seen_at, evidence.alert_facts
 		FROM cairnops_incident_evidence evidence
 		LEFT JOIN cairnops_connectors connector ON connector.id = evidence.connector_id
 		LEFT JOIN cairnops_users account ON account.id = evidence.invalidated_by
@@ -247,11 +248,12 @@ func (store *PostgresStore) loadChildren(ctx context.Context, incidents []Incide
 			&evidence.AcknowledgementSyncError,
 			&evidence.AcknowledgementSyncedAt, &evidence.InvalidatedAt,
 			&evidence.InvalidatedBy, &evidence.InvalidationReason,
-			&evidence.RearmedAt, &evidence.SourceID, &evidence.LastSeenAt,
+			&evidence.RearmedAt, &evidence.SourceID, &evidence.LastSeenAt, &evidence.Alert,
 		); err != nil {
 			rows.Close()
 			return fmt.Errorf("scan incident evidence: %w", err)
 		}
+		evidence.Presentation = alerttext.Localize(evidence.Alert)
 		evidence.ImpactID = impactID
 		if impact := impacts[impactID]; impact != nil {
 			impact.Evidence = append(impact.Evidence, evidence)
@@ -316,13 +318,16 @@ func (store *PostgresStore) loadChildren(ctx context.Context, incidents []Incide
 				break
 			}
 		}
-		item.Summary = synthesis.Localize(synthesis.Situation{
+		situation := synthesis.Situation{
+			AlertKind: item.AlertKind,
 			NatureKey: item.NatureKey, NatureLabel: item.NatureLabel, TargetName: targetName,
 			NatureScope: item.NatureScope, Severity: string(item.Severity),
 			AffectedTargets: item.AffectedTargetCount, MaxAffected: item.MaxAffectedTargets,
 			TotalTargets: item.ImpactCount,
 			Resolved:     item.Status == "resolved",
-		})
+		}
+		item.Summary = synthesis.Localize(situation)
+		item.Presentation = synthesis.Presentation(situation)
 	}
 	return nil
 }
@@ -555,7 +560,7 @@ func scanIncident(row scanner) (Incident, error) {
 		&item.AcknowledgementSyncStatus, &item.AcknowledgementSyncError,
 		&item.Extended, &item.ActiveImpactCount, &item.ImpactCount,
 		&item.AffectedTargetCount, &item.MaxAffectedTargets, &item.Revision,
-		&item.CreatedAt, &item.UpdatedAt,
+		&item.CreatedAt, &item.UpdatedAt, &item.AlertKind,
 	)
 	item.Impacts = []Impact{}
 	item.Activity = []Activity{}

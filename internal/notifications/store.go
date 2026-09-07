@@ -138,7 +138,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO cairnops_notification_outbox (
 			incident_id, incident_revision, channel_id, event_kind, event_key,
-			presentation, target_name, nature_label, severity, opened_at,
+			presentation, target_name, nature_label, alert_kind, severity, opened_at,
 			impact_count, affected_target_count, max_affected_targets,
 			propagation_status, extended, next_attempt_at
 		)
@@ -151,7 +151,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		                WHERE impact.incident_id = incident.id AND impact.status = 'active'
 		                ORDER BY impact.opened_at, impact.id LIMIT 1
 		            ), 'Cible affectée') END,
-		       incident.nature_label, incident.severity, incident.opened_at,
+		       incident.nature_label, incident.alert_kind, incident.severity, incident.opened_at,
 		       incident.impact_count, incident.affected_target_count,
 		       greatest(incident.max_affected_targets, 1),
 		       incident.propagation_status, incident.extended,
@@ -196,7 +196,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		            WHERE impact.incident_id = incident.id AND impact.status = 'active'
 		            ORDER BY impact.opened_at, impact.id LIMIT 1
 		        ), delivery.target_name) END,
-		    nature_label = incident.nature_label, severity = incident.severity,
+		    nature_label = incident.nature_label, alert_kind = incident.alert_kind, severity = incident.severity,
 		    impact_count = incident.impact_count,
 		    affected_target_count = incident.affected_target_count,
 		    max_affected_targets = greatest(incident.max_affected_targets, 1),
@@ -247,7 +247,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		                WHERE impact.incident_id = incident.id AND impact.status = 'active'
 		                ORDER BY impact.opened_at, impact.id LIMIT 1
 		            ), opening.target_name) END AS target_name,
-		       incident.nature_label, incident.severity, incident.opened_at,
+		       incident.nature_label, incident.alert_kind, incident.severity, incident.opened_at,
 		       incident.resolved_at, incident.impact_count,
 		       incident.affected_target_count, greatest(incident.max_affected_targets, 1) AS max_affected_targets,
 		       incident.propagation_status, incident.extended
@@ -280,12 +280,12 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		)
 		INSERT INTO cairnops_notification_outbox (
 			incident_id, incident_revision, channel_id, event_kind, event_key,
-			presentation, target_name, nature_label, severity, opened_at, resolved_at,
+			presentation, target_name, nature_label, alert_kind, severity, opened_at, resolved_at,
 			impact_count, affected_target_count, max_affected_targets,
 			propagation_status, extended, next_attempt_at, attempts
 		)
 		SELECT id, revision, channel_id, 'incident_update', 'revision:' || revision::text,
-		       presentation, target_name, nature_label, severity, opened_at, resolved_at,
+		       presentation, target_name, nature_label, alert_kind, severity, opened_at, resolved_at,
 		       impact_count, affected_target_count, max_affected_targets, propagation_status, extended,
 		       coalesce((SELECT max(previous.next_attempt_at) FROM cairnops_notification_outbox previous
 		           WHERE previous.incident_id = revisions.id AND previous.channel_id = revisions.channel_id
@@ -317,7 +317,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO cairnops_notification_outbox (
 			incident_id, incident_revision, channel_id, event_kind, event_key,
-			presentation, target_name, nature_label, severity, opened_at, resolved_at,
+			presentation, target_name, nature_label, alert_kind, severity, opened_at, resolved_at,
 			impact_count, affected_target_count, max_affected_targets,
 			propagation_status, extended
 		)
@@ -330,7 +330,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		           ORDER BY impact.opened_at, impact.id LIMIT 1
 		       ), opening.target_name)
 		       ELSE incident.max_affected_targets::text || ' Cibles affectées au maximum' END,
-		       incident.nature_label, incident.severity, incident.opened_at,
+		       incident.nature_label, incident.alert_kind, incident.severity, incident.opened_at,
 		       incident.resolved_at, incident.impact_count, 0,
 		       greatest(incident.max_affected_targets, 1),
 		       incident.propagation_status, incident.extended
@@ -388,7 +388,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		)
 		SELECT claimed.id, claimed.incident_id::text, claimed.incident_revision,
 		       claimed.channel_id::text, channel.kind, claimed.event_kind,
-		       claimed.presentation, claimed.target_name, incident.nature_key, incident.nature_scope, claimed.nature_label,
+		       claimed.presentation, claimed.target_name, incident.nature_key, incident.nature_scope, claimed.nature_label, claimed.alert_kind,
 		       claimed.severity, claimed.impact_count,
 		       claimed.affected_target_count, claimed.max_affected_targets,
 		       claimed.propagation_status, claimed.extended, claimed.opened_at,
@@ -398,7 +398,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 	`, strings.TrimSpace(workerID)).Scan(
 		&delivery.ID, &delivery.IncidentID, &delivery.IncidentRevision,
 		&delivery.ChannelID, &delivery.ChannelKind, &delivery.EventKind,
-		&delivery.Presentation, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureScope, &delivery.NatureLabel,
+		&delivery.Presentation, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureScope, &delivery.NatureLabel, &delivery.AlertKind,
 		&delivery.Severity, &delivery.ImpactCount, &delivery.AffectedTargets,
 		&delivery.MaxAffected, &delivery.PropagationStatus, &delivery.Extended,
 		&delivery.OpenedAt, &delivery.ResolvedAt, &delivery.CredentialSealed,
@@ -474,7 +474,7 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 		command, err := tx.Exec(ctx, `
 			INSERT INTO cairnops_notification_inbox (
 				user_id, incident_id, target_id, revision, event_kind,
-				target_name, nature_label, severity, occurred_at,
+				target_name, nature_label, alert_kind, severity, occurred_at,
 				impact_count, affected_target_count, max_affected_targets,
 				propagation_status, extended
 			)
@@ -483,12 +483,12 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 			           SELECT target_id FROM cairnops_incident_impacts
 			           WHERE incident_id = $1::uuid ORDER BY opened_at, id LIMIT 1
 			       ) ELSE NULL END,
-			       $2, 'firing', $3, $4, $5, $6, $7, $8, $9, $10, $11
+			       $2, 'firing', $3, $4, $12, $5, $6, $7, $8, $9, $10, $11
 			FROM cairnops_users users
 			WHERE users.deactivated_at IS NULL AND users.external_suspended_at IS NULL
 			ON CONFLICT (user_id, incident_id) DO UPDATE SET
 				revision = EXCLUDED.revision, event_kind = EXCLUDED.event_kind,
-				target_name = EXCLUDED.target_name, nature_label = EXCLUDED.nature_label,
+				target_name = EXCLUDED.target_name, nature_label = EXCLUDED.nature_label, alert_kind = EXCLUDED.alert_kind,
 				severity = EXCLUDED.severity, occurred_at = EXCLUDED.occurred_at,
 				impact_count = EXCLUDED.impact_count,
 				affected_target_count = EXCLUDED.affected_target_count,
@@ -498,7 +498,7 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 		`, delivery.IncidentID, delivery.IncidentRevision, delivery.TargetName,
 			delivery.NatureLabel, string(delivery.Severity), delivery.OpenedAt,
 			delivery.ImpactCount, delivery.AffectedTargets, delivery.MaxAffected,
-			delivery.PropagationStatus, delivery.Extended)
+			delivery.PropagationStatus, delivery.Extended, string(delivery.AlertKind))
 		if err != nil {
 			return 0, fmt.Errorf("deposit in-app incident opening: %w", err)
 		}
@@ -519,7 +519,7 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 			        ORDER BY opened_at, id LIMIT 1
 			    ) ELSE NULL END,
 			    target_name = $4,
-			    nature_label = $5, severity = $6, occurred_at = $7,
+			    nature_label = $5, alert_kind = $14, severity = $6, occurred_at = $7,
 			    impact_count = $8, affected_target_count = $9,
 			    max_affected_targets = $10, propagation_status = $11,
 			    extended = $12,
@@ -530,7 +530,7 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 			delivery.TargetName, delivery.NatureLabel, string(delivery.Severity),
 			occurredAt, delivery.ImpactCount, delivery.AffectedTargets,
 			delivery.MaxAffected, delivery.PropagationStatus, delivery.Extended,
-			presentation)
+			presentation, string(delivery.AlertKind))
 		if err != nil {
 			return 0, fmt.Errorf("revise in-app incident notification: %w", err)
 		}

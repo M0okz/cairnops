@@ -201,6 +201,7 @@ func (synchronizer *Synchronizer) syncOne(ctx context.Context, connector Runtime
 				ExternalEventID: problem.EventID, ExternalObjectID: problem.TriggerID,
 				NatureFingerprint: problem.NatureFingerprint,
 				CanonicalNature:   problem.CanonicalNature,
+				Alert:             problem.Alert,
 				EvaluationWindow:  problem.EvaluationWindow,
 				Name:              problem.Name, Severity: zabbixSeverity(problem.Severity),
 				OpenedAt: problem.StartedAt, UpstreamAcknowledged: problem.Acknowledged,
