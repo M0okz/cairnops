@@ -2,7 +2,8 @@
   import { page } from '$app/state';
   import { reconciliationState } from '$lib/reconciliation.svelte';
   import { startReconciliationPolling } from '$lib/reconciliation-polling';
-  import { showReconciliationReviewInTopbar } from '$lib/reconciliation-visibility';
+  import Icon from './Icon.svelte';
+  import Odometer from './Odometer.svelte';
   import { session } from '$lib/session.svelte';
   import type { ReconciliationStage } from '$lib/api';
   import { t, type MessageKey } from '$lib/i18n.svelte';
@@ -30,7 +31,6 @@
   });
 
   const active = $derived(reconciliationState.activeOperations[0] ?? null);
-  const showReview = $derived(showReconciliationReviewInTopbar(page.url.pathname));
 
   $effect(() => {
     for (const operation of reconciliationState.activeOperations) watched.add(operation.id);
@@ -47,21 +47,24 @@
   });
 </script>
 
-{#if active}
-  <a class="progress" href="/cibles/rapprochements" aria-live="polite" title={t(stages[active.stage])}>
-    <i></i>
-    <span>{t(stages[active.stage])}</span>
-  </a>
-{:else if showReview && reconciliationState.actionable.length > 0}
-  <a class="review" href="/cibles/rapprochements" title={t('reconciliation.reviewTitle')}>
-    <span>{t('reconciliation.title')}</span><b>{reconciliationState.actionable.length}</b>
+{#if session.user?.role === 'administrator'}
+  <a
+    href="/cibles/rapprochements"
+    aria-label={t('reconciliation.title')}
+    aria-current={page.url.pathname.startsWith('/cibles/rapprochements') ? 'page' : undefined}
+    title={active ? t(stages[active.stage]) : t('reconciliation.reviewTitle')}
+  >
+    <Icon name="signal" size={20} />
+    <span class="nav-item-label">{t('reconciliation.title')}</span>
+    {#if active || reconciliationState.actionable.length > 0}
+      <span class="rail-indicator">
+        {#if active}
+          <i class="dot info" aria-hidden="true"></i>
+        {:else}
+          <b class="num"><Odometer value={reconciliationState.actionable.length} /></b>
+        {/if}
+      </span>
+    {/if}
+    <span class="visually-hidden" aria-live="polite">{active ? t(stages[active.stage]) : ''}</span>
   </a>
 {/if}
-
-<style>
-  .progress, .review { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl-h); padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--r-m); color: var(--muted); font-size: .6875rem; white-space: nowrap; }
-  .progress i { width: .5rem; height: .5rem; border-radius: 50%; background: var(--accent); }
-  .progress span { max-width: 13rem; overflow: hidden; text-overflow: ellipsis; }
-  .review b { min-width: 1.125rem; height: 1.125rem; display: grid; place-items: center; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-ink); font: .625rem var(--font-num); }
-  @media (max-width: 85rem) { .progress span, .review span { display: none; } }
-</style>

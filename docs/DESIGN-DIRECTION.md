@@ -17,6 +17,8 @@ L’identité retenue est **Convergence · Titane**, décrite dans [le guide de 
 
 Le film de présentation et de développement est destiné au futur site vitrine. Son entrée d’aperçu est indépendante ; il n’apparaît pas dans la navigation de CairnOps. Les ressources iOS du kit seront reprises dans le chantier natif, en conservant un seul AppIcon par cible.
 
+L’accès administrateur aux Rapprochements se trouve dans le volet, immédiatement après Cibles, avec le compteur de suggestions ou l’état du traitement en cours. Il reste disponible sur toutes les pages et dans la navigation mobile, sans commande supplémentaire dans la barre supérieure.
+
 ### Signature : densité constante
 
 La signature de CairnOps n'est pas un ornement, c'est la constance. Les huit écrans partagent la même grille, la même hauteur de barre supérieure, la même hauteur de contrôle et les mêmes colonnes lorsqu'ils montrent la même chose. Un opérateur qui passe de la liste des Cibles au journal des Incidents ne réapprend rien.

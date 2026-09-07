@@ -1,5 +1,6 @@
 <script lang="ts">
   import Brand from './Brand.svelte';
+  import ReconciliationNavigation from './ReconciliationNavigation.svelte';
   import { page } from '$app/state';
   import Icon, { type IconName } from './Icon.svelte';
   import Odometer from './Odometer.svelte';
@@ -118,6 +119,7 @@
    * d'une Cible garde donc Cibles allumé. */
   function current(href: string) {
     if (href === '/') return page.url.pathname === '/';
+    if (href === '/cibles' && page.url.pathname.startsWith('/cibles/rapprochements')) return false;
     return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
   }
 
@@ -182,6 +184,7 @@
           </span>
         {/if}
       </a>
+      {#if item.href === '/cibles'}<ReconciliationNavigation />{/if}
     {/each}
   </nav>
 

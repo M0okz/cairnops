@@ -5,7 +5,6 @@
   import { session } from '$lib/session.svelte';
   import { t } from '$lib/i18n.svelte';
   import ThemePicker from './ThemePicker.svelte';
-  import ReconciliationProgress from './ReconciliationProgress.svelte';
 
   /* Le déclencheur de la Palette est le même sur tous les écrans : la barre
    * supérieure n'a plus de champ propre. Filtrer une liste est le travail de
@@ -29,7 +28,6 @@
   </nav>
 
   <div class="topbar-right">
-    <ReconciliationProgress />
     <button class="search" type="button" aria-label={t('common.search')} onclick={() => palette.show()}>
       <Icon name="search" size={20} />
       <span>{t('common.search')}</span>

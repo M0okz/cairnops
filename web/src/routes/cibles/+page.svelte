@@ -30,7 +30,6 @@
   import { i18n, plural, t } from '$lib/i18n.svelte';
   import { formatIndicator } from '$lib/indicator-format';
   import type { Measure, Outcome, SourceMeasures, Target } from '$lib/api';
-  import { reconciliationState } from '$lib/reconciliation.svelte';
 
   /* Les Contrôles natifs portent le nom de leur protocole : il ne se traduit
    * pas, et « Heartbeat » est le mot des Écrans dans les deux langues. */
@@ -165,12 +164,6 @@
       </p>
     </div>
     <div class="page-actions shadcn-control">
-      {#if session.user?.role === 'administrator'}
-        <Button variant="outline" href="/cibles/rapprochements">
-          {t('reconciliation.title')}
-          {#if reconciliationState.actionable.length > 0}<b class="action-count">{reconciliationState.actionable.length}</b>{/if}
-        </Button>
-      {/if}
       <Button variant="outline" type="button" onclick={() => (chooserOpen = true)}>
         {t('targets.importFromConnector')}
       </Button>
