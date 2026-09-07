@@ -233,9 +233,9 @@
   .history-frame { --history-height: var(--chart-history-height); width: 100%; height: var(--history-height); min-height: var(--history-height); flex: 1 1 var(--history-height); }
   .history-frame.compact { --history-height: var(--chart-history-compact-height); }
 
-  /* A definite flex basis prevents the SVG's initial viewBox ratio from
-     inflating the entire dashboard row on a wide viewport. */
-  .history-chart { --history-height: var(--chart-history-height); display: block; flex: 1 1 var(--history-height); width: 100%; height: var(--history-height); min-height: var(--history-height); color: var(--chart-series); overflow: visible; touch-action: pan-y; cursor: crosshair; }
+  /* The frame owns the minimum height and can grow with the dashboard row.
+     Fill the LayerChart wrappers so the SVG and tooltip share that full height. */
+  .history-chart { --history-height: var(--chart-history-height); display: block; flex: 1 1 var(--history-height); width: 100%; height: 100%; min-height: var(--history-height); color: var(--chart-series); overflow: visible; touch-action: pan-y; cursor: crosshair; }
   .history-chart.compact { --history-height: var(--chart-history-compact-height); }
   .history-chart:focus-visible { outline-offset: var(--s2); border-radius: var(--r-m); }
   .chart-grid line { stroke: var(--line); stroke-width: 1; }
