@@ -37,7 +37,7 @@ export type RealtimeState = 'connecting' | 'online' | 'offline';
 /* La profondeur de la série d'Incidents montrée sous le compte du moment.
  * Douze jours tiennent dans la largeur d'une cellule sans que chaque jour
  * devienne un trait illisible. */
-const incidentWindowDays = 12;
+const incidentWindowDays = 14;
 
 export function messageFrom(cause: unknown): string {
   if (cause instanceof APIError) return cause.message;

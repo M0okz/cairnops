@@ -256,7 +256,7 @@ export const fr = {
   'overview.fig.openedLabel_other': 'nouveaux Incidents sur les',
   'overview.fig.daysLabel_one': 'dernier jour',
   'overview.fig.daysLabel_other': 'derniers jours',
-  'overview.fig.dailyHistory': 'Incidents ouverts par jour',
+  'overview.fig.dailyHistory': 'Incidents ouverts par jour · 14 derniers jours',
   'overview.fig.openedOnDay_one': '{date} · {count} Incident ouvert',
   'overview.fig.openedOnDay_other': '{date} · {count} Incidents ouverts',
   'overview.fig.coverageUnread': 'Aucune heure mesurée',

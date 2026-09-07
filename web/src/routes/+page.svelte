@@ -172,7 +172,8 @@
   .coverage-strip { height: 0.25rem; margin-block: 0.1875rem; }
   .strip-idle { fill: var(--surface-3); } .strip-ok { fill: var(--ok); } .strip-warn { fill: var(--warn); } .strip-crit { fill: var(--crit); } .strip-info { fill: var(--info); } .strip-accent { fill: var(--accent); }
   .fleet-strip line { stroke: var(--surface); stroke-width: 2; }
-  .metric-history { height: 0.625rem; color: var(--faint); overflow: hidden; }
+  /* Bars owns its height: clipping this row hides zero-incident days. */
+  .metric-history { color: var(--faint); }
   .source-origins { display: flex; flex-wrap: wrap; gap: var(--s4); font-size: 0.75rem; color: var(--faint); }
   .source-origins span { display: flex; gap: var(--s2); align-items: center; }
   .overview-analysis { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(19rem, 1fr); gap: var(--s5); align-items: stretch; }

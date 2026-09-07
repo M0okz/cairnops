@@ -257,7 +257,7 @@ export const en: Record<MessageKey, string> = {
   'overview.fig.openedLabel_other': 'new Incidents over the last',
   'overview.fig.daysLabel_one': 'day',
   'overview.fig.daysLabel_other': 'days',
-  'overview.fig.dailyHistory': 'Incidents opened by day',
+  'overview.fig.dailyHistory': 'Incidents opened by day · Last 14 days',
   'overview.fig.openedOnDay_one': '{date} · {count} Incident opened',
   'overview.fig.openedOnDay_other': '{date} · {count} Incidents opened',
   'overview.fig.coverageUnread': 'No hour measured',
