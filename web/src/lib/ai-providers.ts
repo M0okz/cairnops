@@ -1,6 +1,17 @@
 /** Curated Chat Completions + JSON-mode presets; custom endpoints/models remain supported. */
 export const aiProviders = [
   {
+    id: "gemini",
+    name: "Gemini (Google)",
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
+    models: [
+      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash" },
+      { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash-Lite" },
+      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
+    ],
+  },
+  {
     id: "openai",
     name: "OpenAI",
     endpoint: "https://api.openai.com/v1",
