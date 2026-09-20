@@ -65,6 +65,7 @@ type Service struct {
 	Unknown           bool            `json:"unknown"`
 	UnknownReason     string          `json:"unknown_reason,omitempty"`
 	DashboardTemplate string          `json:"-"`
+	ReleaseSourceURL  string          `json:"release_source_url,omitempty"`
 	VersionURL        string          `json:"version_url,omitempty"`
 }
 
@@ -82,7 +83,11 @@ type configService struct {
 		Active *bool `json:"active"`
 	} `json:"options"`
 	DeployedVersion json.RawMessage `json:"deployed_version"`
-	Dashboard       struct {
+	LatestVersion   struct {
+		Type string `json:"type"`
+		URL  string `json:"url"`
+	} `json:"latest_version"`
+	Dashboard struct {
 		WebURL string `json:"web_url"`
 	} `json:"dashboard"`
 	Status struct {
@@ -221,6 +226,10 @@ func (client *Client) Inspect(ctx context.Context, address string, credentials C
 			LatestVersion:     strings.TrimSpace(configured.Status.LatestVersion),
 			LastChecked:       strings.TrimSpace(configured.Status.LastQueried),
 			DashboardTemplate: strings.TrimSpace(configured.Dashboard.WebURL),
+		}
+		service.ReleaseSourceURL = strings.TrimSpace(configured.LatestVersion.URL)
+		if configured.LatestVersion.Type == "github" && !strings.Contains(service.ReleaseSourceURL, "://") && service.ReleaseSourceURL != "" {
+			service.ReleaseSourceURL = "https://github.com/" + service.ReleaseSourceURL
 		}
 		if service.Name == "" {
 			service.Name = id

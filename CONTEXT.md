@@ -64,6 +64,22 @@ _Éviter_ : Invité, lecteur
 Observation continue de ressources, centralisation de leurs signaux et suivi des incidents associés, sans action directe sur l'infrastructure supervisée.
 _Éviter_ : Administration distante, pilotage d'infrastructure
 
+**Suivi des versions logicielles** :
+Consultation, pour un service suivi par Argus dans le périmètre initial, des changements entre sa version installée et les versions disponibles, accompagnée de l'historique des versions détectées. Ce suivi aide à décider d'une mise à jour réalisée avec des outils extérieurs à CairnOps ; il ne la déclenche jamais.
+_Éviter_ : Déploiement, mise à jour automatique, pilotage des mises à jour
+
+**Version cible du suivi** :
+Version disponible remontée par Argus pour un service, qui constitue la destination de la comparaison depuis sa version installée. Elle respecte la sélection d'Argus et ne désigne pas nécessairement la version la plus récente publiée par l'éditeur.
+_Éviter_ : Dernière version de l'éditeur, version installée
+
+**Impact conditionnel de mise à jour** :
+Conséquence documentée par une source officielle, applicable sous une condition que l'utilisateur doit vérifier pour son installation, telle qu'une configuration, une dépendance ou un mode de déploiement. Dans le périmètre initial, CairnOps présente cette condition et sa source sans affirmer qu'elle s'applique au service suivi.
+_Éviter_ : Impact confirmé, diagnostic de configuration
+
+**Changement de version constaté** :
+Différence observée entre deux versions installées successivement remontées par Argus pour un service, y compris un retour à une version antérieure. Sa date est celle du constat ; il n'établit ni l'heure exacte, ni l'auteur, ni les étapes intermédiaires du déploiement.
+_Éviter_ : Déploiement exécuté, journal de déploiement
+
 **État partagé** :
 État de référence maintenu par le serveur et projeté vers les interfaces Web, iOS et Android. Une copie locale ou une action en attente de synchronisation ne constitue pas l'état de référence.
 _Éviter_ : État local, vérité du client

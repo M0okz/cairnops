@@ -17,6 +17,7 @@ type Pinger interface {
 }
 
 type ServerOptions struct {
+	SoftwareUpdates SoftwareUpdates
 	Address         string
 	WebDir          string
 	PublicURL       string
@@ -108,6 +109,15 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("GET /api/v1/devices", identityHTTP.requireSession(http.HandlerFunc(handler.list)))
 		mux.Handle("PATCH /api/v1/devices/{deviceID}", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(handler.update))))
 		mux.Handle("DELETE /api/v1/devices/{deviceID}", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(handler.revoke))))
+	}
+
+	if options.SoftwareUpdates != nil && options.Identity != nil {
+		h := softwareHandler{service: options.SoftwareUpdates}
+		mux.Handle("GET /api/v1/software-updates", identityHTTP.requireSession(http.HandlerFunc(h.list)))
+		mux.Handle("GET /api/v1/software-updates/{serviceID}", identityHTTP.requireSession(http.HandlerFunc(h.get)))
+		mux.Handle("PUT /api/v1/software-updates/{serviceID}/source", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(h.confirm)))))
+		mux.Handle("GET /api/v1/software-update-settings", identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(h.config))))
+		mux.Handle("PUT /api/v1/software-update-settings", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(h.saveConfig)))))
 	}
 	if options.ControlPlane != nil && options.Identity != nil {
 		handler := controlPlaneHandler{controlPlane: options.ControlPlane, logger: logger}

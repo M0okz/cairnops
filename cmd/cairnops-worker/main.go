@@ -25,6 +25,7 @@ import (
 	"github.com/M0okz/cairnops/internal/push"
 	"github.com/M0okz/cairnops/internal/reconciliation"
 	"github.com/M0okz/cairnops/internal/secretbox"
+	"github.com/M0okz/cairnops/internal/softwareupdates"
 	"github.com/M0okz/cairnops/internal/worker"
 )
 
@@ -114,7 +115,7 @@ func run(logger *slog.Logger) error {
 			reconciliationDetector, reconciliationProcessor,
 		).WithSupervisedRunners(
 			connectorSync, uptimeKumaSync, patchMonSync, argusSync, proxmoxSync,
-			indicatorCollector, incidentRuntime,
+			indicatorCollector, incidentRuntime, softwareupdates.NewWorker(softwareupdates.NewStore(pool, secrets), logger),
 		)
 		errCh <- runtime.Run(ctx)
 	}()

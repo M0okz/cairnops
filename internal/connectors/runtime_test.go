@@ -170,8 +170,11 @@ func TestArgusSynchronizerKeepsValidServicesAndDegradesPartialFailures(t *testin
 	if len(store.observations) != 4 {
 		t.Fatalf("expected an observation for every imported Argus service: %#v", store.observations)
 	}
-	if len(store.argusBindings) != 3 || store.argusBindings[0].ExternalName != "Public API" {
+	if len(store.argusBindings) != 4 || store.argusBindings[0].ExternalName != "Public API" {
 		t.Fatalf("Argus service labels and snapshots must stay mutable: %#v", store.argusBindings)
+	}
+	if store.argusBindings[3].Metadata["unknown"] != true {
+		t.Fatal("removed Argus services must retain an explicitly unknown snapshot")
 	}
 	outcomes := map[string]string{}
 	for _, observation := range store.observations {

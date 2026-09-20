@@ -32,6 +32,7 @@ import (
 	"github.com/M0okz/cairnops/internal/realtime"
 	"github.com/M0okz/cairnops/internal/reconciliation"
 	"github.com/M0okz/cairnops/internal/secretbox"
+	"github.com/M0okz/cairnops/internal/softwareupdates"
 	"github.com/M0okz/cairnops/internal/systemhealth"
 	"github.com/M0okz/cairnops/internal/version"
 )
@@ -99,6 +100,7 @@ func run(logger *slog.Logger) error {
 	oidcSync := oidcauth.NewSynchronizer(oidcService, "server:"+hostname, logger)
 
 	server := httpapi.NewServer(httpapi.ServerOptions{
+		SoftwareUpdates: softwareupdates.NewStore(pool, secrets),
 		Address:         cfg.HTTPAddress,
 		WebDir:          cfg.WebDir,
 		PublicURL:       cfg.PublicURL,

@@ -6,6 +6,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import ActivityTimeline from '$lib/components/ActivityTimeline.svelte';
+  import SoftwareUpdates from '$lib/components/SoftwareUpdates.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
   import Spark from '$lib/components/Spark.svelte';
   import Uptime from '$lib/components/Uptime.svelte';
@@ -39,7 +40,7 @@
   import { i18n, plural, t } from '$lib/i18n.svelte';
   import { api, type IncidentEvidence, type MeasureWindow, type ReconciliationSourceSummary, type TargetReconciliationActivity } from '$lib/api';
 
-  type Tab = 'view' | 'sources' | 'checks' | 'log' | 'settings';
+  type Tab = 'updates' | 'view' | 'sources' | 'checks' | 'log' | 'settings';
 
   let tab = $state<Tab>('view');
   let maintenanceOpen = $state(false);
@@ -362,6 +363,7 @@
         ['sources', t('targets.column.sources')],
         ['checks', t('target.tab.checks')],
         ['log', t('target.tab.log')],
+        ['updates', t('updates.title')],
         ['settings', t('nav.settings')]
       ] as [value, label] (value)}
         <button
@@ -642,6 +644,8 @@
           </div>
         </aside>
       </div>
+    {:else if tab === 'updates'}
+      <SoftwareUpdates targetID={target.id}/>
     {:else if tab === 'sources'}
       <!-- La fenêtre choisie ne gouverne que cette lecture par Source : c'est
            ici qu'on compare une sonde à l'autre sur la même durée. -->

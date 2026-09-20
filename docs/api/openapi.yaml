@@ -41,6 +41,276 @@ components:
       scheme: bearer
       description: Secret de 256 bits affiché une seule fois lors de la création du webhook générique.
   schemas:
+    SoftwareReleaseSource:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+          - github
+          - forgejo
+          - gitlab
+          - changelog
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+        software:
+          type: string
+          minLength: 1
+          maxLength: 160
+      required:
+      - kind
+      - url
+      - software
+    SoftwareReleaseNote:
+      type: object
+      properties:
+        version:
+          type: string
+        url:
+          type: string
+        body:
+          type: string
+        missing:
+          type: boolean
+      required:
+      - version
+      - url
+      - body
+      - missing
+    SoftwareReleasePoint:
+      type: object
+      properties:
+        category:
+          type: string
+          enum:
+          - feature
+          - fix
+          - security
+          - impact
+          - upgrade
+        text:
+          type: string
+        version:
+          type: string
+        quote:
+          type: string
+      required:
+      - category
+      - text
+      - version
+      - quote
+    SoftwareReleaseSummary:
+      type: object
+      properties:
+        overview:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoftwareReleasePoint'
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoftwareReleasePoint'
+      required:
+      - overview
+      - details
+    SoftwareReleaseCollection:
+      type: object
+      properties:
+        installed_version:
+          type: string
+        target_version:
+          type: string
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoftwareReleaseNote'
+        incomplete:
+          type: boolean
+      required:
+      - installed_version
+      - target_version
+      - notes
+      - incomplete
+    SoftwareReleaseAnalysis:
+      type: object
+      properties:
+        id:
+          type: integer
+        revision:
+          type: integer
+        installed_version:
+          type: string
+        target_version:
+          type: string
+        source:
+          $ref: '#/components/schemas/SoftwareReleaseSource'
+        result:
+          $ref: '#/components/schemas/SoftwareReleaseSummary'
+        model:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        current:
+          type: boolean
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoftwareReleaseNote'
+      required:
+      - id
+      - revision
+      - installed_version
+      - target_version
+      - source
+      - result
+      - model
+      - created_at
+      - current
+      - notes
+    SoftwareVersionObservation:
+      type: object
+      properties:
+        installed_version:
+          type: string
+        target_version:
+          type: string
+        observed_at:
+          type: string
+          format: date-time
+      required:
+      - installed_version
+      - target_version
+      - observed_at
+    SoftwareService:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        target_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        installed_version:
+          type: string
+        target_version:
+          type: string
+        observed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        known:
+          type: boolean
+        source:
+          description: Objet vide avant confirmation, sinon source officielle.
+          anyOf:
+          - $ref: '#/components/schemas/SoftwareReleaseSource'
+          - type: object
+            maxProperties: 0
+        suggested_source:
+          anyOf:
+          - $ref: '#/components/schemas/SoftwareReleaseSource'
+          - type: 'null'
+        confirmed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        revision:
+          type: integer
+        state:
+          type: string
+          enum:
+          - awaiting_source
+          - pending
+          - awaiting_ai
+          - ready
+          - retry
+          - up_to_date
+        last_error:
+          type: string
+        checked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        collection:
+          anyOf:
+          - $ref: '#/components/schemas/SoftwareReleaseCollection'
+          - type: 'null'
+        collection_revision:
+          type:
+          - integer
+          - 'null'
+        analyses:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoftwareReleaseAnalysis'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoftwareVersionObservation'
+      required:
+      - id
+      - target_id
+      - name
+      - installed_version
+      - target_version
+      - observed_at
+      - known
+      - source
+      - suggested_source
+      - confirmed_at
+      - revision
+      - state
+      - last_error
+      - checked_at
+      - collection
+      - collection_revision
+      - analyses
+      - history
+    SoftwareAIConfiguration:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        endpoint:
+          type: string
+        model:
+          type: string
+        key_configured:
+          type: boolean
+      required:
+      - enabled
+      - endpoint
+      - model
+      - key_configured
+    SoftwareAIConfigurationInput:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        endpoint:
+          type: string
+          format: uri
+        model:
+          type: string
+          maxLength: 160
+        api_key:
+          type: string
+          writeOnly: true
+          maxLength: 8192
+          description: Vide conserve la clé ; changement de fournisseur exige une nouvelle
+            clé.
+      required:
+      - enabled
+      - endpoint
+      - model
     User:
       type: object
       required: [id, username, display_name, role, authorization_regime]
@@ -1439,6 +1709,164 @@ components:
       properties:
         error: { type: string }
 paths:
+  /api/v1/software-updates:
+    get:
+      summary: Lister le suivi des services Argus
+      security:
+      - SessionCookie: []
+      - DeviceBearer: []
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SoftwareService'
+                required:
+                - services
+        '400':
+          description: Paramètres invalides
+        '401':
+          description: Session requise
+        '500':
+          description: Erreur interne
+      parameters:
+      - in: query
+        name: target_id
+        schema:
+          type: string
+          format: uuid
+      description: Liste sans notes ni analyses détaillées. Les tableaux analyses et
+        history sont vides ; collection est null.
+  /api/v1/software-updates/{serviceID}:
+    get:
+      summary: Consulter notes, synthèses et historique
+      security:
+      - SessionCookie: []
+      - DeviceBearer: []
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareService'
+        '400':
+          description: Paramètres invalides
+        '401':
+          description: Session requise
+        '500':
+          description: Erreur interne
+        '404':
+          description: Service inconnu
+      description: Renvoie les 30 dernières analyses et les 500 derniers constats ;
+        les enregistrements antérieurs restent conservés en base.
+    parameters:
+    - in: path
+      name: serviceID
+      required: true
+      schema:
+        type: string
+        format: uuid
+  /api/v1/software-updates/{serviceID}/source:
+    put:
+      summary: Confirmer ou remplacer la source officielle
+      security:
+      - SessionCookie: []
+      - DeviceBearer: []
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  confirmed:
+                    type: boolean
+                required:
+                - confirmed
+        '400':
+          description: Paramètres invalides
+        '401':
+          description: Session requise
+        '500':
+          description: Erreur interne
+        '403':
+          description: Administrateur requis
+        '404':
+          description: Service inconnu
+      description: Réservé aux Administrateurs. Les écritures vérifient également l’origine
+        de la requête.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SoftwareReleaseSource'
+    parameters:
+    - in: path
+      name: serviceID
+      required: true
+      schema:
+        type: string
+        format: uuid
+  /api/v1/software-update-settings:
+    get:
+      summary: Lire la configuration IA sans secret
+      security:
+      - SessionCookie: []
+      - DeviceBearer: []
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareAIConfiguration'
+        '400':
+          description: Paramètres invalides
+        '401':
+          description: Session requise
+        '500':
+          description: Erreur interne
+        '403':
+          description: Administrateur requis
+      description: Réservé aux Administrateurs. Les écritures vérifient également l’origine
+        de la requête.
+    put:
+      summary: Configurer le fournisseur IA externe
+      security:
+      - SessionCookie: []
+      - DeviceBearer: []
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareAIConfiguration'
+        '400':
+          description: Paramètres invalides
+        '401':
+          description: Session requise
+        '500':
+          description: Erreur interne
+        '403':
+          description: Administrateur requis
+      description: Réservé aux Administrateurs. Les écritures vérifient également l’origine
+        de la requête.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SoftwareAIConfigurationInput'
   /api/v1/health/live:
     get:
       operationId: getLiveness
@@ -1578,7 +2006,7 @@ paths:
         '401': { description: Session Web requise }
         '403': { description: Origine Web non autorisée }
         '404': { description: Appairage absent }
-        '409': { description: Scan absent, appairage annulé ou déjà confirmé }
+        '409': { description: "Scan absent, appairage annulé ou déjà confirmé" }
         '410': { description: Appairage expiré }
   /api/v1/devices:
     get:
@@ -1809,7 +2237,7 @@ paths:
         '400': { description: Entrée invalide }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
-        '422': { description: Zabbix inaccessible, incompatible ou jeton insuffisant }
+        '422': { description: "Zabbix inaccessible, incompatible ou jeton insuffisant" }
   /api/v1/connectors/zabbix/import:
     post:
       operationId: importZabbixConnector
@@ -1882,7 +2310,7 @@ paths:
         '400': { description: Entrée invalide }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
-        '422': { description: Endpoint métriques inaccessible, invalide ou clé refusée }
+        '422': { description: "Endpoint métriques inaccessible, invalide ou clé refusée" }
   /api/v1/connectors/uptime-kuma/import:
     post:
       operationId: importUptimeKumaConnector
@@ -1961,7 +2389,7 @@ paths:
         '400': { description: Entrée invalide }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
-        '422': { description: Integration API inaccessible, invalide ou identifiants refusés }
+        '422': { description: "Integration API inaccessible, invalide ou identifiants refusés" }
   /api/v1/connectors/patchmon/import:
     post:
       operationId: importPatchMonConnector
@@ -2050,7 +2478,7 @@ paths:
         '400': { description: Entrée invalide ou endpoint déjà connecté }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
-        '422': { description: TLS, version, inventaire ou autorisation non vérifiés }
+        '422': { description: "TLS, version, inventaire ou autorisation non vérifiés" }
   /api/v1/connectors/proxmox/import:
     post:
       operationId: importProxmoxConnector
@@ -2119,7 +2547,7 @@ paths:
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
         '404': { description: Connecteur introuvable }
-        '422': { description: Connecteur suspendu, nettoyage distant en attente }
+        '422': { description: "Connecteur suspendu, nettoyage distant en attente" }
   /api/v1/connectors/{connectorID}/proxmox/certificate:
     post:
       operationId: approveProxmoxCertificate
@@ -2192,7 +2620,7 @@ paths:
         '400': { description: Entrée invalide }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
-        '422': { description: Argus inaccessible, incompatible, invalide ou identifiants refusés }
+        '422': { description: "Argus inaccessible, incompatible, invalide ou identifiants refusés" }
   /api/v1/connectors/argus/import:
     post:
       operationId: importArgusConnector
@@ -2226,7 +2654,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ArgusImport' }
-        '400': { description: Sélection, éligibilité ou reçu invalide }
+        '400': { description: "Sélection, éligibilité ou reçu invalide" }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
         '410': { description: Aperçu expiré }
@@ -2350,8 +2778,8 @@ paths:
                 properties:
                   disposition: { type: string, enum: [accepted, quarantined] }
                   quarantine_id: { type: string, format: uuid }
-        '400': { description: Corps invalide, inconnu ou supérieur à 64 KiB }
-        '401': { description: Point d'entrée, secret ou état du Connecteur invalide }
+        '400': { description: "Corps invalide, inconnu ou supérieur à 64 KiB" }
+        '401': { description: "Point d'entrée, secret ou état du Connecteur invalide" }
   /api/v1/connectors/{connectorID}/quarantine:
     get:
       operationId: listWebhookQuarantine
@@ -2409,7 +2837,7 @@ paths:
         '400': { description: Entrée invalide }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
-        '404': { description: Connecteur, quarantaine ou Cible absent }
+        '404': { description: "Connecteur, quarantaine ou Cible absent" }
         '409': { description: Identité déjà liée à une autre Cible }
   /api/v1/incidents:
     get:
@@ -2675,7 +3103,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotificationChannel' }
-        '400': { description: URL, nom ou Gravités invalides }
+        '400': { description: "URL, nom ou Gravités invalides" }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
         '422': { description: Mattermost n’a pas confirmé le message de contrôle }
@@ -2725,7 +3153,7 @@ paths:
           name: error
           schema: { type: string }
       responses:
-        '302': { description: Session ouverte, test enregistré ou refus renvoyé à l'interface }
+        '302': { description: "Session ouverte, test enregistré ou refus renvoyé à l'interface" }
   /api/v1/oidc/configuration:
     get:
       operationId: readOIDCConfiguration
@@ -2793,7 +3221,7 @@ paths:
                 properties:
                   active: { $ref: '#/components/schemas/OIDCConfiguration' }
         '403': { description: Administrateur local requis }
-        '409': { description: Brouillon absent, non testé ou issuer verrouillé }
+        '409': { description: "Brouillon absent, non testé ou issuer verrouillé" }
   /api/v1/setup/status:
     get:
       operationId: getSetupStatus
@@ -2939,8 +3367,8 @@ paths:
                 properties:
                   status: { type: string, enum: [changed] }
                   session: { type: string, enum: [renewed, ended] }
-        '400': { description: Mot de passe hors bornes, ou identique à l'actuel }
-        '401': { description: Mot de passe actuel incorrect, ou session absente }
+        '400': { description: "Mot de passe hors bornes, ou identique à l'actuel" }
+        '401': { description: "Mot de passe actuel incorrect, ou session absente" }
         '404': { description: Le compte connecté n'est pas un compte local }
   /api/v1/users:
     get:
@@ -2993,7 +3421,7 @@ paths:
                 required: [user]
                 properties:
                   user: { $ref: '#/components/schemas/Account' }
-        '400': { description: Identifiant, nom, rôle ou mot de passe hors bornes }
+        '400': { description: "Identifiant, nom, rôle ou mot de passe hors bornes" }
         '403': { description: Administrateur local requis }
         '409': { description: Identifiant déjà pris }
   /api/v1/users/{userID}:
@@ -3033,10 +3461,10 @@ paths:
                 required: [user]
                 properties:
                   user: { $ref: '#/components/schemas/Account' }
-        '400': { description: Nom ou rôle hors bornes, ou requête sans rien à modifier }
+        '400': { description: "Nom ou rôle hors bornes, ou requête sans rien à modifier" }
         '403': { description: Administrateur local requis }
         '404': { description: Compte introuvable }
-        '409': { description: Propre rôle, ou dernier Administrateur actif }
+        '409': { description: "Propre rôle, ou dernier Administrateur actif" }
   /api/v1/users/{userID}/deactivation:
     post:
       operationId: deactivateAccount
@@ -3067,7 +3495,7 @@ paths:
                   user: { $ref: '#/components/schemas/Account' }
         '403': { description: Administrateur local requis }
         '404': { description: Compte introuvable }
-        '409': { description: Propre compte, ou dernier Administrateur actif }
+        '409': { description: "Propre compte, ou dernier Administrateur actif" }
     delete:
       operationId: reactivateAccount
       summary: Rendre l'accès d'un compte
@@ -3516,7 +3944,7 @@ paths:
         '400': { description: Entrée invalide }
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
-        '404': { description: Cible, Source ou suggestion absente }
+        '404': { description: "Cible, Source ou suggestion absente" }
         '409': { description: Mutation structurelle concurrente incompatible }
   /api/v1/target-reconciliation/suggestions/{suggestionID}/rejection:
     post:
@@ -3785,7 +4213,7 @@ paths:
       operationId: listIndicatorPins
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       responses:
-        '200': { description: Épingles personnelles ordonnées, au plus quatre, content: { application/json: { schema: { $ref: '#/components/schemas/IndicatorPins' } } } }
+        '200': { description: "Épingles personnelles ordonnées, au plus quatre", content: { application/json: { schema: { $ref: '#/components/schemas/IndicatorPins' } } } }
         '401': { description: Authentification requise }
     put:
       operationId: replaceIndicatorPins

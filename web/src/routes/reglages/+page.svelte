@@ -11,6 +11,7 @@
   import AccountCreation from '$lib/components/AccountCreation.svelte';
   import AccountDeactivation from '$lib/components/AccountDeactivation.svelte';
   import DeviceManagement from '$lib/components/DeviceManagement.svelte';
+  import SoftwareAISettings from '$lib/components/SoftwareAISettings.svelte';
   import OIDCSettings from '$lib/components/OIDCSettings.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Account, type Role } from '$lib/api';
@@ -443,6 +444,7 @@
   </div>
 
   <DeviceManagement />
+  {#if isAdministrator}<SoftwareAISettings/>{/if}
 
   {#if isAdministrator}
     {#if isLocalAdministrator}

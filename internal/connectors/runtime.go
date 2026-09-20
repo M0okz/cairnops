@@ -541,6 +541,8 @@ func (synchronizer *ArgusSynchronizer) syncOne(ctx context.Context, connector Ru
 		if !found {
 			unknownCount++
 			details := argusMissingDetails(inspection.Endpoint, binding)
+			details["unknown"] = true
+			bindingSnapshots = append(bindingSnapshots, ArgusBindingSnapshot{BindingID: binding.ID, ExternalName: binding.ExternalName, Metadata: details})
 			observations = append(observations, IntegrationObservation{
 				BindingID: binding.ID, Outcome: "unknown", Reason: "argus_service_missing",
 				Message: "Service absent de la configuration Argus active",
@@ -549,6 +551,7 @@ func (synchronizer *ArgusSynchronizer) syncOne(ctx context.Context, connector Ru
 			continue
 		}
 		details := argusDetails(inspection.Endpoint, discoveredService)
+		details["unknown"] = discoveredService.Unknown || !discoveredService.Importable
 		bindingSnapshots = append(bindingSnapshots, ArgusBindingSnapshot{
 			BindingID: binding.ID, ExternalName: discoveredService.Name, Metadata: details,
 		})
@@ -642,6 +645,7 @@ func argusDetails(endpoint string, service argus.Service) map[string]any {
 		"latest_version_query_ok":   service.LatestQueryOK,
 		"deployed_version_query_ok": service.DeployedQueryOK,
 		"argus_url":                 endpoint, "version_url": service.VersionURL,
+		"release_source_url": service.ReleaseSourceURL,
 	}
 }
 

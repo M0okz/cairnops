@@ -85,6 +85,7 @@
   const items = $derived<Item[]>([
     { href: '/', label: t('nav.overview'), icon: 'overview' },
     { href: '/cibles', label: t('nav.targets'), icon: 'targets', count: session.targets.length },
+    { href: '/mises-a-jour', label: t('updates.title'), icon: 'changelog' },
     {
       href: '/incidents',
       label: t('nav.incidents'),
