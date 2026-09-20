@@ -4,7 +4,7 @@ La vue **Mises à jour** et l'onglet homonyme d'une Cible montrent les services 
 
 ## Première configuration
 
-1. Dans **Réglages → Analyse des notes de version**, renseigner l'adresse de base HTTPS d'une API compatible Chat Completions, son modèle et sa clé. La clé est scellée avec la clé maîtresse CairnOps et ne revient jamais dans la réponse API. Une nouvelle adresse de fournisseur exige de ressaisir la clé.
+1. Dans **Réglages → Analyse des notes de version**, choisir le fournisseur (OpenAI, Mistral ou DeepSeek), puis un modèle proposé et saisir sa clé. L'adresse HTTPS est préremplie. Les choix sont une sélection de modèles compatibles, pas un inventaire du compte fournisseur. **Personnalisé** permet une autre API compatible Chat Completions ; **Autre modèle** permet de saisir son identifiant. Une configuration existante hors liste reste conservée. La clé est scellée avec la clé maîtresse CairnOps et ne revient jamais dans la réponse API. Une nouvelle adresse de fournisseur exige de ressaisir la clé.
 2. Dans le détail d'un service, vérifier la proposition de source publique remontée depuis Argus, puis confirmer le nom public du logiciel, le format et l'adresse officielle. Une source peut être corrigée par un Administrateur ; cela invalide la comparaison courante et programme une nouvelle analyse.
 3. Laisser le worker collecter les notes et préparer la synthèse. Les notes restent consultables même sans fournisseur IA configuré.
 
@@ -22,3 +22,7 @@ Les synthèses sont produites en français ; les commandes de l'interface existe
 
 - [API GitHub Releases](https://docs.github.com/en/rest/releases/releases)
 - [API Chat Completions](https://platform.openai.com/docs/api-reference/chat/create)
+
+- [Modèles OpenAI](https://developers.openai.com/api/docs/models/gpt-4.1-mini)
+- [API Mistral et mode JSON](https://docs.mistral.ai/api)
+- [Mode JSON DeepSeek](https://api-docs.deepseek.com/guides/json_mode)

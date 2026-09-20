@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { aiProviders, providerForEndpoint } from "$lib/ai-providers";
   import { api } from "$lib/api";
   import { t } from "$lib/i18n.svelte";
   import { messageFrom } from "$lib/session.svelte";
@@ -8,12 +9,55 @@
   import Switch from "./ui/Switch.svelte";
   let config = $state<SoftwareAIConfig | null>(null);
   let key = $state("");
+  let providerID = $state("");
+  let customModel = $state(false);
+  let savedEndpoint = $state("");
+  const provider = $derived(
+    aiProviders.find((entry) => entry.id === providerID),
+  );
+  const canKeepKey = $derived(
+    !!config?.key_configured && config.endpoint === savedEndpoint,
+  );
+  function restoreSelection() {
+    if (!config) return;
+    savedEndpoint = config.endpoint;
+    const preset = providerForEndpoint(config.endpoint);
+    providerID = preset?.id ?? (config.endpoint ? "custom" : "");
+    customModel = !preset?.models.some((model) => model.id === config?.model);
+  }
+  function chooseProvider(event: Event) {
+    if (!config) return;
+    providerID = (event.currentTarget as HTMLSelectElement).value;
+    const next = aiProviders.find((entry) => entry.id === providerID);
+    // Changing destination must never carry a newly entered key to another provider.
+    key = "";
+    saved = false;
+    error = "";
+    if (next) {
+      config.endpoint = next.endpoint;
+      config.model = next.models[0].id;
+      customModel = false;
+    } else if (providerID !== "custom") {
+      config.endpoint = "";
+      config.model = "";
+    } else {
+      customModel = true;
+    }
+  }
+  function chooseModel(event: Event) {
+    if (!config) return;
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    customModel = value === "custom";
+    config.model = customModel ? "" : value;
+    saved = false;
+  }
   let busy = $state(false);
   let error = $state("");
   let saved = $state(false);
   async function load() {
     try {
       config = await api<SoftwareAIConfig>("/api/v1/software-update-settings");
+      restoreSelection();
       error = "";
     } catch (e) {
       error = messageFrom(e);
@@ -34,6 +78,7 @@
         body: JSON.stringify({ ...config, api_key: key }),
       });
       key = "";
+      restoreSelection();
       saved = true;
     } catch (e) {
       error = messageFrom(e);
@@ -55,34 +100,80 @@
           bind:checked={config.enabled}
         /><span>{t("updates.enabled")}</span>
       </div>
-      <label for="software-endpoint"
-        >{t("updates.endpoint")}<Input
-          id="software-endpoint"
-          type="url"
+      <label class="field" for="software-provider"
+        >{t("updates.provider")}
+        <select
+          id="software-provider"
           required
-          bind:value={config.endpoint}
-          placeholder="https://api.example.com/v1"
-        /></label
-      >
-      <label for="software-model"
-        >{t("updates.model")}<Input
-          id="software-model"
-          required
-          maxlength={160}
-          bind:value={config.model}
-        /></label
-      >
+          value={providerID}
+          onchange={chooseProvider}
+          disabled={busy}
+        >
+          <option value="" disabled>{t("updates.chooseProvider")}</option>
+          {#each aiProviders as entry}<option value={entry.id}
+              >{entry.name}</option
+            >{/each}
+          <option value="custom">{t("updates.customProvider")}</option>
+        </select>
+      </label>
+      {#if providerID === "custom"}
+        <label for="software-endpoint"
+          >{t("updates.endpoint")}
+          <Input
+            id="software-endpoint"
+            type="url"
+            required
+            bind:value={config.endpoint}
+            oninput={() => {
+              key = "";
+              saved = false;
+            }}
+            placeholder="https://api.example.com/v1"
+            disabled={busy}
+          />
+        </label>
+      {/if}
+      {#if provider}
+        <label class="field" for="software-model-choice"
+          >{t("updates.model")}
+          <select
+            id="software-model-choice"
+            value={customModel ? "custom" : config.model}
+            onchange={chooseModel}
+            disabled={busy}
+          >
+            {#each provider.models as model}<option value={model.id}
+                >{model.name}</option
+              >{/each}
+            <option value="custom">{t("updates.customModel")}</option>
+          </select>
+        </label>
+      {/if}
+      {#if providerID && (customModel || providerID === "custom")}
+        <label for="software-model"
+          >{t("updates.modelID")}
+          <Input
+            id="software-model"
+            required
+            maxlength={160}
+            bind:value={config.model}
+            disabled={busy}
+          />
+        </label>
+      {/if}
       <label for="software-key"
         >{t("updates.key")}<Input
           id="software-key"
           type="password"
           autocomplete="new-password"
           bind:value={key}
-          placeholder={config.key_configured ? t("updates.keyKept") : ""}
+          placeholder={canKeepKey ? t("updates.keyKept") : ""}
+          required={!canKeepKey}
+          disabled={busy}
         /></label
       >
       <div>
-        <Button type="submit" disabled={busy}
+        <Button type="submit" disabled={busy || !providerID}
           >{busy ? t("updates.saving") : t("updates.save")}</Button
         >
         {#if saved}<span role="status">{t("updates.saved")}</span>{/if}
@@ -107,6 +198,13 @@
   label {
     display: grid;
     gap: var(--s2);
+  }
+  label.field {
+    margin-bottom: 0;
+  }
+  select {
+    width: 100%;
+    min-width: 0;
   }
   .switch-row {
     display: flex;
