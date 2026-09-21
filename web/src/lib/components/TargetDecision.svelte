@@ -33,6 +33,7 @@
   }
 </script>
 
+<div class="target-decision">
 <div class="decision" class:compact class:needs-review={value === REVIEW_TARGET}>
   <select
     aria-label={t('wizard.targetChoice', { name })}
@@ -89,7 +90,10 @@
   </div>
 </div>
 
+</div>
+
 <style>
+  .target-decision { container-type: inline-size; min-width: 0; }
   .decision {
     display: grid;
     grid-template-areas: 'proof choice';
@@ -157,13 +161,15 @@
   .compact .proof { align-items: baseline; }
   .compact .proof small { white-space: normal; overflow-wrap: anywhere; }
 
-  @media (max-width: 40rem) {
+  @container (max-width: 30rem) {
+    .proof { align-items: baseline; }
+    .proof small { white-space: normal; overflow-wrap: anywhere; }
     .decision {
       grid-template-areas:
         'choice'
         'proof';
       grid-template-columns: minmax(0, 1fr);
-      gap: 0.25rem;
+      gap: var(--s2);
     }
   }
 </style>

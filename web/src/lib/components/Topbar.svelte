@@ -28,7 +28,7 @@
   </nav>
 
   <div class="topbar-right">
-    <button class="search" type="button" aria-label={t('common.search')} onclick={() => palette.show()}>
+    <button class="palette-trigger" type="button" aria-label={t('common.search')} onclick={() => palette.show()}>
       <Icon name="search" size={20} />
       <span>{t('common.search')}</span>
       <kbd>⌘K</kbd>

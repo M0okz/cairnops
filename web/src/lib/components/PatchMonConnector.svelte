@@ -216,7 +216,7 @@
         <ReconciliationSummary counts={reconciliation} />
 
         <div class="listbar">
-          <div class="field search"><label class="sr-only" for="patchmon-filter">{t('patchmon.filter')}</label><input id="patchmon-filter" bind:value={query} placeholder={t('patchmon.filter')} /></div>
+          <div class="field search"><input aria-label={t('patchmon.filter')} id="patchmon-filter" bind:value={query} placeholder={t('patchmon.filter')} /></div>
           <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleImportableHosts().length === 0}>
             {visibleImportableHosts().length > 0 && visibleImportableHosts().every((host) => selected.includes(host.external_id)) ? t('patchmon.removeAll') : t('wizard.selectAll')}
           </button>

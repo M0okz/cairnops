@@ -516,7 +516,7 @@ td.num,
 /* Le déclencheur de la Palette a l'allure d'un champ sans en être un : ce qu'on
  * y tape n'atterrit jamais ici, la frappe se fait dans la Palette elle-même. Un
  * vrai champ promettrait un filtre local que la barre supérieure ne rend pas. */
-.search {
+.palette-trigger {
   width: 15rem;
   height: var(--ctl-h);
   display: flex;
@@ -531,7 +531,7 @@ td.num,
   text-align: left;
 }
 
-.search > span {
+.palette-trigger > span {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -539,7 +539,7 @@ td.num,
   white-space: nowrap;
 }
 
-.search:hover {
+.palette-trigger:hover {
   border-color: var(--icon);
   color: var(--muted);
 }
@@ -1333,8 +1333,8 @@ a.trow:hover .caret {
   .rail-indicator > b:not(.hot) { display: none; }
   .rail-indicator > b.hot { padding: 0 var(--s2); }
   .realtime { justify-content: center; }
-  .search { width: var(--ctl-h-lg); justify-content: center; }
-  .search > span, .search kbd { display: none; }
+  .palette-trigger { width: var(--ctl-h-lg); justify-content: center; }
+  .palette-trigger > span, .palette-trigger kbd { display: none; }
   .update-cta { align-self: center; justify-content: center; max-width: 100%; margin: 0 0 var(--s3); width: var(--ctl-h-lg); }
   .update-cta > span, .update-cta > small { display: none; }
   .page { padding: var(--s6); }
@@ -1448,13 +1448,13 @@ a.trow:hover .caret {
   /* Le déclencheur se réduit à son icône plutôt que de disparaître : la
    * recherche globale est le seul moyen d'atteindre une Cible sans faire
    * défiler, et c'est précisément ici qu'on fait le plus défiler. */
-  .search {
+  .palette-trigger {
     width: auto;
     padding: 0 0.5rem;
   }
 
-  .search > span,
-  .search kbd {
+  .palette-trigger > span,
+  .palette-trigger kbd {
     display: none;
   }
 
