@@ -6,7 +6,7 @@
   import { session, messageFrom } from '$lib/session.svelte';
   import { stamp } from '$lib/format';
   import { addSystemIndicators, indicatorSelectionKey } from '$lib/indicator-bulk';
-  import { applyImported, createDrafts, draftFingerprint, importRequest, indicatorPayload, type EquipmentDraft, type SourcePreview } from '$lib/connector-configuration';
+  import { applyImported, readonlyConfiguration, createDrafts, draftFingerprint, importRequest, indicatorPayload, type EquipmentDraft, type SourcePreview } from '$lib/connector-configuration';
   import Icon from './Icon.svelte';
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
@@ -69,7 +69,7 @@
       const fresh = await api<IndicatorConfiguration>(`/api/v1/connectors/${connector.id}/indicator-configuration/preview`, { method: 'POST' });
       indicatorEditable = true; return fresh;
     } catch (cause) {
-      indicatorError = `Indicateurs enregistrés en lecture seule : ${messageFrom(cause)}`; return stored;
+      indicatorError = `Indicateurs enregistrés en lecture seule : ${messageFrom(cause)}`; return readonlyConfiguration(stored);
     }
   }
   function selectVisible() {

@@ -79,3 +79,17 @@ export function indicatorPayload(drafts: EquipmentDraft[]) {
 export function draftFingerprint(drafts: EquipmentDraft[], profiles: unknown) {
   return JSON.stringify({ drafts: drafts.map(draft => ({ id: draft.equipment.external_id, supervise: draft.supervise, target: draft.targetId, expected: draft.equipment.expectedRunning, indicators: draft.indicators && { enabled: draft.indicators.enabled, target: draft.indicators.targetId, selected: [...draft.indicators.selected].sort() } })), profiles });
 }
+
+// A failed rediscovery must still show the saved selection, without claiming
+// that these external measurements have just been verified.
+export function readonlyConfiguration(configuration: IndicatorConfiguration): IndicatorConfiguration {
+  return { ...configuration, bindings: configuration.bindings.map(binding => ({
+    ...binding,
+    candidates: binding.indicators.map(indicator => ({
+      external_id: indicator.external_id, semantic_key: indicator.semantic_key,
+      dimension: indicator.dimension, label: indicator.label, unit: indicator.unit,
+      metadata: indicator.metadata, available: false, recommended: false,
+      reason: 'Configuration enregistrée · disponibilité non vérifiée'
+    }))
+  })) };
+}

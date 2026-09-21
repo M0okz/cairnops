@@ -1,7 +1,7 @@
 // @ts-nocheck -- Node regression suite.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createDrafts, importRequest, applyImported, indicatorPayload, draftFingerprint, equipmentFrom } from './connector-configuration.ts';
+import { createDrafts, importRequest, applyImported, indicatorPayload, draftFingerprint, equipmentFrom, readonlyConfiguration } from './connector-configuration.ts';
 const candidate = { external_id: 'cpu-1', semantic_key: 'cpu.utilization', dimension: '', label: 'CPU', unit: 'percent', available: true, recommended: true };
 const preview = { kind: 'zabbix', receipt: 'receipt', hosts: [{ external_id: 'host-1', name: 'Serveur', candidate_targets: [] }], available_targets: [] };
 const config = { bindings: [{ external_id: 'host-1', external_name: 'Serveur', enabled: false, imported: false, indicators: [], candidates: [candidate] }] };
@@ -50,4 +50,14 @@ test('Argus eligibility and Proxmox expected-running settings are preserved', ()
  const p = {kind:'proxmox',receipt:'r',resources:[{external_id:'qemu/100',name:'VM',importable:true,expected_running:true}],available_targets:[]};
  const drafts = createDrafts(p,null); drafts[0].supervise=true;
  assert.deepEqual(importRequest(p,drafts).expected_running_ids,['qemu/100']);
+});
+
+test('failed discovery displays saved indicators read-only without erasing their selection', () => {
+ const stored = { bindings: [{...config.bindings[0], imported:true, enabled:true, target_id:'t1', candidates:[], indicators:[{...candidate,enabled:true}]}] };
+ const readonly = readonlyConfiguration(stored);
+ const drafts = createDrafts(preview,readonly);
+ assert.equal(readonly.bindings[0].candidates[0].label,'CPU');
+ assert.equal(readonly.bindings[0].candidates[0].available,false);
+ assert.equal(drafts[0].indicators.selected.has('cpu-1\0cpu.utilization\0'),true);
+ assert.deepEqual(stored.bindings[0].candidates,[]);
 });
