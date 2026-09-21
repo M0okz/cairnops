@@ -2607,7 +2607,10 @@ paths:
                     Adresse avec ou sans préfixe HTTP(S), avec port et chemin facultatifs.
                     Sans préfixe, HTTPS est testé sans identifiants, puis HTTP uniquement
                     si la connexion est refusée ou si le serveur répond en HTTP au test TLS.
-                    Les erreurs de certificat et les redirections restent bloquantes.
+                    Les erreurs de certificat restent bloquantes. Une redirection de connexion
+                    pendant la sonde confirme le protocole sans être suivie ; les identifiants
+                    sont ensuite envoyés uniquement à l’adresse initiale. Les redirections
+                    des requêtes authentifiées restent refusées.
                   example: argus.example.net
                 username:
                   type: string

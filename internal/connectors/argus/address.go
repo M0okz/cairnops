@@ -12,6 +12,8 @@ import (
 
 // resolveAddress probes without credentials. An explicit scheme is authoritative;
 // certificate errors and HTTP error responses never cause a downgrade.
+// A login redirect proves the transport works. It is never followed; Inspect
+// retries the same endpoint with credentials and still rejects redirects.
 func (client *Client) resolveAddress(ctx context.Context, address string) (string, error) {
 	address = strings.TrimSpace(address)
 	if strings.Contains(address, "://") {
@@ -36,9 +38,6 @@ func (client *Client) resolveAddress(ctx context.Context, address string) (strin
 	response, err := probe.Do(request)
 	if err == nil {
 		response.Body.Close()
-		if response.StatusCode >= 300 && response.StatusCode < 400 {
-			return "", fmt.Errorf("detect Argus protocol: redirects are not allowed")
-		}
 		return endpoint, nil
 	}
 	if errors.Is(err, http.ErrSchemeMismatch) || errors.Is(err, syscall.ECONNREFUSED) {
@@ -50,9 +49,6 @@ func (client *Client) resolveAddress(ctx context.Context, address string) (strin
 		response, err = probe.Do(request)
 		if err == nil {
 			response.Body.Close()
-			if response.StatusCode >= 300 && response.StatusCode < 400 {
-				return "", fmt.Errorf("detect Argus protocol: redirects are not allowed")
-			}
 			return endpoint, nil
 		}
 	}

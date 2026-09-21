@@ -22,7 +22,7 @@ func TestInspectDetectsProtocolWithoutSendingCredentials(t *testing.T) {
 					if r.URL.Path != "/argus/api/v1/version" {
 						t.Errorf("unexpected probe %s", r.URL.Path)
 					}
-					w.WriteHeader(http.StatusUnauthorized)
+					http.Redirect(w, r, "https://auth.example/login", http.StatusFound)
 					return
 				}
 				authenticated++
@@ -77,7 +77,7 @@ func TestAddressDetectionDoesNotDowngradeTLSErrorsOrHTTPResponses(t *testing.T) 
 		{"timeout", context.DeadlineExceeded, 0, true},
 		{"unauthorized", nil, 401, false},
 		{"unavailable", nil, 503, false},
-		{"redirect", nil, 302, true},
+		{"redirect", nil, 302, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
