@@ -9,6 +9,7 @@
     candidates = [],
     availableTargets,
     disabled = false,
+    compact = false,
     onselect
   }: {
     name: string;
@@ -16,6 +17,7 @@
     candidates?: TargetMatch[];
     availableTargets: TargetReference[];
     disabled?: boolean;
+    compact?: boolean;
     onselect: (targetID: string) => void;
   } = $props();
 
@@ -31,7 +33,7 @@
   }
 </script>
 
-<div class="decision" class:needs-review={value === REVIEW_TARGET}>
+<div class="decision" class:compact class:needs-review={value === REVIEW_TARGET}>
   <select
     aria-label={t('wizard.targetChoice', { name })}
     {value}
@@ -100,6 +102,7 @@
   .decision select {
     grid-area: choice;
     width: 100%;
+    min-width: 0;
     min-height: 2.75rem;
     padding: 0 var(--s3);
     border: 1px solid var(--line-strong);
@@ -144,6 +147,15 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .decision.compact {
+    grid-template-areas: 'choice' 'proof';
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s2);
+  }
+
+  .compact .proof { align-items: baseline; }
+  .compact .proof small { white-space: normal; overflow-wrap: anywhere; }
 
   @media (max-width: 40rem) {
     .decision {

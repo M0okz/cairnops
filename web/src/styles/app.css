@@ -200,28 +200,6 @@
   color-scheme: light;
 }
 
-@media (max-width: 48rem) {
-  .argus-modal .argus-rack li {
-    grid-template-columns: 1fr;
-    padding: 0 var(--s3) var(--s3);
-  }
-
-  .argus-modal .argus-rack .argus-service-choice {
-    padding-left: 0;
-    padding-right: 0;
-  }
-
-  .argus-modal .argus-rack .argus-service-summary {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .argus-modal .argus-rack .argus-versions {
-    grid-row: auto;
-    grid-column: 1;
-    justify-self: start;
-  }
-}
-
 /* ── Base ───────────────────────────────────────────────────────────────── */
 
 *,

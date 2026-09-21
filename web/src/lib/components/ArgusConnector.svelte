@@ -201,7 +201,7 @@
         <ReconciliationSummary counts={reconciliation} />
 
         <div class="listbar">
-          <div class="field search"><label class="sr-only" for="argus-filter">{t('argus.filter')}</label><input id="argus-filter" bind:value={query} placeholder={t('argus.filter')} /></div>
+          <div class="field service-filter"><input id="argus-filter" aria-label={t('argus.filter')} bind:value={query} placeholder={t('argus.filter')} /></div>
           <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleSelectableServices().length === 0}>
             {visibleSelectableServices().length > 0 && visibleSelectableServices().every((service) => selected.includes(service.external_id)) ? t('argus.removeAll') : t('wizard.selectAll')}
           </button>
@@ -226,7 +226,7 @@
                 {:else if !service.importable}
                   <span class="pill idle">{stateLabel(service)}</span>
                 {:else}
-                  <TargetDecision name={service.name} value={targetAssignments[service.external_id] ?? ''} candidates={service.candidate_targets} availableTargets={preview.available_targets} disabled={!selected.includes(service.external_id)} onselect={(targetID) => assignTarget(service.external_id, targetID)} />
+                  <TargetDecision compact name={service.name} value={targetAssignments[service.external_id] ?? ''} candidates={service.candidate_targets} availableTargets={preview.available_targets} disabled={!selected.includes(service.external_id)} onselect={(targetID) => assignTarget(service.external_id, targetID)} />
                 {/if}
               </div>
             </li>
@@ -280,6 +280,7 @@
 
 <style>
   .modal { max-width: var(--connector-modal-max); }
+  .modal-body { container-type: inline-size; }
   section { padding-bottom: var(--s5); margin-bottom: var(--s5); border-bottom: var(--line-width) solid var(--line); }
   section.last { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
   h3 { font-size: var(--text-md); font-weight: var(--weight-semibold); }
@@ -294,25 +295,31 @@
   .checks strong { display: block; margin-top: var(--s1); font-size: var(--text-sm); }
   .checks > .btn { margin-left: auto; }
   .listbar { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s3); flex-wrap: wrap; }
-  .search { flex: 1; min-width: var(--connector-filter-min); margin: 0; }
+  .service-filter { flex: 1 1 var(--connector-filter-min); min-width: 0; margin: 0; }
+  .listbar > .num { font-size: var(--text-xs); overflow-wrap: anywhere; }
   .rack { margin: 0; padding: 0; max-height: var(--connector-rack-max); overflow: auto; list-style: none; border: var(--line-width) solid var(--line-strong); border-radius: var(--r-m); }
-  .rack li { display: grid; grid-template-columns: minmax(var(--connector-summary-min), var(--connector-summary-max)) minmax(0, 1fr); align-items: center; gap: var(--s3); padding-right: var(--s4); border-bottom: var(--line-width) solid var(--line-row); }
+  .rack li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: var(--s3); padding-inline-end: var(--s4); border-bottom: var(--line-width) solid var(--line-row); }
   .rack li:last-child { border-bottom: 0; }
   .rack li.picked { background: var(--surface-2); }
   .rack li.locked { background: var(--choice-locked-surface); }
-  .service { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s1) var(--s3); min-width: 0; }
+  .service { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr); gap: var(--s1) var(--s3); min-width: 0; }
   .service-title { min-width: 0; }
-  .service-title strong, .service-title small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .service-title strong, .service-title small { display: block; overflow-wrap: anywhere; }
   .service-title strong { font-size: var(--text-sm); }
   .service-title small, .state, .version-link { font-size: var(--text-xs); }
-  .versions { grid-row: 1; grid-column: 2; display: flex; align-items: center; gap: var(--s2); font-size: var(--text-xs); }
-  .versions strong { color: var(--text); }
+  .versions { display: flex; flex-wrap: wrap; min-width: 0; overflow-wrap: anywhere; align-items: baseline; gap: var(--s2); font-size: var(--text-xs); }
+  .versions > :not([aria-hidden]) { min-width: 0; }
+  .versions strong { color: var(--ink); }
   .state { color: var(--ok); }
   .state.warn { color: var(--warn); }
   .state.unknown { color: var(--muted); }
-  .decision { display: grid; gap: var(--s2); }
+  .decision { display: grid; min-width: 0; padding-block: var(--s3); gap: var(--s2); }
   .version-link { justify-self: start; color: var(--accent); text-decoration: none; }
   .version-link:hover { text-decoration: underline; }
   .impact { margin-top: var(--s4); }
   .none { display: block !important; padding: var(--s5) !important; text-align: center; }
+  @container (max-width: 38rem) {
+    .rack li { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0; }
+    .decision { padding: 0 var(--s4) var(--s3); }
+  }
 </style>
