@@ -7,6 +7,7 @@
 
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import ConnectorConfigurator from '$lib/components/ConnectorConfigurator.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
   import ZabbixConnector from '$lib/components/ZabbixConnector.svelte';
   import UptimeKumaConnector from '$lib/components/UptimeKumaConnector.svelte';
@@ -77,6 +78,8 @@
       </div>
     </div>
   </div>
+{:else if managedConnector && managedConnector.kind !== 'generic_webhook'}
+  <ConnectorConfigurator connector={managedConnector} onclose={leave} onsuccess={async () => { await Promise.all([session.loadConnectors(), session.loadTargets()]); }} />
 {:else if kind === 'zabbix'}
   <ZabbixConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else if kind === 'uptime-kuma'}

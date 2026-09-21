@@ -67,3 +67,30 @@ est seulement temporel et ne prouve pas une cause.
 Une panne de la seule capacité Indicateurs n'abaisse pas artificiellement le
 Connecteur entier. L'interface distingue par exemple « Incidents synchronisés ·
 Indicateurs indisponibles » et conserve la dernière valeur avec sa date.
+
+## Configuration commune par équipement
+
+Depuis Connecteurs, le bouton **Configurer** ouvre un seul panneau pour les
+Sources et les Indicateurs. Les anciens liens de gestion d’un connecteur
+aboutissent également à ce panneau. Le parcours de connexion d’un nouveau
+connecteur reste séparé.
+
+Sélectionner un équipement dans la liste affiche ses Sources de supervision et
+ses Indicateurs de contexte. Les cases à cocher de la liste servent aux actions
+groupées : ajout à la supervision, activation de la collecte, ajout du socle
+CPU/RAM/disques ou application d’un profil. Les rapprochements ambigus demandent
+toujours un choix explicite de Cible. Une collecte de contexte seule reste
+possible avec une Cible existante et ne déclenche pas d’Incident.
+
+**Enregistrer les modifications** applique les choix de tous les équipements.
+Fermer, quitter la page ou recharger protège les modifications non enregistrées.
+L’import des Sources précède l’enregistrement des Indicateurs : si ce dernier
+échoue, le panneau indique les Sources déjà ajoutées, conserve les choix et
+permet de réessayer sans importer de nouveau ces Sources. Les deux appels HTTP
+ne constituent pas une transaction atomique. Une découverte d’Indicateurs en
+échec laisse leur configuration en lecture seule, sans empêcher la gestion des
+Sources disponibles.
+
+Argus propose les Sources sans section d’Indicateurs. Pour une ressource Proxmox
+nouvellement découverte, le catalogue d’Indicateurs devient disponible après
+l’enregistrement de sa supervision et la réouverture du panneau.

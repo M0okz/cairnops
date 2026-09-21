@@ -139,6 +139,12 @@
   --choice-ease: cubic-bezier(0.2, 0, 0, 1);
   --choice-locked-surface: color-mix(in srgb, var(--surface-2) 35%, transparent);
 
+  /* Panneau commun des Sources et Indicateurs */
+  --connector-config-width: 76rem;
+  --connector-config-height: 52rem;
+  --connector-equipment-list-width: 19rem;
+  --connector-equipment-mobile-height: 12rem;
+
   /* Inventaires de Connecteurs */
   --connector-modal-max: 52rem;
   --connector-field-min: 13rem;

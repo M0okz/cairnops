@@ -10,7 +10,7 @@
   import WebhookQuarantine from '$lib/components/WebhookQuarantine.svelte';
   import ConnectorRemoval from '$lib/components/ConnectorRemoval.svelte';
   import ConnectorSuspension from '$lib/components/ConnectorSuspension.svelte';
-  import IndicatorConfigurator from '$lib/components/IndicatorConfigurator.svelte';
+  import ConnectorConfigurator from '$lib/components/ConnectorConfigurator.svelte';
   import MattermostConnector from '$lib/components/MattermostConnector.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import { goto } from '$app/navigation';
@@ -30,7 +30,7 @@
   let quarantineFor = $state<Connector | null>(null);
   let removalFor = $state<Connector | null>(null);
   let suspensionFor = $state<Connector | null>(null);
-  let indicatorFor = $state<Connector | null>(null);
+  let configurationFor = $state<Connector | null>(null);
   let mattermostOpen = $state(false);
   let now = $state(new Date());
 
@@ -79,11 +79,6 @@
     patchmon: 'patchmon',
     argus: 'argus'
   };
-
-  function sourceManagementRoute(connector: Connector) {
-    const kind = connector.kind === 'uptime_kuma' ? 'uptime-kuma' : connector.kind;
-    return `/connecteurs/${kind}?connector=${connector.id}`;
-  }
 
   const statusLabels = $derived<Record<Connector['status'], { label: string; tone: string }>>({
     connected: { label: t('connector.status.connected'), tone: 'ok' },
@@ -210,13 +205,6 @@
             <p class="contract">{t('connectors.discoveryHint')}</p>
           {/if}
 
-          {#if connector.kind !== 'generic_webhook' && connector.kind !== 'argus'}
-            <section class="indicator-section">
-              <span><strong>Indicateurs</strong><small>Métriques contextuelles importées depuis le Connecteur</small></span>
-              {#if isAdministrator}<button class="btn sm" type="button" onclick={() => (indicatorFor = connector)}>Configurer</button>{/if}
-            </section>
-          {/if}
-
           {#if connector.last_error}
             <p class="error">{connector.last_error}</p>
           {/if}
@@ -235,7 +223,7 @@
             {#if isAdministrator}
               <span class="spacer"></span>
               {#if connector.kind !== 'generic_webhook'}
-                <a class="btn sm" href={sourceManagementRoute(connector)}>{t('connectors.manageSources')}</a>
+                <button class="btn sm" type="button" onclick={() => (configurationFor = connector)}>Configurer</button>
               {/if}
               <button
                 class="btn sm"
@@ -431,8 +419,8 @@
   />
 {/if}
 
-{#if indicatorFor}
-  <IndicatorConfigurator connector={indicatorFor} onclose={() => (indicatorFor = null)} onsuccess={() => session.loadConnectors()} />
+{#if configurationFor}
+  <ConnectorConfigurator connector={configurationFor} onclose={() => (configurationFor = null)} onsuccess={async () => { await Promise.all([session.loadConnectors(), session.loadTargets()]); }} />
 {/if}
 
 <style>
@@ -498,21 +486,6 @@
     font-size: 0.75rem;
   }
 
-  .indicator-section {
-    display: flex;
-    align-items: center;
-    gap: var(--s3);
-    margin-top: var(--s3);
-    padding: var(--s3);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-m);
-    background: var(--bg);
-  }
-
-  .indicator-section > span { min-width: 0; flex: 1; }
-  .indicator-section strong, .indicator-section small { display: block; }
-  .indicator-section strong { color: var(--accent); font-size: .6875rem; }
-  .indicator-section small { color: var(--faint); font-size: .625rem; }
 
   /* Deux fiches côte à côte n'ont pas la même hauteur de contenu : sans cela,
    * celle qui ne dit pas sa version remonte ses boutons d'une ligne. Les

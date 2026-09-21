@@ -16,7 +16,7 @@ const systemIndicatorKeys = new Set([
   'filesystem.utilization'
 ]);
 
-export const indicatorSelectionKey = (candidate: IndicatorCandidate) =>
+export const indicatorSelectionKey = (candidate: Pick<IndicatorCandidate, 'external_id' | 'semantic_key' | 'dimension'>) =>
   `${candidate.external_id}\u0000${candidate.semantic_key}\u0000${candidate.dimension ?? ''}`;
 
 export function setBindingsEnabled(
