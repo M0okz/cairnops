@@ -60,6 +60,7 @@ type ArgusBindingSnapshot struct {
 }
 
 type RuntimeStore interface {
+	RefreshDiscovery(context.Context, RuntimeConnector, string, string, []DiscoveryObject) ([]RuntimeBinding, error)
 	ClaimDueConnector(context.Context, string, string, int, time.Duration) ([]RuntimeConnector, error)
 	CompleteConnectorSync(context.Context, string, string, time.Time) error
 	FailConnectorSync(context.Context, string, string, time.Time, string) error
@@ -72,6 +73,7 @@ type IncidentReconciler interface {
 }
 
 type ProblemClient interface {
+	Inspect(context.Context, string, string) (zabbix.Inspection, error)
 	Problems(context.Context, string, string, []string) ([]zabbix.Problem, error)
 }
 
@@ -157,6 +159,16 @@ func (synchronizer *Synchronizer) syncOne(ctx context.Context, connector Runtime
 	credential, err := synchronizer.secrets.Open(connector.CredentialSealed, "connector:zabbix:"+connector.Endpoint)
 	if err != nil {
 		failed(fmt.Errorf("open connector credential: %w", err))
+		return
+	}
+	inspection, err := synchronizer.zabbix.Inspect(ctx, connector.Endpoint, string(credential))
+	if err != nil {
+		failed(err)
+		return
+	}
+	connector.Bindings, err = synchronizer.store.RefreshDiscovery(ctx, connector, synchronizer.owner, "zabbix", zabbixDiscoveries(inspection.Hosts))
+	if err != nil {
+		failed(err)
 		return
 	}
 	hostIDs := make([]string, 0, len(connector.Bindings))
@@ -342,6 +354,11 @@ func (synchronizer *PatchMonSynchronizer) syncOne(ctx context.Context, connector
 		failed(err)
 		return
 	}
+	connector.Bindings, err = synchronizer.store.RefreshDiscovery(ctx, connector, synchronizer.owner, "patchmon", patchMonDiscoveries(hosts))
+	if err != nil {
+		failed(err)
+		return
+	}
 	bindingByHost := make(map[string]RuntimeBinding, len(connector.Bindings))
 	for _, binding := range connector.Bindings {
 		bindingByHost[binding.ExternalID] = binding
@@ -522,6 +539,11 @@ func (synchronizer *ArgusSynchronizer) syncOne(ctx context.Context, connector Ru
 		return
 	}
 	inspection, err := synchronizer.client.Inspect(ctx, connector.Endpoint, credentials)
+	if err != nil {
+		fail(synchronizer.now().UTC(), err)
+		return
+	}
+	connector.Bindings, err = synchronizer.store.RefreshDiscovery(ctx, connector, synchronizer.owner, "argus", argusDiscoveries(inspection.Endpoint, inspection.Services))
 	if err != nil {
 		fail(synchronizer.now().UTC(), err)
 		return
@@ -734,6 +756,11 @@ func (synchronizer *UptimeKumaSynchronizer) syncOne(ctx context.Context, connect
 		return
 	}
 	monitors, err := synchronizer.client.Monitors(ctx, connector.Endpoint, string(credential))
+	if err != nil {
+		failed(err)
+		return
+	}
+	connector.Bindings, err = synchronizer.store.RefreshDiscovery(ctx, connector, synchronizer.owner, "uptime_kuma", kumaDiscoveries(monitors))
 	if err != nil {
 		failed(err)
 		return

@@ -779,7 +779,10 @@ components:
         credential_management: { type: string, enum: [provided, managed] }
         encrypted_transport: { type: boolean }
         binding_count: { type: integer, minimum: 0 }
-        quarantine_count: { type: integer, minimum: 0 }
+        quarantine_count:
+          type: integer
+          minimum: 0
+          description: Éléments entrants en quarantaine ou nouvelles découvertes présentes dont le rapprochement avec une Cible exige une confirmation.
         last_checked_at: { type: string, format: date-time }
         last_error: { type: string }
         created_at: { type: string, format: date-time }

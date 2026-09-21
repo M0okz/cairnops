@@ -284,6 +284,7 @@ type PreviewState struct {
 }
 
 type PersistZabbixInput struct {
+	Discovery            []DiscoveryObject
 	ActorID              string
 	Name                 string
 	Endpoint             string
@@ -298,6 +299,7 @@ type PersistZabbixInput struct {
 }
 
 type PersistUptimeKumaInput struct {
+	Discovery            []DiscoveryObject
 	ActorID              string
 	Name                 string
 	Endpoint             string
@@ -310,6 +312,7 @@ type PersistUptimeKumaInput struct {
 }
 
 type PersistPatchMonInput struct {
+	Discovery            []DiscoveryObject
 	ActorID              string
 	Name                 string
 	Endpoint             string
@@ -322,6 +325,7 @@ type PersistPatchMonInput struct {
 }
 
 type PersistArgusInput struct {
+	Discovery          []DiscoveryObject
 	ActorID            string
 	Name               string
 	Endpoint           string
@@ -1015,7 +1019,8 @@ func (service *Service) ImportZabbix(ctx context.Context, actorID string, input 
 		return ZabbixImport{}, fmt.Errorf("seal Zabbix credential: %w", err)
 	}
 	result, err := service.store.ImportZabbix(ctx, PersistZabbixInput{
-		ActorID: actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
+		Discovery: zabbixDiscoveries(inspection.Hosts),
+		ActorID:   actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
 		CredentialSealed: credential, Version: inspection.Version,
 		Compatibility: inspection.Compatibility, EncryptedTransport: inspection.EncryptedTransport,
 		Hosts: selected, TargetAssignments: assignments,
@@ -1117,7 +1122,8 @@ func (service *Service) ImportUptimeKuma(ctx context.Context, actorID string, in
 		return UptimeKumaImport{}, fmt.Errorf("seal Uptime Kuma credential: %w", err)
 	}
 	result, err := service.store.ImportUptimeKuma(ctx, PersistUptimeKumaInput{
-		ActorID: actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
+		Discovery: kumaDiscoveries(inspection.Monitors),
+		ActorID:   actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
 		CredentialSealed: credential, EncryptedTransport: inspection.EncryptedTransport,
 		Monitors: selected, TargetAssignments: assignments,
 		CredentialManagement: mode, ManagedCredentialID: managedCredentialID,
@@ -1222,7 +1228,8 @@ func (service *Service) ImportPatchMon(ctx context.Context, actorID string, inpu
 		return PatchMonImport{}, fmt.Errorf("seal PatchMon credential: %w", err)
 	}
 	result, err := service.store.ImportPatchMon(ctx, PersistPatchMonInput{
-		ActorID: actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
+		Discovery: patchMonDiscoveries(inspection.Hosts),
+		ActorID:   actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
 		CredentialSealed: credential, EncryptedTransport: inspection.EncryptedTransport,
 		Hosts: selected, TargetAssignments: assignments,
 		CredentialManagement: mode, ManagedCredentialID: managedCredentialID,
@@ -1301,7 +1308,8 @@ func (service *Service) ImportArgus(ctx context.Context, actorID string, input A
 		return ArgusImport{}, fmt.Errorf("seal Argus credential: %w", err)
 	}
 	result, err := service.store.ImportArgus(ctx, PersistArgusInput{
-		ActorID: actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
+		Discovery: argusDiscoveries(inspection.Endpoint, inspection.Services),
+		ActorID:   actorID, Name: receipt.Name, Endpoint: inspection.Endpoint,
 		CredentialSealed: credential, Version: inspection.Version,
 		EncryptedTransport: inspection.EncryptedTransport,
 		Services:           selected, TargetAssignments: assignments,

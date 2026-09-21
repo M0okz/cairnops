@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import ConnectorAccessPlan from './ConnectorAccessPlan.svelte';
+  import ConnectorDiscoveryNotice from './ConnectorDiscoveryNotice.svelte';
   import ReconciliationSummary from './ReconciliationSummary.svelte';
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
@@ -265,6 +266,7 @@
 
         <ConnectorAccessPlan access={preview.access} product="zabbix" />
         <ReconciliationSummary counts={reconciliation} />
+        <ConnectorDiscoveryNotice />
 
         <div class="listbar">
           <div class="field search">

@@ -197,7 +197,7 @@
             <div class="fig"><b><Odometer value={connector.binding_count} /></b><span>Sources</span></div>
             <div class="fig">
               <b class={connector.quarantine_count > 0 ? 'warn' : ''}><Odometer value={connector.quarantine_count} /></b>
-              <span>{connector.kind === 'proxmox' ? t('proxmox.pending') : 'En quarantaine'}</span>
+              <span>{connector.kind === 'generic_webhook' ? 'En quarantaine' : t('proxmox.pending')}</span>
             </div>
             <div class="fig">
               <b><Odometer value={connector.last_checked_at ? since(connector.last_checked_at, now) : '—'} /></b>
@@ -206,6 +206,9 @@
           </div>
 
           <p class="contract">{contracts[connector.kind]}</p>
+          {#if ['zabbix', 'uptime_kuma', 'patchmon', 'argus'].includes(connector.kind)}
+            <p class="contract">{t('connectors.discoveryHint')}</p>
+          {/if}
 
           {#if connector.kind !== 'generic_webhook' && connector.kind !== 'argus'}
             <section class="indicator-section">

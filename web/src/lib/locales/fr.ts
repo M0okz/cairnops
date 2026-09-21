@@ -10,6 +10,7 @@
  * accrocher. */
 
 export const fr = {
+  "connectors.discoveryHint": "Les nouveaux éléments sont ajoutés automatiquement. Les correspondances avec une Cible existante restent à confirmer.",
   "updates.unsupportedVersions": "Les versions remontées par Argus ne peuvent pas être comparées automatiquement.",
   "updates.title": "Mises à jour",
   "updates.intro": "Comprendre les changements entre la version installée et la cible Argus.",

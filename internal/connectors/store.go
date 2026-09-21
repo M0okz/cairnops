@@ -113,6 +113,8 @@ func (store *PostgresStore) List(ctx context.Context) ([]Connector, error) {
 		       (SELECT count(*)::integer FROM cairnops_webhook_quarantine quarantine
 		        WHERE quarantine.connector_id = connector.id AND quarantine.approved_at IS NULL)
 		       + (SELECT count(*)::integer FROM cairnops_proxmox_inventory inventory
+		          WHERE inventory.connector_id = connector.id AND inventory.pending AND inventory.present)
+		       + (SELECT count(*)::integer FROM cairnops_connector_inventory inventory
 		          WHERE inventory.connector_id = connector.id AND inventory.pending AND inventory.present),
 		       connector.last_checked_at, connector.last_error,
 		       connector.created_at, connector.updated_at, connector.credential_management
@@ -173,6 +175,8 @@ func (store *PostgresStore) SetStatus(ctx context.Context, connectorID, status s
 		          (SELECT count(*)::integer FROM cairnops_webhook_quarantine quarantine
 		           WHERE quarantine.connector_id = cairnops_connectors.id AND quarantine.approved_at IS NULL)
 		          + (SELECT count(*)::integer FROM cairnops_proxmox_inventory inventory
+		             WHERE inventory.connector_id = cairnops_connectors.id AND inventory.pending AND inventory.present)
+		          + (SELECT count(*)::integer FROM cairnops_connector_inventory inventory
 		             WHERE inventory.connector_id = cairnops_connectors.id AND inventory.pending AND inventory.present),
 		          last_checked_at, last_error, created_at, updated_at, credential_management
 	`, connectorID, status), &management)
@@ -530,6 +534,14 @@ func scanWebhookQuarantine(row scanner) (WebhookQuarantine, error) {
 }
 
 func (store *PostgresStore) PreviewState(ctx context.Context, kind, endpoint string, names []string) (PreviewState, error) {
+	return previewState(ctx, store.pool, kind, endpoint, names)
+}
+
+type identityQuerier interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
+func previewState(ctx context.Context, db identityQuerier, kind, endpoint string, names []string) (PreviewState, error) {
 	state := PreviewState{
 		TargetsByName:        make(map[string]TargetReference),
 		ImportedByExternalID: make(map[string]TargetReference),
@@ -548,7 +560,7 @@ func (store *PostgresStore) PreviewState(ctx context.Context, kind, endpoint str
 		normalized = append(normalized, name)
 	}
 	if len(normalized) > 0 {
-		rows, err := store.pool.Query(ctx, `
+		rows, err := db.Query(ctx, `
 			SELECT id::text, name
 			FROM cairnops_targets
 			WHERE archived_at IS NULL AND lower(btrim(name)) = ANY($1::text[])
@@ -575,7 +587,7 @@ func (store *PostgresStore) PreviewState(ctx context.Context, kind, endpoint str
 		rows.Close()
 	}
 
-	identityRows, err := store.pool.Query(ctx, `
+	identityRows, err := db.Query(ctx, `
 		SELECT target.id::text, target.name,
 		       coalesce(binding.external_name, ''), coalesce(connector.kind, ''),
 		       coalesce(binding.metadata, '{}'::jsonb)
@@ -628,7 +640,7 @@ func (store *PostgresStore) PreviewState(ctx context.Context, kind, endpoint str
 		return state.Targets[i].ID < state.Targets[j].ID
 	})
 
-	rows, err := store.pool.Query(ctx, `
+	rows, err := db.Query(ctx, `
 		SELECT binding.external_id, target.id::text, target.name
 		FROM cairnops_connectors connector
 		JOIN cairnops_connector_bindings binding ON binding.connector_id = connector.id
@@ -777,6 +789,9 @@ func (store *PostgresStore) ImportUptimeKuma(ctx context.Context, input PersistU
 			ExternalID: monitor.ID, TargetID: targetID, TargetName: targetName, Disposition: disposition,
 		})
 	}
+	if err := rememberDiscoverySelection(ctx, tx, connector.ID, input.Discovery); err != nil {
+		return UptimeKumaImport{}, err
+	}
 	result.Connector.BindingCount += countNewBindings(result.Targets)
 	if err := tx.Commit(ctx); err != nil {
 		return UptimeKumaImport{}, fmt.Errorf("commit Uptime Kuma import: %w", err)
@@ -906,6 +921,9 @@ func (store *PostgresStore) ImportPatchMon(ctx context.Context, input PersistPat
 			ExternalID: host.ID, TargetID: targetID, TargetName: targetName, Disposition: disposition,
 		})
 	}
+	if err := rememberDiscoverySelection(ctx, tx, connector.ID, input.Discovery); err != nil {
+		return PatchMonImport{}, err
+	}
 	result.Connector.BindingCount += countNewBindings(result.Targets)
 	if err := tx.Commit(ctx); err != nil {
 		return PatchMonImport{}, fmt.Errorf("commit PatchMon import: %w", err)
@@ -1031,6 +1049,9 @@ func (store *PostgresStore) ImportArgus(ctx context.Context, input PersistArgusI
 		result.Targets = append(result.Targets, ImportedTarget{
 			ExternalID: service.ID, TargetID: targetID, TargetName: targetName, Disposition: disposition,
 		})
+	}
+	if err := rememberDiscoverySelection(ctx, tx, connector.ID, input.Discovery); err != nil {
+		return ArgusImport{}, err
 	}
 	result.Connector.BindingCount += countNewBindings(result.Targets)
 	if err := tx.Commit(ctx); err != nil {
@@ -1162,6 +1183,9 @@ func (store *PostgresStore) ImportZabbix(ctx context.Context, input PersistZabbi
 		result.Targets = append(result.Targets, ImportedTarget{
 			ExternalID: host.ID, TargetID: targetID, TargetName: targetName, Disposition: disposition,
 		})
+	}
+	if err := rememberDiscoverySelection(ctx, tx, connector.ID, input.Discovery); err != nil {
+		return ZabbixImport{}, err
 	}
 	result.Connector.BindingCount += countNewBindings(result.Targets)
 	if err := tx.Commit(ctx); err != nil {

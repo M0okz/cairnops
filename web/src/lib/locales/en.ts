@@ -11,6 +11,7 @@
 import type { MessageKey } from '../i18n.svelte';
 
 export const en: Record<MessageKey, string> = {
+  "connectors.discoveryHint": "New items are added automatically. Matches with an existing Target still require confirmation.",
   "updates.unsupportedVersions": "The versions reported by Argus cannot be compared automatically.",
   "updates.title": "Software updates",
   "updates.intro": "Understand changes between the installed version and the Argus target.",

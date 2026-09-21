@@ -17,12 +17,23 @@ import (
 )
 
 type runtimeStore struct {
-	connectors    []RuntimeConnector
-	completed     bool
-	failed        string
-	claimedKind   string
-	observations  []IntegrationObservation
-	argusBindings []ArgusBindingSnapshot
+	discoveries        []DiscoveryObject
+	discoveredBindings []RuntimeBinding
+	discoveryErr       error
+	connectors         []RuntimeConnector
+	completed          bool
+	failed             string
+	claimedKind        string
+	observations       []IntegrationObservation
+	argusBindings      []ArgusBindingSnapshot
+}
+
+func (store *runtimeStore) RefreshDiscovery(_ context.Context, c RuntimeConnector, _, _ string, objects []DiscoveryObject) ([]RuntimeBinding, error) {
+	store.discoveries = objects
+	if store.discoveryErr != nil {
+		return nil, store.discoveryErr
+	}
+	return append(c.Bindings, store.discoveredBindings...), nil
 }
 
 func (store *runtimeStore) ClaimDueConnector(_ context.Context, kind, _ string, _ int, _ time.Duration) ([]RuntimeConnector, error) {
@@ -50,8 +61,14 @@ func (store *runtimeStore) UpdateArgusBindings(_ context.Context, _ string, bind
 }
 
 type problemClient struct {
-	problems []zabbix.Problem
-	err      error
+	hosts      []zabbix.Host
+	inspectErr error
+	problems   []zabbix.Problem
+	err        error
+}
+
+func (client problemClient) Inspect(context.Context, string, string) (zabbix.Inspection, error) {
+	return zabbix.Inspection{Hosts: client.hosts}, client.inspectErr
 }
 
 func (client problemClient) Problems(context.Context, string, string, []string) ([]zabbix.Problem, error) {
@@ -393,5 +410,63 @@ func TestSynchronizerMarksConnectorDegradedWithoutResolvingIncidentsOnRemoteFail
 	}
 	if store.failed != "timeout" || store.completed || reconciler.input.ConnectorID != "" {
 		t.Fatalf("remote failure incorrectly reconciled state: completed=%v failed=%q input=%#v", store.completed, store.failed, reconciler.input)
+	}
+}
+
+func TestZabbixDiscoveryObservesNewBindingDuringSameCycle(t *testing.T) {
+	box, _ := secretbox.New(bytes.Repeat([]byte{0x71}, 32))
+	endpoint := "https://zabbix.example.test/api_jsonrpc.php"
+	credential, _ := box.Seal([]byte("token"), "connector:zabbix:"+endpoint)
+	store := &runtimeStore{discoveredBindings: []RuntimeBinding{{ID: "new-binding", TargetID: "new-target", ExternalID: "100"}}}
+	reconciler := &incidentReconciler{}
+	client := problemClient{hosts: []zabbix.Host{{ID: "100", Name: "New host"}}, problems: []zabbix.Problem{{HostIDs: []string{"100"}, EventID: "event", Name: "Failure", Severity: 3}}}
+	NewSynchronizer(store, reconciler, client, box, "worker", nil).syncOne(context.Background(), RuntimeConnector{ID: "connector", Endpoint: endpoint, CredentialSealed: credential})
+	if !store.completed || len(store.discoveries) != 1 || len(reconciler.input.Signals) != 1 || reconciler.input.Signals[0].TargetID != "new-target" {
+		t.Fatalf("new host was not supervised: store=%+v signals=%+v", store, reconciler.input.Signals)
+	}
+}
+
+func TestFailedZabbixInventoryDoesNotDiscoverOrResolve(t *testing.T) {
+	box, _ := secretbox.New(bytes.Repeat([]byte{0x72}, 32))
+	endpoint := "https://zabbix.example.test/api_jsonrpc.php"
+	credential, _ := box.Seal([]byte("token"), "connector:zabbix:"+endpoint)
+	store := &runtimeStore{}
+	reconciler := &incidentReconciler{}
+	NewSynchronizer(store, reconciler, problemClient{inspectErr: errors.New("incomplete inventory")}, box, "worker", nil).syncOne(context.Background(), RuntimeConnector{ID: "connector", Endpoint: endpoint, CredentialSealed: credential})
+	if store.failed == "" || store.completed || store.discoveries != nil || reconciler.input.ConnectorID != "" {
+		t.Fatalf("failed inventory changed supervision: %+v", store)
+	}
+}
+
+func TestDiscoveryFailureStopsEveryFamilyBeforeReconciliation(t *testing.T) {
+	for _, kind := range []string{"zabbix", "uptime_kuma", "patchmon", "argus"} {
+		t.Run(kind, func(t *testing.T) {
+			box, _ := secretbox.New(bytes.Repeat([]byte{0x73}, 32))
+			endpoint := "https://example.test"
+			plain := []byte("token")
+			if kind == "patchmon" {
+				plain = []byte(`{"key":"key","secret":"secret"}`)
+			}
+			if kind == "argus" {
+				plain = []byte(`{"username":"user","password":"secret"}`)
+			}
+			credential, _ := box.Seal(plain, "connector:"+kind+":"+endpoint)
+			c := RuntimeConnector{ID: "connector", Endpoint: endpoint, CredentialSealed: credential}
+			store := &runtimeStore{discoveryErr: errors.New("expired lease")}
+			reconciler := &incidentReconciler{}
+			switch kind {
+			case "zabbix":
+				NewSynchronizer(store, reconciler, problemClient{}, box, "worker", nil).syncOne(context.Background(), c)
+			case "uptime_kuma":
+				NewUptimeKumaSynchronizer(store, reconciler, kumaMonitorClient{}, box, "worker", nil).syncOne(context.Background(), c)
+			case "patchmon":
+				NewPatchMonSynchronizer(store, reconciler, patchMonHostClient{}, box, "worker", nil).syncOne(context.Background(), c)
+			case "argus":
+				NewArgusSynchronizer(store, reconciler, argusInspectionClient{}, box, "worker", nil).syncOne(context.Background(), c)
+			}
+			if store.failed == "" || store.completed || len(store.observations) != 0 || reconciler.input.ConnectorID != "" || reconciler.kumaInput.ConnectorID != "" || reconciler.patchMonInput.ConnectorID != "" || reconciler.argusInput.ConnectorID != "" {
+				t.Fatalf("discovery failure changed supervision: %+v", store)
+			}
+		})
 	}
 }

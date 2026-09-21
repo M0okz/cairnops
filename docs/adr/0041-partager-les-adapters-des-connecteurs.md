@@ -37,3 +37,11 @@ La vérification TLS n'est jamais désactivée globalement. Lorsqu'un produit pr
 Après l'installation, une découverte complète inscrit automatiquement tout nouvel objet externe qui ne présente aucune correspondance plausible avec une Cible existante : CairnOps crée sa Cible, sa liaison et démarre sa Supervision. Si une correspondance plausible existe, la découverte reste en attente de confirmation afin de ne jamais rapprocher silencieusement deux identités potentiellement distinctes.
 
 Lorsqu'une découverte complète établit qu'un objet précédemment lié a disparu du produit externe, CairnOps conserve la Cible et son historique, marque la liaison comme introuvable et signale cette disparition comme une condition anormale. Cette absence ne vaut ni rétablissement ni autorisation de supprimer la Cible ; une lecture partielle ne peut jamais produire cette transition.
+
+## Découverte continue des inventaires
+
+Zabbix, Uptime Kuma, PatchMon et Argus appliquent la découverte à chaque cycle complet de synchronisation, avec les mêmes critères d’éligibilité que leur aperçu. La Cible et sa Source sont créées dans une transaction protégée par le bail du worker ; elles sont observées dès ce cycle. Une correspondance plausible est comptée dans les éléments à rapprocher et se confirme depuis « Gérer les Sources ».
+
+La confirmation initiale mémorise aussi les objets éligibles non sélectionnés. Ils restent exclus de l’ajout automatique, y compris après disparition puis retour, mais peuvent être importés manuellement. Un objet inéligible n’est pas une exclusion : il peut entrer lorsqu’il devient éligible. Une liaison désactivée ou une Cible archivée n’est jamais réactivée par la découverte.
+
+Les Connecteurs installés avant cette évolution établissent leur inventaire de référence au premier cycle complet, sans importer les objets déjà non reliés : les exclusions historiques ne sont pas connues. Seuls les objets qui apparaissent après cette référence sont ajoutés automatiquement. Un import manuel permet de reprendre des objets en attente.

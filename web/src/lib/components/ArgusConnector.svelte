@@ -5,6 +5,7 @@
   import { plural, t } from '$lib/i18n.svelte';
   import { prepareTargetAssignments, reconciliationCounts, resolvedTargetAssignments } from '$lib/reconciliation';
   import Icon from './Icon.svelte';
+  import ConnectorDiscoveryNotice from './ConnectorDiscoveryNotice.svelte';
   import ReconciliationSummary from './ReconciliationSummary.svelte';
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
@@ -199,6 +200,7 @@
         </div>
 
         <ReconciliationSummary counts={reconciliation} />
+        <ConnectorDiscoveryNotice />
 
         <div class="listbar">
           <div class="field service-filter"><input id="argus-filter" aria-label={t('argus.filter')} bind:value={query} placeholder={t('argus.filter')} /></div>
