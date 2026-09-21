@@ -162,7 +162,7 @@ func NormalizeEndpoint(raw string) (string, error) {
 }
 
 func (client *Client) Inspect(ctx context.Context, address string, credentials Credentials) (Inspection, error) {
-	endpoint, err := NormalizeEndpoint(address)
+	endpoint, err := client.resolveAddress(ctx, address)
 	if err != nil {
 		return Inspection{}, err
 	}

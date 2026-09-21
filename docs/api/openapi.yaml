@@ -2600,7 +2600,15 @@ paths:
               required: [address]
               properties:
                 name: { type: string, minLength: 1, maxLength: 160, default: Argus }
-                address: { type: string, format: uri, maxLength: 2048 }
+                address:
+                  type: string
+                  maxLength: 2048
+                  description: >-
+                    Adresse avec ou sans préfixe HTTP(S), avec port et chemin facultatifs.
+                    Sans préfixe, HTTPS est testé sans identifiants, puis HTTP uniquement
+                    si la connexion est refusée ou si le serveur répond en HTTP au test TLS.
+                    Les erreurs de certificat et les redirections restent bloquantes.
+                  example: argus.example.net
                 username:
                   type: string
                   maxLength: 4096
