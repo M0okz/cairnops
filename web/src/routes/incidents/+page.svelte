@@ -421,6 +421,7 @@
   }
 
   .incident-filter-grid .field, .history-filters .field { min-width: 0; margin: 0; }
+  .incident-filter-grid select, .history-filters select { width: 100%; min-width: 0; }
   .history-filters { display: flex; align-items: end; flex-wrap: wrap; gap: var(--s4); margin-bottom: var(--s4); }
   .history-filters .field { flex: 1 1 11rem; }
   .history-note { color: var(--muted); font-size: var(--text-sm); flex: 1 1 16rem; padding-bottom: var(--s2); }
