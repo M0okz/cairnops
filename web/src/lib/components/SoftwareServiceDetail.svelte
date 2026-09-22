@@ -18,6 +18,10 @@
   let error = $state("");
   let busy = $state(false);
   let initialized = false;
+  let editingSource = $state(false);
+  const effectiveSource = $derived(
+    service?.confirmed_at ? service.source : service?.suggested_source,
+  );
   let source = $state<ReleaseSource>({ kind: "github", url: "", software: "" });
   const analysis = $derived(service ? currentAnalysis(service) : undefined);
   const previous = $derived(
@@ -74,6 +78,7 @@
         body: JSON.stringify(source),
       });
       service = await api<SoftwareService>(`/api/v1/software-updates/${id}`);
+      editingSource = false;
     } catch (e) {
       error = messageFrom(e);
     } finally {
@@ -93,13 +98,36 @@
       >{#if !service.known}<span class="pill warn">{t("updates.unknown")}</span
         >{/if}
     </div>
-    {#if !service.confirmed_at || session.user?.role === "administrator"}
-      <details class="source-box" open={!service.confirmed_at}>
+    {#if effectiveSource || session.user?.role === "administrator"}
+      <details class="source-box" open={!effectiveSource}>
         <summary
-          >{t("updates.source")}{#if service.confirmed_at}
-            · {service.source.software}{/if}</summary
+          >{t("updates.source")}{#if effectiveSource}
+            · {effectiveSource.software}{/if}</summary
         >
-        {#if session.user?.role === "administrator"}
+        {#if effectiveSource}
+          <p class="muted">
+            {service.source_origin === "argus" || !service.confirmed_at
+              ? t("updates.argusSource")
+              : t("updates.customSource")}
+          </p>
+          <a
+            href={safeReleaseURL(effectiveSource.url)}
+            target="_blank"
+            rel="noreferrer noopener">{effectiveSource.url} ↗</a
+          >
+          {#if session.user?.role === "administrator" && !editingSource}
+            <div class="shadcn-control source-actions">
+              <Button
+                variant="outline"
+                onclick={() => {
+                  source = { ...effectiveSource };
+                  editingSource = true;
+                }}>{t("updates.editSource")}</Button
+              >
+            </div>
+          {/if}
+        {/if}
+        {#if session.user?.role === "administrator" && (editingSource || !effectiveSource)}
           <form onsubmit={confirm} class="shadcn-control source-form">
             <p class="muted">{t("updates.sourceHint")}</p>
             <SegmentedControl
@@ -135,7 +163,7 @@
               >
             </div>
           </form>
-        {:else}<p>{t("updates.awaiting_source")}</p>{/if}
+        {/if}
       </details>
     {/if}
     {#if service.state === "awaiting_ai"}<p class="notice">
@@ -146,7 +174,11 @@
     {#if service.state === "retry"}<p role="status">
         {service.last_error === "versions_not_comparable"
           ? t("updates.unsupportedVersions")
-          : t("updates.failed")}
+          : service.last_error.startsWith("invalid_ai_")
+            ? t("updates.invalidAI")
+            : service.last_error === "remote HTTP 429"
+              ? t("updates.rateLimited")
+              : t("updates.failed")}
       </p>{/if}
     {#if service.collection && service.collection_revision !== service.revision}<p
         class="muted"
@@ -267,6 +299,12 @@
   .detail-meta {
     font-size: var(--text-xs);
     color: var(--muted);
+  }
+  .source-actions {
+    margin-top: var(--s3);
+  }
+  .source-box {
+    overflow-wrap: anywhere;
   }
   .source-form {
     display: grid;

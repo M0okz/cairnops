@@ -23,7 +23,7 @@ func NewStore(pool *pgxpool.Pool, secrets *secretbox.Box) *Store {
 
 const serviceSelect = `SELECT s.binding_id::text,b.target_id::text,b.external_name,s.installed_version,s.target_version,s.observed_at,
  s.known AND b.integration_enabled AND c.status <> 'disabled' AND c.last_checked_at > now()-make_interval(secs => c.sync_interval_seconds*3),
- s.source,s.confirmed_at,s.revision,s.state,s.last_error,s.checked_at,s.collection,s.collection_revision,s.content_hash,
+ s.source,s.source_origin,s.confirmed_at,s.revision,s.state,s.last_error,s.checked_at,s.collection,s.collection_revision,s.content_hash,
  coalesce(nullif(b.metadata->>'release_source_url',''),b.metadata->>'version_url','')
  FROM cairnops_software_services s JOIN cairnops_connector_bindings b ON b.id=s.binding_id
  JOIN cairnops_connectors c ON c.id=b.connector_id JOIN cairnops_targets t ON t.id=b.target_id `
@@ -31,7 +31,7 @@ const serviceSelect = `SELECT s.binding_id::text,b.target_id::text,b.external_na
 func scanService(row pgx.Row) (Service, error) {
 	var s Service
 	var candidate string
-	err := row.Scan(&s.ID, &s.TargetID, &s.Name, &s.Installed, &s.Target, &s.ObservedAt, &s.Known, &s.Source, &s.ConfirmedAt, &s.Revision, &s.State, &s.LastError, &s.CheckedAt, &s.Collection, &s.CollectionRevision, &s.ContentHash, &candidate)
+	err := row.Scan(&s.ID, &s.TargetID, &s.Name, &s.Installed, &s.Target, &s.ObservedAt, &s.Known, &s.Source, &s.SourceOrigin, &s.ConfirmedAt, &s.Revision, &s.State, &s.LastError, &s.CheckedAt, &s.Collection, &s.CollectionRevision, &s.ContentHash, &candidate)
 	s.Suggested = Suggest(candidate)
 	s.Analyses = []Analysis{}
 	s.History = []History{}
@@ -101,7 +101,7 @@ func (s *Store) Confirm(ctx context.Context, id, actor string, input Source) err
 		return err
 	}
 	b, _ := json.Marshal(source)
-	result, err := s.pool.Exec(ctx, `UPDATE cairnops_software_services s SET source=$2::jsonb,confirmed_by=$3::uuid,confirmed_at=now(),revision=revision+1,next_check_at=now(),state='pending',last_error='' WHERE binding_id=$1::uuid AND EXISTS(SELECT 1 FROM cairnops_connector_bindings b WHERE b.id=s.binding_id)`, id, b, actor)
+	result, err := s.pool.Exec(ctx, `UPDATE cairnops_software_services s SET source=$2::jsonb,source_origin='manual',confirmed_by=$3::uuid,confirmed_at=now(),revision=revision+1,next_check_at=now(),state='pending',last_error='' WHERE binding_id=$1::uuid AND EXISTS(SELECT 1 FROM cairnops_connector_bindings b WHERE b.id=s.binding_id)`, id, b, actor)
 	if err != nil {
 		return err
 	}

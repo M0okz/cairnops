@@ -131,7 +131,7 @@ func TestStaleAIResultIsNotPublished(t *testing.T) {
 			if _, err := s.pool.Exec(ctx, `UPDATE cairnops_connector_bindings SET metadata=metadata||'{"latest_version":"2.10.0"}' WHERE id=$1::uuid`, id); err != nil {
 				t.Fatal(err)
 			}
-			return response(`{"choices":[{"finish_reason":"stop","message":{"content":"{\"overview\":[{\"category\":\"fix\",\"text\":\"Correction MySQL\",\"version\":\"2.9.1\",\"quote\":\"Fixed database migrations for MySQL.\"}],\"details\":[]}"}}]}`), nil
+			return response(`{"choices":[{"finish_reason":"stop","message":{"content":"{\"overview\":[{\"category\":\"fix\",\"text\":\"Correction MySQL\",\"evidence_id\":\"e1\"}],\"details\":[]}"}}]}`), nil
 		}
 		if strings.HasSuffix(r.URL.Path, "/tags") {
 			return response(`[]`), nil
@@ -165,7 +165,7 @@ func TestWorkerReusesExactResultAndReanalysesChangedNotes(t *testing.T) {
 	w.client = &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
 		if r.Method == "POST" {
 			calls++
-			return response(`{"choices":[{"finish_reason":"stop","message":{"content":"{\"overview\":[{\"category\":\"fix\",\"text\":\"Correction MySQL\",\"version\":\"2.9.1\",\"quote\":\"Fixed database migrations for MySQL.\"}],\"details\":[]}"}}]}`), nil
+			return response(`{"choices":[{"finish_reason":"stop","message":{"content":"{\"overview\":[{\"category\":\"fix\",\"text\":\"Correction MySQL\",\"evidence_id\":\"e1\"}],\"details\":[]}"}}]}`), nil
 		}
 		if strings.HasSuffix(r.URL.Path, "/tags") {
 			return response(`[]`), nil

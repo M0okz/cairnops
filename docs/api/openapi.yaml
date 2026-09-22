@@ -207,11 +207,15 @@ components:
         known:
           type: boolean
         source:
-          description: Objet vide avant confirmation, sinon source officielle.
+          description: Objet vide avant adoption, sinon source officielle reprise d’Argus ou personnalisée.
           anyOf:
           - $ref: '#/components/schemas/SoftwareReleaseSource'
           - type: object
             maxProperties: 0
+        source_origin:
+          type: string
+          enum: [argus, manual]
+          description: Origine de la source adoptée ; manual par défaut avant adoption.
         suggested_source:
           anyOf:
           - $ref: '#/components/schemas/SoftwareReleaseSource'
@@ -264,6 +268,7 @@ components:
       - observed_at
       - known
       - source
+      - source_origin
       - suggested_source
       - confirmed_at
       - revision
