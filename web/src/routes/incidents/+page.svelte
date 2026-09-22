@@ -300,7 +300,8 @@
 
   @media (max-width: 48rem) {
     .cols :global(.trow > .btn:last-child) {
-      justify-self: auto;
+      grid-column: 1 / -1;
+      justify-self: end;
     }
   }
 
@@ -316,7 +317,8 @@
     }
 
     .cols :global(.trow > .btn:last-child) {
-      justify-self: auto;
+      grid-column: 1 / -1;
+      justify-self: end;
     }
   }
 

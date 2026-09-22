@@ -322,7 +322,7 @@
 
     <div class="row appearance-row">
       <span class="id"><strong>{t('appearance.title')}</strong><small class="faint">{t('appearance.deviceHint')}</small></span>
-      <div class="settings-appearance"><AppearanceSettings /></div>
+      <div class="act settings-appearance"><AppearanceSettings /></div>
     </div>
 
     <!-- La langue se choisit ici comme dans le menu du rail : c'est le même
@@ -703,6 +703,7 @@
 
   .means {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--s3);
     min-width: 0;

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
+  import { Input } from './ui/input';
   import Odometer from './Odometer.svelte';
   import { formatIndicator } from '$lib/indicator-format';
   import { plural, t } from '$lib/i18n.svelte';
@@ -105,8 +106,8 @@
     </button>
   </header>
 
-  <div class="personalizer-tools">
-    <input
+  <div class="personalizer-tools shadcn-control">
+    <Input
       type="search"
       bind:value={search}
       placeholder={t('overview.indicators.personalizerSearch')}
@@ -190,6 +191,7 @@
   }
 
   header {
+    flex-shrink: 0;
     display: flex;
     align-items: flex-start;
     gap: var(--s4);
@@ -232,6 +234,7 @@
   }
 
   .personalizer-tools {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: var(--s4);
@@ -240,9 +243,10 @@
     background: var(--bg);
   }
 
-  .personalizer-tools input {
+  .personalizer-tools :global(input) {
     min-width: 0;
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: var(--ctl-h-lg);
   }
 
   .selection-count {
@@ -253,7 +257,8 @@
   }
 
   .catalog {
-    min-height: 14rem;
+    min-height: 0;
+    flex: 1 1 14rem;
     padding: var(--s4);
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -350,6 +355,7 @@
   }
 
   footer {
+    flex-shrink: 0;
     padding: var(--s4) var(--s5);
     display: flex;
     justify-content: flex-end;

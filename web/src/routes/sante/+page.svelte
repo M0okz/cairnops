@@ -202,7 +202,7 @@
     {#if session.system}
       {#each session.system.components as component (component.name)}
         {@const status = statusLabels[component.status] ?? { label: component.status, tone: 'idle' }}
-        <div class="comp">
+        <div class="comp status-row">
           <span class="key"><Icon name={componentIcons[component.name] ?? 'health'} size={16} /></span>
           <span class="comp-id">
             <strong>{labels[component.name]?.name ?? component.name}</strong>
@@ -230,7 +230,7 @@
   <div class="card">
     {#each session.connectors as connector (connector.id)}
       {@const tone = connector.status === 'connected' ? 'ok' : connector.status === 'degraded' ? 'warn' : 'idle'}
-      <div class="comp">
+      <div class="comp status-row">
         {#if kindBrands[connector.kind]}
           <BrandMark name={kindBrands[connector.kind]!} size={28} />
         {:else}
@@ -422,6 +422,18 @@
     display: block;
     font-family: var(--font-num);
     font-size: 0.6875rem;
+  }
+
+  .comp-id strong, .comp-id small { overflow-wrap: anywhere; }
+  .status-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .status-row > span:last-child { margin-inline-start: 0; }
+  @media (max-width: 48rem) {
+    .status-row { grid-template-columns: auto minmax(0, 1fr); }
+    .status-row > .hide-sm { display: none; }
+    .status-row > span:last-child { grid-column: 2; justify-self: start; }
+    .page-head h1 { flex-wrap: wrap; }
+    .comp:not(.status-row) { flex-wrap: wrap; }
+    .comp:not(.status-row) > span:last-child { white-space: normal; text-align: end; }
   }
 
   code {

@@ -5,6 +5,7 @@
   import { onMount } from 'svelte';
   import { api, type CreatedSource, type IncidentSeverity, type SourceKind, type Target } from '$lib/api';
   import Checkbox from './ui/Checkbox.svelte';
+  import SegmentedControl from './ui/SegmentedControl.svelte';
 
   let {
     onclose,
@@ -179,12 +180,10 @@
 
           <section>
             <h3>{t('workshop.signalSource')}</h3>
-            <div class="segments kinds" role="group" aria-label={t('workshop.checkKind')}>
-              {#each Object.entries(kindLabels) as [value, label] (value)}
-                <button type="button" aria-pressed={kind === value} onclick={() => (kind = value as typeof kind)}>
-                  {label}
-                </button>
-              {/each}
+            <div class="kinds">
+              <SegmentedControl value={kind} label={t('workshop.checkKind')}
+                items={Object.entries(kindLabels).map(([value, label]) => ({ value: value as SourceKind, label }))}
+                onValueChange={(value) => (kind = value)} />
             </div>
 
             <div class="grid">
@@ -357,10 +356,6 @@
   .kinds {
     width: 100%;
     margin-bottom: var(--s4);
-  }
-
-  .kinds button {
-    flex: 1;
   }
 
   .note {

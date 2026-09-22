@@ -177,7 +177,15 @@
 
 <style>
   .cols {
+    container-type: inline-size;
     --cols: minmax(0, 1.3fr) 6.75rem 11.875rem 4.125rem minmax(0, 1fr) 6rem auto;
+  }
+
+  .trow > .btn { justify-self: end; }
+  @container (max-width: 55rem) {
+    .thead, .trow > .hide-sm { display: none; }
+    .trow { grid-template-columns: minmax(0, 1fr) auto; }
+    .trow > .btn { grid-column: 1 / -1; }
   }
 
   .current {

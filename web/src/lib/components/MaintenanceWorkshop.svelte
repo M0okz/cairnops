@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
+  import SegmentedControl from './ui/SegmentedControl.svelte';
   import Odometer from './Odometer.svelte';
   import { api, type Maintenance, type Target } from '$lib/api';
 
@@ -79,13 +80,10 @@
 
     <form onsubmit={submit}>
       <div class="modal-body">
-        <div class="segments timing" role="group" aria-label={t('workshop.windowKind')}>
-          <button type="button" aria-pressed={timing === 'now'} onclick={() => (timing = 'now')}>
-            {t('workshop.immediate')}
-          </button>
-          <button type="button" aria-pressed={timing === 'planned'} onclick={() => (timing = 'planned')}>
-            {t('workshop.scheduled')}
-          </button>
+        <div class="timing">
+          <SegmentedControl value={timing} label={t('workshop.windowKind')}
+            items={[{ value: 'now', label: t('workshop.immediate') }, { value: 'planned', label: t('workshop.scheduled') }]}
+            onValueChange={(value) => (timing = value)} />
         </div>
 
         <div class="field">
@@ -154,10 +152,6 @@
   .timing {
     width: 100%;
     margin-bottom: var(--s5);
-  }
-
-  .timing button {
-    flex: 1;
   }
 
   .dates {

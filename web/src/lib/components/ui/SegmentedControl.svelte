@@ -31,6 +31,7 @@
       if (item) onValueChange(item.value);
     }}
     variant="outline"
+    spacing={1}
     size={size === 'compact' ? 'sm' : 'default'}
     orientation="horizontal"
     aria-label={label}

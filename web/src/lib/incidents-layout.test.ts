@@ -31,8 +31,8 @@ test('la grille des Incidents réserve la même colonne aux actions dans chaque 
   );
   assert.match(
     page,
-    /@media\s*\(max-width:\s*48rem\)[\s\S]*?\.cols\s+:global\(\.trow\s*>\s*\.btn:last-child\)\s*\{[^}]*justify-self:\s*auto;/s,
-    "le repli mobile doit conserver le placement naturel de l’action"
+    /@media\s*\(max-width:\s*48rem\)[\s\S]*?\.cols\s+:global\(\.trow\s*>\s*\.btn:last-child\)\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;[^}]*justify-self:\s*end;/s,
+    "le repli mobile doit aligner les actions sur le même bord, indépendamment des badges"
   );
 });
 

@@ -221,7 +221,7 @@
               </span>
             {/if}
             {#if isAdministrator}
-              <span class="spacer"></span>
+              <div class="connector-actions">
               {#if connector.kind !== 'generic_webhook'}
                 <button class="btn sm" type="button" onclick={() => (configurationFor = connector)}>Configurer</button>
               {/if}
@@ -236,6 +236,7 @@
               <button class="btn sm danger" type="button" onclick={() => (removalFor = connector)}>
                 Supprimer
               </button>
+              </div>
             {/if}
           </div>
         </div>
@@ -512,9 +513,7 @@
 
   /* Les actions de gouvernance se tiennent à droite, séparées des états qu'elles
    * ne commentent pas. */
-  .spacer {
-    flex: 1;
-  }
+  .connector-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--s3); margin-inline-start: auto; }
 
   /* ── Le sas des identités inconnues ─────────────────────────────────────
      La bande porte la teinte de l'avertissement sur toute sa tête : ce n'est

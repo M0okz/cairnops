@@ -381,6 +381,10 @@ td.num,
   gap: 1px;
 }
 
+/* Keep the account reachable on short windows; only navigation scrolls. */
+.rail > :not(nav) { flex-shrink: 0; }
+.rail nav { min-height: 0; overflow-y: auto; align-content: start; scrollbar-width: thin; }
+
 .rail-foot {
   margin-top: auto;
   padding-top: var(--s4);
@@ -511,9 +515,11 @@ td.num,
 
 .update-cta {
   flex: none;
-  align-self: flex-start;
-  max-width: calc(100% - 2 * var(--s3));
-  margin: 0 var(--s3) var(--s3);
+  align-self: stretch;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 0 var(--s3);
 }
 
 .update-cta small {
@@ -602,6 +608,7 @@ kbd {
 
 .page-actions {
   display: flex;
+  align-items: center;
   gap: var(--s3);
   flex-wrap: wrap;
 }
@@ -623,6 +630,8 @@ kbd {
   white-space: nowrap;
   transition: background var(--d1) var(--ease), border-color var(--d1) var(--ease);
 }
+
+.btn > svg { flex: none; }
 
 .btn:hover:not(:disabled) {
   background: var(--surface-2);
@@ -1346,14 +1355,14 @@ a.trow:hover .caret {
   .realtime { justify-content: center; }
   .palette-trigger { width: var(--ctl-h-lg); justify-content: center; }
   .palette-trigger > span, .palette-trigger kbd { display: none; }
-  .update-cta { align-self: center; justify-content: center; max-width: 100%; margin: 0 0 var(--s3); width: var(--ctl-h-lg); }
+  .rail .update-cta { padding-inline: 0; align-self: center; justify-content: center; max-width: 100%; margin: 0 0 var(--s3); width: var(--ctl-h-lg); }
   .update-cta > span, .update-cta > small { display: none; }
   .page { padding: var(--s6); }
   .topbar { padding: 0 var(--s6); }
 }
 
 @media (max-width: 48rem) {
-  .shell { grid-template-columns: minmax(0, 1fr); }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content minmax(0, 1fr); }
   .rail { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: var(--s4); }
   .brand-full { display: block; }
   .brand-symbol { display: none; }
@@ -1401,9 +1410,12 @@ a.trow:hover .caret {
   }
 
   .rail .update-cta {
+    width: 100%;
+    padding-inline: var(--s4);
+    margin-block: var(--s3);
     grid-column: 1 / -1;
     grid-row: 2;
-    justify-self: start;
+    justify-self: stretch;
     max-width: 100%;
   }
 
@@ -1488,4 +1500,13 @@ a.trow:hover .caret {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Narrow dialog actions share both edges, even when their labels wrap. */
+@media (max-width: 30rem) {
+  :is(.modal, .personalizer, .incident-drawer) footer > .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .modal footer > .note { flex-basis: 100%; }
 }
