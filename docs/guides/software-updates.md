@@ -12,7 +12,7 @@ Les formats disponibles sont les dépôts publics GitHub, Forgejo/Gitea et GitLa
 
 ## Comparaison et actualisation
 
-Les versions numériques à deux, trois ou quatre composantes, éventuellement préfixées par `v` et accompagnées d'une préversion, sont ordonnées explicitement. Les tags arbitraires comme `latest` ne sont pas ordonnés à l'aveugle. Les préversions intermédiaires sont exclues lorsque la cible est stable. Le catalogue est limité à vingt pages de cent entrées par ressource ; un dépassement est indiqué comme incomplet. Les tags du dépôt permettent de signaler les versions sans notes, sans inventer les numéros intermédiaires.
+Les versions numériques à deux, trois ou quatre composantes, éventuellement préfixées par `v` et accompagnées d'une préversion, sont ordonnées explicitement. Les tags arbitraires comme `latest` ne sont pas ordonnés à l'aveugle. Les préversions intermédiaires sont exclues lorsque la cible est stable. Le catalogue est limité à vingt requêtes par ressource, avec cent entrées par page au départ. Si une réponse dépasse 2 Mio, la collecte réduit la taille des pages sans sauter d’entrée. Un dépassement du budget est indiqué comme incomplet. Les tags du dépôt permettent de signaler les versions sans notes, sans inventer les numéros intermédiaires.
 
 La comparaison en cours est contrôlée chaque jour. Un changement de contenu déclenche une nouvelle analyse ; une consultation ne relance pas l'IA. Une panne reporte le traitement et conserve les résultats précédents avec leurs versions couvertes. Les reprises sont espacées d'une heure et les traitements sont bornés à huit minutes avec un bail de dix minutes. Une analyse trop volumineuse reste différée ; les notes déjà collectées restent accessibles.
 
