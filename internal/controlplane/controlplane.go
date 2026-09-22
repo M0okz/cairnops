@@ -31,13 +31,17 @@ var (
 )
 
 type Target struct {
-	ID                  string    `json:"id"`
-	Name                string    `json:"name"`
-	Description         string    `json:"description"`
-	CreatedAt           time.Time `json:"created_at"`
-	ExternalSourceCount int       `json:"external_source_count"`
-	Aliases             []string  `json:"aliases"`
-	Sources             []Source  `json:"sources"`
+	LastSuccessAt       *time.Time `json:"last_success_at,omitempty"`
+	Category            Category   `json:"category"`
+	SuggestedCategory   Category   `json:"suggested_category"`
+	CategoryManual      bool       `json:"category_manual"`
+	ID                  string     `json:"id"`
+	Name                string     `json:"name"`
+	Description         string     `json:"description"`
+	CreatedAt           time.Time  `json:"created_at"`
+	ExternalSourceCount int        `json:"external_source_count"`
+	Aliases             []string   `json:"aliases"`
+	Sources             []Source   `json:"sources"`
 }
 
 type Source struct {
@@ -69,13 +73,15 @@ type Observation struct {
 }
 
 type CreateTargetInput struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	Category    *Category `json:"category,omitempty"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
 }
 
 type UpdateTargetInput struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Category    *Category `json:"category,omitempty"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
 }
 
 // UpdateSourceInput modifie un Contrôle natif. Un champ absent reste inchangé,
@@ -206,10 +212,16 @@ func (store *Store) ListTargets(ctx context.Context) ([]Target, error) {
 	if err := sourceRows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate sources: %w", err)
 	}
+	if err := store.classifyTargets(ctx, targets); err != nil {
+		return nil, err
+	}
 	return targets, nil
 }
 
 func (store *Store) CreateTarget(ctx context.Context, input CreateTargetInput) (Target, error) {
+	if input.Category != nil && !input.Category.Valid() {
+		return Target{}, fmt.Errorf("%w: unsupported resource category", ErrInvalidInput)
+	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Description = strings.TrimSpace(input.Description)
 	if utf8.RuneCountInString(input.Name) < 1 || utf8.RuneCountInString(input.Name) > 160 {
@@ -221,20 +233,27 @@ func (store *Store) CreateTarget(ctx context.Context, input CreateTargetInput) (
 
 	target := Target{Name: input.Name, Description: input.Description, Aliases: make([]string, 0), Sources: make([]Source, 0)}
 	err := store.pool.QueryRow(ctx, `
-		INSERT INTO cairnops_targets (name, description, identity_managed_at)
-		VALUES ($1, $2, now())
+		INSERT INTO cairnops_targets (name, description, identity_managed_at, category)
+		VALUES ($1, $2, now(), $3)
 		RETURNING id::text, created_at
-	`, target.Name, target.Description).Scan(&target.ID, &target.CreatedAt)
+	`, target.Name, target.Description, input.Category).Scan(&target.ID, &target.CreatedAt)
 	if err != nil {
 		return Target{}, fmt.Errorf("create target: %w", err)
 	}
-	return target, nil
+	projected := []Target{target}
+	if err := store.classifyTargets(ctx, projected); err != nil {
+		return Target{}, err
+	}
+	return projected[0], nil
 }
 
 // UpdateTarget corrige le nom et la description d'une Cible. Son identité, son
 // historique et ses Sources ne bougent pas : c'est la même chose qu'on nomme
 // autrement.
 func (store *Store) UpdateTarget(ctx context.Context, targetID string, input UpdateTargetInput) (Target, error) {
+	if input.Category != nil && !input.Category.Valid() {
+		return Target{}, fmt.Errorf("%w: unsupported resource category", ErrInvalidInput)
+	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Description = strings.TrimSpace(input.Description)
 	if utf8.RuneCountInString(input.Name) < 1 || utf8.RuneCountInString(input.Name) > 160 {
@@ -252,17 +271,21 @@ func (store *Store) UpdateTarget(ctx context.Context, targetID string, input Upd
 	target := Target{ID: targetID, Name: input.Name, Description: input.Description, Aliases: make([]string, 0), Sources: make([]Source, 0)}
 	err := store.pool.QueryRow(ctx, `
 		UPDATE cairnops_targets
-		SET name = $2, description = $3, identity_managed_at = now(), updated_at = now()
+		SET name = $2, description = $3, category = COALESCE($4, category), identity_managed_at = now(), updated_at = now()
 		WHERE id = $1::uuid AND archived_at IS NULL
 		RETURNING created_at
-	`, targetID, target.Name, target.Description).Scan(&target.CreatedAt)
+	`, targetID, target.Name, target.Description, input.Category).Scan(&target.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Target{}, ErrNotFound
 	}
 	if err != nil {
 		return Target{}, fmt.Errorf("update target: %w", err)
 	}
-	return target, nil
+	projected := []Target{target}
+	if err := store.classifyTargets(ctx, projected); err != nil {
+		return Target{}, err
+	}
+	return projected[0], nil
 }
 
 // ArchiveTarget retire une Cible de l'Espace opérationnel sans effacer son
@@ -322,7 +345,11 @@ func (store *Store) RestoreTarget(ctx context.Context, targetID string) (Target,
 	}
 	target.Sources = make([]Source, 0)
 	target.Aliases = make([]string, 0)
-	return target, nil
+	projected := []Target{target}
+	if err := store.classifyTargets(ctx, projected); err != nil {
+		return Target{}, err
+	}
+	return projected[0], nil
 }
 
 func (store *Store) CreateSource(ctx context.Context, targetID string, input CreateSourceInput) (CreatedSource, error) {

@@ -538,3 +538,47 @@ func incidentForTarget(t *testing.T, pool *pgxpool.Pool, targetID string) (natur
 	}
 	return nature, severity, status
 }
+
+func TestPostgresResourceCategoryPreservesManualChoice(t *testing.T) {
+	pool := openTestPool(t)
+	ctx := context.Background()
+	store := NewStore(pool)
+	target, err := store.CreateTarget(ctx, CreateTargetInput{Name: "Service"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.Category != CategoryUnclassified || target.CategoryManual {
+		t.Fatalf("unexpected empty category: %+v", target)
+	}
+	_, err = store.CreateSource(ctx, target.ID, CreateSourceInput{Name: "HTTP", Kind: domain.SourceHTTP, IntervalSeconds: 60, TimeoutMilliseconds: 1000, Config: json.RawMessage(`{"url":"https://example.com"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targets, err := store.ListTargets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 1 || targets[0].Category != CategoryService {
+		t.Fatalf("expected suggested service: %+v", targets)
+	}
+	manual := CategoryScheduledTask
+	target, err = store.UpdateTarget(ctx, target.ID, UpdateTargetInput{Name: "Scheduled HTTP", Category: &manual})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.Category != manual || !target.CategoryManual || target.SuggestedCategory != CategoryService {
+		t.Fatalf("manual category lost: %+v", target)
+	}
+	target, err = store.UpdateTarget(ctx, target.ID, UpdateTargetInput{Name: "Renamed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.Category != manual || !target.CategoryManual {
+		t.Fatalf("rename overwrote category: %+v", target)
+	}
+	invalid := Category("invalid")
+	_, err = store.UpdateTarget(ctx, target.ID, UpdateTargetInput{Name: "Renamed", Category: &invalid})
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("invalid category accepted: %v", err)
+	}
+}

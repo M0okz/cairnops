@@ -127,3 +127,7 @@ Le QR code occupe une dalle dédiée et reste accompagné de son expiration et d
 ## Divergence de Sources
 
 Une Divergence de Sources ne crée pas un cinquième État de santé. Une pastille secondaire et un libellé explicite signalent le désaccord sur la Cible et l'Incident, tandis que le détail nomme les conclusions de chaque Source ; l'indication disparaît automatiquement lorsque les preuves convergent.
+
+## Ressources et problèmes explicites
+
+La [clarification du vocabulaire](clarification-du-vocabulaire.md) remplace les intitulés historiques de ce document : Ressources, Contrôles, Doublons possibles, État de CairnOps et Temps observé. La liste regroupe les ressources par catégorie avec compteurs ; les mesures affichées dépendent de l’objet suivi. Le problème précis reste visible sur mobile, avec sa gravité et son origine. Les problèmes supplémentaires sont accessibles depuis « +N autres problèmes » au survol, au clavier et au toucher ; les mises à jour sont affichées séparément. Les infobulles restent dans les limites de l’écran et se ferment avec Échap.

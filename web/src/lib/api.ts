@@ -126,7 +126,13 @@ export type Observation = {
   details: Record<string, unknown>;
 };
 
+export type ResourceCategory = 'service' | 'infrastructure' | 'scheduled_task' | 'software' | 'unclassified';
+
 export type Target = {
+  last_success_at?: string;
+  category?: ResourceCategory;
+  suggested_category?: ResourceCategory;
+  category_manual?: boolean;
   id: string;
   name: string;
   description: string;
@@ -170,6 +176,8 @@ export type TargetMeasures = {
 };
 
 export type SourceMeasures = {
+  enabled?: boolean;
+  interval_seconds?: number;
   source_id: string;
   name: string;
   kind: SourceKind | 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'proxmox' | 'generic_webhook';

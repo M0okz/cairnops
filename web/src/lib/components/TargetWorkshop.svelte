@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resourceCategories } from '$lib/resources';
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import { onMount } from 'svelte';
@@ -17,6 +18,7 @@
 
   let nameInput = $state<HTMLInputElement>();
   let targetName = $state('');
+  let category = $state<import('$lib/api').ResourceCategory | ''>('');
   let description = $state('');
   let sourceName = $state('');
   let kind = $state<SourceKind>('http');
@@ -76,7 +78,7 @@
       if (!createdTarget) {
         createdTarget = await api<Target>('/api/v1/targets', {
           method: 'POST',
-          body: JSON.stringify({ name: targetName, description })
+          body: JSON.stringify({ name: targetName, description, ...(category ? { category } : {}) })
         });
       }
       const created = await api<CreatedSource>(`/api/v1/targets/${createdTarget.id}/sources`, {
@@ -159,6 +161,12 @@
                   <label for="target-name">{t('workshop.targetName')}</label>
                   <input id="target-name" bind:this={nameInput} bind:value={targetName} required maxlength="160"
                     placeholder="Nextcloud" disabled={createdTarget !== null} />
+                </div>
+                <div class="field"><label for="new-resource-category">{t('resources.category')}</label>
+                  <select id="new-resource-category" bind:value={category} disabled={createdTarget !== null}>
+                    <option value="">{t('resources.category.auto')}</option>
+                    {#each resourceCategories as value}<option {value}>{t(`resources.category.${value}`)}</option>{/each}
+                  </select>
                 </div>
                 <div class="field">
                   <label for="target-description">{t('workshop.optionalHint')}</label>

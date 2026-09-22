@@ -1,3 +1,4 @@
+import { resourceDivergence } from './resources';
 /* Mise en forme partagée par les huit écrans. Un seul endroit décide comment
  * une Gravité se nomme, comment une durée se dit et comment un nombre
  * s'écrit — les Écrans supposent cette cohérence d'un écran à l'autre.
@@ -183,8 +184,7 @@ export function leadIncident(incidents: Incident[]): Incident | null {
 /** Une preuve est en désaccord quand les Sources vivantes ne concluent pas
  *  la même chose. Cela ne crée pas un État de santé supplémentaire. */
 export function diverges(incident: Incident): boolean {
-  const live = incident.impacts.flatMap((impact) => impact.evidence).filter((evidence) => !evidence.invalidated_at);
-  return live.some((signal) => signal.active) && live.some((signal) => !signal.active);
+  return incident.impacts.some((impact) => resourceDivergence(impact.target_id, [incident]));
 }
 
 export function activeImpactRatio(incident: Incident): string {

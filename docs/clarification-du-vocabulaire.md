@@ -1,6 +1,6 @@
 # Clarification du vocabulaire CairnOps
 
-Session de conception en cours. Ces décisions sont consignées ; leur application dans le produit reste à réaliser après la synthèse de l’entretien.
+Décisions validées lors de l’entretien, appliquées à l’interface Web et au contrat de ressources. Les identifiants techniques des routes et champs historiques restent compatibles avec les clients existants.
 
 ## Décisions validées
 
@@ -36,8 +36,16 @@ La page Ressources propose les onglets « Toutes », « Services », « Infrastr
 
 Les catégories présentent les informations pertinentes pour leur objet : accès et temps de réponse pour les services, fonctionnement et capacité pour l’infrastructure, dernière réussite et retards pour les tâches planifiées, versions pour les logiciels suivis. L’onglet « Toutes » conserve une vue d’ensemble et indique la catégorie sur chaque ligne.
 
-## Points à finaliser
+## Règles de réalisation
 
-- Termes restants de navigation et de présentation.
-- Synthèse des décisions avant toute modification du comportement de l’application.
-- Harmonisation des références historiques à « Source de signal » dans le glossaire et les documents concernés.
+La catégorie proposée provient des faits structurés : type de contrôle réseau, type d’objet Proxmox, interfaces Zabbix ou informations de machine PatchMon. Un heartbeat seul ne prouve pas une tâche planifiée : ce cas reste à classer. Un nom ressemblant à un serveur ne constitue pas une preuve de catégorie. Plusieurs catégories opérationnelles incompatibles produisent « À classer » ; le suivi logiciel enrichit la catégorie opérationnelle lorsqu’elle est connue.
+
+La correction manuelle est persistante et prioritaire sur les découvertes suivantes. Les versions sont actualisées depuis le suivi logiciel existant. La dernière réussite d’une tâche vient des observations saines conservées de ses contrôles heartbeat ; elle reste absente si aucune preuve correspondante n’est disponible.
+
+La disponibilité est établie par les contrôles dédiés, actifs et récents. La gravité seule ne rend plus une ressource indisponible. Une preuve ancienne ou un contrôle suspendu ne peut pas établir un état disponible. Le calcul historique des pourcentages reste fondé sur les observations ; l’aide du « Temps observé » précise cette estimation selon les cadences attendues.
+
+Les messages connus utilisent la présentation structurée des connecteurs. Un message non reconnu conserve son texte original. Les incidents et notifications existants ne sont ni supprimés ni reclassifiés par cette évolution de présentation.
+
+## Validation
+
+Tests de catégories proposées et corrigées manuellement avec PostgreSQL isolé ; tests de séparation entre disponibilité, problèmes et mises à jour ; tests de preuves contradictoires et périmètre des ressources. Vérification visuelle locale sur le même scénario avant/après, clair et sombre, de 320 à 1 920 px, avec ouverture et fermeture de l’infobulle et filtrage par catégorie.

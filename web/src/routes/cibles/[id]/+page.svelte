@@ -3,6 +3,7 @@
    * Chaque Source garde son verdict, sa fraîcheur et son origine. Une
    * Divergence est signalée sans produire un cinquième État de santé. */
 
+  import { resourceCategories } from '$lib/resources';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import ActivityTimeline from '$lib/components/ActivityTimeline.svelte';
@@ -120,6 +121,7 @@
    * cours, ni laisser un champ périmé après un renommage. */
   const admin = $derived(session.user?.role === 'administrator');
   let draftName = $state('');
+  let draftCategory = $state<import('$lib/api').ResourceCategory>('unclassified');
   let draftDescription = $state('');
   let editedTarget = $state('');
   let saving = $state(false);
@@ -130,6 +132,7 @@
       editedTarget = target.id;
       draftName = target.name;
       draftDescription = target.description;
+    draftCategory = target.category ?? 'unclassified';
     }
   });
 
@@ -137,13 +140,14 @@
     if (!target) return;
     draftName = target.name;
     draftDescription = target.description;
+    draftCategory = target.category ?? 'unclassified';
   }
 
   async function saveTarget(event: SubmitEvent) {
     event.preventDefault();
     if (!target || draftName.trim().length === 0) return;
     saving = true;
-    await session.renameTarget(target.id, draftName.trim(), draftDescription.trim());
+    await session.renameTarget(target.id, draftName.trim(), draftDescription.trim(), draftCategory);
     saving = false;
   }
 
@@ -217,7 +221,7 @@
 
   const liveCount = $derived(proofs.filter((proof) => !proof.signal.invalidated_at).length);
 
-  const divergent = $derived(incidents.some(diverges));
+  const divergent = $derived(target ? session.hasDivergence(target) : false);
 
   const journal = $derived(
     target ? incidentTimelineForTarget(incidents, incidentHistory, target.id) : []
@@ -801,6 +805,13 @@
 
           {#if admin}
             <form class="settings" onsubmit={saveTarget}>
+              <div class="field"><label for="resource-category">{t('resources.category')}</label>
+                <select id="resource-category" bind:value={draftCategory} disabled={saving || structureBusy}>
+                  {#each resourceCategories as category}
+                    <option value={category}>{t(`resources.category.${category}`)}</option>
+                  {/each}
+                </select>
+              </div>
               <div class="field">
                 <label for="target-name">{t('target.name')}</label>
                 <input id="target-name" bind:value={draftName} maxlength="160" required />

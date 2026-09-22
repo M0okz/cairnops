@@ -160,6 +160,8 @@ type sourceCounters struct {
 	name                 string
 	kind                 string
 	origin               string
+	enabled              bool
+	intervalSeconds      int
 	measuresAvailability bool
 	latestOutcome        *domain.Outcome
 	latestObservedAt     *time.Time
@@ -170,7 +172,7 @@ type sourceCounters struct {
 func (store *Store) bySource(ctx context.Context, window domain.Window, targetID string) ([]sourceCounters, error) {
 	rows, err := store.pool.Query(ctx, bucketsCTE+`
 		SELECT source.target_id::text, source.id::text, source.name, source.kind, source.origin,
-		       source.measures_availability,
+		       source.measures_availability, source.enabled, source.interval_seconds,
 		       latest.outcome, latest.observed_at,
 		       coalesce(sum(bucket.healthy), 0)::integer,
 		       coalesce(sum(bucket.unhealthy), 0)::integer,
@@ -204,7 +206,7 @@ func (store *Store) bySource(ctx context.Context, window domain.Window, targetID
 		var source sourceCounters
 		if err := rows.Scan(
 			&source.targetID, &source.sourceID, &source.name, &source.kind, &source.origin,
-			&source.measuresAvailability,
+			&source.measuresAvailability, &source.enabled, &source.intervalSeconds,
 			&source.latestOutcome, &source.latestObservedAt,
 			&source.counters.Healthy, &source.counters.Unhealthy,
 			&source.counters.Unknown, &source.counters.Expected, &source.counters.LatencySumMilliseconds,

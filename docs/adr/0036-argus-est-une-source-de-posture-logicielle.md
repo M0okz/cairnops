@@ -79,9 +79,10 @@ Le premier cycle suivant l'import peut ouvrir immédiatement plusieurs Incidents
 et appliquer les politiques de notification habituelles. L'aperçu annonce ce
 nombre avant confirmation.
 
-Comme tout Incident actif, une mise à jour logicielle peut rendre la Cible
-Dégradée et faire apparaître un état global « Services dégradés ». Elle ne
-modifie cependant ni la Disponibilité ni le SLA.
+La [clarification du vocabulaire](../clarification-du-vocabulaire.md) remplace
+la projection initiale : une mise à jour disponible est présentée séparément
+et ne dégrade plus l’état de fonctionnement de la Ressource. Elle ne modifie
+ni la Disponibilité ni le SLA ; son cycle d’Incident reste inchangé.
 
 La suppression ou la disparition distante ne résout et n'efface rien
 implicitement. La Source et son histoire restent administrables dans CairnOps et

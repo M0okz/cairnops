@@ -1,3 +1,4 @@
+import { resourceState, resourceDivergence } from './resources';
 /* État opérationnel partagé.
  *
  * Le passage à huit écrans routés sort cet état de la page unique : le shell et
@@ -163,35 +164,11 @@ class Session {
   /** L'État de santé d'une Cible, déduit des Incidents qui la concernent.
    *  Une Divergence de Sources ne crée pas un cinquième État. */
   targetState(target: Target): 'down' | 'degraded' | 'maintenance' | 'unknown' | 'ok' {
-	const own = this.incidents.filter((incident) =>
-	  incident.impacts.some((impact) => impact.target_id === target.id)
-	);
-    const posture = own.filter((incident) =>
-      incident.nature_key === 'security-patches-required' || incident.nature_key === 'reboot-required'
-    );
-    const operational = own.filter((incident) => !posture.includes(incident));
-    const impacts = (incident: Incident) =>
-      incident.impacts.filter((impact) => impact.target_id === target.id && impact.status === 'active');
-    if (own.some((incident) => impacts(incident).some((impact) => impact.maintenance_active))) return 'maintenance';
-    if (operational.some((incident) => impacts(incident).some((impact) => impact.effective_severity === 'critical' || impact.effective_severity === 'major'))) return 'down';
-    if (posture.some((incident) => impacts(incident).some((impact) => impact.effective_severity === 'critical' || impact.effective_severity === 'major'))) return 'degraded';
-    if (own.some((incident) => impacts(incident).some((impact) => impact.effective_severity === 'warning'))) return 'degraded';
-    if (own.some((incident) => impacts(incident).some((impact) => impact.effective_severity === 'information'))) return 'unknown';
-    const externalMeasures = this.measures[target.id]?.sources;
-    if (target.sources.length === 0 && externalMeasures && !externalMeasures.some((source) => source.measures_availability)) return 'unknown';
-    if (target.sources.length === 0 && target.external_source_count === 0) return 'unknown';
-    return 'ok';
+    return resourceState(target, this.incidents, this.measures[target.id]);
   }
 
-  /** Une Cible dont les Sources ne concluent pas la même chose. */
   hasDivergence(target: Target): boolean {
-    return this.incidents.some((incident) => {
-      const live = incident.impacts
-		.filter((impact) => impact.target_id === target.id)
-		.flatMap((impact) => impact.evidence)
-		.filter((evidence) => !evidence.invalidated_at);
-      return live.some((signal) => signal.active) && live.some((signal) => !signal.active);
-    });
+    return resourceDivergence(target.id, this.incidents);
   }
 
   incidentsFor(targetId: string) {
@@ -919,17 +896,17 @@ class Session {
 
   /* Corriger une Cible ne change ni son identité ni son histoire : la
    * projection est rechargée, jamais reconstruite. */
-  async renameTarget(targetId: string, name: string, description: string) {
+  async renameTarget(targetId: string, name: string, description: string, category?: Target['category']) {
     try {
       await api<Target>(`/api/v1/targets/${targetId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ name, description })
+        body: JSON.stringify({ name, description, category })
       });
       await this.loadTargets();
       this.showNotice(t('session.targetRenamed'));
       return true;
     } catch (cause) {
-      this.showNotice(`Impossible de renommer la Cible : ${messageFrom(cause)}`);
+      this.showNotice(`Impossible de modifier la ressource : ${messageFrom(cause)}`);
       return false;
     }
   }

@@ -38,6 +38,8 @@ type TargetMetrics struct {
 // origine distingue un Contrôle natif d'une Source apportée par une Intégration
 // — la mesure les traite pareillement, l'écran non.
 type SourceMetrics struct {
+	Enabled              bool            `json:"enabled"`
+	IntervalSeconds      int             `json:"interval_seconds"`
 	SourceID             string          `json:"source_id"`
 	Name                 string          `json:"name"`
 	Kind                 string          `json:"kind"`
@@ -104,7 +106,7 @@ func (store *Store) List(ctx context.Context) ([]TargetMetrics, error) {
 			continue
 		}
 		metrics[index].Sources = append(metrics[index].Sources, SourceMetrics{
-			SourceID: source.sourceID, Name: source.name,
+			SourceID: source.sourceID, Name: source.name, Enabled: source.enabled, IntervalSeconds: source.intervalSeconds,
 			Kind: source.kind, Origin: source.origin, MeasuresAvailability: source.measuresAvailability,
 			LatestOutcome: source.latestOutcome, LatestObservedAt: source.latestObservedAt,
 			Measures: []domain.Measure{source.counters.Measure(domain.WindowDay)},
@@ -143,7 +145,7 @@ func (store *Store) Target(ctx context.Context, targetID string) (TargetDetail, 
 				index = len(detail.Sources)
 				indexes[source.sourceID] = index
 				detail.Sources = append(detail.Sources, SourceMetrics{
-					SourceID: source.sourceID, Name: source.name,
+					SourceID: source.sourceID, Name: source.name, Enabled: source.enabled, IntervalSeconds: source.intervalSeconds,
 					Kind: source.kind, Origin: source.origin,
 					MeasuresAvailability: source.measuresAvailability,
 					LatestOutcome:        source.latestOutcome, LatestObservedAt: source.latestObservedAt,
