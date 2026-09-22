@@ -45,7 +45,7 @@ export const fr = {
   "updates.target": "Cible Argus",
   "updates.search": "Rechercher un service",
   "updates.all": "Tous",
-  "updates.pending": "À examiner",
+  "updates.pending": "À traiter",
   "updates.upToDate": "Versions identiques",
   "updates.empty": "Aucun service Argus suivi",
   "updates.emptyHint": "Connecte Argus pour consulter les versions de tes services.",

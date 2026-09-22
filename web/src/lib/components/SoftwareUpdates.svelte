@@ -12,7 +12,7 @@
   let error = $state("");
   let selected = $state("");
   let search = $state("");
-  let filter = $state("all");
+  let filter = $state("pending");
   let reload = $state(0);
   const visible = $derived(
     services.filter(
@@ -100,9 +100,9 @@
         value={filter}
         label={t("updates.title")}
         items={[
-          { value: "all", label: t("updates.all"), count: services.length },
           { value: "pending", label: t("updates.pending") },
           { value: "current", label: t("updates.upToDate") },
+          { value: "all", label: t("updates.all"), count: services.length },
         ]}
         onValueChange={(value) => (filter = value)}
       />

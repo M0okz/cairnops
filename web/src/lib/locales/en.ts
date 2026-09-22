@@ -46,7 +46,7 @@ export const en: Record<MessageKey, string> = {
   "updates.target": "Argus target",
   "updates.search": "Search services",
   "updates.all": "All",
-  "updates.pending": "To review",
+  "updates.pending": "Needs attention",
   "updates.upToDate": "Matching versions",
   "updates.empty": "No tracked Argus service",
   "updates.emptyHint": "Connect Argus to see your services’ versions.",
