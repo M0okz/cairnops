@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	identitymodel "github.com/M0okz/cairnops/internal/identity"
 	"github.com/M0okz/cairnops/internal/incidents"
 )
 
 type Incidents interface {
+	ListResolvedPage(context.Context, incidents.ResolvedPageOptions) (incidents.ResolvedPage, error)
 	List(context.Context, string, int) ([]incidents.Incident, error)
 	ListForTarget(context.Context, string, string, int) ([]incidents.Incident, error)
 	Get(context.Context, string) (incidents.Incident, error)
@@ -39,6 +41,36 @@ func (handler incidentHandler) list(w http.ResponseWriter, r *http.Request) {
 	targetID := strings.TrimSpace(r.URL.Query().Get("target_id"))
 	if targetID != "" && !validUUID(targetID) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		return
+	}
+	query := r.URL.Query()
+	paged := query.Has("page") || query.Has("cursor") || query.Has("resolved_from") || query.Has("resolved_before") ||
+		query.Has("nature_key") || query.Has("severity") || query.Has("q")
+	if paged {
+		if query.Get("page") != "" && query.Get("page") != "true" || query.Get("status") != "resolved" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "pagination requires status=resolved and page=true when specified"})
+			return
+		}
+		options := incidents.ResolvedPageOptions{
+			Limit: limit, TargetID: targetID, NatureKey: strings.TrimSpace(query.Get("nature_key")),
+			Severity: incidents.Severity(query.Get("severity")), Query: strings.TrimSpace(query.Get("q")), Cursor: query.Get("cursor"),
+		}
+		for name, destination := range map[string]**time.Time{"resolved_from": &options.From, "resolved_before": &options.Before} {
+			if query.Has(name) {
+				value, err := time.Parse(time.RFC3339Nano, query.Get(name))
+				if err != nil {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"error": name + " must be an RFC3339 timestamp"})
+					return
+				}
+				*destination = &value
+			}
+		}
+		result, err := handler.incidents.ListResolvedPage(r.Context(), options)
+		if err != nil {
+			handler.writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
 		return
 	}
 	var items []incidents.Incident

@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +19,12 @@ type fakeIncidents struct {
 	invalidateReason string
 	listedTarget     string
 	historyDays      int
+	pageOptions      *incidents.ResolvedPageOptions
+}
+
+func (fake *fakeIncidents) ListResolvedPage(_ context.Context, options incidents.ResolvedPageOptions) (incidents.ResolvedPage, error) {
+	fake.pageOptions = &options
+	return incidents.ResolvedPage{Incidents: []incidents.Incident{{ID: "10000000-0000-0000-0000-000000000001", Status: "resolved"}}, NextCursor: "next-page"}, nil
 }
 
 func (*fakeIncidents) List(context.Context, string, int) ([]incidents.Incident, error) {
@@ -117,6 +125,70 @@ func TestIncidentListCanBeScopedToATargetHistory(t *testing.T) {
 
 	if response.Code != http.StatusOK || fake.listedTarget != targetID {
 		t.Fatalf("expected target-scoped incident history, status=%d target=%q body=%s", response.Code, fake.listedTarget, response.Body.String())
+	}
+}
+
+func TestResolvedIncidentPaginationPassesAllFiltersAndReturnsCursor(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIncidents{}
+	server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "observer"}, Incidents: fake})
+	query := url.Values{
+		"status": {"resolved"}, "page": {"true"}, "limit": {"50"},
+		"target_id": {"30000000-0000-0000-0000-000000000003"}, "nature_key": {"availability"},
+		"severity": {"major"}, "q": {" storage 100% "}, "cursor": {"previous-page"},
+		"resolved_from": {"2026-09-01T00:00:00+02:00"}, "resolved_before": {"2026-09-23T00:00:00+02:00"},
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/incidents?"+query.Encode(), nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || fake.pageOptions == nil {
+		t.Fatalf("expected paginated history, status=%d body=%s", response.Code, response.Body.String())
+	}
+	options := fake.pageOptions
+	if options.Limit != 50 || options.Query != "storage 100%" || options.TargetID != query.Get("target_id") ||
+		options.NatureKey != "availability" || options.Severity != incidents.SeverityMajor || options.Cursor != "previous-page" ||
+		options.From == nil || options.From.UTC().Format(time.RFC3339) != "2026-08-31T22:00:00Z" || options.Before == nil {
+		t.Fatalf("filters or zone offsets lost: %#v", options)
+	}
+	var page incidents.ResolvedPage
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil || page.NextCursor != "next-page" || len(page.Incidents) != 1 {
+		t.Fatalf("unexpected page contract: %#v %v", page, err)
+	}
+}
+
+func TestResolvedIncidentPaginationRejectsInvalidModeAndDates(t *testing.T) {
+	t.Parallel()
+	for _, query := range []string{
+		"page=true", "page=true&status=active", "page=false&status=resolved",
+		"page=true&status=resolved&resolved_from=2026-09-01", "page=true&status=resolved&resolved_before=",
+		"status=all&q=storage", "status=resolved&page=true&target_id=invalid",
+	} {
+		t.Run(query, func(t *testing.T) {
+			fake := &fakeIncidents{}
+			server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "observer"}, Incidents: fake})
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/incidents?"+query, nil)
+			request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+			response := httptest.NewRecorder()
+			server.Handler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest || fake.pageOptions != nil {
+				t.Fatalf("invalid filters reached incident listing: status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestLegacyResolvedIncidentListPreservesMobileContract(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIncidents{}
+	server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: "observer"}, Incidents: fake})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/incidents?status=resolved&limit=100", nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(response.Body.Bytes(), &fields); err != nil || response.Code != http.StatusOK || fake.pageOptions != nil || len(fields) != 1 || fields["incidents"] == nil {
+		t.Fatalf("legacy mobile contract changed: status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

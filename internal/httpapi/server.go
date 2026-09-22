@@ -165,6 +165,8 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("POST /api/v1/connectors/proxmox/import", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.importProxmox)))))
 		mux.Handle("POST /api/v1/connectors/{connectorID}/proxmox/remove", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.removeProxmox)))))
 		mux.Handle("POST /api/v1/connectors/{connectorID}/proxmox/certificate", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.approveProxmoxCertificate)))))
+		mux.Handle("POST /api/v1/connectors/{connectorID}/connection/test", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.testConnection)))))
+		mux.Handle("PUT /api/v1/connectors/{connectorID}/connection", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.saveConnection)))))
 		mux.Handle("POST /api/v1/connectors/{connectorID}/preview", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.previewExisting)))))
 		mux.Handle("POST /api/v1/connectors/{connectorID}/suspension", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.suspend)))))
 		mux.Handle("DELETE /api/v1/connectors/{connectorID}/suspension", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.resume)))))
@@ -192,6 +194,8 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("GET /api/v1/maintenances", identityHTTP.requireSession(http.HandlerFunc(handler.list)))
 		mux.Handle("POST /api/v1/maintenances", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireAnyRole([]string{"administrator", "operator"}, http.HandlerFunc(handler.create)))))
 		mux.Handle("POST /api/v1/maintenances/{maintenanceID}/cancellation", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireAnyRole([]string{"administrator", "operator"}, http.HandlerFunc(handler.cancel)))))
+		mux.Handle("POST /api/v1/maintenances/{maintenanceID}/extension", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireAnyRole([]string{"administrator", "operator"}, http.HandlerFunc(handler.extend)))))
+		mux.Handle("POST /api/v1/maintenances/{maintenanceID}/series-cancellation", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireAnyRole([]string{"administrator", "operator"}, http.HandlerFunc(handler.cancelSeries)))))
 	}
 	if options.Notifications != nil && options.Identity != nil {
 		handler := notificationHandler{notifications: options.Notifications, logger: logger}

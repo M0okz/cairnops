@@ -1,4 +1,4 @@
-import { resourceState, resourceDivergence } from './resources';
+import { resourceState, resourceDivergence, resourceUnderMaintenance } from './resources';
 /* État opérationnel partagé.
  *
  * Le passage à huit écrans routés sort cet état de la page unique : le shell et
@@ -78,6 +78,7 @@ class Session {
    * écrans ouverts racontent le même passé. */
   incidentDays = $state<IncidentDay[]>([]);
   maintenances = $state<Maintenance[]>([]);
+  maintenancesComplete = $state(false);
   channels = $state<NotificationChannel[]>([]);
 
   /* Ce que ce compte a reçu. La boîte n'appartient qu'à lui : deux personnes
@@ -107,6 +108,8 @@ class Session {
   observations = $state<Record<string, Observation[]>>({});
 
   realtime = $state<RealtimeState>('offline');
+  // Freshness must keep advancing even when every network request fails.
+  evaluatedAt = $state(Date.now());
   lastEventAt = $state<Date | null>(null);
   /* Les Résolus restent chargés à la demande par leur écran. Ce compteur les
    * invalide seulement lorsqu'un Incident change, sans imposer leur projection
@@ -130,6 +133,7 @@ class Session {
   #dirty = new Set<string>();
   #versionKnown = false;
   #visibilityProbe = () => {
+    this.evaluatedAt = Date.now();
     if (document.visibilityState === 'visible' && this.gate === 'app') void this.checkVersion();
   };
 
@@ -143,7 +147,9 @@ class Session {
 
   get actionable() {
     return this.incidents.filter((incident) =>
-      incident.impacts.some((impact) => impact.status === 'active' && !impact.maintenance_active)
+      incident.impacts.some((impact) => impact.status === 'active' && !resourceUnderMaintenance(
+        impact.target_id, this.incidents, this.evaluatedAt, this.maintenances, this.maintenancesComplete
+      ))
     );
   }
 
@@ -164,11 +170,11 @@ class Session {
   /** L'État de santé d'une Cible, déduit des Incidents qui la concernent.
    *  Une Divergence de Sources ne crée pas un cinquième État. */
   targetState(target: Target): 'down' | 'degraded' | 'maintenance' | 'unknown' | 'ok' {
-    return resourceState(target, this.incidents, this.measures[target.id]);
+    return resourceState(target, this.incidents, this.measures[target.id], this.evaluatedAt, this.maintenances, this.maintenancesComplete);
   }
 
   hasDivergence(target: Target): boolean {
-    return resourceDivergence(target.id, this.incidents);
+    return resourceDivergence(target.id, this.incidents, this.evaluatedAt);
   }
 
   incidentsFor(targetId: string) {
@@ -406,6 +412,7 @@ class Session {
       this.incidentHistory = [];
       this.incidentDays = [];
       this.maintenances = [];
+      this.maintenancesComplete = false;
       this.channels = [];
       this.inbox = [];
       this.unread = 0;
@@ -416,6 +423,8 @@ class Session {
   }
 
   async enter() {
+    this.evaluatedAt = Date.now();
+    this.maintenancesComplete = false;
     this.gate = 'app';
     await this.refreshAll();
     if (this.gate !== 'app' || !this.user) return;
@@ -423,6 +432,7 @@ class Session {
     void this.checkVersion();
     if (this.#refreshTimer) clearInterval(this.#refreshTimer);
     this.#refreshTimer = setInterval(() => {
+      this.evaluatedAt = Date.now();
       void this.loadSystemHealth();
       void this.loadIncidents();
       void this.loadIncidentDays();
@@ -544,9 +554,11 @@ class Session {
 
   async loadMaintenances() {
     try {
-      const response = await api<{ maintenances: Maintenance[] }>('/api/v1/maintenances?limit=100');
+      const response = await api<{ maintenances: Maintenance[] }>('/api/v1/maintenances?limit=200');
       this.maintenances = response.maintenances;
+      this.maintenancesComplete = response.maintenances.length < 200;
     } catch (cause) {
+      this.maintenancesComplete = false;
       if (this.#expired(cause)) return;
       this.showNotice(t('session.refreshMaintenances', { error: messageFrom(cause) }));
     }

@@ -32,7 +32,7 @@ func (store *PostgresStore) ProxmoxSettings(ctx context.Context, endpoint string
 
 func (store *PostgresStore) RemovalCredential(ctx context.Context, id string) (RuntimeCredential, error) {
 	var result RuntimeCredential
-	err := store.pool.QueryRow(ctx, `SELECT kind, endpoint, credential_sealed, credential_management, managed_credential_id FROM cairnops_connectors WHERE id = $1::uuid`, id).Scan(&result.Kind, &result.Endpoint, &result.CredentialSealed, &result.CredentialManagement, &result.ManagedCredentialID)
+	err := store.pool.QueryRow(ctx, `SELECT kind, endpoint, credential_sealed, credential_management, managed_credential_id, managed_cleanup_endpoint, managed_cleanup_credential_sealed FROM cairnops_connectors WHERE id = $1::uuid`, id).Scan(&result.Kind, &result.Endpoint, &result.CredentialSealed, &result.CredentialManagement, &result.ManagedCredentialID, &result.ManagedCleanupEndpoint, &result.ManagedCleanupCredentialSealed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return result, ErrNotFound
 	}
@@ -40,7 +40,7 @@ func (store *PostgresStore) RemovalCredential(ctx context.Context, id string) (R
 }
 
 func (store *PostgresStore) ReplaceProxmoxCredential(ctx context.Context, id, previous, replacement string) error {
-	result, err := store.pool.Exec(ctx, `UPDATE cairnops_connectors SET credential_sealed = $3, next_sync_at = now(), lease_owner = NULL, lease_until = NULL, updated_at = now()
+	result, err := store.pool.Exec(ctx, `UPDATE cairnops_connectors SET credential_sealed = $3, managed_cleanup_credential_sealed = CASE WHEN managed_cleanup_endpoint=endpoint THEN $3 ELSE managed_cleanup_credential_sealed END, next_sync_at = now(), lease_owner = NULL, lease_until = NULL, updated_at = now()
 		WHERE id = $1::uuid AND kind = 'proxmox' AND credential_sealed = $2`, id, previous, replacement)
 	if err != nil {
 		return err

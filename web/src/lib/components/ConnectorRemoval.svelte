@@ -90,6 +90,7 @@
 
       {#if connector.kind === 'proxmox' && connector.credential_management === 'managed'}
         <p>{t('proxmox.removalHint')}</p>
+        <p>{t('connection.cleanupAt', { endpoint: connector.managed_cleanup_endpoint || connector.endpoint })}</p>
         <div class="field"><label for="remove-pve-token">{t('proxmox.tokenID')}</label><input id="remove-pve-token" bind:value={tokenID} autocomplete="off" /></div>
         <div class="field"><label for="remove-pve-secret">{t('proxmox.tokenSecret')}</label><input id="remove-pve-secret" type="password" bind:value={secret} autocomplete="off" /></div>
       {/if}

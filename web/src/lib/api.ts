@@ -236,7 +236,18 @@ export type SystemHealth = {
   hours: InstanceHour[];
 };
 
+export type ConnectorConnectionTest = {
+  name: string;
+  endpoint: string;
+  version: string;
+  compatibility: 'supported' | 'warning';
+  encrypted_transport: boolean;
+  receipt: string;
+  expires_at: string;
+};
+
 export type Connector = {
+  managed_cleanup_endpoint?: string;
   credential_management?: 'provided' | 'managed';
   id: string;
   kind: 'zabbix' | 'uptime_kuma' | 'patchmon' | 'argus' | 'proxmox' | 'generic_webhook';
@@ -784,6 +795,14 @@ export type Incident = {
   updated_at: string;
 };
 
+export type IncidentFilterOption = { value: string; label: string };
+
+export type ResolvedIncidentPage = {
+  incidents: Incident[];
+  next_cursor?: string;
+  filters?: { targets: IncidentFilterOption[]; natures: IncidentFilterOption[] };
+};
+
 export type IncidentImpact = {
   id: string;
   target_id: string;
@@ -800,6 +819,8 @@ export type IncidentImpact = {
   updated_at: string;
 };
 
+export type MaintenanceRecurrence = { frequency: 'weekly'; timezone: string; until: string };
+
 export type Maintenance = {
   id: string;
   name: string;
@@ -808,6 +829,9 @@ export type Maintenance = {
   starts_at: string;
   ends_at: string;
   cancelled_at?: string;
+  series_id?: string;
+  recurrence?: MaintenanceRecurrence;
+  extension_count?: number;
   created_by?: string;
   targets: Array<{ id: string; name: string }>;
   created_at: string;
@@ -871,7 +895,8 @@ export type RealtimeMessage = {
 export class APIError extends Error {
   constructor(
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly code?: string
   ) {
     super(message);
   }
@@ -888,13 +913,15 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   if (!response.ok) {
     let message = t('common.requestFailed', { status: response.status });
+    let code: string | undefined;
     try {
-      const payload: { error?: string } = await response.json();
+      const payload: { error?: string; code?: string } = await response.json();
       if (payload.error) message = payload.error;
+      code = payload.code;
     } catch {
       // The status remains the useful fallback when a proxy returns a non-JSON error.
     }
-    throw new APIError(message, response.status);
+    throw new APIError(message, response.status, code);
   }
 
   if (response.status === 204) return undefined as T;

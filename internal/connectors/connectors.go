@@ -30,21 +30,22 @@ var (
 )
 
 type Connector struct {
-	CredentialManagement string    `json:"credential_management,omitempty"`
-	ID                   string    `json:"id"`
-	Kind                 string    `json:"kind"`
-	Name                 string    `json:"name"`
-	Endpoint             string    `json:"endpoint"`
-	Status               string    `json:"status"`
-	RemoteVersion        string    `json:"remote_version"`
-	Compatibility        string    `json:"compatibility"`
-	EncryptedTransport   bool      `json:"encrypted_transport"`
-	BindingCount         int       `json:"binding_count"`
-	QuarantineCount      int       `json:"quarantine_count"`
-	LastCheckedAt        time.Time `json:"last_checked_at"`
-	LastError            string    `json:"last_error,omitempty"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ManagedCleanupEndpoint string    `json:"managed_cleanup_endpoint,omitempty"`
+	CredentialManagement   string    `json:"credential_management,omitempty"`
+	ID                     string    `json:"id"`
+	Kind                   string    `json:"kind"`
+	Name                   string    `json:"name"`
+	Endpoint               string    `json:"endpoint"`
+	Status                 string    `json:"status"`
+	RemoteVersion          string    `json:"remote_version"`
+	Compatibility          string    `json:"compatibility"`
+	EncryptedTransport     bool      `json:"encrypted_transport"`
+	BindingCount           int       `json:"binding_count"`
+	QuarantineCount        int       `json:"quarantine_count"`
+	LastCheckedAt          time.Time `json:"last_checked_at"`
+	LastError              string    `json:"last_error,omitempty"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 // Removal rend compte de ce qu'a emporté la suppression. Le décompte est celui

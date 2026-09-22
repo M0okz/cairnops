@@ -11,6 +11,7 @@
   import ConnectorRemoval from '$lib/components/ConnectorRemoval.svelte';
   import ConnectorSuspension from '$lib/components/ConnectorSuspension.svelte';
   import ConnectorConfigurator from '$lib/components/ConnectorConfigurator.svelte';
+  import ConnectorConnection from '$lib/components/ConnectorConnection.svelte';
   import MattermostConnector from '$lib/components/MattermostConnector.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import { goto } from '$app/navigation';
@@ -31,6 +32,7 @@
   let removalFor = $state<Connector | null>(null);
   let suspensionFor = $state<Connector | null>(null);
   let configurationFor = $state<Connector | null>(null);
+  let connectionFor = $state<Connector | null>(null);
   let mattermostOpen = $state(false);
   let now = $state(new Date());
 
@@ -224,6 +226,7 @@
               <div class="connector-actions">
               {#if connector.kind !== 'generic_webhook'}
                 <button class="btn sm" type="button" onclick={() => (configurationFor = connector)}>Configurer</button>
+                <button class="btn sm" type="button" onclick={() => (connectionFor = connector)}>{t('connection.edit')}</button>
               {/if}
               <button
                 class="btn sm"
@@ -422,6 +425,10 @@
 
 {#if configurationFor}
   <ConnectorConfigurator connector={configurationFor} onclose={() => (configurationFor = null)} onsuccess={async () => { await Promise.all([session.loadConnectors(), session.loadTargets()]); }} />
+{/if}
+
+{#if connectionFor}
+  <ConnectorConnection connector={connectionFor} onclose={() => (connectionFor = null)} onsuccess={() => session.loadConnectors()} />
 {/if}
 
 <style>

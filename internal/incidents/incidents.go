@@ -265,6 +265,7 @@ type OpenedDay struct {
 }
 
 type Store interface {
+	ListResolvedPage(context.Context, ResolvedPageOptions) (ResolvedPage, error)
 	List(context.Context, string, int) ([]Incident, error)
 	ListForTarget(context.Context, string, string, int) ([]Incident, error)
 	Get(context.Context, string) (Incident, error)

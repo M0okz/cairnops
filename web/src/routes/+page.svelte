@@ -41,7 +41,7 @@
     switch (health.state) {
       case 'down': return { tone: 'crit', title: [plural('dashboard.down', counts.down), counts.degraded ? plural('dashboard.degraded', counts.degraded) : ''].filter(Boolean).join(' · '), href: '/incidents' };
       case 'degraded': return { tone: 'warn', title: plural('dashboard.degraded', counts.degraded), href: '/incidents' };
-      case 'unknown': return { tone: 'idle', title: plural('dashboard.unknown', counts.unknown), href: '/cibles' };
+      case 'unknown': return { tone: 'warn', title: plural('dashboard.unknown', counts.unknown), href: '/cibles?scope=unknown' };
       case 'maintenance': return { tone: 'info', title: plural('dashboard.maintenance', counts.maintenance), href: '/maintenance' };
       case 'empty': return { tone: 'idle', title: t('dashboard.empty'), href: '/cibles' };
       default: return { tone: 'ok', title: t('dashboard.allClear'), href: '/cibles' };
@@ -74,6 +74,10 @@
       <span class="verdict-detail">{health.state === 'empty' ? t('dashboard.emptyHint') : freshest ? t('dashboard.freshness', { duration: since(freshest, now) }) : t('overview.noEvidence')}</span>
       <span class="verdict-action">{t('dashboard.inspect')} <span aria-hidden="true">→</span></span>
     </a>
+
+    {#if health.counts.unknown > 0 && health.state !== 'unknown'}
+      <a class="monitoring-gap" href="/cibles?scope=unknown"><Icon name="health" size={18} />{plural('dashboard.unknown', health.counts.unknown)} <span aria-hidden="true">→</span></a>
+    {/if}
 
     <div class="overview-metrics">
       <section class="metric card">
@@ -162,6 +166,7 @@
   .overview-verdict.crit { background: color-mix(in srgb, var(--crit) 4%, var(--surface)); border-color: color-mix(in srgb, var(--crit) 25%, var(--line)); }
   .overview-verdict.warn { background: color-mix(in srgb, var(--warn) 4%, var(--surface)); }
   .overview-verdict strong { color: var(--ink); font-weight: 600; }
+  .monitoring-gap { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s3); color: var(--warn); font-size: var(--text-sm); }
   .verdict-detail { color: var(--faint); font-size: var(--text-xs); }
   .verdict-action { display: flex; gap: var(--s4); margin-left: auto; color: var(--muted); flex: none; font-size: var(--text-xs); }
   .overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s4); }

@@ -48,3 +48,17 @@ func TestMaintenanceRejectsAnEmptyTargetSet(t *testing.T) {
 		t.Fatalf("expected invalid input, got %v", err)
 	}
 }
+
+func (*fakeStore) CancelSeries(context.Context, string, string) (Maintenance, error) {
+	return Maintenance{}, nil
+}
+func (*fakeStore) Extend(context.Context, string, string, time.Time) (Maintenance, error) {
+	return Maintenance{}, nil
+}
+
+func TestExtensionRequiresObservedEnd(t *testing.T) {
+	service := NewService(&fakeStore{})
+	if _, err := service.Extend(context.Background(), "id", "actor", time.Time{}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected missing end rejection: %v", err)
+	}
+}

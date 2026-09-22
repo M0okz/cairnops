@@ -288,7 +288,11 @@ func (service *Service) RemoveProxmox(ctx context.Context, connectorID string, i
 		return Removal{}, err
 	}
 	if credential.CredentialManagement == "managed" {
-		encoded, err := service.secrets.Open(credential.CredentialSealed, "connector:proxmox:"+credential.Endpoint)
+		cleanupEndpoint, cleanupCredential := credential.Endpoint, credential.CredentialSealed
+		if credential.ManagedCleanupEndpoint != "" {
+			cleanupEndpoint, cleanupCredential = credential.ManagedCleanupEndpoint, credential.ManagedCleanupCredentialSealed
+		}
+		encoded, err := service.secrets.Open(cleanupCredential, "connector:proxmox:"+cleanupEndpoint)
 		if err != nil {
 			return Removal{}, err
 		}
@@ -297,7 +301,7 @@ func (service *Service) RemoveProxmox(ctx context.Context, connectorID string, i
 			return Removal{}, err
 		}
 		installer.Fingerprint = runtime.Fingerprint
-		if err := service.proxmox.RemoveManaged(ctx, credential.Endpoint, installer, credential.ManagedCredentialID); err != nil {
+		if err := service.proxmox.RemoveManaged(ctx, cleanupEndpoint, installer, credential.ManagedCredentialID); err != nil {
 			return Removal{}, fmt.Errorf("%w: connector suspended; remote cleanup is pending: %v", ErrConnection, err)
 		}
 	}

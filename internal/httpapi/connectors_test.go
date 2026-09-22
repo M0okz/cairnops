@@ -15,6 +15,10 @@ import (
 )
 
 type fakeConnectors struct {
+	connectionID         string
+	connectionInput      connectors.ConnectionInput
+	connectionReceipt    string
+	connectionErr        error
 	previewInput         connectors.ZabbixPreviewInput
 	importActor          string
 	importInput          connectors.ZabbixImportInput
@@ -333,4 +337,81 @@ func (fake *fakeConnectors) RemoveProxmox(_ context.Context, id string, _ proxmo
 
 func (fake *fakeConnectors) ReapproveProxmoxCertificate(context.Context, string, string) error {
 	return nil
+}
+
+func (fake *fakeConnectors) TestConnection(_ context.Context, id string, input connectors.ConnectionInput) (connectors.ConnectionTest, error) {
+	fake.connectionID, fake.connectionInput = id, input
+	return connectors.ConnectionTest{Name: input.Name, Endpoint: input.Address, Receipt: "sealed-receipt"}, fake.connectionErr
+}
+func (fake *fakeConnectors) SaveConnection(_ context.Context, id string, input connectors.ConnectionSaveInput) (connectors.Connector, error) {
+	fake.connectionID, fake.connectionReceipt = id, input.Receipt
+	return connectors.Connector{ID: id}, fake.connectionErr
+}
+
+func TestConnectorConnectionAuthorizationAndContract(t *testing.T) {
+	const id = "12345678-1234-4234-8234-123456789012"
+	for _, role := range []string{"administrator", "operator", "observer"} {
+		for _, action := range []struct{ method, path, body string }{
+			{http.MethodPost, "/api/v1/connectors/" + id + "/connection/test", `{"name":"Production","address":"https://new.example.net","api_token":"private-token"}`},
+			{http.MethodPut, "/api/v1/connectors/" + id + "/connection", `{"receipt":"sealed-receipt"}`},
+		} {
+			t.Run(role+action.path, func(t *testing.T) {
+				fake := &fakeConnectors{}
+				server := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: role}, Connectors: fake})
+				request := httptest.NewRequest(action.method, action.path, bytes.NewBufferString(action.body))
+				request.Header.Set("Content-Type", "application/json")
+				request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+				response := httptest.NewRecorder()
+				server.Handler.ServeHTTP(response, request)
+				want := http.StatusOK
+				if role != "administrator" {
+					want = http.StatusForbidden
+				}
+				if response.Code != want {
+					t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+				}
+				if role == "administrator" {
+					if fake.connectionID != id {
+						t.Fatal("wrong connector")
+					}
+					if action.method == http.MethodPost && fake.connectionInput.APIToken != "private-token" {
+						t.Fatal("missing replacement credential")
+					}
+					if action.method == http.MethodPut && fake.connectionReceipt != "sealed-receipt" {
+						t.Fatal("missing verification receipt")
+					}
+				} else if fake.connectionID != "" {
+					t.Fatal("unauthorized service call")
+				}
+				if bytes.Contains(response.Body.Bytes(), []byte("private-token")) {
+					t.Fatal("response leaked token")
+				}
+			})
+		}
+	}
+}
+
+func TestConnectorConnectionConflictsAndFailureResponses(t *testing.T) {
+	for _, tc := range []struct {
+		err    error
+		status int
+	}{
+		{connectors.ErrConnectionBusy, http.StatusConflict},
+		{connectors.ErrEndpointConflict, http.StatusConflict},
+		{connectors.ErrConnectionChanged, http.StatusConflict},
+		{connectors.ErrPreviewExpired, http.StatusGone},
+		{connectors.ErrConnection, http.StatusUnprocessableEntity},
+	} {
+		t.Run(tc.err.Error(), func(t *testing.T) {
+			fake := &fakeConnectors{connectionErr: tc.err}
+			handler := connectorHandler{connectors: fake}
+			request := httptest.NewRequest(http.MethodPut, "/", bytes.NewBufferString(`{"receipt":"sealed-receipt"}`))
+			request.SetPathValue("connectorID", "12345678-1234-4234-8234-123456789012")
+			response := httptest.NewRecorder()
+			handler.saveConnection(response, request)
+			if response.Code != tc.status {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
 }

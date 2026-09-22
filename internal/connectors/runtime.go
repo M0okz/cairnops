@@ -34,11 +34,13 @@ type RuntimeConnector struct {
 }
 
 type RuntimeCredential struct {
-	Kind                 string
-	Endpoint             string
-	CredentialSealed     string
-	CredentialManagement string
-	ManagedCredentialID  string
+	ManagedCleanupEndpoint         string
+	ManagedCleanupCredentialSealed string
+	Kind                           string
+	Endpoint                       string
+	CredentialSealed               string
+	CredentialManagement           string
+	ManagedCredentialID            string
 }
 
 // IntegrationObservation est ce qu'un cycle de synchronisation a constaté sur

@@ -11,14 +11,12 @@ export function incidentMembershipChanged(
   return next.some((incident) => !currentIDs.has(incident.id));
 }
 
-/* La liste résolue est volontairement paresseuse : elle ne coûte une requête
- * que lorsque son filtre est visible. Sa révision suit toutefois les
- * changements d'Incident reçus en temps réel afin qu'une Résolution ne reste
- * pas prisonnière d'une ancienne copie. */
-export function shouldLoadResolvedIncidents(
-  scope: IncidentScope,
+/* Le temps réel propose un nouveau snapshot, sans effacer les pages parcourues.
+ * La révision reste celle du début de la première requête : un changement reçu
+ * pendant cette requête ne doit pas être avalé par sa réponse. */
+export function resolvedHistoryChanged(
   loadedRevision: number,
   incidentRevision: number
 ): boolean {
-  return scope === 'resolved' && loadedRevision !== incidentRevision;
+  return loadedRevision >= 0 && loadedRevision !== incidentRevision;
 }

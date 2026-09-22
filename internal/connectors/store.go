@@ -117,7 +117,7 @@ func (store *PostgresStore) List(ctx context.Context) ([]Connector, error) {
 		       + (SELECT count(*)::integer FROM cairnops_connector_inventory inventory
 		          WHERE inventory.connector_id = connector.id AND inventory.pending AND inventory.present),
 		       connector.last_checked_at, connector.last_error,
-		       connector.created_at, connector.updated_at, connector.credential_management
+		       connector.created_at, connector.updated_at, connector.credential_management, connector.managed_cleanup_endpoint
 		FROM cairnops_connectors connector
 		LEFT JOIN cairnops_connector_bindings binding ON binding.connector_id = connector.id
 		GROUP BY connector.id
@@ -130,9 +130,10 @@ func (store *PostgresStore) List(ctx context.Context) ([]Connector, error) {
 
 	connectors := make([]Connector, 0)
 	for rows.Next() {
-		var management string
-		connector, err := scanConnector(rows, &management)
+		var management, cleanupEndpoint string
+		connector, err := scanConnector(rows, &management, &cleanupEndpoint)
 		connector.CredentialManagement = management
+		connector.ManagedCleanupEndpoint = cleanupEndpoint
 		if err != nil {
 			return nil, err
 		}

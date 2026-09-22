@@ -12,6 +12,10 @@ type serviceStore struct {
 	openedDays      int
 }
 
+func (*serviceStore) ListResolvedPage(context.Context, ResolvedPageOptions) (ResolvedPage, error) {
+	return ResolvedPage{}, nil
+}
+
 func (*serviceStore) List(context.Context, string, int) ([]Incident, error) { return nil, nil }
 func (*serviceStore) ListForTarget(context.Context, string, string, int) ([]Incident, error) {
 	return nil, nil

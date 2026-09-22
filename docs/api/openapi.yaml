@@ -779,6 +779,41 @@ components:
         conclusive_observations: { type: integer, minimum: 0 }
         healthy_observations: { type: integer, minimum: 0 }
         average_latency_milliseconds: { type: integer, minimum: 0, nullable: true }
+    ConnectorConnectionInput:
+      type: object
+      additionalProperties: false
+      required: [name, address]
+      description: >-
+        Réglages du même serveur ou cluster. Tout champ d’accès omis ou vide
+        conserve sa valeur enregistrée. Aucun compte distant n’est créé ni supprimé.
+        Les champs d’accès sont propres au type du Connecteur.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        address: { type: string, format: uri, maxLength: 2048 }
+        api_token: { type: string, writeOnly: true, description: Jeton Zabbix. }
+        api_key: { type: string, writeOnly: true, description: Clé Uptime Kuma. }
+        token_key: { type: string, writeOnly: true, description: Clé du jeton PatchMon. }
+        token_secret: { type: string, writeOnly: true, description: Secret du jeton PatchMon. }
+        username: { type: string, writeOnly: true, description: Identifiant Argus. }
+        password: { type: string, writeOnly: true, description: Mot de passe Argus. }
+        credentials:
+          type: object
+          description: Accès Proxmox VE ; une nouvelle empreinte exige l’approbation explicite de l’Administrateur.
+          properties:
+            token_id: { type: string, writeOnly: true }
+            secret: { type: string, writeOnly: true }
+            fingerprint: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+    ConnectorConnectionTest:
+      type: object
+      required: [name, endpoint, version, compatibility, encrypted_transport, receipt, expires_at]
+      properties:
+        name: { type: string }
+        endpoint: { type: string, format: uri }
+        version: { type: string }
+        compatibility: { type: string, enum: [supported, warning] }
+        encrypted_transport: { type: boolean }
+        receipt: { type: string, description: Reçu chiffré lié au Connecteur et à sa révision d’accès, valable 15 minutes. }
+        expires_at: { type: string, format: date-time }
     Connector:
       type: object
       required: [id, kind, name, endpoint, status, remote_version, compatibility, encrypted_transport, binding_count, quarantine_count, last_checked_at, created_at, updated_at]
@@ -791,6 +826,7 @@ components:
         remote_version: { type: string }
         compatibility: { type: string, enum: [supported, warning] }
         credential_management: { type: string, enum: [provided, managed] }
+        managed_cleanup_endpoint: { type: string, format: uri, description: Adresse initiale conservée pour le nettoyage explicite du compte technique après changement de connexion. }
         encrypted_transport: { type: boolean }
         binding_count: { type: integer, minimum: 0 }
         quarantine_count:
@@ -1168,6 +1204,9 @@ components:
         state: { type: string, enum: [active, upcoming, ended, cancelled] }
         starts_at: { type: string, format: date-time }
         ends_at: { type: string, format: date-time }
+        series_id: { type: string, format: uuid }
+        recurrence: { $ref: '#/components/schemas/MaintenanceRecurrence' }
+        extension_count: { type: integer, minimum: 0, description: Nombre de prolongations de 30 minutes de cette occurrence. }
         cancelled_at: { type: string, format: date-time }
         created_by: { type: string }
         targets:
@@ -1175,6 +1214,20 @@ components:
           minItems: 1
           items: { $ref: '#/components/schemas/TargetReference' }
         created_at: { type: string, format: date-time }
+    MaintenanceRecurrence:
+      type: object
+      additionalProperties: false
+      required: [frequency, timezone, until]
+      description: >-
+        Toutes les occurrences sont créées atomiquement à la planification, au
+        même jour et à la même heure locale que la première fenêtre. Leur durée
+        réelle reste constante (24 heures maximum). Une heure locale inexistante
+        est sautée, une heure ambiguë utilise le premier passage. Aucune relance
+        de worker n'est nécessaire pour activer les futures fenêtres.
+      properties:
+        frequency: { type: string, const: weekly }
+        timezone: { type: string, description: Fuseau IANA explicite, par exemple Europe/Paris. Local est refusé. }
+        until: { type: string, format: date, description: Date locale inclusive entre une semaine et un an après le début. Au moins deux occurrences et au maximum 53. }
     NotificationChannel:
       type: object
       required: [id, kind, name, endpoint, severities, enabled, status, encrypted_transport, last_checked_at, created_at, updated_at]
@@ -2174,6 +2227,65 @@ paths:
         '401': { description: Authentification requise }
         '403': { description: Rôle Administrateur requis }
         '404': { description: Connecteur absent }
+  /api/v1/connectors/{connectorID}/connection/test:
+    post:
+      operationId: testConnectorConnection
+      description: >-
+        Vérifie en lecture seule les réglages proposés pour un Connecteur Zabbix,
+        Uptime Kuma, PatchMon, Argus ou Proxmox VE, y compris suspendu. Ni les accès
+        enregistrés, ni les liaisons, ni la découverte ne sont modifiés. Un échec
+        conserve la connexion précédente. Seul un Administrateur peut transférer
+        les accès conservés à une nouvelle adresse de la même instance.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      parameters:
+        - in: path
+          name: connectorID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConnectorConnectionInput' }
+      responses:
+        '200': { description: Réglages vérifiés, content: { application/json: { schema: { $ref: '#/components/schemas/ConnectorConnectionTest' } } } }
+        '400': { description: Entrée invalide ou type de Connecteur non pris en charge }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '404': { description: Connecteur absent }
+        '409': { description: Adresse déjà utilisée par un autre Connecteur du même type }
+        '422': { description: Connexion ou autorisation refusée }
+  /api/v1/connectors/{connectorID}/connection:
+    put:
+      operationId: saveConnectorConnection
+      description: >-
+        Enregistre atomiquement les réglages du reçu vérifié. Conserve l’identifiant,
+        les liaisons, les historiques, la découverte, la suspension et la propriété
+        des comptes techniques créés auparavant. Aucun import ou acte distant.
+        Une modification concurrente des accès invalide le reçu.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      parameters:
+        - in: path
+          name: connectorID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [receipt]
+              properties:
+                receipt: { type: string, minLength: 32, maxLength: 131072 }
+      responses:
+        '200': { description: Connexion enregistrée, content: { application/json: { schema: { $ref: '#/components/schemas/Connector' } } } }
+        '400': { description: Reçu invalide ou destiné à un autre Connecteur }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur requis }
+        '409': { description: Adresse occupée, connexion modifiée depuis le test ou synchronisation en cours (code connector_sync_in_progress, reçu réutilisable). }
+        '410': { description: Test expiré ; nouvelle vérification requise }
   /api/v1/connectors/{connectorID}/preview:
     post:
       operationId: previewExistingConnectorInventory
@@ -2872,8 +2984,17 @@ paths:
       operationId: listIncidents
       description: >-
         Retourne la projection ordonnée des Incidents et leurs preuves. Les
-        Incidents actifs sont prioritaires ; les Incidents résolus sont
-        présentés du rétablissement le plus récent au plus ancien.
+        Incidents actifs sont triés par absence d’acquittement, gravité décroissante,
+        puis ouverture croissante. Les Incidents résolus sont présentés de la
+        résolution la plus récente à la plus ancienne. Sans les nouveaux paramètres,
+        le contrat historique des clients Web et mobiles reste inchangé.
+        Avec page=true et status=resolved, les filtres sont appliqués côté serveur
+        avant la limite. La pagination utilise le couple (resolved_at, id) décroissant
+        et une borne de lecture fixée à la première page ; les Incidents créés après
+        cette borne sont exclus même si leur résolution est antidatée. Le curseur
+        doit être réutilisé avec les mêmes filtres. Une nouvelle recherche repart
+        sans curseur. Chaque Incident conserve toutes ses Atteintes même lorsqu’une
+        seule Ressource correspond au filtre.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: query
@@ -2881,11 +3002,39 @@ paths:
           schema: { type: string, enum: [active, resolved, all], default: active }
         - in: query
           name: target_id
-          description: Limite la projection à l'historique d'une Cible.
+          description: Recherche la Ressource dans toutes les Atteintes sans dupliquer les Incidents.
           schema: { type: string, format: uuid }
         - in: query
           name: limit
           schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+        - in: query
+          name: page
+          description: Active la pagination des Incidents résolus. Exige status=resolved.
+          schema: { type: boolean, enum: [true] }
+        - in: query
+          name: cursor
+          description: Curseur opaque next_cursor de la page précédente ; mêmes filtres requis.
+          schema: { type: string, maxLength: 2048 }
+        - in: query
+          name: resolved_from
+          description: Résolution à partir de cet instant inclus, exprimé avec son fuseau RFC3339.
+          schema: { type: string, format: date-time }
+        - in: query
+          name: resolved_before
+          description: Résolution strictement avant cet instant ; doit être postérieur à resolved_from.
+          schema: { type: string, format: date-time }
+        - in: query
+          name: nature_key
+          description: Nature exacte des Incidents résolus.
+          schema: { type: string, maxLength: 500 }
+        - in: query
+          name: severity
+          description: Gravité des Incidents résolus.
+          schema: { type: string, enum: [information, warning, major, critical] }
+        - in: query
+          name: q
+          description: Recherche littérale insensible à la casse dans la Nature, les titres présentés en français et anglais, les Ressources et les libellés de Preuve. Les caractères % et _ ne sont pas des jokers.
+          schema: { type: string, maxLength: 200 }
       responses:
         '200':
           description: Incidents correspondant au filtre
@@ -2898,6 +3047,30 @@ paths:
                   incidents:
                     type: array
                     items: { $ref: '#/components/schemas/Incident' }
+                  next_cursor:
+                    type: string
+                    description: Présent seulement lorsqu’une autre page est disponible en mode paginé.
+                  filters:
+                    type: object
+                    description: Options disponibles dans tout l’historique résolu conservé, y compris les Ressources archivées. Présentes uniquement sur la première page, indépendamment des filtres actifs.
+                    required: [targets, natures]
+                    properties:
+                      targets:
+                        type: array
+                        items:
+                          type: object
+                          required: [value, label]
+                          properties:
+                            value: { type: string, format: uuid }
+                            label: { type: string }
+                      natures:
+                        type: array
+                        items:
+                          type: object
+                          required: [value, label]
+                          properties:
+                            value: { type: string }
+                            label: { type: string }
         '400': { description: Filtre invalide }
         '401': { description: Authentification requise }
   /api/v1/incidents/history:
@@ -3034,7 +3207,7 @@ paths:
         '401': { description: Authentification requise }
     post:
       operationId: createMaintenance
-      description: Crée une fenêtre immédiate ou planifiée sur une ou plusieurs Cibles.
+      description: Crée une fenêtre immédiate ou planifiée, ou une série hebdomadaire bornée, sur une ou plusieurs Ressources. Une série renvoie sa première occurrence ; les autres sont accessibles dans la liste.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       requestBody:
         required: true
@@ -3054,6 +3227,7 @@ paths:
                   items: { type: string, format: uuid }
                 starts_at: { type: string, format: date-time, description: Omis pour démarrer immédiatement. }
                 ends_at: { type: string, format: date-time }
+                recurrence: { $ref: '#/components/schemas/MaintenanceRecurrence' }
       responses:
         '201':
           description: Maintenance créée
@@ -3066,6 +3240,7 @@ paths:
   /api/v1/maintenances/{maintenanceID}/cancellation:
     post:
       operationId: cancelMaintenance
+      description: Annule uniquement cette occurrence, sans modifier les fenêtres suivantes de sa série.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: path
@@ -3083,6 +3258,58 @@ paths:
         '403': { description: Rôle Administrateur ou Opérateur requis }
         '404': { description: Maintenance absente }
         '409': { description: Maintenance déjà terminée ou annulée }
+  /api/v1/maintenances/{maintenanceID}/extension:
+    post:
+      operationId: extendMaintenance
+      description: Prolonge une occurrence active de 30 minutes. Ne modifie pas les suivantes. Comparaison atomique de expected_ends_at ; une requête concurrente ou répétée avec la même valeur reçoit 409. La prolongation est auditée avec son auteur et les anciennes et nouvelles fins. Ne dépasse ni 31 jours ni le début de la prochaine occurrence non annulée.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      parameters:
+        - in: path
+          name: maintenanceID
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_ends_at]
+              properties:
+                expected_ends_at: { type: string, format: date-time, description: Fin observée dans la dernière réponse de maintenance. }
+      responses:
+        '200':
+          description: Occurrence actualisée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Maintenance' }
+        '400': { description: Identifiant ou paramètres invalides }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur ou Opérateur requis }
+        '404': { description: Maintenance absente }
+        '409': { description: Fenêtre modifiée ou non active, durée maximale atteinte, absence de série ou série terminée }
+  /api/v1/maintenances/{maintenanceID}/series-cancellation:
+    post:
+      operationId: cancelMaintenanceSeries
+      description: Annule les occurrences en cours et à venir de la série contenant cette occurrence, sans modifier les occurrences terminées. Le rôle Opérateur ou Administrateur est requis.
+      security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
+      parameters:
+        - in: path
+          name: maintenanceID
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Occurrence actualisée
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Maintenance' }
+        '400': { description: Identifiant ou paramètres invalides }
+        '401': { description: Authentification requise }
+        '403': { description: Rôle Administrateur ou Opérateur requis }
+        '404': { description: Maintenance absente }
+        '409': { description: Fenêtre modifiée ou non active, durée maximale atteinte, absence de série ou série terminée }
   /api/v1/notification-channels:
     get:
       operationId: listNotificationChannels

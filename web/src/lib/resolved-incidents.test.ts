@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { incidentMembershipChanged, shouldLoadResolvedIncidents } from './resolved-incidents.ts';
+import { incidentMembershipChanged, resolvedHistoryChanged } from './resolved-incidents.ts';
 
 test('invalidates resolved incidents only when active incident membership changes', () => {
   assert.equal(incidentMembershipChanged([{ id: 'a' }, { id: 'b' }], [{ id: 'b' }, { id: 'a' }]), false);
@@ -10,9 +10,11 @@ test('invalidates resolved incidents only when active incident membership change
   assert.equal(incidentMembershipChanged([{ id: 'a' }], [{ id: 'b' }]), true);
 });
 
-test('loads resolved incidents lazily and invalidates them after an incident change', () => {
-  assert.equal(shouldLoadResolvedIncidents('active', -1, 0), false);
-  assert.equal(shouldLoadResolvedIncidents('resolved', -1, 0), true);
-  assert.equal(shouldLoadResolvedIncidents('resolved', 0, 0), false);
-  assert.equal(shouldLoadResolvedIncidents('resolved', 0, 1), true);
+test('offers refresh only for an existing snapshot and keeps changes received during a request visible', () => {
+  assert.equal(resolvedHistoryChanged(-1, 0), false);
+  assert.equal(resolvedHistoryChanged(-1, 1), false);
+  assert.equal(resolvedHistoryChanged(0, 0), false);
+  assert.equal(resolvedHistoryChanged(0, 1), true);
+  assert.equal(resolvedHistoryChanged(0, 2), true);
+  assert.equal(resolvedHistoryChanged(2, 2), false);
 });

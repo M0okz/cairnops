@@ -8,9 +8,13 @@
   import Odometer from '$lib/components/Odometer.svelte';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
-  import { api, type Incident } from '$lib/api';
+  import { api, type Incident, type IncidentSeverity, type ResolvedIncidentPage } from '$lib/api';
   import { incidentHref } from '$lib/incident-detail';
-  import { shouldLoadResolvedIncidents, type IncidentScope } from '$lib/resolved-incidents';
+  import { resolvedHistoryChanged, type IncidentScope } from '$lib/resolved-incidents';
+  import {
+    compareActiveIncidents, historyBounds, incidentFilterOptions, localDateValue,
+    matchesIncidentFilters, resolvedIncidentQuery, type HistoryPeriod
+  } from '$lib/incident-list';
   import {
     activeImpactRatio,
     diverges,
@@ -24,9 +28,21 @@
 
   let scope = $state<IncidentScope>('active');
   let resolved = $state<Incident[]>([]);
+  let query = $state('');
+  let targetID = $state('');
+  let natureKey = $state('');
+  let severity = $state<IncidentSeverity | ''>('');
+  let period = $state<HistoryPeriod>('30');
+  const initialDate = new Date();
+  let fromDate = $state(localDateValue(new Date(initialDate.getFullYear(), initialDate.getMonth(), initialDate.getDate() - 29)));
+  let throughDate = $state(localDateValue(initialDate));
+  let historyFilters = $state<ResolvedIncidentPage['filters']>();
+  let resolvedLoading = $state(false);
+  let nextCursor = $state('');
   let resolvedRevision = $state(-1);
   let resolvedRequest = 0;
   let resolvedError = $state('');
+  let failedResolvedRequest: { url: string; append: boolean } | null = null;
   let acknowledging = $state('');
   let now = $state(new Date());
   const incidentIDFrom = (url: URL) => url.searchParams.get('incident')?.trim() ?? '';
@@ -41,46 +57,72 @@
     return () => clearInterval(timer);
   });
 
-  async function loadResolved(revision: number) {
+  const filters = $derived({ query, targetID, natureKey, severity });
+  const hasFilters = $derived(Boolean(query.trim() || targetID || natureKey || severity));
+  const historyDay = $derived(localDateValue(now));
+  const bounds = $derived(historyBounds(period, fromDate, throughDate, new Date(`${historyDay}T12:00:00`)));
+  const historyURL = $derived(bounds ? resolvedIncidentQuery(filters, bounds) : '');
+  const activeOptions = $derived(incidentFilterOptions(session.incidents));
+  const options = $derived(scope === 'resolved' ? (historyFilters ?? activeOptions) : activeOptions);
+  const historyChanged = $derived(resolvedHistoryChanged(resolvedRevision, session.incidentRevision));
+
+  async function loadResolved(url: string, append = false) {
     const request = ++resolvedRequest;
+    const revision = session.incidentRevision;
+    resolvedLoading = true;
     resolvedError = '';
+    failedResolvedRequest = null;
     try {
-      const response = await api<{ incidents: Incident[] }>('/api/v1/incidents?status=resolved&limit=100');
+      const response = await api<ResolvedIncidentPage>(url);
       if (request !== resolvedRequest) return;
-      resolved = response.incidents;
-      resolvedRevision = revision;
+      resolved = append ? [...resolved, ...response.incidents] : response.incidents;
+      if (!append) resolvedRevision = revision;
+      nextCursor = response.next_cursor ?? '';
+      if (response.filters) historyFilters = response.filters;
     } catch (cause) {
       if (request !== resolvedRequest) return;
       resolvedError = messageFrom(cause);
+      failedResolvedRequest = { url, append };
+    } finally {
+      if (request === resolvedRequest) resolvedLoading = false;
     }
   }
 
-  /* La projection reste paresseuse, puis tout changement d'Incident la rend
-   * périmée. Une Résolution reçue pendant que la route reste montée apparaît
-   * ainsi dès l'ouverture du filtre, ou immédiatement s'il est déjà ouvert. */
+  /* Only a filter/date change starts a new snapshot automatically. Realtime
+   * changes offer an explicit refresh and leave the pages/cursor untouched. */
   $effect(() => {
-    const revision = session.incidentRevision;
-    if (!shouldLoadResolvedIncidents(scope, resolvedRevision, revision)) return;
-    void loadResolved(revision);
+    const currentScope = scope;
+    const url = historyURL;
+    resolvedRequest += 1;
+    if (currentScope !== 'resolved') {
+      resolvedLoading = false;
+      return;
+    }
+    resolved = [];
+    resolvedRevision = -1;
+    nextCursor = '';
+    resolvedError = '';
+    resolvedLoading = Boolean(url);
+    if (!url) return;
+    const timer = setTimeout(() => void loadResolved(url), 200);
+    return () => clearTimeout(timer);
   });
 
-  const active = $derived(
-    [...session.actionable].sort((a, b) => {
-      if (Boolean(a.acknowledged_at) !== Boolean(b.acknowledged_at)) return a.acknowledged_at ? 1 : -1;
-      return new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime();
-    })
-  );
+  function loadMore() {
+    if (!bounds || !nextCursor || resolvedLoading) return;
+    void loadResolved(resolvedIncidentQuery(filters, bounds, nextCursor), true);
+  }
 
-  const candidateIncidents = $derived(
-    scope === 'resolved'
-      ? resolved
-      : scope === 'unacknowledged'
-        ? active.filter((incident) => !incident.acknowledged_at)
-        : active
-  );
-  const shown = $derived([...candidateIncidents].sort(
-    (left, right) => new Date(left.opened_at).getTime() - new Date(right.opened_at).getTime()
-  ));
+  function clearFilters() {
+    query = '';
+    targetID = '';
+    natureKey = '';
+    severity = '';
+  }
+
+  const shown = $derived(scope === 'resolved' ? resolved : session.actionable
+    .filter((incident) => (scope !== 'unacknowledged' || !incident.acknowledged_at) && matchesIncidentFilters(incident, filters))
+    .sort(compareActiveIncidents));
   const selectedIncident = $derived(
     [...session.incidents, ...resolved].find((incident) => incident.id === selectedIncidentID) ?? null
   );
@@ -143,16 +185,91 @@
           label: t('incidents.scope.unacknowledged'),
           count: session.unacknowledged.length
         },
-        { value: 'resolved', label: t('incidents.scope.resolved'), count: resolved.length }
+        { value: 'resolved', label: t('incidents.scope.resolved') }
       ]}
       onValueChange={(value) => (scope = value)}
     />
     <span class="note">
-      {scope === 'resolved' ? t('incidents.lastThirtyDays') : t('incidents.unacknowledgedFirst')}
+      {scope === 'resolved' ? t('incidents.history.order') : t('incidents.priorityOrder')}
     </span>
   </div>
 
-  <div class="card cols">
+  <div class="incident-filter-grid">
+    <div class="field search-field">
+      <label for="incident-search">{t('incidents.filters.search')}</label>
+      <input id="incident-search" name="incident-search" type="search" bind:value={query} maxlength="200" placeholder={t('incidents.filters.searchHint')} />
+    </div>
+    <div class="field">
+      <label for="incident-target">{t('incidents.filters.target')}</label>
+      <select id="incident-target" bind:value={targetID}>
+        <option value="">{t('incidents.filters.allTargets')}</option>
+        {#if targetID && !options.targets.some((option) => option.value === targetID)}
+          <option value={targetID}>{session.targets.find((target) => target.id === targetID)?.name ?? t('incidents.filters.selectedTarget')}</option>
+        {/if}
+        {#each options.targets as option (option.value)}<option value={option.value}>{option.label}</option>{/each}
+      </select>
+    </div>
+    <div class="field">
+      <label for="incident-nature">{t('incidents.filters.nature')}</label>
+      <select id="incident-nature" bind:value={natureKey}>
+        <option value="">{t('incidents.filters.allNatures')}</option>
+        {#if natureKey && !options.natures.some((option) => option.value === natureKey)}
+          <option value={natureKey}>{natureKey}</option>
+        {/if}
+        {#each options.natures as option (option.value)}<option value={option.value}>{option.label}</option>{/each}
+      </select>
+    </div>
+    <div class="field">
+      <label for="incident-severity">{t('incidents.column.severity')}</label>
+      <select id="incident-severity" bind:value={severity}>
+        <option value="">{t('incidents.filters.allSeverities')}</option>
+        {#each ['critical', 'major', 'warning', 'information'] as value}
+          <option {value}>{severityLabel(value as IncidentSeverity)}</option>
+        {/each}
+      </select>
+    </div>
+  </div>
+
+  {#if scope === 'resolved'}
+    <div class="history-filters">
+      <div class="field">
+        <label for="incident-period">{t('incidents.history.period')}</label>
+        <select id="incident-period" bind:value={period}>
+          <option value="7">{t('incidents.history.sevenDays')}</option>
+          <option value="30">{t('incidents.lastThirtyDays')}</option>
+          <option value="90">{t('incidents.history.ninetyDays')}</option>
+          <option value="all">{t('incidents.history.all')}</option>
+          <option value="custom">{t('incidents.history.custom')}</option>
+        </select>
+      </div>
+      {#if period === 'custom'}
+        <div class="field">
+          <label for="incident-from">{t('incidents.history.from')}</label>
+          <input id="incident-from" type="date" bind:value={fromDate} aria-invalid={!bounds} aria-describedby={!bounds ? 'incident-date-error' : undefined} />
+        </div>
+        <div class="field">
+          <label for="incident-through">{t('incidents.history.through')}</label>
+          <input id="incident-through" type="date" bind:value={throughDate} aria-invalid={!bounds} aria-describedby={!bounds ? 'incident-date-error' : undefined} />
+        </div>
+      {/if}
+      <span class="history-note">{t('incidents.history.dateNote')}</span>
+    </div>
+    {#if !bounds}<p id="incident-date-error" class="filter-error" role="alert">{t('incidents.history.invalidDates')}</p>{/if}
+  {/if}
+
+  <div class="results-summary">
+    <p role="status">{scope === 'resolved' && resolvedLoading ? t('incidents.history.loading') : plural('incidents.results', shown.length)}</p>
+    {#if hasFilters}<button class="btn sm" type="button" onclick={clearFilters}>{t('incidents.filters.clear')}</button>{/if}
+  </div>
+
+  {#if scope === 'resolved' && historyChanged}
+    <div class="history-refresh">
+      <p role="status">{t('incidents.history.changed')}</p>
+      <button class="btn sm" type="button" disabled={resolvedLoading} onclick={() => loadResolved(historyURL)}>{t('incidents.history.refresh')}</button>
+    </div>
+  {/if}
+
+  <div class="card cols" aria-busy={scope === 'resolved' && resolvedLoading}>
     <div class="thead">
       <span>{t('incidents.column.targetNature')}</span>
       <span>{t('incidents.column.severity')}</span>
@@ -243,12 +360,15 @@
       </div>
     {:else}
       <div class="empty">
-        {#if scope === 'resolved' && resolvedError}
+        {#if scope === 'resolved' && resolvedLoading}
+          <strong>{t('incidents.history.loading')}</strong>
+        {:else if scope === 'resolved' && !bounds}
+          <strong>{t('incidents.history.chooseDates')}</strong>
+        {:else if scope === 'resolved' && resolvedError}
           <strong>{t('incidents.logUnread')}</strong>
-          {resolvedError}
-        {:else if scope === 'resolved'}
-          <strong>{t('incidents.emptyResolved')}</strong>
-          {t('incidents.emptyResolvedHint')}
+        {:else if hasFilters || scope === 'resolved'}
+          <strong>{t('incidents.filters.empty')}</strong>
+          {t('incidents.filters.emptyHint')}
         {:else if scope === 'unacknowledged'}
           <strong>{t('incidents.emptyUnacknowledged')}</strong>
           {t('incidents.emptyUnacknowledgedHint')}
@@ -259,6 +379,20 @@
       </div>
     {/each}
   </div>
+
+  {#if scope === 'resolved' && resolvedError}
+    <div class="history-error" role="alert">
+      <span>{resolvedError}</span>
+      <button class="btn" type="button" onclick={() => failedResolvedRequest && loadResolved(failedResolvedRequest.url, failedResolvedRequest.append)}>{t('common.retry')}</button>
+    </div>
+  {/if}
+  {#if scope === 'resolved' && nextCursor}
+    <div class="history-pagination">
+      <button class="btn" type="button" disabled={resolvedLoading} onclick={loadMore}>
+        {resolvedLoading ? t('incidents.history.loading') : t('incidents.history.loadMore')}
+      </button>
+    </div>
+  {/if}
 
   {#if session.incidents.length > session.actionable.length}
     <p class="under">
@@ -279,6 +413,30 @@
 {/if}
 
 <style>
+  .incident-filter-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+    gap: var(--s4);
+    margin-bottom: var(--s4);
+  }
+
+  .incident-filter-grid .field, .history-filters .field { min-width: 0; margin: 0; }
+  .history-filters { display: flex; align-items: end; flex-wrap: wrap; gap: var(--s4); margin-bottom: var(--s4); }
+  .history-filters .field { flex: 1 1 11rem; }
+  .history-note { color: var(--muted); font-size: var(--text-sm); flex: 1 1 16rem; padding-bottom: var(--s2); }
+  .results-summary, .history-error, .history-refresh { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--s3); margin-block: var(--s4); }
+  .results-summary p, .history-refresh p { color: var(--muted); font-size: var(--text-sm); }
+  .filter-error, .history-error { color: var(--crit); font-size: var(--text-sm); }
+  .history-pagination { display: flex; justify-content: center; margin-top: var(--s5); }
+
+  @media (max-width: 70rem) {
+    .incident-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 38rem) {
+    .incident-filter-grid { grid-template-columns: minmax(0, 1fr); }
+    .history-filters .field { flex-basis: 100%; }
+  }
+
   .cols {
     container-type: inline-size;
     --cols: minmax(0, 1.4fr) 7.25rem 8.75rem 4.125rem 5.5rem minmax(0, 1.1fr) var(--table-action-width);

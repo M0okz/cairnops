@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	identitymodel "github.com/M0okz/cairnops/internal/identity"
 	"github.com/M0okz/cairnops/internal/maintenance"
@@ -16,6 +17,8 @@ type Maintenances interface {
 	List(context.Context, int) ([]maintenance.Maintenance, error)
 	Create(context.Context, string, maintenance.CreateInput) (maintenance.Maintenance, error)
 	Cancel(context.Context, string, string) (maintenance.Maintenance, error)
+	CancelSeries(context.Context, string, string) (maintenance.Maintenance, error)
+	Extend(context.Context, string, string, time.Time) (maintenance.Maintenance, error)
 }
 
 type maintenanceHandler struct {
@@ -49,6 +52,7 @@ func (handler maintenanceHandler) create(w http.ResponseWriter, r *http.Request)
 	}
 	var input maintenance.CreateInput
 	if err := decodeJSON(w, r, maximumAdminBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 	item, err := handler.maintenances.Create(r.Context(), principal.ID, input)
@@ -92,4 +96,44 @@ func (handler maintenanceHandler) writeError(w http.ResponseWriter, err error) {
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
+}
+
+func (handler maintenanceHandler) extend(w http.ResponseWriter, r *http.Request) {
+	handler.change(w, r, false)
+}
+
+func (handler maintenanceHandler) cancelSeries(w http.ResponseWriter, r *http.Request) {
+	handler.change(w, r, true)
+}
+
+func (handler maintenanceHandler) change(w http.ResponseWriter, r *http.Request, series bool) {
+	id := r.PathValue("maintenanceID")
+	if !validUUID(id) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid maintenance ID"})
+		return
+	}
+	principal, ok := r.Context().Value(principalContextKey{}).(identitymodel.Principal)
+	if !ok {
+		unauthorizedSession(w)
+		return
+	}
+	var item maintenance.Maintenance
+	var err error
+	if series {
+		item, err = handler.maintenances.CancelSeries(r.Context(), id, principal.ID)
+	} else {
+		var input struct {
+			ExpectedEndsAt time.Time `json:"expected_ends_at"`
+		}
+		if err := decodeJSON(w, r, maximumAdminBody, &input, false); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		item, err = handler.maintenances.Extend(r.Context(), id, principal.ID, input.ExpectedEndsAt)
+	}
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
 }

@@ -15,6 +15,8 @@ import (
 const maximumConnectorBody = 256 * 1024
 
 type Connectors interface {
+	TestConnection(context.Context, string, connectors.ConnectionInput) (connectors.ConnectionTest, error)
+	SaveConnection(context.Context, string, connectors.ConnectionSaveInput) (connectors.Connector, error)
 	ReapproveProxmoxCertificate(context.Context, string, string) error
 	ProxmoxCertificate(context.Context, string) (proxmox.Certificate, error)
 	PreviewProxmox(context.Context, connectors.ProxmoxPreviewInput) (connectors.ProxmoxPreview, error)
@@ -290,6 +292,12 @@ func (handler connectorHandler) writeError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), connectors.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, connectors.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "connector not found"})
+	case errors.Is(err, connectors.ErrEndpointConflict):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "Cette adresse est déjà utilisée par un autre Connecteur du même type."})
+	case errors.Is(err, connectors.ErrConnectionBusy):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "Une synchronisation est en cours. Réessayez l’enregistrement dans quelques secondes.", "code": "connector_sync_in_progress"})
+	case errors.Is(err, connectors.ErrConnectionChanged):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "La connexion a changé. Testez à nouveau vos réglages avant de les enregistrer."})
 	case errors.Is(err, connectors.ErrStructureBusy):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "a target reconciliation involving this connector is in progress"})
 	case errors.Is(err, connectors.ErrPreviewExpired):
@@ -332,6 +340,44 @@ func (handler connectorHandler) removeProxmox(w http.ResponseWriter, r *http.Req
 		return
 	}
 	result, err := handler.connectors.RemoveProxmox(r.Context(), id, input)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (handler connectorHandler) testConnection(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("connectorID")
+	if !validUUID(id) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		return
+	}
+	var input connectors.ConnectionInput
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	result, err := handler.connectors.TestConnection(r.Context(), id, input)
+	if err != nil {
+		handler.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (handler connectorHandler) saveConnection(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("connectorID")
+	if !validUUID(id) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		return
+	}
+	var input connectors.ConnectionSaveInput
+	if err := decodeJSON(w, r, maximumConnectorBody, &input, false); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	result, err := handler.connectors.SaveConnection(r.Context(), id, input)
 	if err != nil {
 		handler.writeError(w, err)
 		return

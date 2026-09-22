@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/Icon.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
@@ -20,7 +21,12 @@
   let filter = $state('');
   let addOpen = $state(false);
   let category = $state<ResourceCategory | 'all'>('all');
-  let scope = $state<'all' | 'problems' | 'maintenance'>('all');
+  let scope = $state<'all' | 'problems' | 'maintenance' | 'unknown'>('all');
+  $effect(() => {
+    const requested = page.url.searchParams.get('scope');
+    scope = requested === 'problems' || requested === 'maintenance' || requested === 'unknown' ? requested : 'all';
+  });
+  const scopeLabel = $derived(scope === 'problems' ? t('targets.scope.problems') : scope === 'unknown' ? t('state.unknown') : t('nav.maintenance'));
   let divergentOnly = $state(false);
   const activeFilterCount = $derived(Number(scope !== 'all') + Number(divergentOnly));
   let workshopOpen = $state(false);
@@ -56,6 +62,7 @@
     if (category !== 'all' && categoryOf(row.target) !== category) return false;
     if (scope === 'problems' && row.problems.length === 0) return false;
     if (scope === 'maintenance' && row.state !== 'maintenance') return false;
+    if (scope === 'unknown' && row.state !== 'unknown') return false;
     if (divergentOnly && !row.divergent) return false;
     const query = filter.trim().toLocaleLowerCase(i18n.locale);
     return !query || [row.target.name, row.target.description, ...row.target.aliases, ...row.problems.map((problem) => problemText(problem, i18n.locale))].some((value) => value.toLocaleLowerCase(i18n.locale).includes(query));
@@ -101,7 +108,8 @@
           {#each [
             {value: 'all' as const, label: t('resources.anyState'), count: scoped.length},
             {value: 'problems' as const, label: t('targets.scope.problems'), count: scoped.filter(row => row.problems.length > 0).length},
-            {value: 'maintenance' as const, label: t('nav.maintenance'), count: scoped.filter(row => row.state === 'maintenance').length}
+            {value: 'maintenance' as const, label: t('nav.maintenance'), count: scoped.filter(row => row.state === 'maintenance').length},
+            {value: 'unknown' as const, label: t('state.unknown'), count: scoped.filter(row => row.state === 'unknown').length}
           ] as item (item.value)}
             <label class="filter-option"><input type="radio" name="resource-scope" bind:group={scope} value={item.value} />{item.label}<span class="num">{item.count}</span></label>
           {/each}
@@ -113,7 +121,7 @@
   </div>
   {#if activeFilterCount || filter.trim()}
     <div class="active-filters" aria-label={t('resources.activeFilters')}>
-      {#if scope !== 'all'}<button class="filter-chip" aria-label={t('resources.removeFilter', {name: scope === 'problems' ? t('targets.scope.problems') : t('nav.maintenance')})} onclick={() => scope = 'all'}>{scope === 'problems' ? t('targets.scope.problems') : t('nav.maintenance')} <span aria-hidden="true">×</span></button>{/if}
+      {#if scope !== 'all'}<button class="filter-chip" aria-label={t('resources.removeFilter', {name: scopeLabel})} onclick={() => scope = 'all'}>{scopeLabel} <span aria-hidden="true">×</span></button>{/if}
       {#if divergentOnly}<button class="filter-chip" aria-label={t('resources.removeFilter', {name: t('targets.divergence')})} onclick={() => divergentOnly = false}>{t('targets.divergence')} <span aria-hidden="true">×</span></button>{/if}
       {#if filter.trim()}<button class="filter-chip" aria-label={t('resources.removeSearch')} onclick={() => filter = ''}>« {filter.trim()} » <span aria-hidden="true">×</span></button>{/if}
     </div>
@@ -172,7 +180,7 @@
           {#if row.measured?.sources.length}
             <ResourceTooltip label={plural('palette.sources', row.measured.sources.length)}>
               <ul class="problem-list">{#each row.measured.sources as source (source.source_id)}<li>
-                <strong>{source.name}</strong><small>{sourceLabel(source)} · {source.enabled === false ? t('target.suspended') : !fresh(source.latest_observed_at, Date.now(), source.interval_seconds) ? t('component.status.stale') : source.latest_outcome === 'unhealthy' ? t('target.failing') : source.latest_outcome === 'healthy' ? source.measures_availability ? t('state.ok') : t('resources.noProblem') : t('state.unknown')}</small>
+                <strong>{source.name}</strong><small>{sourceLabel(source)} · {source.enabled === false ? t('target.suspended') : !fresh(source.latest_observed_at, session.evaluatedAt, source.interval_seconds) ? t('component.status.stale') : source.latest_outcome === 'unhealthy' ? t('target.failing') : source.latest_outcome === 'healthy' ? source.measures_availability ? t('state.ok') : t('resources.noProblem') : t('state.unknown')}</small>
                 <small>{t('targets.sourceLastObservation')} : {source.latest_observed_at ? since(source.latest_observed_at) : t('common.none')}</small>
                 {#if source.measures_availability}
                   <small>{t('resources.availability')} : {ratio(inWindow(source, '24h').availability)} · {t('resources.observedTime')} : {ratio(inWindow(source, '24h').coverage)}</small>

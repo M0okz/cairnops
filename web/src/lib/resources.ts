@@ -1,4 +1,4 @@
-import type { Incident, IncidentEvidence, IncidentImpact, ResourceCategory, Target, TargetMeasures } from './api.ts';
+import type { Incident, IncidentEvidence, IncidentImpact, Maintenance, ResourceCategory, Target, TargetMeasures } from './api.ts';
 
 export const resourceCategories: ResourceCategory[] = ['service', 'infrastructure', 'scheduled_task', 'software', 'unclassified'];
 const weights = { critical: 4, major: 3, warning: 2, information: 1 };
@@ -21,9 +21,24 @@ export function fresh(date: string | undefined, now: number, intervalSeconds = 3
   const age = now - Date.parse(date ?? '');
   return Number.isFinite(age) && age >= -60_000 && age <= Math.max(900, intervalSeconds * 3) * 1000;
 }
-export function resourceState(target: Target, incidents: Incident[], measured?: TargetMeasures, now = Date.now()): 'ok' | 'down' | 'degraded' | 'unknown' | 'maintenance' {
+export function resourceUnderMaintenance(targetID: string, incidents: Incident[], now: number, maintenances?: Maintenance[], maintenancesComplete = maintenances !== undefined): boolean {
+  // A planned window applies even when no incident exists. Read its dates,
+  // since the last server snapshot may predate its start or end.
+  if (maintenances?.some((window) => !window.cancelled_at &&
+    Date.parse(window.starts_at) <= now && now <= Date.parse(window.ends_at) &&
+    window.targets.some((item) => item.id === targetID))) return true;
+  // Known windows remain useful in a partial or cached list. Only a complete
+  // list can establish absence and override an older incident projection.
+  if (maintenancesComplete) return false;
+  // Otherwise the incident projection supplies a bounded fallback. A stale
+  // boolean must never hide an incident forever.
+  return incidents.some((incident) => incident.impacts.some((impact) =>
+    impact.target_id === targetID && impact.maintenance_active &&
+    Date.parse(impact.maintenance_ends_at ?? '') >= now));
+}
+export function resourceState(target: Target, incidents: Incident[], measured?: TargetMeasures, now = Date.now(), maintenances?: Maintenance[], maintenancesComplete = maintenances !== undefined): 'ok' | 'down' | 'degraded' | 'unknown' | 'maintenance' {
+  if (resourceUnderMaintenance(target.id, incidents, now, maintenances, maintenancesComplete)) return 'maintenance';
   const own = resourceProblems(target.id, incidents);
-  if (own.some(({impact}) => impact.maintenance_active)) return 'maintenance';
   // Severity never establishes availability. Only the canonical availability
   // condition can do so; stale/non-availability observations cannot prove UP.
   if (own.some(({incident, impact}) => incident.nature_key === 'availability' && impact.evidence.some((e) => e.active && !e.invalidated_at && fresh(e.last_seen_at, now)))) return 'down';

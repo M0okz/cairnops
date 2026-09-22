@@ -14,23 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type PostgresStore struct{ pool *pgxpool.Pool }
-
-func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore { return &PostgresStore{pool: pool} }
-
-func (store *PostgresStore) List(ctx context.Context, status string, limit int) ([]Incident, error) {
-	return store.list(ctx, status, "", limit)
-}
-
-func (store *PostgresStore) ListForTarget(ctx context.Context, status, targetID string, limit int) ([]Incident, error) {
-	return store.list(ctx, status, targetID, limit)
-}
-
-func (store *PostgresStore) list(ctx context.Context, status, targetID string, limit int) ([]Incident, error) {
-	if status == "all" {
-		status = ""
-	}
-	rows, err := store.pool.Query(ctx, `
+const incidentProjectionSQL = `
 		SELECT incident.id::text, incident.nature_key, incident.nature_label,
 		       incident.nature_scope, incident.nature_namespace,
 		       incident.nature_fingerprint, incident.propagation_eligible,
@@ -47,14 +31,35 @@ func (store *PostgresStore) list(ctx context.Context, status, targetID string, l
 		       incident.revision, incident.created_at, incident.updated_at, incident.alert_kind
 		FROM cairnops_incidents incident
 		LEFT JOIN cairnops_users account ON account.id = incident.acknowledged_by
+`
+
+type PostgresStore struct{ pool *pgxpool.Pool }
+
+func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore { return &PostgresStore{pool: pool} }
+
+func (store *PostgresStore) List(ctx context.Context, status string, limit int) ([]Incident, error) {
+	return store.list(ctx, status, "", limit)
+}
+
+func (store *PostgresStore) ListForTarget(ctx context.Context, status, targetID string, limit int) ([]Incident, error) {
+	return store.list(ctx, status, targetID, limit)
+}
+
+func (store *PostgresStore) list(ctx context.Context, status, targetID string, limit int) ([]Incident, error) {
+	if status == "all" {
+		status = ""
+	}
+	rows, err := store.pool.Query(ctx, incidentProjectionSQL+`
 		WHERE ($1 = '' OR incident.status = $1)
 		  AND ($2 = '' OR EXISTS (
 		      SELECT 1 FROM cairnops_incident_impacts impact
-		      WHERE impact.incident_id = incident.id AND impact.target_id = $2::uuid
+		      WHERE impact.incident_id = incident.id AND impact.target_id = NULLIF($2, '')::uuid
 		  ))
 		ORDER BY
 		  CASE WHEN incident.status = 'active' THEN 0 ELSE 1 END,
-		  CASE WHEN incident.status = 'active' THEN incident.opened_at END DESC,
+		  CASE WHEN incident.status = 'active' THEN (incident.acknowledged_at IS NOT NULL)::integer END,
+		  CASE WHEN incident.status = 'active' THEN CASE incident.severity WHEN 'critical' THEN 0 WHEN 'major' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END END,
+		  CASE WHEN incident.status = 'active' THEN incident.opened_at END ASC,
 		  incident.resolved_at DESC NULLS LAST,
 		  incident.opened_at DESC, incident.id
 		LIMIT $3
@@ -82,23 +87,7 @@ func (store *PostgresStore) list(ctx context.Context, status, targetID string, l
 }
 
 func (store *PostgresStore) Get(ctx context.Context, incidentID string) (Incident, error) {
-	item, err := scanIncident(store.pool.QueryRow(ctx, `
-		SELECT incident.id::text, incident.nature_key, incident.nature_label,
-		       incident.nature_scope, incident.nature_namespace,
-		       incident.nature_fingerprint, incident.propagation_eligible,
-		       incident.status, incident.propagation_status, incident.severity,
-		       incident.opened_at, incident.last_impact_at,
-		       incident.propagation_window_seconds, incident.propagation_ends_at,
-		       incident.propagation_closed_at, incident.resolved_at,
-		       incident.acknowledged_at, coalesce(account.display_name, ''),
-		       coalesce(incident.acknowledgement_origin, ''),
-		       incident.acknowledgement_sync_status,
-		       incident.acknowledgement_sync_error, incident.extended,
-		       incident.active_impact_count, incident.impact_count,
-		       incident.affected_target_count, incident.max_affected_targets,
-		       incident.revision, incident.created_at, incident.updated_at, incident.alert_kind
-		FROM cairnops_incidents incident
-		LEFT JOIN cairnops_users account ON account.id = incident.acknowledged_by
+	item, err := scanIncident(store.pool.QueryRow(ctx, incidentProjectionSQL+`
 		WHERE incident.id = $1::uuid
 	`, incidentID))
 	if errors.Is(err, pgx.ErrNoRows) {

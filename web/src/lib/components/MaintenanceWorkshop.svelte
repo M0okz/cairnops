@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import SegmentedControl from './ui/SegmentedControl.svelte';
@@ -21,12 +22,28 @@
   let selectedTargets = $state<string[]>([]);
   let startsAt = $state(toLocalInput(new Date(Date.now() + 15 * 60 * 1000)));
   let endsAt = $state(toLocalInput(new Date(Date.now() + 60 * 60 * 1000)));
+  let recurrence = $state<'once' | 'weekly'>('once');
+  let recurrenceUntil = $state(toLocalInput(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)).slice(0, 10));
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  let dialog: HTMLDialogElement;
+  onMount(() => {
+    dialog.showModal();
+    return () => dialog.close();
+  });
   let busy = $state(false);
   let error = $state('');
 
   function toLocalInput(date: Date) {
     const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
     return shifted.toISOString().slice(0, 16);
+  }
+
+  function parseLocalTime(value: string) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime()) || toLocalInput(date) !== value) {
+      throw new Error(t('maintenance.invalidLocalTime', { zone: timezone }));
+    }
+    return date;
   }
 
   function toggleTarget(targetID: string) {
@@ -37,6 +54,7 @@
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
+    if (busy) return;
     error = '';
     if (selectedTargets.length === 0) {
       error = t('workshop.pickTarget');
@@ -44,14 +62,17 @@
     }
     busy = true;
     try {
+      const start = timing === 'planned' ? parseLocalTime(startsAt) : undefined;
+      const end = parseLocalTime(endsAt);
       const created = await api<Maintenance>('/api/v1/maintenances', {
         method: 'POST',
         body: JSON.stringify({
           name,
           reason,
           target_ids: selectedTargets,
-          starts_at: timing === 'planned' ? new Date(startsAt).toISOString() : undefined,
-          ends_at: new Date(endsAt).toISOString()
+          starts_at: start?.toISOString(),
+          ends_at: end.toISOString(),
+          recurrence: recurrence === 'weekly' ? { frequency: 'weekly', timezone, until: recurrenceUntil } : undefined
         })
       });
       await onsuccess(created);
@@ -64,16 +85,13 @@
   }
 </script>
 
-<svelte:window onkeydown={(event) => event.key === 'Escape' && onclose()} />
-
-<div class="scrim" role="presentation" onclick={(event) => event.target === event.currentTarget && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="maintenance-title">
+<dialog bind:this={dialog} class="modal maintenance-dialog" aria-labelledby="maintenance-title" oncancel={(event) => { event.preventDefault(); if (!busy) onclose(); }}>
     <header>
       <div>
         <h2 id="maintenance-title">{t('workshop.maintenanceTitle')}</h2>
         <p>{t('workshop.maintenanceLead')}</p>
       </div>
-      <button class="close" type="button" onclick={onclose} aria-label="Fermer">
+      <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
         <Icon name="close" size={14} />
       </button>
     </header>
@@ -112,6 +130,21 @@
           </div>
         </div>
 
+        <div class="field">
+          <label for="mw-recurrence">{t('maintenance.recurrence')}</label>
+          <select id="mw-recurrence" bind:value={recurrence}>
+            <option value="once">{t('maintenance.once')}</option>
+            <option value="weekly">{t('maintenance.weekly')}</option>
+          </select>
+        </div>
+        {#if recurrence === 'weekly'}
+          <div class="field">
+            <label for="mw-until">{t('maintenance.repeatUntil')}</label>
+            <input id="mw-until" type="date" bind:value={recurrenceUntil} required aria-describedby="mw-recurrence-hint" />
+            <small id="mw-recurrence-hint">{t('maintenance.recurrenceHint', { zone: timezone })}</small>
+          </div>
+        {/if}
+
         <fieldset class="targets">
           <legend>
             {t('workshop.neutralisedTargets')}
@@ -139,16 +172,26 @@
       </div>
 
       <footer>
-        <button class="btn" type="button" onclick={onclose}>Annuler</button>
+        <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
         <button class="btn primary" type="submit" disabled={busy}>
-          {busy ? t('workshop.logging') : t('workshop.activateWindow')}
+          {busy ? t('workshop.logging') : recurrence === 'weekly' ? t('maintenance.planSeries') : timing === 'planned' ? t('maintenance.plan') : t('workshop.activateWindow')}
         </button>
       </footer>
     </form>
-  </div>
-</div>
+</dialog>
 
 <style>
+  .maintenance-dialog {
+    margin: auto;
+    padding: 0;
+    width: min(42rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    color: var(--ink);
+    overscroll-behavior: contain;
+  }
+  .maintenance-dialog:not([open]) { display: none; }
+  .maintenance-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+
   .timing {
     width: 100%;
     margin-bottom: var(--s5);

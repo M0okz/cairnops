@@ -21,30 +21,36 @@ type Target struct {
 }
 
 type Maintenance struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Reason      string     `json:"reason"`
-	State       string     `json:"state"`
-	StartsAt    time.Time  `json:"starts_at"`
-	EndsAt      time.Time  `json:"ends_at"`
-	CancelledAt *time.Time `json:"cancelled_at,omitempty"`
-	CreatedBy   string     `json:"created_by,omitempty"`
-	Targets     []Target   `json:"targets"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID             string      `json:"id"`
+	Name           string      `json:"name"`
+	Reason         string      `json:"reason"`
+	State          string      `json:"state"`
+	StartsAt       time.Time   `json:"starts_at"`
+	EndsAt         time.Time   `json:"ends_at"`
+	CancelledAt    *time.Time  `json:"cancelled_at,omitempty"`
+	CreatedBy      string      `json:"created_by,omitempty"`
+	Targets        []Target    `json:"targets"`
+	CreatedAt      time.Time   `json:"created_at"`
+	SeriesID       string      `json:"series_id,omitempty"`
+	Recurrence     *Recurrence `json:"recurrence,omitempty"`
+	ExtensionCount int         `json:"extension_count"`
 }
 
 type CreateInput struct {
-	Name      string    `json:"name"`
-	Reason    string    `json:"reason"`
-	TargetIDs []string  `json:"target_ids"`
-	StartsAt  time.Time `json:"starts_at"`
-	EndsAt    time.Time `json:"ends_at"`
+	Name       string      `json:"name"`
+	Reason     string      `json:"reason"`
+	TargetIDs  []string    `json:"target_ids"`
+	StartsAt   time.Time   `json:"starts_at"`
+	EndsAt     time.Time   `json:"ends_at"`
+	Recurrence *Recurrence `json:"recurrence,omitempty"`
 }
 
 type Store interface {
 	List(context.Context, int) ([]Maintenance, error)
 	Create(context.Context, string, CreateInput) (Maintenance, error)
 	Cancel(context.Context, string, string) (Maintenance, error)
+	CancelSeries(context.Context, string, string) (Maintenance, error)
+	Extend(context.Context, string, string, time.Time) (Maintenance, error)
 }
 
 type Service struct {
@@ -105,6 +111,9 @@ func (service *Service) Create(ctx context.Context, actorID string, input Create
 	if input.EndsAt.Before(now) {
 		return Maintenance{}, fmt.Errorf("%w: la fenêtre est déjà terminée", ErrInvalidInput)
 	}
+	if _, err := occurrences(input); err != nil {
+		return Maintenance{}, err
+	}
 	return service.store.Create(ctx, actorID, input)
 }
 
@@ -118,4 +127,17 @@ func validUUID(value string) bool {
 
 func (service *Service) Cancel(ctx context.Context, maintenanceID, actorID string) (Maintenance, error) {
 	return service.store.Cancel(ctx, maintenanceID, actorID)
+}
+
+func (service *Service) CancelSeries(ctx context.Context, maintenanceID, actorID string) (Maintenance, error) {
+	return service.store.CancelSeries(ctx, maintenanceID, actorID)
+}
+
+// ExpectedEndsAt ensures retries and concurrent operators cannot extend twice
+// from the same displayed end time.
+func (service *Service) Extend(ctx context.Context, maintenanceID, actorID string, expectedEndsAt time.Time) (Maintenance, error) {
+	if expectedEndsAt.IsZero() {
+		return Maintenance{}, fmt.Errorf("%w: expected_ends_at requis", ErrInvalidInput)
+	}
+	return service.store.Extend(ctx, maintenanceID, actorID, expectedEndsAt)
 }

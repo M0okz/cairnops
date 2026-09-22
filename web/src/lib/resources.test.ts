@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Target, TargetMeasures, Incident, IncidentEvidence } from './api.ts';
+import type { Target, TargetMeasures, Incident, IncidentEvidence, Maintenance } from './api.ts';
 // @ts-ignore -- Node executes tests directly with its TypeScript loader.
-import { resourceState, resourceProblems, resourceDivergence, problemText } from './resources.ts';
+import { resourceState, resourceProblems, resourceDivergence, resourceUnderMaintenance, problemText } from './resources.ts';
 const now = Date.parse('2026-09-22T12:00:00Z');
 const date = new Date(now).toISOString();
 const target: Target = { id: 'r', name: 'Home Assistant', description: '', created_at: date, external_source_count: 2, aliases: [], sources: [] };
@@ -14,6 +14,18 @@ test('a critical version alert does not make an accessible service unavailable',
  assert.equal(resourceState(target, [incident('version-query')], measures, now), 'ok');
  assert.equal(resourceState(target, [incident('software-update-available')], measures, now), 'ok');
  assert.equal(resourceState(target, [incident('availability')], measures, now), 'down');
+});
+
+test('incident maintenance fallback expires and never masks an actionable incident indefinitely', () => {
+ const item = incident('availability');
+ item.impacts[0].maintenance_active = true;
+ item.impacts[0].maintenance_ends_at = new Date(now + 60_000).toISOString();
+ assert.equal(resourceUnderMaintenance(target.id, [item], now), true);
+ assert.equal(resourceState(target, [item], measures, now), 'maintenance');
+ assert.equal(resourceUnderMaintenance(target.id, [item], now + 120_000), false);
+ assert.equal(resourceState(target, [item], measures, now + 120_000), 'down');
+ // A successfully read empty list overrides an old, cancelled projection.
+ assert.equal(resourceUnderMaintenance(target.id, [item], now, []), false);
 });
 test('missing, stale and non-availability measurements cannot prove availability', () => {
  assert.equal(resourceState(target, [], undefined, now), 'unknown');
@@ -38,4 +50,39 @@ test('contradictions require recent opposite proofs of the same condition', () =
 test('a suspended availability check cannot establish an available resource', () => {
  const suspended=structuredClone(measures);suspended.sources[0].enabled=false;
  assert.equal(resourceState(target,[],suspended,now),'unknown');
+});
+
+test('a scheduled maintenance applies without an incident and expires by its dates', () => {
+ const window: Maintenance = { id: 'm', name: 'Intervention', reason: 'Maintenance planifiée',
+  state: 'upcoming', starts_at: date, ends_at: new Date(now + 1800_000).toISOString(),
+  targets: [{ id: target.id, name: target.name }], created_at: date };
+ assert.equal(resourceState(target, [], measures, now, [window]), 'maintenance');
+ assert.equal(resourceState(target, [], measures, now - 1000, [window]), 'ok');
+ assert.equal(resourceState(target, [], undefined, now + 1800_001, [window]), 'unknown');
+ assert.equal(resourceState(target, [], measures, now, [{ ...window, cancelled_at: date }]), 'ok');
+ assert.equal(resourceState(target, [], measures, now, [{ ...window, targets: [{ id: 'other', name: 'Other' }] }]), 'ok');
+ const staleMaintenance = incident('availability');
+ staleMaintenance.impacts[0].maintenance_active = true;
+ assert.equal(resourceState(target, [staleMaintenance], undefined, now + 1800_001, [window]), 'unknown');
+});
+
+
+test('a partial or cached maintenance list keeps known windows and a bounded fallback for missing resources', () => {
+ const window: Maintenance = { id: 'known', name: 'Intervention', reason: 'Maintenance planifiée',
+  state: 'active', starts_at: date, ends_at: new Date(now + 1800_000).toISOString(),
+  targets: [{ id: target.id, name: target.name }], created_at: date };
+ const truncated = Array.from({ length: 200 }, (_, index) => ({ ...window, id: `window-${index}` }));
+ // Reaching the transport limit must not discard a known active window,
+ // including for a resource that has no incident to provide a fallback.
+ assert.equal(resourceState(target, [], undefined, now, truncated, false), 'maintenance');
+ assert.equal(resourceUnderMaintenance(target.id, [], now, truncated, false), true);
+ assert.equal(resourceUnderMaintenance(target.id, [], now + 1800_001, truncated, false), false);
+ const missing = incident('availability');
+ missing.impacts[0].target_id = 'outside-page';
+ missing.impacts[0].maintenance_active = true;
+ missing.impacts[0].maintenance_ends_at = new Date(now + 60_000).toISOString();
+ assert.equal(resourceUnderMaintenance('outside-page', [missing], now, truncated, false), true);
+ assert.equal(resourceUnderMaintenance('outside-page', [missing], now + 60_001, truncated, false), false);
+ // A successful complete empty list still establishes an early cancellation.
+ assert.equal(resourceUnderMaintenance('outside-page', [missing], now, [], true), false);
 });

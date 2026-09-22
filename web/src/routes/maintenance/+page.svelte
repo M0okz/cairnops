@@ -10,10 +10,14 @@
   import { session } from '$lib/session.svelte';
   import { since, stamp, until } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
-  import type { Maintenance } from '$lib/api';
+  import { api, type Maintenance } from '$lib/api';
 
   let scope = $state<'planned' | 'past'>('planned');
   let workshopOpen = $state(false);
+  let busy = $state('');
+  let actionError = $state('');
+  let cancelSeriesID = $state('');
+  const canOperate = $derived(session.user?.role === 'administrator' || session.user?.role === 'operator');
   let now = $state(new Date());
 
   $effect(() => {
@@ -46,6 +50,24 @@
     return since(item.starts_at, new Date(item.ends_at));
   }
 
+  async function change(item: Maintenance, action: 'extension' | 'series-cancellation') {
+    if (busy) return;
+    busy = item.id;
+    actionError = '';
+    try {
+      await api<Maintenance>(`/api/v1/maintenances/${item.id}/${action}`, {
+        method: 'POST',
+        ...(action === 'extension' ? { body: JSON.stringify({ expected_ends_at: item.ends_at }) } : {})
+      });
+      cancelSeriesID = '';
+      await Promise.all([session.loadMaintenances(), session.loadIncidents()]);
+      session.showNotice(t(action === 'extension' ? 'maintenance.extended' : 'maintenance.seriesCancelled'));
+    } catch (cause) {
+      actionError = cause instanceof Error ? cause.message : t('maintenance.changeFailed');
+      await session.loadMaintenances();
+    } finally { busy = ''; }
+  }
+
   /* Le fuseau affiché est celui du navigateur ; le stockage reste en UTC. */
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 </script>
@@ -60,12 +82,14 @@
       <h1>{t('nav.maintenance')}</h1>
       <p>{t('maintenance.lead')}</p>
     </div>
-    <div class="page-actions">
+    {#if canOperate}<div class="page-actions">
       <button class="btn primary" type="button" onclick={() => (workshopOpen = true)}>
         {t('maintenance.plan')}
       </button>
-    </div>
+    </div>{/if}
   </div>
+
+  {#if actionError}<p class="error" role="alert">{actionError}</p>{/if}
 
   {#each running as item (item.id)}
     <div class="banner info current">
@@ -83,9 +107,14 @@
           {t('maintenance.currentSay')}
         </p>
       </div>
-      <button class="btn sm" type="button" onclick={() => session.cancelMaintenance(item)}>
-        {t('maintenance.endNow')}
-      </button>
+      {#if canOperate}
+        <div class="maintenance-actions">
+          <button class="btn sm" type="button" disabled={!!busy} onclick={() => change(item, 'extension')}>{t('maintenance.extend')}</button>
+          <button class="btn sm" type="button" disabled={!!busy} onclick={() => session.cancelMaintenance(item)}>
+            {item.series_id ? t('maintenance.endOccurrence') : t('maintenance.endNow')}
+          </button>
+        </div>
+      {/if}
     </div>
   {/each}
 
@@ -121,6 +150,9 @@
           <span>
             <strong>{item.name}</strong>
             {#if item.reason}<small class="reason">{item.reason}</small>{/if}
+            {#if item.recurrence}<small class="reason">{t('maintenance.seriesSummary', { date: item.recurrence.until, zone: item.recurrence.timezone })}</small>{/if}
+            {#if item.extension_count}<small class="reason">{t('maintenance.extensionSummary', { count: item.extension_count * 30 })}</small>{/if}
+            <small class="mobile-range num">{stamp(item.starts_at)} → {stamp(item.ends_at)}</small>
           </span>
         </span>
 
@@ -138,14 +170,26 @@
 
         <span class="faint hide-sm">{item.created_by ?? t('common.none')}</span>
 
-        {#if item.state === 'active' || item.state === 'upcoming'}
+        {#if canOperate && (item.state === 'active' || item.state === 'upcoming')}
+          <div class="maintenance-actions">
           <button class="btn sm" type="button" onclick={() => session.cancelMaintenance(item)}>
-            {item.state === 'active' ? t('maintenance.end') : t('common.cancel')}
+            {item.series_id ? (item.state === 'active' ? t('maintenance.endOccurrence') : t('maintenance.cancelOccurrence')) : item.state === 'active' ? t('maintenance.end') : t('common.cancel')}
           </button>
+          {#if item.series_id}<button class="btn sm" type="button" disabled={!!busy} onclick={() => (cancelSeriesID = item.id)}>{t('maintenance.cancelSeries')}</button>{/if}
+          </div>
         {:else}
           <span></span>
         {/if}
       </div>
+      {#if cancelSeriesID === item.id}
+        <div class="series-confirm" role="group" aria-label={t('maintenance.cancelSeries')}>
+          <p>{t('maintenance.cancelSeriesHint', { name: item.name })}</p>
+          <div class="maintenance-actions">
+            <button class="btn sm" type="button" disabled={!!busy} onclick={() => (cancelSeriesID = '')}>{t('common.cancel')}</button>
+            <button class="btn sm" type="button" disabled={!!busy} onclick={() => change(item, 'series-cancellation')}>{t('maintenance.confirmCancelSeries')}</button>
+          </div>
+        </div>
+      {/if}
     {:else}
       <div class="empty">
         {#if scope === 'planned'}
@@ -181,14 +225,22 @@
     --cols: minmax(0, 1.3fr) 6.75rem 11.875rem 4.125rem minmax(0, 1fr) 6rem auto;
   }
 
-  .trow > .btn { justify-self: end; }
+  .maintenance-actions { display: flex; flex-wrap: wrap; gap: var(--s2); justify-content: flex-end; }
+  .trow > .maintenance-actions { max-width: 12rem; justify-self: end; }
+  .series-confirm { padding: var(--s4); background: var(--surface-2); }
+  .series-confirm p { margin-bottom: var(--s3); }
+  .mobile-range { display: none; }
+  .reason { display: block; }
+
   @container (max-width: 55rem) {
     .thead, .trow > .hide-sm { display: none; }
     .trow { grid-template-columns: minmax(0, 1fr) auto; }
-    .trow > .btn { grid-column: 1 / -1; }
+    .trow > .maintenance-actions { grid-column: 1 / -1; max-width: none; }
+    .mobile-range { display: block; margin-top: var(--s2); color: var(--muted); font-size: 0.6875rem; }
   }
 
   .current {
+    flex-wrap: wrap;
     margin-bottom: var(--s5);
     align-items: center;
   }
