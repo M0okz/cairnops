@@ -1,5 +1,6 @@
 <script lang="ts">
   import AppearanceSettings from '$lib/components/AppearanceSettings.svelte';
+  import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   /* Réglages.
    * Les Écrans placent « Réglages » dans la navigation et font passer les
    * Connecteurs par lui. S'y ajoutent les gestes qui portent sur les comptes,
@@ -332,15 +333,10 @@
         <strong>{t('rail.language')}</strong>
         <small class="faint">{t('settings.languageHint')}</small>
       </span>
-      <div class="act segments" role="group" aria-label={t('rail.language')}>
-        {#each locales as choice (choice.value)}
-          <button
-            type="button"
-            lang={choice.value}
-            aria-pressed={i18n.locale === choice.value}
-            onclick={() => i18n.choose(choice.value)}>{choice.label}</button
-          >
-        {/each}
+      <div class="act">
+        <SegmentedControl value={i18n.locale} label={t('rail.language')}
+          items={locales.map((choice) => ({ ...choice, lang: choice.value }))}
+          onValueChange={(value) => i18n.choose(value)} />
       </div>
     </div>
 

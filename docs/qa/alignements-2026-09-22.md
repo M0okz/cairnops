@@ -16,7 +16,7 @@ Aucun contrat HTTP ni comportement de supervision n’est modifié.
 | Incidents et maintenance | Boutons étirés selon la largeur du badge précédent | Action sur une ligne complète, alignée au bord final ; repli selon la largeur disponible |
 | Connecteurs | Métadonnées séparant les boutons sur différentes lignes | Groupe d’actions solidaire, avec retour à la ligne interne |
 | Filtres | Bordures segmentées cassées après retour à la ligne | Segments indépendants avec espacement constant |
-| Création de ressource et maintenance | Anciens boutons natifs sans style, superposés sur téléphone | Réutilisation du sélecteur commun |
+| Création de ressource, maintenance et langue des réglages | Anciens boutons natifs sans style, superposés sur téléphone | Réutilisation du sélecteur commun |
 | Menus des ressources | Panneau collé au bord du viewport | Marge de collision de 16 px |
 | Pieds de fenêtre | Boutons en escalier sur petit écran | Bords et largeur communs sous 480 px |
 | Personnalisation | Recherche native non stylée ; Enregistrer coupé à 390 × 600 | Champ commun ; en-tête et pied non rétractables, catalogue défilant |
@@ -45,3 +45,9 @@ Les tests métier des écritures et les connecteurs réels restent hors du péri
 visuel de ces fixtures. Les contrôles post-publication doivent être faits dans
 le navigateur externe de l’utilisateur, avec preuve du SHA servi et de la santé
 des conteneurs ; une capture locale ne prouve pas le déploiement.
+
+Le contrôle post-publication dans Opera a confirmé les tableaux mobiles, la
+Santé en sombre et les actions de la personnalisation avec le catalogue réel.
+Il a également révélé le dernier groupe natif `act segments` dans la langue
+des Réglages : il utilise désormais le sélecteur commun. Le contrôle existant
+des consommateurs couvre aussi les classes composées et ces trois formulaires.

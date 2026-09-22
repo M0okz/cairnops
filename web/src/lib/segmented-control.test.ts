@@ -4,6 +4,9 @@ import test from 'node:test';
 
 const consumers = [
   '../routes/incidents/+page.svelte',
+  '../routes/reglages/+page.svelte',
+  './components/TargetWorkshop.svelte',
+  './components/MaintenanceWorkshop.svelte',
   '../routes/cibles/[id]/+page.svelte',
   '../routes/maintenance/+page.svelte',
   './components/TargetIndicators.svelte',
@@ -12,7 +15,7 @@ const consumers = [
 
 test('tous les groupes segmentés utilisent le même composant', () => {
   for (const consumer of consumers) {
-    assert.doesNotMatch(consumer, /<div class="segments"/);
+    assert.doesNotMatch(consumer, /<div class="[^"]*\bsegments\b[^"]*"/);
     assert.match(consumer, /SegmentedControl/);
   }
 });
