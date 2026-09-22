@@ -3,6 +3,7 @@ package softwareupdates
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -169,5 +170,49 @@ func TestGenerateConsolidatesMultipleChunksWithExactEvidence(t *testing.T) {
 	}
 	if err := validateSummary(got, c); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRepositoryReducesOversizedPagesWithoutSkippingReleases(t *testing.T) {
+	requested := []string{}
+	client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/tags") {
+			return response(`[]`), nil
+		}
+		size, page := r.URL.Query().Get("per_page"), r.URL.Query().Get("page")
+		requested = append(requested, size+":"+page)
+		if size == "100" && page == "1" {
+			rows := make([]map[string]string, 100)
+			for i := range rows {
+				rows[i] = map[string]string{"tag_name": fmt.Sprintf("3.0.%d", 200-i), "body": "Documented release improvements."}
+			}
+			return response(string(mustJSON(rows))), nil
+		}
+		if size == "100" {
+			return response(strings.Repeat("x", (2<<20)+1)), nil
+		}
+		if size != "50" || page != "3" {
+			t.Fatalf("pagination skipped entries: %s:%s", size, page)
+		}
+		return response(`[{"tag_name":"3.0.100","body":"Fixed database migrations for MySQL."}]`), nil
+	})}
+	c, err := Collect(context.Background(), client, Source{Kind: "github", URL: "https://github.com/example/project", Software: "Project"}, "3.0.99", "3.0.200")
+	if err != nil || c.Incomplete || len(c.Notes) != 101 {
+		t.Fatalf("notes=%d incomplete=%v err=%v requests=%v", len(c.Notes), c.Incomplete, err, requested)
+	}
+	if strings.Join(requested, ",") != "100:1,100:2,50:3" {
+		t.Fatalf("requests=%v", requested)
+	}
+}
+
+func TestRepositoryKeepsResponseLimitForOversizedSingleRelease(t *testing.T) {
+	calls := 0
+	client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		return response(strings.Repeat("x", (2<<20)+1)), nil
+	})}
+	_, err := Collect(context.Background(), client, Source{Kind: "github", URL: "https://github.com/example/project", Software: "Project"}, "1.0", "2.0")
+	if !errors.Is(err, errResponseTooLarge) || calls != 5 {
+		t.Fatalf("calls=%d err=%v", calls, err)
 	}
 }

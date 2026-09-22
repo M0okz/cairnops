@@ -2,6 +2,7 @@ package softwareupdates
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -67,6 +68,9 @@ func publicClient() *http.Client {
 	tr.ResponseHeaderTimeout = 20 * time.Second
 	return &http.Client{Transport: tr, Timeout: 90 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 }
+
+var errResponseTooLarge = errors.New("response too large")
+
 func request(ctx context.Context, client *http.Client, method, endpoint, key string, body io.Reader) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
@@ -93,7 +97,7 @@ func request(ctx context.Context, client *http.Client, method, endpoint, key str
 		return nil, fmt.Errorf("read response failed")
 	}
 	if len(b) > 2<<20 {
-		return nil, fmt.Errorf("response too large")
+		return nil, errResponseTooLarge
 	}
 	return b, nil
 }

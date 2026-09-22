@@ -3,6 +3,7 @@ package softwareupdates
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -129,13 +130,23 @@ func collectRepository(ctx context.Context, client *http.Client, s Source) ([]No
 	notes := []Note{}
 	incomplete := false
 	for _, resource := range []string{"releases", "tags"} {
-		for page := 1; page <= 20; page++ {
+		// Smaller page sizes divide their predecessor, preserving the offset
+		// when a later page exceeds the bounded HTTP response size.
+		sizes := []int{100, 50, 25, 5, 1}
+		sizeIndex, offset := 0, 0
+		for attempt := 0; attempt < 20; attempt++ {
+			size := sizes[sizeIndex]
+			page := offset/size + 1
 			endpoint := base + "/" + resource
 			if s.Kind == "gitlab" && resource == "releases" {
 				endpoint = strings.TrimSuffix(base, "/repository") + "/releases"
 			}
-			b, err := request(ctx, client, "GET", fmt.Sprintf("%s?per_page=100&limit=100&page=%d", endpoint, page), "", nil)
+			b, err := request(ctx, client, "GET", fmt.Sprintf("%s?per_page=%d&limit=%d&page=%d", endpoint, size, size, page), "", nil)
 			if err != nil {
+				if errors.Is(err, errResponseTooLarge) && sizeIndex < len(sizes)-1 && attempt < 19 {
+					sizeIndex++
+					continue
+				}
 				if len(notes) == 0 {
 					return nil, false, err
 				}
@@ -180,10 +191,11 @@ func collectRepository(ctx context.Context, client *http.Client, s Source) ([]No
 				}
 				notes = append(notes, Note{Version: v, URL: link, Body: body})
 			}
-			if len(rows) < 100 {
+			offset += size
+			if len(rows) < size {
 				break
 			}
-			if page == 20 {
+			if attempt == 19 {
 				incomplete = true
 			}
 		}
