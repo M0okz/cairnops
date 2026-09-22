@@ -300,6 +300,10 @@ td.num,
   z-index: 30;
 }
 
+:root[data-theme='light'] .rail {
+  background: var(--surface);
+}
+
 .rail-brand { display: flex; align-items: center; justify-content: center; padding: var(--s4) var(--s3); }
 .rail-brand .brand-full { width: min(100%, var(--rail-brand-w)); }
 .rail-brand .brand-full .cairnops-brand { width: 100%; height: auto; }
