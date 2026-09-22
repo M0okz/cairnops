@@ -1,11 +1,11 @@
 # CairnOps
 
-CairnOps centralise la supervision continue de cibles et la coordination des incidents depuis plusieurs interfaces partageant le même état.
+CairnOps centralise la supervision continue de ressources et la coordination des incidents depuis plusieurs interfaces partageant le même état.
 
 ## Langage
 
 **Espace opérationnel** :
-Ensemble isolé des Cibles, Sources de signal, Incidents, utilisateurs et appareils appartenant à une unique installation CairnOps. Une installation ne contient qu'un Espace opérationnel.
+Ensemble isolé des Ressources, Sources de signal, Incidents, utilisateurs et appareils appartenant à une unique installation CairnOps. Une installation ne contient qu'un Espace opérationnel.
 _Éviter_ : Tenant, organisation, workspace
 
 **Utilisateur** :
@@ -37,7 +37,7 @@ Retrait automatique et réversible de l'accès d'un Utilisateur externe lorsque 
 _Éviter_ : Désactivation d'un Utilisateur, révocation d'un appareil
 
 **Administrateur** :
-Utilisateur habilité à configurer l'Espace opérationnel, ses utilisateurs, appareils, intégrations, Cibles et Sources de signal. Il possède également tous les pouvoirs d'un Opérateur.
+Utilisateur habilité à configurer l'Espace opérationnel, ses utilisateurs, appareils, intégrations, Ressources et Sources de signal. Il possède également tous les pouvoirs d'un Opérateur.
 _Éviter_ : Super-utilisateur, propriétaire
 
 **Administrateur local de secours** :
@@ -84,33 +84,57 @@ _Éviter_ : Déploiement exécuté, journal de déploiement
 État de référence maintenu par le serveur et projeté vers les interfaces Web, iOS et Android. Une copie locale ou une action en attente de synchronisation ne constitue pas l'état de référence.
 _Éviter_ : État local, vérité du client
 
-**Cible** :
-Chose identifiable et durable dont l'état opérationnel importe à l'utilisateur, par exemple un service, un équipement ou une tâche planifiée. Une Cible peut être observée par plusieurs Sources de signal ; son identité, son historique et son cycle de vie appartiennent à CairnOps, même lorsqu'elle a été découverte par une Intégration.
-_Éviter_ : Monitor, moniteur, ressource
+**Ressource** :
+Chose identifiable et durable dont l'état opérationnel importe à l'utilisateur, par exemple un service, un équipement ou une tâche planifiée. Une Ressource peut être observée par plusieurs Sources de signal ; son identité, son historique et son cycle de vie appartiennent à CairnOps, même lorsqu'elle a été découverte par une Intégration.
+_Éviter_ : Cible, monitor, moniteur
 
-**Suggestion de rapprochement** :
-Proposition non contraignante selon laquelle deux Cibles pourraient représenter la même chose. Elle ne modifie leur identité ni leur historique tant qu'un utilisateur ne l'a pas confirmée.
-_Éviter_ : Fusion automatique, déduplication automatique
+**Catégorie de ressource** :
+Classement d’une Ressource selon ce qu’elle représente : Service, Infrastructure, Tâche planifiée ou Logiciel suivi. Une Ressource conserve une seule fiche regroupant ses Contrôles ; le suivi de sa version ne transforme pas un Service en Logiciel suivi.
+_Éviter_ : Connecteur, gravité, état de fonctionnement
 
-**Source de signal** :
-Mécanisme rattaché à une Cible qui produit des observations sur son état, qu'il s'agisse d'une sonde exécutée par CairnOps ou d'une intégration externe.
-_Éviter_ : Monitor, fournisseur
+**À classer** :
+Situation d’une Ressource dont les informations disponibles ne permettent pas encore de proposer une catégorie suffisamment claire. Elle indique un classement à compléter, sans qualifier le fonctionnement de la Ressource.
+_Éviter_ : Catégorie métier, état inconnu, problème détecté
+
+**Service** :
+Ressource qui fournit une fonction utilisable, telle que Home Assistant ou Nextcloud, dont on suit notamment l’accès, les temps de réponse et les problèmes constatés.
+_Éviter_ : Logiciel suivi uniquement pour ses versions, serveur hôte
+
+**Infrastructure** :
+Catégorie des Ressources qui hébergent, relient ou stockent les services, notamment les serveurs, machines virtuelles, équipements réseau et systèmes de stockage. Leur suivi porte notamment sur le fonctionnement, la capacité et les problèmes constatés.
+_Éviter_ : Service applicatif, Connecteur
+
+**Tâche planifiée** :
+Ressource représentant une exécution attendue à une cadence définie, telle qu’une sauvegarde ou une synchronisation, dont on suit notamment la dernière réussite, les échecs et les retards.
+_Éviter_ : Service disponible en continu, tâche utilisateur
+
+**Logiciel suivi** :
+Ressource suivie uniquement pour ses versions et les mises à jour disponibles, sans constituer la fiche d’un service dont le fonctionnement est supervisé. Lorsqu’un Service possède déjà une fiche, le suivi de sa version est rattaché à cette même Ressource.
+_Éviter_ : Service indisponible, doublon de Service pour son suivi de version
+
+**Doublon possible** :
+Proposition non contraignante selon laquelle deux Ressources pourraient représenter la même chose. Elle ne modifie leur identité ni leur historique tant qu'un utilisateur ne l'a pas confirmée.
+_Éviter_ : Suggestion de rapprochement, doublon confirmé, fusion automatique, déduplication automatique
+
+**Contrôle** :
+Vérification rattachée à une Ressource qui produit des observations sur un aspect précis de son fonctionnement ou de sa situation, exécutée par CairnOps ou rapportée par un outil externe. « Contrôle » est le terme de référence pour le concept précédemment nommé « Source de signal » ; le Connecteur désigne l’adaptateur vers l’outil externe.
+_Éviter_ : Source de signal, source, monitor, fournisseur
 
 **Intégration** :
-Connexion configurée à un système externe qui peut découvrir des Cibles, créer des Sources de signal ou transmettre des Observations. Elle conserve la propriété de ses Sources importées et de leurs liens externes, mais jamais celle des Cibles CairnOps auxquelles elles sont rattachées.
+Connexion configurée à un système externe qui peut découvrir des Ressources, créer des Sources de signal ou transmettre des Observations. Elle conserve la propriété de ses Sources importées et de leurs liens externes, mais jamais celle des Ressources CairnOps auxquelles elles sont rattachées.
 _Éviter_ : Fournisseur, monitor
 
 **Connecteur** :
 Adaptateur sur mesure fourni par CairnOps pour créer et exploiter simplement une Intégration avec un produit donné. Il encapsule l'autorisation, la validation, la découverte et la configuration propres au produit, puis traduit ses événements en Observations et Preuves structurées selon le langage de CairnOps.
 _Éviter_ : Intégration, configuration manuelle
 
-**Cible découverte** :
-Entité trouvée dans l'inventaire d'une Intégration avant de devenir une Cible. Pendant la connexion initiale, elle est présentée à un Administrateur avant son import ; après cette connexion, elle peut devenir automatiquement une Cible lorsqu'aucun rapprochement plausible n'existe, tandis qu'une ambiguïté exige toujours une confirmation.
-_Éviter_ : Cible active, rapprochement automatique ambigu
+**Ressource découverte** :
+Entité trouvée dans l'inventaire d'une Intégration avant de devenir une Ressource. Pendant la connexion initiale, elle est présentée à un Administrateur avant son import ; après cette connexion, elle peut devenir automatiquement une Ressource lorsqu'aucun rapprochement plausible n'existe, tandis qu'une ambiguïté exige toujours une confirmation.
+_Éviter_ : Ressource active, rapprochement automatique ambigu
 
 **Signal à rapprocher** :
-Signal entrant muni d'une identité externe stable mais ne pouvant pas encore être rattaché avec certitude à une Cible. Il reste hors du tableau opérationnel et ne déclenche aucune escalade jusqu'à sa création ou son rapprochement par un Administrateur ; ses signaux conservés sont alors rattachés rétroactivement, sans notifier un problème déjà terminé.
-_Éviter_ : Cible, Incident actif
+Signal entrant muni d'une identité externe stable mais ne pouvant pas encore être rattaché avec certitude à une Ressource. Il reste hors du tableau opérationnel et ne déclenche aucune escalade jusqu'à sa création ou son rapprochement par un Administrateur ; ses signaux conservés sont alors rattachés rétroactivement, sans notifier un problème déjà terminé.
+_Éviter_ : Ressource, Incident actif
 
 **Contrôle natif** :
 Source de signal interrogée ou exécutée périodiquement par CairnOps depuis son propre point de vue réseau.
@@ -126,7 +150,7 @@ _Éviter_ : Serveur CairnOps, source de vérité
 
 **Bail de présence** :
 Preuve opaque renouvelée périodiquement par une instance auprès du Relais Push. Son expiration déclenche la livraison d'un message préalablement chiffré indiquant seulement que l'instance ne donne plus signe de vie.
-_Éviter_ : Contrôle de Cible, accès distant
+_Éviter_ : Contrôle de Ressource, accès distant
 
 **Canal de notification** :
 Destination configurée par laquelle CairnOps informe un utilisateur ou un système externe d'un événement opérationnel, notamment dans l'application, par Push, navigateur, courrier électronique, webhook signé ou Mattermost.
@@ -160,44 +184,52 @@ _Éviter_ : Escalade, nouvel Incident
 Signal entrant périodique attestant qu'une tâche externe continue de fonctionner ; son absence au-delà de la tolérance configurée constitue une Observation défavorable.
 _Éviter_ : Ping, ICMP
 
+**Problème constaté** :
+Description précise d’une condition défavorable concernant une Ressource, appuyée par les observations ou les détails transmis par une Source de signal, par exemple des réponses lentes, des erreurs intermittentes ou une sauvegarde trop ancienne. Elle constitue la description présentée en priorité et reste limitée à ce que les preuves permettent d’établir, sans déduire une cause ou une fonctionnalité affectée non observée.
+_Éviter_ : Diagnostic supposé, gravité seule, état générique lorsque le problème est connu
+
+**Problème signalé** :
+Libellé de repli d’une condition défavorable rapportée par une Source de signal lorsque les informations disponibles ne permettent pas de décrire précisément le problème. Il n’établit à lui seul ni une indisponibilité de la Ressource, ni une défaillance de la Source.
+_Éviter_ : En défaut, source en panne, ressource indisponible
+
 **Observation** :
-Résultat daté produit par une Source de signal au sujet d'une Cible. Une observation isolée ne constitue pas nécessairement un changement d'état ni un Incident.
+Résultat daté produit par une Source de signal au sujet d'une Ressource. Une observation isolée ne constitue pas nécessairement un changement d'état ni un Incident.
 _Éviter_ : Incident, alerte
 
 **Preuve d'Incident** :
-Contribution traçable d'une Source de signal à l'Atteinte d'une Cible au sein d'un Incident, établie lorsque le Contrôle natif ou l'Intégration conclut à une condition active. Elle exprime une Nature et, lorsqu'ils sont disponibles, l'objet concerné, la valeur constatée, le seuil franchi et le libellé original ; son Invalidation, son rétablissement ou le retrait de sa Source cesse d'alimenter l'Atteinte.
+Contribution traçable d'une Source de signal à l'Atteinte d'une Ressource au sein d'un Incident, établie lorsque le Contrôle natif ou l'Intégration conclut à une condition active. Elle exprime une Nature et, lorsqu'ils sont disponibles, l'objet concerné, la valeur constatée, le seuil franchi et le libellé original ; son Invalidation, son rétablissement ou le retrait de sa Source cesse d'alimenter l'Atteinte.
 _Éviter_ : Observation, Source de signal, cause
 
 **Indicateur contextuel** :
-Valeur numérique ou booléenne, explicitement sélectionnée depuis un Connecteur, qui aide à comprendre la situation d'une Cible sans participer à son État de santé, à sa Disponibilité ni à l'ouverture d'un Incident. CairnOps en conserve un historique court et borné ; le produit d'origine reste l'autorité sur ses seuils et ses alertes.
+Valeur numérique ou booléenne, explicitement sélectionnée depuis un Connecteur, qui aide à comprendre la situation d'une Ressource sans participer à son État de santé, à sa Disponibilité ni à l'ouverture d'un Incident. CairnOps en conserve un historique court et borné ; le produit d'origine reste l'autorité sur ses seuils et ses alertes.
 _Éviter_ : Source de signal, Observation, seuil CairnOps, cause d'Incident
 
-**Divergence de Sources** :
-Situation temporaire dans laquelle des Sources valides rattachées à une même Cible soutiennent des conclusions opposées. Elle qualifie les preuves sans constituer un État de santé supplémentaire ni bloquer un Incident.
-_Éviter_ : État contradictoire, consensus
+**Résultats contradictoires** :
+Situation dans laquelle des Sources valides rattachées à une même Ressource donnent, pour une même période, des conclusions opposées sur un même aspect de son fonctionnement. Une disponibilité constatée et un problème signalé portant sur un autre aspect, comme le suivi d’une version, peuvent coexister sans contradiction ; cette qualification ne constitue pas un État de santé supplémentaire et ne bloque pas un Incident.
+_Éviter_ : Divergence de Sources, état contradictoire, consensus
 
 **Politique de déclenchement** :
 Règle propre à une Source de signal qui détermine quand une suite d'Observations devient suffisamment certaine pour signaler une dégradation ou un rétablissement. L'absence d'Observation ne constitue jamais un rétablissement.
 _Éviter_ : Vote, consensus des sources
 
-**Atteinte de Cible** :
-Condition d'une Nature donnée affectant une Cible au sein d'un Incident. Elle conserve ses propres Preuves, sa Gravité et ses instants de début et de fin lorsque d'autres Atteintes rejoignent l'Incident ou s'en rétablissent.
+**Atteinte de Ressource** :
+Condition d'une Nature donnée affectant une Ressource au sein d'un Incident. Elle conserve ses propres Preuves, sa Gravité et ses instants de début et de fin lorsque d'autres Atteintes rejoignent l'Incident ou s'en rétablissent.
 _Éviter_ : Incident, Source de signal, impact agrégé
 
 **Incident** :
-Situation opérationnelle réunissant une ou plusieurs Atteintes de Cibles qui partagent toutes la même Nature et portant leur Synthèse opérationnelle commune. Il commence avec sa première Atteinte, n'accueille de nouvelles Atteintes que pendant sa Propagation et n'est Résolu qu'une fois cette Propagation fermée et toutes ses Atteintes rétablies.
-_Éviter_ : Observation, Atteinte de Cible, panne d'une Source
+Situation opérationnelle réunissant une ou plusieurs Atteintes de Ressources qui partagent toutes la même Nature et portant leur Synthèse opérationnelle commune. Il commence avec sa première Atteinte, n'accueille de nouvelles Atteintes que pendant sa Propagation et n'est Résolu qu'une fois cette Propagation fermée et toutes ses Atteintes rétablies.
+_Éviter_ : Observation, Atteinte de Ressource, panne d'une Source
 
 **Propagation d'un Incident** :
 Phase initiale et glissante durant laquelle de nouvelles Atteintes de même Nature peuvent rejoindre un Incident. Chaque nouvelle Atteinte retarde sa fermeture dans une tolérance bornée adaptée à la cadence des Sources et à la durée vérifiée de leurs conditions ; sa fermeture fige l'appartenance, et toute Atteinte ultérieure ouvre un nouvel Incident sans résoudre celui qui reste actif.
 _Éviter_ : Durée d'un Incident, Fenêtre de maintenance, corrélation causale
 
 **Propagation étendue** :
-Qualification d'un Incident dont le nombre de Cibles distinctes encore affectées devient important à l'échelle de l'Espace opérationnel ou par son volume absolu. Elle peut justifier un unique nouveau signalement sans modifier la Gravité de l'Incident ni établir une cause.
+Qualification d'un Incident dont le nombre de Ressources distinctes encore affectées devient important à l'échelle de l'Espace opérationnel ou par son volume absolu. Elle peut justifier un unique nouveau signalement sans modifier la Gravité de l'Incident ni établir une cause.
 _Éviter_ : Gravité, nouvel Incident, cause commune
 
 **Dépendance** :
-Relation explicite indiquant que le fonctionnement d'une Cible dépend de celui d'une autre. Elle fournit un indice de causalité aux regroupements sans constituer une preuve certaine de cause.
+Relation explicite indiquant que le fonctionnement d'une Ressource dépend de celui d'une autre. Elle fournit un indice de causalité aux regroupements sans constituer une preuve certaine de cause.
 _Éviter_ : Cause confirmée, parenté
 
 **Événement opérationnel** :
@@ -205,7 +237,7 @@ Regroupement corrélé d'Incidents pouvant être de Natures différentes, destin
 _Éviter_ : Incident, cause certaine
 
 **Nature d'incident** :
-Catégorie stable du problème opérationnel rencontré par une Cible, telle qu'une indisponibilité ou une expiration TLS imminente. Son identité ne dépend ni de la Cible affectée ni du libellé particulier d'un signal. Elle détermine quelles Sources de signal alimentent le même Incident sans préjuger de sa cause profonde.
+Catégorie stable du problème opérationnel rencontré par une Ressource, telle qu'une indisponibilité ou une expiration TLS imminente. Son identité ne dépend ni de la Ressource affectée ni du libellé particulier d'un signal. Elle détermine quelles Sources de signal alimentent le même Incident sans préjuger de sa cause profonde.
 _Éviter_ : Cause, gravité, message d'alerte
 
 **Nature canonique** :
@@ -213,15 +245,15 @@ Nature d'incident dont CairnOps définit l'identité et le sens indépendamment 
 _Éviter_ : Libellé ressemblant, identité locale d'un Connecteur
 
 **Nature locale de Connecteur** :
-Nature d'incident établie automatiquement à partir d'une identité sémantique stable propre à une instance de Connecteur. Elle reste comparable entre les Cibles observées par cette instance, mais jamais avec l'identité locale d'une autre instance.
-_Éviter_ : Nature canonique, identifiant propre à une Cible, message d'alerte
+Nature d'incident établie automatiquement à partir d'une identité sémantique stable propre à une instance de Connecteur. Elle reste comparable entre les Ressources observées par cette instance, mais jamais avec l'identité locale d'une autre instance.
+_Éviter_ : Nature canonique, identifiant propre à une Ressource, message d'alerte
 
 **Gravité** :
 Importance de l'impact associé à une Atteinte, qualifiée par ordre croissant comme Information, Avertissement, Majeur ou Critique. La Gravité de l'Incident est la plus élevée de ses Atteintes actives. La Gravité source continue de refléter la Source de signal ; la Gravité effective utilisée par CairnOps peut être requalifiée par un Opérateur, avec justification et trace d'audit, jusqu'à la Résolution ou au retrait explicite de cette requalification.
 _Éviter_ : État de santé, priorité, statut
 
 **Acquittement** :
-Déclaration traçable qu'un utilisateur a pris connaissance d'un Incident et le prend en charge. Elle couvre ses Atteintes présentes et celles qui le rejoignent tant que sa Propagation reste ouverte. Elle peut provenir de CairnOps ou d'un système intégré ; sa propagation vers chaque Preuve compatible est suivie séparément et un échec de synchronisation ne l'annule pas dans son système d'origine. Elle ne modifie ni l'état des Cibles, ni les Preuves, ni les conditions de Résolution.
+Déclaration traçable qu'un utilisateur a pris connaissance d'un Incident et le prend en charge. Elle couvre ses Atteintes présentes et celles qui le rejoignent tant que sa Propagation reste ouverte. Elle peut provenir de CairnOps ou d'un système intégré ; sa propagation vers chaque Preuve compatible est suivie séparément et un échec de synchronisation ne l'annule pas dans son système d'origine. Elle ne modifie ni l'état des Ressources, ni les Preuves, ni les conditions de Résolution.
 _Éviter_ : Résolution, fermeture
 
 **Invalidation** :
@@ -229,11 +261,11 @@ Décision motivée et traçable d'écarter une Source de signal des preuves acti
 _Éviter_ : Acquittement, rétablissement, suspension
 
 **Suspension** :
-Action administrative qui empêche temporairement une Source de signal de participer à la supervision jusqu'à sa réactivation explicite. Si toutes les Sources d'une Cible sont suspendues, celle-ci devient Inconnue et reste incluse dans l'État global, sans calcul de disponibilité pendant cette période.
+Action administrative qui empêche temporairement une Source de signal de participer à la supervision jusqu'à sa réactivation explicite. Si toutes les Sources d'une Ressource sont suspendues, celle-ci devient Inconnue et reste incluse dans l'État global, sans calcul de disponibilité pendant cette période.
 _Éviter_ : Invalidation, maintenance
 
 **Archivage** :
-Retrait volontaire d'une Cible de la supervision active et du calcul de l'État global, sans suppression de son historique. Il exige une action explicite d'un Administrateur.
+Retrait volontaire d'une Ressource de la supervision active et du calcul de l'État global, sans suppression de son historique. Il exige une action explicite d'un Administrateur.
 _Éviter_ : Suspension, suppression
 
 **Résolution** :
@@ -245,53 +277,57 @@ Chronologie immuable des événements et décisions qui modifient le traitement 
 _Éviter_ : Discussion, historique modifiable
 
 **État de santé** :
-Synthèse calculée des preuves récentes et des Incidents actifs d'une Cible : Opérationnelle, Dégradée, Indisponible ou Inconnue. Il ne peut pas être modifié directement par un utilisateur.
+Synthèse calculée des preuves récentes et des Incidents actifs d'une Ressource : Opérationnelle, Dégradée, Indisponible ou Inconnue. Il ne peut pas être modifié directement par un utilisateur.
 _Éviter_ : Statut manuel, état d'acquittement
 
 **Disponibilité** :
-Part du temps observable pendant laquelle une Cible n'est pas Indisponible. Les périodes Inconnues, suspendues ou Sous maintenance sont exclues du calcul et les valeurs propres aux Sources restent diagnostiques.
-_Éviter_ : Couverture, moyenne des Sources
+Part du temps observable pendant laquelle une Ressource n'est pas Indisponible. Les périodes Inconnues, suspendues ou Sous maintenance sont exclues du calcul et les valeurs propres aux Sources restent diagnostiques.
+_Éviter_ : Temps observé, moyenne des Sources
 
-**Couverture** :
-Part de la période demandée pour laquelle CairnOps possède assez de preuves valides pour calculer la Disponibilité d'une Cible. Elle accompagne toujours le pourcentage de Disponibilité.
-_Éviter_ : Disponibilité, temps supervisé implicite
+**Temps observé** :
+Part de la période demandée pour laquelle CairnOps possède assez de preuves valides pour conclure sur la disponibilité d’une Ressource, exprimée en pourcentage. Cette valeur accompagne toujours le pourcentage de Disponibilité, calculé uniquement sur le temps observable.
+_Éviter_ : Couverture, Disponibilité, durée depuis l’ajout de la Ressource
 
 **Opérationnelle** :
-État de santé d'une Cible disposant de preuves suffisamment récentes et d'aucun Incident actif.
+État de santé d'une Ressource disposant de preuves suffisamment récentes et d'aucun Incident actif.
 _Éviter_ : UP, verte
 
 **Dégradée** :
-État de santé d'une Cible affectée par au moins un Incident actif qui n'établit pas son indisponibilité totale.
+État de santé d'une Ressource affectée par au moins un Incident actif qui n'établit pas son indisponibilité totale.
 _Éviter_ : Warning, partiellement UP
 
 **Indisponible** :
-État de santé d'une Cible affectée par au moins un Incident actif d'indisponibilité.
+État de santé d'une Ressource affectée par au moins un Incident actif d'indisponibilité.
 _Éviter_ : DOWN, rouge
 
 **Inconnue** :
-État de santé d'une Cible pour laquelle aucune preuve valide n'est assez récente pour conclure.
+État de santé d'une Ressource pour laquelle aucune preuve valide n'est assez récente pour conclure.
 _Éviter_ : Opérationnelle, sans Incident
 
 **État global** :
-Synthèse de toutes les Cibles actives de l'Espace opérationnel : Supervision non configurée s'il n'en existe aucune, Incident en cours si l'une est Indisponible, Services dégradés sinon si l'une est Dégradée, Supervision incomplète sinon si l'une est Inconnue, et Tout est opérationnel uniquement si elles sont toutes Opérationnelles.
+Synthèse de toutes les Ressources actives de l'Espace opérationnel : Supervision non configurée s'il n'en existe aucune, Incident en cours si l'une est Indisponible, Services dégradés sinon si l'une est Dégradée, Supervision incomplète sinon si l'une est Inconnue, et Tout est opérationnel uniquement si elles sont toutes Opérationnelles.
 _Éviter_ : Moyenne, absence d'Incident
 
 **Supervision non configurée** :
-État global d'un Espace opérationnel qui ne contient encore aucune Cible active et ne peut donc produire aucune conclusion sur son infrastructure.
+État global d'un Espace opérationnel qui ne contient encore aucune Ressource active et ne peut donc produire aucune conclusion sur son infrastructure.
 _Éviter_ : Tout est opérationnel, Supervision incomplète
 
-**Santé de CairnOps** :
-Vue distincte de la capacité du serveur, des workers, du stockage, des Intégrations et du Relais Push à assurer la supervision. Elle ne crée aucune Cible artificielle.
-_Éviter_ : État de santé d'une Cible, tableau de bord des Cibles
+**État de CairnOps** :
+Vue distincte de la capacité du serveur, des workers, du stockage, des Intégrations et du Relais Push à assurer la supervision. Elle ne crée aucune Ressource artificielle.
+_Éviter_ : Santé, Santé de CairnOps, État de santé d'une Ressource, tableau de bord des Ressources
 
 **Défaillance de supervision** :
-Problème affectant un composant de CairnOps ou une Intégration plutôt qu'une Cible. Il peut rendre des Cibles Inconnues et placer l'État global en Supervision incomplète, mais ne résout ni ne duplique leurs Incidents.
-_Éviter_ : Incident de Cible, indisponibilité d'une Cible
+Problème affectant un composant de CairnOps ou une Intégration plutôt qu'une Ressource. Il peut rendre des Ressources Inconnues et placer l'État global en Supervision incomplète, mais ne résout ni ne duplique leurs Incidents.
+_Éviter_ : Incident de Ressource, indisponibilité d'une Ressource
 
 **Fenêtre de maintenance** :
-Période ponctuelle ou récurrente appliquée à une ou plusieurs Cibles durant laquelle les Observations et Incidents restent enregistrés, mais n'affectent ni l'État global, ni la disponibilité, ni les notifications et escalades. Un Incident encore actif à son terme redevient immédiatement visible avec son heure réelle de début.
+Période ponctuelle ou récurrente appliquée à une ou plusieurs Ressources durant laquelle les Observations et Incidents restent enregistrés, mais n'affectent ni l'État global, ni la disponibilité, ni les notifications et escalades. Un Incident encore actif à son terme redevient immédiatement visible avec son heure réelle de début.
 _Éviter_ : Pause des contrôles, suppression d'Incident
 
 **Sous maintenance** :
 Contexte d'un Incident survenu pendant une Fenêtre de maintenance, indiquant que son impact opérationnel est temporairement neutralisé sans altérer les preuves recueillies.
 _Éviter_ : Résolu, ignoré
+
+**Mise à jour disponible** :
+Indication qu’une version logicielle proposée pour une Ressource diffère de sa version installée. Cette indication reste distincte de son état de fonctionnement : un service dont le fonctionnement normal est établi reste Disponible lorsqu’une mise à jour est disponible.
+_Éviter_ : Fonctionnement dégradé, indisponibilité
