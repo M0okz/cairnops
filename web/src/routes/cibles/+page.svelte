@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import Icon from '$lib/components/Icon.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
   import Spark from '$lib/components/Spark.svelte';
   import ResourceTooltip from '$lib/components/ResourceTooltip.svelte';
@@ -73,7 +74,7 @@
     {#if session.user?.role === 'administrator'}
       <div class="page-actions shadcn-control">
         <Popover.Root bind:open={addOpen}>
-          <Popover.Trigger class="resource-add-trigger">{t('targets.new')} <span aria-hidden="true">⌄</span></Popover.Trigger>
+          <Popover.Trigger class="resource-add-trigger"><Icon name="plus" size={18} />{t('targets.new')}</Popover.Trigger>
           <Popover.Content class="resource-filter-panel add-panel" align="end" sideOffset={8} collisionPadding={16}>
             <button class="menu-action" onclick={() => { addOpen = false; workshopOpen = true; }}>{t('resources.createManually')}</button>
             <button class="menu-action" onclick={() => { addOpen = false; chooserOpen = true; }}>{t('targets.importFromConnector')}</button>
@@ -92,7 +93,7 @@
   <div class="resource-toolbar shadcn-control">
     <label class="target-filter"><span class="visually-hidden">{t('targets.filterLabel')}</span><Input bind:value={filter} type="search" placeholder={t('resources.search')} /></label>
     <Popover.Root>
-      <Popover.Trigger class="resource-filter-trigger">{t('resources.filters')}{#if activeFilterCount}<span class="num">{activeFilterCount}</span>{/if}<span aria-hidden="true">⌄</span></Popover.Trigger>
+      <Popover.Trigger class="resource-filter-trigger"><Icon name="settings" size={18} />{t('resources.filters')}{#if activeFilterCount}<span class="num">{activeFilterCount}</span>{/if}</Popover.Trigger>
       <Popover.Content class="resource-filter-panel" align="end" sideOffset={8} collisionPadding={16}>
         <h2>{t('resources.filters')}</h2>
         <fieldset>

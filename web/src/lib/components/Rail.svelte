@@ -247,7 +247,7 @@
           <strong>{session.user?.display_name ?? t('rail.account')}</strong>
           <small class="faint">{roleLabel}</small>
         </span>
-        <span class="chev" aria-hidden="true">⌄</span>
+        <span class="account-menu-icon" aria-hidden="true"><Icon name="more" size={18} /></span>
       </button>
     </div>
   </div>
@@ -311,9 +311,9 @@
     white-space: nowrap;
   }
 
-  .chev {
-    color: var(--dim);
-    font-size: var(--text-xs);
+  .account-menu-icon {
+    display: flex;
+    color: var(--muted);
   }
 
   /* Le menu déborde volontairement la largeur du rail : la ligne Thème ne
@@ -395,7 +395,7 @@
   }
 
   @media (max-width: 85rem) {
-    .account-button .who, .account-button .chev { display: none; }
+    .account-button .who, .account-button .account-menu-icon { display: none; }
     .account-button { justify-content: center; padding: var(--s3); }
   }
 
