@@ -62,70 +62,70 @@
 <Topbar crumbs={[{ label: t('nav.overview') }]} />
 
 <div class="page overview-page">
-  <div class="intro">
-    <div><span class="eyebrow">{t('dashboard.eyebrow')}</span><h1>{t('overview.title')}</h1><p>{t('dashboard.lead', { targets: health.total, sources: sourceCount })}</p></div>
-    <time datetime={now.toISOString()}>{new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' }).format(now)}</time>
-  </div>
+  <div class="overview-main">
+    <div class="intro">
+      <div><span class="eyebrow">{t('dashboard.eyebrow')}</span><h1>{t('overview.title')}</h1><p>{t('dashboard.lead', { targets: health.total, sources: sourceCount })}</p></div>
+      <time datetime={now.toISOString()}>{new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'long', year: 'numeric' }).format(now)}</time>
+    </div>
 
-  <a class="overview-verdict {verdict.tone}" href={verdict.href}>
-    <Icon name={health.state === 'down' || health.state === 'degraded' ? 'incidents' : health.state === 'ok' ? 'state-healthy' : 'health'} size={22} />
-    <strong>{verdict.title}</strong>
-    <span class="verdict-detail">{health.state === 'empty' ? t('dashboard.emptyHint') : freshest ? t('dashboard.freshness', { duration: since(freshest, now) }) : t('overview.noEvidence')}</span>
-    <span class="verdict-action">{t('dashboard.inspect')} <span aria-hidden="true">→</span></span>
-  </a>
+    <a class="overview-verdict {verdict.tone}" href={verdict.href}>
+      <Icon name={health.state === 'down' || health.state === 'degraded' ? 'incidents' : health.state === 'ok' ? 'state-healthy' : 'health'} size={22} />
+      <strong>{verdict.title}</strong>
+      <span class="verdict-detail">{health.state === 'empty' ? t('dashboard.emptyHint') : freshest ? t('dashboard.freshness', { duration: since(freshest, now) }) : t('overview.noEvidence')}</span>
+      <span class="verdict-action">{t('dashboard.inspect')} <span aria-hidden="true">→</span></span>
+    </a>
 
-  <div class="overview-metrics">
-    <section class="metric card">
-      <div class="metric-label"><h2>{t('dashboard.operational')}</h2><Icon name="targets" size={20} /></div>
-      <div class="metric-value"><b><Odometer value={health.total ? health.counts.ok : '—'} /></b><span>/ {health.total}</span></div>
-      <svg class="fleet-strip" viewBox="0 0 400 12" preserveAspectRatio="none" role="img" aria-label={distributionLabel}>
-        <rect width="400" height="12" class="strip-idle" />
-        {#if health.total}
-          {#each distribution as row}<rect class="strip-{stateTones[row.state]}" x={row.offset / health.total * 400} width={row.count / health.total * 400} height="12" />{/each}
-          {#each { length: Math.min(health.total, 64) } as _, index}<line x1={index * 400 / Math.min(health.total, 64)} x2={index * 400 / Math.min(health.total, 64)} y1="0" y2="12" />{/each}
-        {/if}
-      </svg>
-      <small>{health.watched ? `${health.watched} · ${t('dashboard.watch')}` : health.counts.maintenance ? plural('dashboard.maintenance', health.counts.maintenance) : health.total ? t('dashboard.allClear') : t('dashboard.notMeasured')}</small>
-    </section>
-    <section class="metric card">
-      <div class="metric-label"><h2>{t('dashboard.coverage')}</h2><Icon name="activity" size={20} /></div>
-      <div class="metric-value"><b><Odometer value={coverage === null ? '—' : new Intl.NumberFormat(localeTag(), { maximumFractionDigits: 2 }).format(coverage * 100)} /></b>{#if coverage !== null}<span>%</span>{/if}</div>
-      <svg class="coverage-strip" viewBox="0 0 400 6" preserveAspectRatio="none" aria-hidden="true"><rect width="400" height="6" class="strip-idle" />{#if coverage !== null}<rect width={coverage * 400} height="6" class="strip-accent" />{/if}</svg>
-      <small>{t(coverage === null ? 'dashboard.notMeasured' : 'dashboard.measured')}</small>
-    </section>
-    <section class="metric card">
-      <div class="metric-label"><h2>{t('dashboard.currentIncidents')}</h2><Icon name="incidents" size={20} /></div>
-      <div class="metric-value"><b><Odometer value={active.length} /></b><span>{t('dashboard.pending', { count: session.unacknowledged.length })}</span></div>
-      <div class="metric-history">{#if openedDays.length}<Bars values={openedDays} label={t('overview.fig.dailyHistory')} />{:else}<Bars mode="rule" />{/if}</div>
-      <small>{t('overview.fig.dailyHistory')}</small>
-    </section>
-    <section class="metric card">
-      <div class="metric-label"><h2>{t('dashboard.sourceCount')}</h2><Icon name="connectors" size={20} /></div>
-      <div class="metric-value"><b><Odometer value={sourceCount} /></b></div>
-      <div class="source-origins"><span><Icon name="signal" size={16} />CairnOps</span><span><Icon name="connectors" size={16} />{session.connectors.length} {t('nav.connectors').toLocaleLowerCase(i18n.locale)}</span></div>
-      <small>{t('dashboard.sourceSplit', { native: nativeSources, external: externalSources })}</small>
-    </section>
-  </div>
+    <div class="overview-metrics">
+      <section class="metric card">
+        <div class="metric-label"><h2>{t('dashboard.operational')}</h2><Icon name="targets" size={20} /></div>
+        <div class="metric-value"><b><Odometer value={health.total ? health.counts.ok : '—'} /></b><span>/ {health.total}</span></div>
+        <svg class="fleet-strip" viewBox="0 0 400 12" preserveAspectRatio="none" role="img" aria-label={distributionLabel}>
+          <rect width="400" height="12" class="strip-idle" />
+          {#if health.total}
+            {#each distribution as row}<rect class="strip-{stateTones[row.state]}" x={row.offset / health.total * 400} width={row.count / health.total * 400} height="12" />{/each}
+            {#each { length: Math.min(health.total, 64) } as _, index}<line x1={index * 400 / Math.min(health.total, 64)} x2={index * 400 / Math.min(health.total, 64)} y1="0" y2="12" />{/each}
+          {/if}
+        </svg>
+        <small>{health.watched ? `${health.watched} · ${t('dashboard.watch')}` : health.counts.maintenance ? plural('dashboard.maintenance', health.counts.maintenance) : health.total ? t('dashboard.allClear') : t('dashboard.notMeasured')}</small>
+      </section>
+      <section class="metric card">
+        <div class="metric-label"><h2>{t('dashboard.coverage')}</h2><Icon name="activity" size={20} /></div>
+        <div class="metric-value"><b><Odometer value={coverage === null ? '—' : new Intl.NumberFormat(localeTag(), { maximumFractionDigits: 2 }).format(coverage * 100)} /></b>{#if coverage !== null}<span>%</span>{/if}</div>
+        <svg class="coverage-strip" viewBox="0 0 400 6" preserveAspectRatio="none" aria-hidden="true"><rect width="400" height="6" class="strip-idle" />{#if coverage !== null}<rect width={coverage * 400} height="6" class="strip-accent" />{/if}</svg>
+        <small>{t(coverage === null ? 'dashboard.notMeasured' : 'dashboard.measured')}</small>
+      </section>
+      <section class="metric card">
+        <div class="metric-label"><h2>{t('dashboard.currentIncidents')}</h2><Icon name="incidents" size={20} /></div>
+        <div class="metric-value"><b><Odometer value={active.length} /></b><span>{t('dashboard.pending', { count: session.unacknowledged.length })}</span></div>
+        <div class="metric-history">{#if openedDays.length}<Bars values={openedDays} label={t('overview.fig.dailyHistory')} />{:else}<Bars mode="rule" />{/if}</div>
+        <small>{t('overview.fig.dailyHistory')}</small>
+      </section>
+      <section class="metric card">
+        <div class="metric-label"><h2>{t('dashboard.sourceCount')}</h2><Icon name="connectors" size={20} /></div>
+        <div class="metric-value"><b><Odometer value={sourceCount} /></b></div>
+        <div class="source-origins"><span><Icon name="signal" size={16} />CairnOps</span><span><Icon name="connectors" size={16} />{session.connectors.length} {t('nav.connectors').toLocaleLowerCase(i18n.locale)}</span></div>
+        <small>{t('dashboard.sourceSplit', { native: nativeSources, external: externalSources })}</small>
+      </section>
+    </div>
 
-  <div class="overview-analysis">
     <IndicatorOverview />
-    <section class="card current-incidents" aria-labelledby="current-incidents-title">
-      <header><div><h2 id="current-incidents-title">{t('dashboard.currentIncidents')} <span class="tally">{active.length}</span></h2><p>{t('dashboard.pending', { count: session.unacknowledged.length })}</p></div><Icon name="incidents" size={20} /></header>
-      <div class="incident-list">
-        {#each active.slice(0, 3) as incident (incident.id)}
-          {@const name = incident.affected_target_count > 1 ? plural('incidents.targetsAffected', incident.affected_target_count) : incident.impacts[0]?.target_name ?? t('nav.incidents')}
-          <article class="incident-summary">
-            <div class="incident-meta"><span class="severity {severityTone(incident.severity)}"><i class="dot {severityTone(incident.severity)}"></i>{severityLabel(incident.severity)}</span><time datetime={incident.opened_at}>{since(incident.opened_at, now)}</time></div>
-            <button class="incident-open" type="button" data-incident-trigger={incident.id} aria-label={t('dashboard.incidentOpen', { name })} onclick={() => selectedIncidentID = incident.id}><strong>{name}</strong><span>{natureLabel(incident)}</span></button>
-            <div class="incident-action"><span>{incident.acknowledged_at ? t('overview.acknowledgedShort') : t('dashboard.pending', { count: 1 })}</span>
-              {#if !incident.acknowledged_at && canAcknowledge}<button class="btn sm" type="button" disabled={acknowledging === incident.id} onclick={() => acknowledge(incident)}>{t('incident.acknowledge')}<Icon name="acknowledge" size={16} /></button>{/if}
-            </div>
-          </article>
-        {:else}<div class="incidents-empty"><Icon name="state-healthy" size={28} /><strong>{t('dashboard.noIncidents')}</strong><p>{t('dashboard.noIncidentsHint')}</p></div>{/each}
-      </div>
-      <footer><a href="/incidents">{t('overview.allIncidents')} →</a></footer>
-    </section>
   </div>
+  <section class="current-incidents" aria-labelledby="current-incidents-title">
+    <header><div><h2 id="current-incidents-title">{t('dashboard.currentIncidents')} <span class="tally">{active.length}</span></h2><p>{t('dashboard.pending', { count: session.unacknowledged.length })}</p></div><Icon name="incidents" size={20} /></header>
+    <div class="incident-list">
+      {#each active.slice(0, 3) as incident (incident.id)}
+        {@const name = incident.affected_target_count > 1 ? plural('incidents.targetsAffected', incident.affected_target_count) : incident.impacts[0]?.target_name ?? t('nav.incidents')}
+        <article class="incident-summary">
+          <div class="incident-meta"><span class="severity {severityTone(incident.severity)}"><i class="dot {severityTone(incident.severity)}"></i>{severityLabel(incident.severity)}</span><time datetime={incident.opened_at}>{since(incident.opened_at, now)}</time></div>
+          <button class="incident-open" type="button" data-incident-trigger={incident.id} aria-label={t('dashboard.incidentOpen', { name })} onclick={() => selectedIncidentID = incident.id}><strong>{name}</strong><span>{natureLabel(incident)}</span></button>
+          <div class="incident-action"><span>{incident.acknowledged_at ? t('overview.acknowledgedShort') : t('dashboard.pending', { count: 1 })}</span>
+            {#if !incident.acknowledged_at && canAcknowledge}<button class="btn sm" type="button" disabled={acknowledging === incident.id} onclick={() => acknowledge(incident)}>{t('incident.acknowledge')}<Icon name="acknowledge" size={16} /></button>{/if}
+          </div>
+        </article>
+      {:else}<div class="incidents-empty"><Icon name="state-healthy" size={28} /><strong>{t('dashboard.noIncidents')}</strong><p>{t('dashboard.noIncidentsHint')}</p></div>{/each}
+    </div>
+    <footer><a href="/incidents">{t('overview.allIncidents')} →</a></footer>
+  </section>
 
   <section class="card overview-targets" aria-labelledby="overview-targets-title">
     <header><div><h2 id="overview-targets-title">{t('nav.targets')}</h2><p>{t('dashboard.targetsLead')}</p></div>
@@ -149,24 +149,27 @@
 {#if selectedIncidentID}<IncidentDetailDrawer incidentId={selectedIncidentID} seed={selectedIncident} ondismiss={dismissIncident} />{/if}
 
 <style>
-  .overview-page { display: flex; flex-direction: column; gap: var(--s5); }
+  .overview-page { display: grid; grid-template-columns: minmax(0, 1fr) clamp(17rem, 22vw, 20rem); gap: var(--s6); align-items: start; }
+  .overview-main { min-width: 0; display: flex; flex-direction: column; gap: var(--s5); }
+  .overview-targets, .instance-health { grid-column: 1 / -1; }
+  .overview-main :global(.card), .overview-targets { border-radius: var(--r-overview); }
   .intro { display: flex; justify-content: space-between; align-items: center; gap: var(--s5); margin-bottom: var(--s3); }
   .eyebrow { display: block; color: var(--faint); font-size: var(--text-xs); margin-bottom: var(--s3); }
   h1 { font-size: 2rem; letter-spacing: -0.045em; margin-bottom: var(--s3); }
   .intro p { color: var(--muted); font-size: var(--text-sm); }
   .intro time { font-size: var(--text-xs); color: var(--faint); flex: none; }
-  .overview-verdict { display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s5); border: 1px solid var(--line-strong); border-radius: var(--r-l); font-size: var(--text-sm); }
+  .overview-verdict { display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s5); border: 1px solid var(--line-strong); border-radius: var(--r-overview); font-size: var(--text-sm); }
   .overview-verdict.crit { background: color-mix(in srgb, var(--crit) 4%, var(--surface)); border-color: color-mix(in srgb, var(--crit) 25%, var(--line)); }
   .overview-verdict.warn { background: color-mix(in srgb, var(--warn) 4%, var(--surface)); }
   .overview-verdict strong { color: var(--ink); font-weight: 600; }
   .verdict-detail { color: var(--faint); font-size: var(--text-xs); }
   .verdict-action { display: flex; gap: var(--s4); margin-left: auto; color: var(--muted); flex: none; font-size: var(--text-xs); }
   .overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s4); }
-  .metric { display: flex; flex-direction: column; min-width: 0; padding: var(--s5); gap: var(--s4); }
+  .metric { display: flex; flex-direction: column; min-width: 0; padding: var(--s4); gap: var(--s3); }
   .metric-label { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); color: var(--faint); }
   .metric-label h2 { font-size: var(--text-sm); color: var(--muted); font-weight: 500; line-height: 1.5; letter-spacing: 0; }
-  .metric-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s3); min-height: 3rem; }
-  .metric-value b { font-size: 2.5rem; font-weight: 600; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .metric-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s3); min-height: 2rem; }
+  .metric-value b { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
   .metric-value > span { color: var(--faint); font-size: var(--text-sm); }
   .metric small { font-size: var(--text-xs); color: var(--faint); margin-top: auto; }
   .fleet-strip, .coverage-strip { width: 100%; height: 0.625rem; display: block; }
@@ -177,15 +180,18 @@
   .metric-history { color: var(--faint); }
   .source-origins { display: flex; flex-wrap: wrap; gap: var(--s4); font-size: 0.75rem; color: var(--faint); }
   .source-origins span { display: flex; gap: var(--s2); align-items: center; }
-  .overview-analysis { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(19rem, 1fr); gap: var(--s5); align-items: stretch; }
-  .current-incidents { min-width: 0; display: flex; flex-direction: column; }
+  .current-incidents { min-width: 0; display: flex; flex-direction: column; gap: var(--s4); }
   .current-incidents > header, .overview-targets > header { padding: var(--s5); display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s4); }
   .current-incidents h2, .overview-targets h2 { font-size: 1.125rem; display: flex; align-items: center; gap: var(--s3); }
   .current-incidents header p, .overview-targets header p { margin-top: var(--s3); color: var(--faint); font-size: var(--text-sm); }
-  .tally { font-family: var(--font-num); font-size: var(--text-xs); color: var(--faint); border: 1px solid var(--line); padding: var(--s1) var(--s2); border-radius: var(--r-s); }
-  .incident-list { padding: 0 var(--s5); flex: 1; }
-  .incident-summary { padding: var(--s4) 0 var(--s5); border-top: 1px solid var(--line); }
-  .incident-summary:first-child { border-top: 0; padding-top: var(--s3); }
+  .current-incidents > header { padding: 0; min-height: var(--s6); align-items: center; }
+  .current-incidents > header > div { width: 100%; }
+  .current-incidents h2 { justify-content: space-between; font-size: var(--text-sm); }
+  .current-incidents header p, .current-incidents > header > :global(svg) { display: none; }
+  .tally { font-family: var(--font-num); font-size: var(--text-xs); color: var(--crit); background: var(--crit-bg); padding: var(--s1) var(--s3); border-radius: var(--r-pill); }
+  .incident-list { display: grid; gap: var(--s3); }
+  .incident-summary, .incidents-empty { padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-overview); background: var(--surface); }
+  .incident-action .btn { border-radius: var(--r-pill); }
   .incident-meta, .incident-action { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); font-size: var(--text-xs); color: var(--faint); }
   .severity { display: inline-flex; align-items: center; gap: var(--s2); border: 1px solid var(--line); border-radius: var(--r-s); padding: var(--s1) var(--s2); font-size: 0.75rem; }
   .incident-open { display: block; width: 100%; border: 0; background: none; text-align: left; padding: var(--s4) 0; }
@@ -196,7 +202,8 @@
   .incidents-empty p { font-size: var(--text-sm); color: var(--faint); }
   footer { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); padding: var(--s4) var(--s5); border-top: 1px solid var(--line); color: var(--faint); font-size: var(--text-xs); }
   footer a { color: var(--muted); } footer a:hover { color: var(--ink); }
-  .current-incidents footer { justify-content: flex-end; }
+  .current-incidents footer { padding: 0; border: 0; }
+  .current-incidents footer a { display: block; width: 100%; padding: var(--s4); border: 1px dashed var(--line); border-radius: var(--r-overview); text-align: center; }
   .overview-targets { overflow: hidden; }
   .overview-targets > header { align-items: center; flex-wrap: wrap; }
   .target-tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s4); }
@@ -224,14 +231,14 @@
   .instance-health > span:first-child { display: flex; align-items: center; gap: var(--s3); }
   .components { margin-left: auto; display: flex; flex-wrap: wrap; gap: var(--s5); }
   .components > span { display: flex; align-items: center; gap: var(--s3); }
-  @media (max-width: 100rem) { .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .overview-analysis { grid-template-columns: minmax(0, 1.6fr) minmax(17rem, 1fr); } .target-grid { gap: var(--s4); grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, .6fr) minmax(0, 1fr) 1rem; } .target-sources { display: none; } .availability-top :global(.uptime) { display: none; } }
-  @media (max-width: 60rem) { .overview-analysis { grid-template-columns: minmax(0, 1fr); } .incident-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); } .incident-summary { border-top: 0; padding-top: var(--s3); } .verdict-detail { display: none; } }
+  @media (max-width: 100rem) { .target-grid { gap: var(--s4); grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, .6fr) minmax(0, 1fr) 1rem; } .target-sources { display: none; } .availability-top :global(.uptime) { display: none; } .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .intro time, .verdict-detail { display: none; } }
+  @media (max-width: 60rem) { .overview-page { grid-template-columns: minmax(0, 1fr); } .incident-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 48rem) {
     .overview-page { gap: var(--s4); } .intro { align-items: flex-start; } .intro time { display: none; } h1 { font-size: 1.75rem; }
     .overview-verdict { padding: var(--s4); gap: var(--s3); } .verdict-action { font-size: 0; gap: 0; } .verdict-action > span { font-size: 1rem; }
     .metric { padding: var(--s4); gap: var(--s4); } .metric-value b { font-size: 2.25rem; } .metric-label h2 { font-size: var(--text-sm); } .metric-label :global(svg) { display: none; } .metric-value > span { font-size: 0.75rem; } .metric small { font-size: 0.75rem; }
-    .incident-list { display: block; padding-inline: var(--s4); } .incident-summary + .incident-summary { border-top: 1px solid var(--line); padding-top: var(--s4); }
-    .current-incidents > header, .overview-targets > header { padding: var(--s4); }
+    .incident-list { grid-template-columns: minmax(0, 1fr); }
+    .overview-targets > header { padding: var(--s4); }
     .target-tools, .target-search { width: 100%; }
     .target-head { display: none; } .target-grid { grid-template-columns: minmax(0, 1fr) auto; gap: var(--s3); padding: var(--s4); } .target-name { grid-column: 1; gap: var(--s3); } .target-name strong { white-space: normal; overflow-wrap: anywhere; } .target-state { grid-column: 1; margin-left: 3rem; } .row-arrow { grid-column: 2; grid-row: 1 / span 2; } .target-latency, .target-availability { display: none; }
     footer { flex-wrap: wrap; padding: var(--s4); } .components { margin-left: 0; gap: var(--s3); }
