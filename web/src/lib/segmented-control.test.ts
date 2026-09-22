@@ -4,7 +4,6 @@ import test from 'node:test';
 
 const consumers = [
   '../routes/incidents/+page.svelte',
-  '../routes/cibles/+page.svelte',
   '../routes/cibles/[id]/+page.svelte',
   '../routes/maintenance/+page.svelte',
   './components/TargetIndicators.svelte',

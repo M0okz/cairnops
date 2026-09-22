@@ -5,8 +5,7 @@
   import Spark from '$lib/components/Spark.svelte';
   import ResourceTooltip from '$lib/components/ResourceTooltip.svelte';
   import { Input } from '$lib/components/ui/input/index.js';
-  import { Button } from '$lib/components/ui/button/index.js';
-  import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+  import { Popover } from 'bits-ui';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
   import ConnectorChooser from '$lib/components/ConnectorChooser.svelte';
   import { session } from '$lib/session.svelte';
@@ -18,9 +17,11 @@
   import type { SoftwareService } from '$lib/software-updates';
 
   let filter = $state('');
+  let addOpen = $state(false);
   let category = $state<ResourceCategory | 'all'>('all');
   let scope = $state<'all' | 'problems' | 'maintenance'>('all');
   let divergentOnly = $state(false);
+  const activeFilterCount = $derived(Number(scope !== 'all') + Number(divergentOnly));
   let workshopOpen = $state(false);
   let chooserOpen = $state(false);
   let software = $state<SoftwareService[]>([]);
@@ -71,26 +72,54 @@
     <div><h1>{t('nav.targets')}</h1><p>{plural('targets.supervised', session.targets.length)}{#if session.unacknowledged.length} · {plural('targets.awaitingDecision', session.unacknowledged.length)}{/if}</p></div>
     {#if session.user?.role === 'administrator'}
       <div class="page-actions shadcn-control">
-        <Button variant="outline" type="button" onclick={() => (chooserOpen = true)}>{t('targets.importFromConnector')}</Button>
-        <Button type="button" onclick={() => (workshopOpen = true)}>{t('targets.new')}</Button>
+        <Popover.Root bind:open={addOpen}>
+          <Popover.Trigger class="resource-add-trigger">{t('targets.new')} <span aria-hidden="true">⌄</span></Popover.Trigger>
+          <Popover.Content class="resource-filter-panel add-panel" align="end" sideOffset={8}>
+            <button class="menu-action" onclick={() => { addOpen = false; workshopOpen = true; }}>{t('resources.createManually')}</button>
+            <button class="menu-action" onclick={() => { addOpen = false; chooserOpen = true; }}>{t('targets.importFromConnector')}</button>
+          </Popover.Content>
+        </Popover.Root>
       </div>
     {/if}
   </div>
-  <div class="category-tabs">
-    <SegmentedControl label={t('resources.categories')} value={category} items={[
-      {value: 'all', label: t('targets.scope.all'), count: allRows.length},
-      ...resourceCategories.map((value) => ({value, label: t(`resources.category.${value}`), count: allRows.filter((row) => categoryOf(row.target) === value).length}))
-    ]} onValueChange={(value) => (category = value)} />
+  <div class="category-tabs" role="group" aria-label={t('resources.categories')}>
+    {#each [{value: 'all' as const, label: t('targets.scope.all'), count: allRows.length}, ...resourceCategories.map((value) => ({value, label: t(`resources.category.${value}`), count: allRows.filter((row) => categoryOf(row.target) === value).length}))] as item (item.value)}
+      <button class="category-tab" aria-pressed={category === item.value} onclick={() => category = item.value}>
+        {item.label}<span class="num">{item.count}</span>
+      </button>
+    {/each}
   </div>
-  <div class="filters shadcn-control">
-    <SegmentedControl label={t('targets.scope')} value={scope} items={[
-      {value: 'all', label: t('targets.scope.all'), count: scoped.length},
-      {value: 'problems', label: t('targets.scope.problems'), count: scoped.filter((row) => row.problems.length > 0).length},
-      {value: 'maintenance', label: t('nav.maintenance'), count: scoped.filter((row) => row.state === 'maintenance').length}
-    ]} onValueChange={(value) => (scope = value)} />
-    <Button variant={divergentOnly ? 'secondary' : 'outline'} type="button" aria-pressed={divergentOnly} onclick={() => (divergentOnly = !divergentOnly)}>{t('targets.divergence')}</Button>
-    <label class="target-filter"><span class="visually-hidden">{t('targets.filterLabel')}</span><Input bind:value={filter} type="search" placeholder={t('targets.filterPlaceholder')} /></label>
-    <span class="note">{t('targets.sortedBySeverity')}</span>
+  <div class="resource-toolbar shadcn-control">
+    <label class="target-filter"><span class="visually-hidden">{t('targets.filterLabel')}</span><Input bind:value={filter} type="search" placeholder={t('resources.search')} /></label>
+    <Popover.Root>
+      <Popover.Trigger class="resource-filter-trigger">{t('resources.filters')}{#if activeFilterCount}<span class="num">{activeFilterCount}</span>{/if}<span aria-hidden="true">⌄</span></Popover.Trigger>
+      <Popover.Content class="resource-filter-panel" align="end" sideOffset={8}>
+        <h2>{t('resources.filters')}</h2>
+        <fieldset>
+          <legend>{t('targets.scope')}</legend>
+          {#each [
+            {value: 'all' as const, label: t('resources.anyState'), count: scoped.length},
+            {value: 'problems' as const, label: t('targets.scope.problems'), count: scoped.filter(row => row.problems.length > 0).length},
+            {value: 'maintenance' as const, label: t('nav.maintenance'), count: scoped.filter(row => row.state === 'maintenance').length}
+          ] as item (item.value)}
+            <label class="filter-option"><input type="radio" name="resource-scope" bind:group={scope} value={item.value} />{item.label}<span class="num">{item.count}</span></label>
+          {/each}
+        </fieldset>
+        <label class="filter-option contradiction-option"><input type="checkbox" bind:checked={divergentOnly} />{t('targets.divergence')}</label>
+        <Popover.Close class="filter-done">{t('resources.done')}</Popover.Close>
+      </Popover.Content>
+    </Popover.Root>
+  </div>
+  {#if activeFilterCount || filter.trim()}
+    <div class="active-filters" aria-label={t('resources.activeFilters')}>
+      {#if scope !== 'all'}<button class="filter-chip" aria-label={t('resources.removeFilter', {name: scope === 'problems' ? t('targets.scope.problems') : t('nav.maintenance')})} onclick={() => scope = 'all'}>{scope === 'problems' ? t('targets.scope.problems') : t('nav.maintenance')} <span aria-hidden="true">×</span></button>{/if}
+      {#if divergentOnly}<button class="filter-chip" aria-label={t('resources.removeFilter', {name: t('targets.divergence')})} onclick={() => divergentOnly = false}>{t('targets.divergence')} <span aria-hidden="true">×</span></button>{/if}
+      {#if filter.trim()}<button class="filter-chip" aria-label={t('resources.removeSearch')} onclick={() => filter = ''}>« {filter.trim()} » <span aria-hidden="true">×</span></button>{/if}
+    </div>
+  {/if}
+  <div class="results-context">
+    <span role="status">{plural('resources.results', rows.length)} · {category === 'all' ? t('resources.allCategories') : t(`resources.category.${category}`)}</span>
+    <span>{t('targets.sortedBySeverity')}</span>
   </div>
   <div class="card cols">
     <div class="thead"><span>{t('targets.column.target')}</span><span>{t('targets.column.state')}</span><span>{t('targets.column.natureSeverity')}</span><span>{t('resources.details')}</span></div>
@@ -183,8 +212,33 @@
 
 
 <style>
-  .category-tabs { margin-bottom: var(--s4); }
-  .target-filter { width: 15rem; max-width: 100%; }
+  .category-tabs { display: flex; overflow-x: auto; border-bottom: var(--line-width) solid var(--line); margin-bottom: var(--s4); gap: var(--s4); }
+  .category-tab { flex: none; display: flex; align-items: center; gap: var(--s2); padding: var(--s3) var(--s1); min-height: var(--choice-hit-area); border: 0; border-bottom: var(--s1) solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: var(--text-sm); cursor: pointer; }
+  .category-tab:hover { color: var(--ink); background: var(--surface); }
+  .category-tab[aria-pressed="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+  .category-tab .num { font-size: var(--text-xs); color: var(--faint); }
+  .resource-toolbar { display: flex; align-items: center; gap: var(--s3); }
+  .target-filter { width: 24rem; max-width: 100%; min-width: 0; }
+  :global(.resource-filter-trigger), :global(.resource-add-trigger) { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); min-height: var(--choice-hit-area); padding: var(--s2) var(--s3); border: var(--line-width) solid var(--line-strong); border-radius: var(--r-m); color: var(--ink); background: var(--surface); font: inherit; font-size: var(--text-sm); cursor: pointer; white-space: nowrap; }
+  :global(.resource-add-trigger) { background: var(--ink); color: var(--bg); }
+  :global(.resource-filter-trigger:hover) { background: var(--surface-2); }
+  :global(.resource-filter-panel) { z-index: 50; width: 20rem; max-width: calc(100vw - var(--s6)); padding: var(--s4); border: var(--line-width) solid var(--line-strong); border-radius: var(--r-m); background: var(--bg); color: var(--ink); font-size: var(--text-sm); box-shadow: 0 var(--s2) var(--s6) var(--line); }
+  :global(.resource-filter-panel h2) { margin: 0 0 var(--s3); font-size: var(--text-sm); }
+  fieldset { border: 0; margin: 0; padding: 0; }
+  legend { color: var(--muted); font-size: var(--text-xs); margin-bottom: var(--s2); }
+  .filter-option { display: flex; align-items: center; gap: var(--s2); min-height: var(--choice-hit-area); cursor: pointer; }
+  .filter-option .num { margin-left: auto; color: var(--muted); }
+  .filter-option input { accent-color: var(--ink); }
+  .contradiction-option { border-top: var(--line-width) solid var(--line); margin-top: var(--s2); padding-top: var(--s2); }
+  :global(.filter-done), .menu-action { width: 100%; min-height: var(--choice-hit-area); padding: var(--s2); color: var(--ink); background: var(--surface); border: 0; border-radius: var(--r-s); font: inherit; cursor: pointer; }
+  .menu-action { text-align: left; background: transparent; }
+  .menu-action:hover, :global(.filter-done:hover) { background: var(--surface-2); }
+  .active-filters { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+  .filter-chip { display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--choice-hit-area); max-width: 100%; overflow-wrap: anywhere; border: var(--line-width) solid var(--line); border-radius: var(--r-pill); padding: var(--s1) var(--s3); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--text-xs); cursor: pointer; }
+  .filter-chip span { font-size: var(--text-base); }
+  .results-context { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2); color: var(--muted); font-size: var(--text-xs); margin: var(--s4) 0 var(--s3); }
+  .category-tab:focus-visible, .filter-chip:focus-visible { outline: var(--s1) solid var(--ink); outline-offset: calc(-1 * var(--s1)); }
+
   .cols { --cols: minmax(0, 24rem) minmax(6rem, 0.65fr) minmax(0, 1.3fr) minmax(0, 1fr); overflow: visible; }
   .trow { align-items: start; padding-block: var(--s4); }
   .resource-link { color: var(--ink); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
