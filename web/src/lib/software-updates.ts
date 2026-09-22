@@ -36,6 +36,7 @@ export type SoftwareService = {
   observed_at: string | null;
   known: boolean;
   source: ReleaseSource;
+  source_origin: "argus" | "manual";
   suggested_source: ReleaseSource | null;
   confirmed_at: string | null;
   revision: number;

@@ -39,6 +39,9 @@ func (w *Worker) Run(ctx context.Context) error {
 	}
 }
 func (w *Worker) tick(ctx context.Context) error {
+	if err := w.store.syncArgusSources(ctx); err != nil {
+		return err
+	}
 	tokenBytes := make([]byte, 16)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return err

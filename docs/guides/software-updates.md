@@ -5,7 +5,7 @@ La vue **Mises à jour** et l'onglet homonyme d'une Cible montrent les services 
 ## Première configuration
 
 1. Dans **Réglages → Analyse des notes de version**, choisir le fournisseur (Gemini, OpenAI, Mistral ou DeepSeek), puis un modèle proposé et saisir sa clé. L'adresse HTTPS est préremplie. Les choix sont une sélection de modèles compatibles, pas un inventaire du compte fournisseur. **Personnalisé** permet une autre API compatible Chat Completions ; **Autre modèle** permet de saisir son identifiant. Une configuration existante hors liste reste conservée. La clé est scellée avec la clé maîtresse CairnOps et ne revient jamais dans la réponse API. Une nouvelle adresse de fournisseur exige de ressaisir la clé.
-2. Dans le détail d'un service, vérifier la proposition de source publique remontée depuis Argus, puis confirmer le nom public du logiciel, le format et l'adresse officielle. Une source peut être corrigée par un Administrateur ; cela invalide la comparaison courante et programme une nouvelle analyse.
+2. La source publique renseignée dans Argus est reprise automatiquement, sans confirmation. Un Administrateur peut enregistrer une source personnalisée, prioritaire sur Argus. Si Argus ne fournit aucune source publique exploitable, la renseigner dans le détail du service. Un changement de source invalide la comparaison courante et programme une nouvelle analyse, sans supprimer l’historique.
 3. Laisser le worker collecter les notes et préparer la synthèse. Les notes restent consultables même sans fournisseur IA configuré.
 
 Les formats disponibles sont les dépôts publics GitHub, Forgejo/Gitea et GitLab, ainsi que les changelogs Markdown/HTML organisés par titres de version ou liens vers des notes de version sur le même site. Les pages qui exigent JavaScript ou une authentification ne sont pas collectées. La proposition utilise l'adresse de publication d'Argus ; elle ne transmet pas les noms internes à un moteur de recherche.
@@ -16,7 +16,7 @@ Les versions numériques à deux, trois ou quatre composantes, éventuellement p
 
 La comparaison en cours est contrôlée chaque jour. Un changement de contenu déclenche une nouvelle analyse ; une consultation ne relance pas l'IA. Une panne reporte le traitement et conserve les résultats précédents avec leurs versions couvertes. Les reprises sont espacées d'une heure et les traitements sont bornés à huit minutes avec un bail de dix minutes. Une analyse trop volumineuse reste différée ; les notes déjà collectées restent accessibles.
 
-Les synthèses sont produites en français ; les commandes de l'interface existent en français et en anglais. Chaque point donne accès à son extrait officiel. Une absence de consigne de migration ne produit aucune rubrique de parcours ni aucun avertissement à ce sujet.
+Les synthèses sont produites en français ; les commandes de l'interface existent en français et en anglais. Chaque point donne accès à son extrait officiel. L’IA sélectionne des identifiants d’extraits ; CairnOps reprend leur texte et leur version directement dans les notes, sans demander au modèle de les recopier. Une réponse au format ou aux références invalides bénéficie d’une seule tentative immédiate de réparation, puis de la reprise différée habituelle. Une absence de consigne de migration ne produit aucune rubrique de parcours ni aucun avertissement à ce sujet.
 
 ## Références des protocoles
 

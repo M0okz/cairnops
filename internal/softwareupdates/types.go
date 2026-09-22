@@ -64,6 +64,7 @@ type Service struct {
 	ObservedAt         *time.Time  `json:"observed_at"`
 	Known              bool        `json:"known"`
 	Source             Source      `json:"source"`
+	SourceOrigin       string      `json:"source_origin"`
 	Suggested          *Source     `json:"suggested_source"`
 	ConfirmedAt        *time.Time  `json:"confirmed_at"`
 	Revision           int64       `json:"revision"`
