@@ -292,16 +292,21 @@ button {
 /* Tous les nombres alignés en colonne sont tabulaires. */
 .num,
 kbd,
-code,
-pre,
-time,
-input[type="number"],
-.field input[type="number"],
 td.num,
 .mono {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
+}
+
+/* Les libellés techniques gardent la taille de leur composant. */
+code,
+pre,
+time,
+input[type="number"],
+.field input[type="number"] {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Ossature applicative ───────────────────────────────────────────────── */
