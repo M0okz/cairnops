@@ -11,6 +11,8 @@
   let loading = $state(true);
   let failed = $state(false);
   let now = $state(new Date());
+  let gaugeWidth = $state(0);
+  let gaugeHeight = $state(0);
   const windowStart = $derived(now.getTime() - 7 * 86_400_000);
   const allIncidents = $derived([...new Map([...session.incidents, ...resolved].map((incident) => [incident.id, incident] as const)).values()]);
   const recentIncidents = $derived(allIncidents.filter((incident) => Date.parse(incident.opened_at) >= windowStart));
@@ -66,12 +68,14 @@
     {:else}
       <div class="leader-list">
         {#each leaders as row (row.target.id)}
-          <a href="/cibles/{row.target.id}" class="leader-row">
+          <a href="/cibles/{row.target.id}" class="leader-row" class:lead={row.count === maxIncidents}>
             <span class="row-name">{row.target.name}</span>
-            <svg viewBox="0 0 100 8" preserveAspectRatio="none" role="img" aria-label={t('dashboard.incidentCount', { count: row.count })}>
-              <rect class="track" width="100" height="8" rx="4" />
-              <rect class="bar {row.count === maxIncidents ? 'crit' : 'warn'}" width={row.count / maxIncidents * 100} height="8" rx="4" />
-            </svg>
+            <span class="leader-gauge" bind:clientWidth={gaugeWidth} bind:clientHeight={gaugeHeight}>
+              <svg viewBox="0 0 {gaugeWidth || 100} {gaugeHeight || 6}" role="img" aria-label={t('dashboard.incidentCount', { count: row.count })}>
+                <rect class="track" width={gaugeWidth || 100} height={gaugeHeight || 6} rx={(gaugeHeight || 6) / 2} />
+                <rect class="bar" width={row.count / maxIncidents * (gaugeWidth || 100)} height={gaugeHeight || 6} rx={(gaugeHeight || 6) / 2} />
+              </svg>
+            </span>
             <span class="row-count num">{row.count}</span>
           </a>
         {/each}
@@ -110,12 +114,15 @@
   header a:hover, .leader-row:hover, .activity-list a:hover { color: var(--ink); }
   .leader-list { display: grid; gap: var(--s2); }
   .leader-row { display: grid; align-items: center; min-height: 2rem; gap: var(--s3); color: var(--muted); font-size: var(--text-xs); }
-  .leader-row { grid-template-columns: minmax(5rem, 1fr) minmax(3rem, 0.8fr) 1.5rem; }
+  .leader-row { grid-template-columns: minmax(5rem, 1fr) minmax(3rem, 0.8fr) 4ch; }
   .row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row-count { justify-self: end; white-space: nowrap; }
-  svg { display: block; width: 100%; height: var(--s3); }
-  .track { fill: var(--surface-3); }
-  .bar.warn { fill: var(--warn); } .bar.crit { fill: var(--crit); }
+  .leader-gauge { display: block; min-width: 0; height: var(--incident-rank-gauge-height); }
+  .leader-gauge svg { display: block; width: 100%; height: 100%; }
+  .track { fill: var(--line); }
+  .bar { fill: var(--muted); }
+  .leader-row.lead .bar { fill: var(--ink); }
+  .leader-row.lead .row-name, .leader-row.lead .row-count { color: var(--ink); font-weight: 600; }
   .activity-list { list-style: none; display: grid; }
   .activity-list li { display: grid; grid-template-columns: var(--s3) 2.75rem minmax(0, 1fr); align-items: start; gap: var(--s3); padding: var(--s3) 0; border-left: 1px solid var(--line); margin-left: var(--s2); }
   .activity-dot { display: block; width: var(--s3); height: var(--s3); border-radius: 50%; transform: translateX(calc(-50% - 1px)); background: var(--info); }
