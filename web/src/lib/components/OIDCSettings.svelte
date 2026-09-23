@@ -2,6 +2,7 @@
   import { api, type OIDCConfiguration, type OIDCConfigurationSet } from '$lib/api';
   import { messageFrom, session } from '$lib/session.svelte';
   import { t } from '$lib/i18n.svelte';
+  import Icon from './Icon.svelte';
 
   let configurations = $state<OIDCConfigurationSet>({ active: null, draft: null });
   let label = $state('');
@@ -17,6 +18,7 @@
   let saving = $state(false);
   let activating = $state(false);
   let error = $state('');
+  let providerOpen = $state(false);
 
   const secretConfigured = $derived(
     configurations.draft?.client_secret_configured ??
@@ -131,16 +133,18 @@
   }
 </script>
 
-<section class="oidc-panel" aria-labelledby="oidc-title">
+<section class="card oidc-panel" aria-labelledby="oidc-title">
   <header class="panel-heading">
+    <span class="oidc-icon"><Icon name="lock" size={18} /></span>
     <div>
       <h2 id="oidc-title">{t('oidc.title')}</h2>
       <p>{t('oidc.note')}</p>
     </div>
+    <button class="btn sm" type="button" aria-expanded={providerOpen} onclick={() => (providerOpen = !providerOpen)}>{providerOpen ? t('common.close') : t('oidc.configure')}</button>
   </header>
 
-  <div class="card oidc-card">
-    <div class="status-bar">
+  <div class="oidc-card">
+    <div class="status-bar" class:configured={configurations.active !== null}>
       <span class:ok={configurations.active} class:idle={!configurations.active} class="status-mark" aria-hidden="true"></span>
       {#if configurations.active}
         <span class="status-copy">
@@ -158,7 +162,7 @@
     </div>
 
     <form onsubmit={saveAndTest} oninput={() => (dirty = true)}>
-      <section class="form-section provider-section" aria-labelledby="oidc-provider-title">
+      {#if providerOpen}<section class="form-section provider-section" aria-labelledby="oidc-provider-title">
         <div class="section-heading">
           <div>
             <h3 id="oidc-provider-title">{t('oidc.provider')}</h3>
@@ -197,7 +201,7 @@
             </div>
           </div>
         </details>
-      </section>
+      </section>{/if}
 
       <section class="form-section access-section" aria-labelledby="oidc-groups-title">
         <div class="section-heading">
@@ -212,24 +216,24 @@
           <div class="field role-card">
             <label for="oidc-admin-groups">{t('role.administrator')}</label>
             <small>{t('oidc.administratorHint')}</small>
-            <textarea id="oidc-admin-groups" bind:value={administratorGroups} rows="2" spellcheck="false" placeholder={t('oidc.administratorPlaceholder')}></textarea>
+            <textarea id="oidc-admin-groups" bind:value={administratorGroups} rows="1" spellcheck="false" placeholder={t('oidc.administratorPlaceholder')}></textarea>
           </div>
           <div class="field role-card">
             <label for="oidc-operator-groups">{t('role.operator')}</label>
             <small>{t('oidc.operatorHint')}</small>
-            <textarea id="oidc-operator-groups" bind:value={operatorGroups} rows="2" spellcheck="false" placeholder={t('oidc.operatorPlaceholder')}></textarea>
+            <textarea id="oidc-operator-groups" bind:value={operatorGroups} rows="1" spellcheck="false" placeholder={t('oidc.operatorPlaceholder')}></textarea>
           </div>
           <div class="field role-card">
             <label for="oidc-observer-groups">{t('role.observer')}</label>
             <small>{t('oidc.observerHint')}</small>
-            <textarea id="oidc-observer-groups" bind:value={observerGroups} rows="2" spellcheck="false" placeholder={t('oidc.observerPlaceholder')}></textarea>
+            <textarea id="oidc-observer-groups" bind:value={observerGroups} rows="1" spellcheck="false" placeholder={t('oidc.observerPlaceholder')}></textarea>
           </div>
         </div>
       </section>
 
       {#if error}<p class="error" role="alert">{error}</p>{/if}
 
-      <footer class="flow-footer">
+      {#if providerOpen || !needsConfiguration}<footer class="flow-footer">
         <span class="flow-copy">
           {#if needsConfiguration}
             <strong>{t('oidc.stepConfigure')}</strong>
@@ -246,7 +250,9 @@
           {/if}
         </span>
 
-        {#if needsConfiguration}
+        {#if needsConfiguration && !providerOpen}
+          <button class="btn" type="button" onclick={() => (providerOpen = true)}>{t('oidc.configure')}</button>
+        {:else if needsConfiguration}
           <button class="btn primary" type="submit" disabled={saving}>
             {saving ? t('oidc.saving') : t('oidc.saveAndTest')}
           </button>
@@ -257,23 +263,27 @@
         {:else if configurations.draft}
           <a class="btn primary" href="/api/v1/oidc/configuration/test">{t('oidc.testConnection')}</a>
         {/if}
-      </footer>
+      </footer>{/if}
     </form>
   </div>
 </section>
 
 <style>
   .oidc-panel {
-    margin-top: var(--s6);
+    margin: 0;
   }
+  .oidc-icon { display: inline-grid; place-items: center; flex: none; width: 2.25rem; height: 2.25rem; border-radius: var(--r-m); background: var(--surface-2); }
 
   .panel-heading {
     display: flex;
     align-items: end;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: var(--s4);
-    margin-bottom: var(--s4);
+    min-height: 3.75rem;
+    padding: var(--s3) var(--s4);
+    border-bottom: 1px solid var(--line);
   }
+  .panel-heading > div { flex: 1; min-width: 0; }
 
   .panel-heading h2,
   .panel-heading p,
@@ -302,8 +312,9 @@
     gap: var(--s3);
     padding: var(--s4) var(--s5);
     border-bottom: 1px solid var(--line);
-    background: var(--bg);
+    background: var(--warn-bg);
   }
+  .status-bar.configured { background: var(--surface); }
 
   .status-mark {
     width: var(--s3);
@@ -342,7 +353,7 @@
   }
 
   .status-copy small {
-    font-family: var(--font-num);
+    font-family: var(--font);
   }
 
   .form-section {
@@ -457,7 +468,7 @@
   }
 
   .role-card textarea {
-    min-height: 4rem;
+    min-height: var(--ctl-h-lg);
     margin-top: var(--s2);
     background: var(--surface);
     font-family: var(--font-num);

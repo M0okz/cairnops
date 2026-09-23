@@ -7,6 +7,7 @@
   import { Input } from "./ui/input";
   import { Button } from "./ui/button";
   import Switch from "./ui/Switch.svelte";
+  import Icon from './Icon.svelte';
   let config = $state<SoftwareAIConfig | null>(null);
   let key = $state("");
   let providerID = $state("");
@@ -89,8 +90,10 @@
 </script>
 
 <section class="card software-settings" id="software-analysis">
-  <h2>{t("updates.aiTitle")}</h2>
-  <p class="muted">{t("updates.aiHint")}</p>
+  <header class="software-heading">
+    <span class="software-icon"><Icon name="activity" size={18} /></span>
+    <span><h2>{t("updates.aiTitle")}</h2><small>{t("updates.aiHint")}</small></span>
+  </header>
   {#if error}<p role="alert">{error}</p>{/if}
   {#if config}
     <form onsubmit={save} class="shadcn-control">
@@ -186,15 +189,24 @@
 
 <style>
   .software-settings {
-    padding: var(--s6);
-    display: grid;
-    gap: var(--s4);
+    display: block;
   }
+  .software-heading { display: flex; align-items: center; gap: var(--s4); min-height: 3.75rem; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); }
+  .software-heading h2 { margin: 0; font-size: 0.9375rem; font-weight: 600; }
+  .software-heading small { display: block; margin-top: var(--s1); color: var(--faint); font-size: var(--text-xs); line-height: 1.4; }
+  .software-icon { display: inline-grid; place-items: center; flex: none; width: 2.25rem; height: 2.25rem; border-radius: var(--r-m); background: var(--surface-2); }
+  .software-settings > p { margin: var(--s4) var(--s5); }
   form {
     display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    align-items: end;
     gap: var(--s4);
-    max-width: 48rem;
+    max-width: none;
+    padding: var(--s4) var(--s5) var(--s5);
   }
+  .switch-row { grid-column: 1 / -1; }
+  form > div:last-child { display: flex; align-items: center; gap: var(--s3); min-height: var(--ctl-h-lg); }
+  form > div:last-child span { color: var(--ok); font-size: var(--text-xs); }
   label {
     display: grid;
     gap: var(--s2);
@@ -211,4 +223,6 @@
     align-items: center;
     gap: var(--s3);
   }
+  @media (max-width: 58rem) { form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 48rem) { form { grid-template-columns: minmax(0, 1fr); } .software-heading { align-items: start; } }
 </style>

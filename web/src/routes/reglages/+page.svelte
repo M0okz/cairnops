@@ -1,6 +1,9 @@
 <script lang="ts">
-  import AppearanceSettings from '$lib/components/AppearanceSettings.svelte';
-  import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+  import { appearance } from '$lib/appearance.svelte';
+  import { solarCities, themeModes } from '$lib/appearance';
+  import type { IconName } from '$lib/components/Icon.svelte';
+  import { localeTag } from '$lib/i18n.svelte';
+  import { onMount } from 'svelte';
   /* Réglages.
    * Les Écrans placent « Réglages » dans la navigation et font passer les
    * Connecteurs par lui. S'y ajoutent les gestes qui portent sur les comptes,
@@ -28,6 +31,32 @@
   const roleOrder: Role[] = ['observer', 'operator', 'administrator'];
 
   const initials = (name: string) => name.slice(0, 2).toLocaleUpperCase(i18n.locale);
+  const themeIcons: Record<string, IconName> = { light: 'sun', dark: 'moon', system: 'devices', solar: 'activity' };
+  const solarTime = (date: Date | null) => date
+    ? new Intl.DateTimeFormat(localeTag(), { hour: '2-digit', minute: '2-digit' }).format(date)
+    : '—';
+  let passwordOpen = $state(false);
+  let activeSection = $state('general');
+  onMount(() => {
+    const update = () => (activeSection = location.hash.slice(1) || 'general');
+    update();
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  });
+
+  function exportConfiguration() {
+    const configuration = {
+      instance: { name: session.instanceName, version: session.version },
+      appearance: { mode: appearance.mode, city: appearance.cityName, language: i18n.locale },
+      connectors: session.connectors.map(({ kind, name, status }) => ({ kind, name, status }))
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(configuration, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'cairnops-configuration.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   /* La fraîcheur s'égrène comme dans le rail : « 8 s » ne vaut que s'il compte. */
   let now = $state(new Date());
@@ -39,15 +68,6 @@
   const freshness = $derived.by(() => {
     if (session.realtime !== 'online' || !session.lastEventAt) return t('common.none');
     return since(session.lastEventAt, now);
-  });
-
-  /* Le catalogue tient en quatre intégrations : trois sources et une voie de
-   * notification. Ce qui n'est pas encore relié reste disponible. */
-  const catalogue = 4;
-  const freeConnectors = $derived.by(() => {
-    const engaged = new Set<string>(session.connectors.map((connector) => connector.kind));
-    if (session.channels.some((channel) => channel.kind === 'mattermost')) engaged.add('mattermost');
-    return Math.max(0, catalogue - engaged.size);
   });
 
   /* ── Le nom de l'instance ─────────────────────────────────────────────── */
@@ -284,13 +304,21 @@
       <p>{t('settings.lead')}</p>
     </div>
   </div>
+  <nav class="settings-tabs" aria-label={t('settings.sections')}>
+    <a href="#general" class:active={activeSection === 'general'} aria-current={activeSection === 'general' ? 'location' : undefined}><Icon name="settings" size={14} />{t('settings.general')}</a>
+    <a href="#connectors" class:active={activeSection === 'connectors'} aria-current={activeSection === 'connectors' ? 'location' : undefined}><Icon name="connectors" size={14} />{t('nav.connectors')}</a>
+    <a href="#account" class:active={activeSection === 'account'} aria-current={activeSection === 'account' ? 'location' : undefined}><Icon name="user" size={14} />{t('settings.yourAccount')}</a>
+    <a href="#devices" class:active={activeSection === 'devices'} aria-current={activeSection === 'devices' ? 'location' : undefined}><Icon name="devices" size={14} />{t('devices.title')}</a>
+    {#if isAdministrator}<a href="#ai" class:active={activeSection === 'ai'} aria-current={activeSection === 'ai' ? 'location' : undefined}><Icon name="activity" size={14} />{t('settings.aiTab')}</a>{/if}
+    {#if isLocalAdministrator}<a href="#advanced" class:active={activeSection === 'advanced'} aria-current={activeSection === 'advanced' ? 'location' : undefined}><Icon name="health" size={14} />{t('settings.advanced')}</a>{/if}
+  </nav>
 
-  <div class="band-row">
-    <h2 class="band">{t('settings.workspace')}</h2>
-    <span class="band-note">{t('settings.workspaceNote')}</span>
-  </div>
-
-  <div class="card">
+  <div class="settings-layout">
+  <section id="general" class="card general-card" aria-labelledby="general-title">
+    <header class="settings-card-head">
+      <span class="settings-icon"><Icon name="settings" size={18} /></span>
+      <span><h2 id="general-title">{t('settings.general')}</h2><small>{t('settings.generalHint')}</small></span>
+    </header>
     <!-- Le nom de l'instance ouvre la section : c'est le seul réglage de cette
          carte qui vaut pour tout le monde, les autres n'engagent que l'appareil
          devant lequel on est assis. -->
@@ -321,9 +349,15 @@
     </div>
     {#if renameError}<p class="error" role="alert">{renameError}</p>{/if}
 
-    <div class="row appearance-row">
+    <div class="row">
       <span class="id"><strong>{t('appearance.title')}</strong><small class="faint">{t('appearance.deviceHint')}</small></span>
-      <div class="act settings-appearance"><AppearanceSettings /></div>
+      <div class="setting-value appearance-options" role="group" aria-label={t('rail.theme')}>
+        {#each themeModes as mode}
+          <button type="button" aria-pressed={appearance.mode === mode} onclick={() => appearance.choose(mode)}>
+            <Icon name={themeIcons[mode]} size={16} /><span>{t(`appearance.${mode}`)}</span>
+          </button>
+        {/each}
+      </div>
     </div>
 
     <!-- La langue se choisit ici comme dans le menu du rail : c'est le même
@@ -331,52 +365,50 @@
     <div class="row">
       <span class="id">
         <strong>{t('rail.language')}</strong>
-        <small class="faint">{t('settings.languageHint')}</small>
+        <small class="faint">{t('settings.languageShortHint')}</small>
       </span>
-      <div class="act">
-        <SegmentedControl value={i18n.locale} label={t('rail.language')}
-          items={locales.map((choice) => ({ ...choice, lang: choice.value }))}
-          onValueChange={(value) => i18n.choose(value)} />
+      <div class="setting-value field select-field">
+        <label class="visually-hidden" for="settings-language">{t('rail.language')}</label>
+        <select id="settings-language" value={i18n.locale} onchange={(event) => i18n.choose(event.currentTarget.value as typeof i18n.locale)}>
+          {#each locales as choice}<option value={choice.value}>{choice.label}</option>{/each}
+        </select>
+        <small>{t('settings.translationHint')}</small>
       </div>
     </div>
-
     <div class="row">
-      <span class="id">
-        <strong>{t('nav.connectors')}</strong>
-        <small class="faint">
-          {plural('settings.connections', session.connectors.length)} ·
-          {t('settings.connectorList')}
-        </small>
-      </span>
-      <span class="means">
-        {#each session.connectors.filter((connector) => connector.status === 'connected') as connector (connector.id)}
-          <span class="pill ok">{t('settings.connectorLive', { name: connector.name })}</span>
-        {/each}
-        {#if freeConnectors > 0}
-          <span class="pill">{plural('settings.connectorsFree', freeConnectors)}</span>
+      <span class="id"><strong>{t('appearance.city')}</strong><small class="faint">{t('settings.cityHint')}</small></span>
+      <div class="setting-value field select-field">
+        <label class="visually-hidden" for="settings-city">{t('appearance.city')}</label>
+        <select id="settings-city" value={appearance.cityName} onchange={(event) => appearance.chooseCity(event.currentTarget.value)}>
+          <option value="">{t('appearance.chooseCity')}</option>
+          {#each solarCities as city}<option value={city.name}>{city.name}</option>{/each}
+        </select>
+        {#if appearance.solar}
+          <small>{t('appearance.sunrise')} {solarTime(appearance.solar.sunrise)} &nbsp; · &nbsp; {t('appearance.sunset')} {solarTime(appearance.solar.sunset)} &nbsp; · &nbsp; {appearance.timeZone}</small>
         {/if}
-      </span>
-      <a class="act btn sm" href="/connecteurs">{t('common.open')}</a>
+      </div>
     </div>
+  </section>
 
-    <div class="row">
-      <span class="id">
-        <strong>{t('health.instance')}</strong>
-        <small class="faint">{t('settings.instanceHint')}</small>
-      </span>
-      <span class="means num faint">
-        <span class="dot {session.realtime === 'online' ? 'ok' : 'idle'}"></span>
-        v{session.version} ·
-        {session.realtime === 'online' ? t('settings.realtimeOn') : t('settings.realtimeOff')} ·
-        {freshness}
-      </span>
-      <a class="act btn sm" href="/sante">{t('settings.viewHealth')}</a>
+  <aside class="settings-aside card" aria-label={t('settings.about')}>
+    <div class="aside-block"><span class="settings-icon"><Icon name="health" size={16} /></span><div><strong>{t('settings.about')}</strong><p>{t('settings.workspaceNote')}</p></div></div>
+    <div class="aside-block"><span class="settings-icon"><Icon name="server" size={16} /></span><div><strong>{t('health.instance')}</strong><p><span class="dot {session.health === 'ready' ? 'ok' : 'idle'}"></span> v{session.version}</p><small>{t('settings.lastSignal')} {freshness}</small></div></div>
+    <div class="aside-block"><span class="settings-icon"><Icon name="book" size={16} /></span><div><strong>{t('settings.help')}</strong><p>{t('settings.helpHint')}</p><a class="btn sm" href="https://github.com/M0okz/cairnops#readme" target="_blank" rel="noopener noreferrer">{t('settings.documentation')} ↗</a></div></div>
+    <div class="aside-block"><span class="settings-icon"><Icon name="changelog" size={16} /></span><div><strong>{t('settings.export')}</strong><button class="btn sm" type="button" onclick={exportConfiguration}>{t('settings.exportJSON')}</button></div></div>
+  </aside>
+
+  <section id="connectors" class="card status-card" aria-labelledby="connectors-title">
+    <header class="settings-card-head"><span class="settings-icon"><Icon name="connectors" size={18} /></span><span><h2 id="connectors-title">{t('settings.statusConnectors')}</h2><small>{t('settings.statusConnectorsHint')}</small></span></header>
+    <div class="status-grid">
+      <div><strong>{t('settings.version')}</strong><span class="num"><span class="dot {session.health === 'ready' ? 'ok' : 'idle'}"></span> v{session.version}</span></div>
+      <div><strong>{t('settings.realtime')}</strong><span>{session.realtime === 'online' ? t('settings.realtimeOn') : t('settings.realtimeOff')}</span><small>{t('settings.lastSignal')} {freshness}</small></div>
+      <div><strong>{t('settings.activeConnectors')}</strong><span class="num">{session.connectors.filter((connector) => connector.status === 'connected').length} / {session.connectors.length}</span></div>
+      <a class="btn sm" href="/connecteurs">{t('settings.manageConnectors')} →</a>
     </div>
-  </div>
+  </section>
 
-  <h2 class="band">{t('settings.yourAccount')}</h2>
-
-  <div class="card">
+  <section id="account" class="card account-card" aria-labelledby="account-title">
+    <header class="settings-card-head"><span class="settings-icon"><Icon name="user" size={18} /></span><span><h2 id="account-title">{t('settings.yourAccount')}</h2><small>{t('settings.accountHint')}</small></span></header>
     <div class="row">
       <span class="id who">
         <span class="avatar">{initials(session.user?.display_name ?? '')}</span>
@@ -398,9 +430,12 @@
     </div>
 
     {#if session.user?.authorization_regime === 'local'}
-    <form class="card-body" onsubmit={changePassword}>
-      <h3>{t('settings.changePassword')}</h3>
-      <p class="lead faint">{t('settings.changePasswordHint')}</p>
+    <div class="password-toggle">
+      <span class="settings-icon"><Icon name="health" size={16} /></span>
+      <span><strong>{t('settings.changePassword')}</strong><small>{t('settings.changePasswordHint')}</small></span>
+      <button class="btn sm" type="button" aria-expanded={passwordOpen} onclick={() => (passwordOpen = !passwordOpen)}>{passwordOpen ? t('common.close') : t('settings.edit')} →</button>
+    </div>
+    {#if passwordOpen}<form class="card-body password-form" onsubmit={changePassword}>
 
       <div class="grid">
         <div class="field">
@@ -430,33 +465,25 @@
           <span class="faint">{t('settings.submitHint')}</span>
         {/if}
       </div>
-    </form>
+    </form>{/if}
     {:else}
       <div class="card-body">
         <h3>{t('settings.externalAccount')}</h3>
         <p class="lead faint">{t('settings.externalAccountHint')}</p>
       </div>
     {/if}
-  </div>
+  </section>
 
-  <DeviceManagement />
-  {#if isAdministrator}<SoftwareAISettings/>{/if}
+  <div id="devices" class="settings-section"><DeviceManagement /></div>
+  {#if isAdministrator}<div id="ai" class="settings-section"><SoftwareAISettings/></div>{/if}
 
   {#if isAdministrator}
     {#if isLocalAdministrator}
-      <OIDCSettings />
+      <div id="advanced" class="settings-section"><OIDCSettings /></div>
     {/if}
 
-    <div class="band-row">
-      <h2 class="band">{t('settings.accounts')}</h2>
-      {#if isLocalAdministrator}
-        <button class="btn primary sm" type="button" onclick={() => { creating = true; createError = ''; }}>
-          {t('settings.openAccount')}
-        </button>
-      {/if}
-    </div>
-
-    <div class="card accounts">
+    <section id="accounts" class="card accounts" aria-labelledby="accounts-title">
+      <header class="settings-card-head"><span class="settings-icon"><Icon name="user" size={18} /></span><span><h2 id="accounts-title">{t('settings.accounts')}</h2><small>{t('settings.accountsHint')}</small></span>{#if isLocalAdministrator}<button class="btn sm account-create" type="button" onclick={() => { creating = true; createError = ''; }}>{t('settings.openAccount')}</button>{/if}</header>
       {#if usersError}
         <div class="empty">
           <strong>{t('settings.accountsUnread')}</strong>
@@ -554,8 +581,6 @@
           <span>{rule}</span>
         </p>
       {/if}
-    </div>
-
     <!-- Ce qui n'est pas une commande se range à côté d'elles, pas dessous en
          paragraphe libre : la doctrine se lit, l'avertissement se remarque. -->
     <div class="notes">
@@ -568,7 +593,9 @@
         <p>{t('settings.recoveryHint')}</p>
       </div>
     </div>
+    </section>
   {/if}
+  </div>
 </div>
 
 {#if creating}
@@ -626,36 +653,64 @@
 {/if}
 
 <style>
-  .settings-appearance { width: 24rem; max-width: 100%; }
-  .appearance-row { align-items: flex-start; flex-wrap: wrap; }
-  .band {
-    margin: var(--s6) 0 var(--s4);
-    font-size: 0.9375rem;
-    font-weight: 600;
-  }
-
-  .band-row {
-    display: flex;
-    align-items: center;
-    gap: var(--s4);
-    margin: var(--s6) 0 var(--s4);
-  }
-
-  /* Seul le premier bandeau se passe de marge haute : le titre de l'écran lui
-   * en a déjà donné. Les suivants séparent deux dalles et la gardent. */
-  .page-head + .band-row {
-    margin-top: 0;
-  }
-
-  .band-row .band {
-    flex: 1;
-    margin: 0;
-  }
-
-  .band-note {
-    color: var(--faint);
-    font-size: var(--text-sm);
-  }
+  .page { max-width: 94rem; }
+  .page-head { margin-bottom: var(--s5); }
+  .page-head h1 { font-size: 1.5rem; }
+  .settings-tabs { display: flex; align-items: center; gap: var(--s2); overflow-x: auto; margin-bottom: var(--s4); border-bottom: 1px solid var(--line); scrollbar-width: none; }
+  .settings-tabs::-webkit-scrollbar { display: none; }
+  .settings-tabs a { display: inline-flex; align-items: center; gap: var(--s2); flex: none; min-height: 2.75rem; padding: 0 var(--s3); border-bottom: 2px solid transparent; color: var(--faint); font-size: var(--text-sm); font-weight: 500; white-space: nowrap; }
+  .settings-tabs a:hover, .settings-tabs a:focus-visible { color: var(--ink); }
+  .settings-tabs a.active { border-bottom-color: var(--ink); color: var(--ink); }
+  .settings-layout { display: grid; grid-template-columns: minmax(0, 1fr) 18rem; align-items: start; gap: var(--s4); }
+  .settings-layout > :not(.general-card):not(.settings-aside) { grid-column: 1 / -1; }
+  .settings-layout > section, .settings-section { min-width: 0; scroll-margin-top: calc(var(--topbar-h) + var(--s7) + var(--s7)); }
+  .settings-card-head { display: flex; align-items: center; gap: var(--s4); min-height: 3.75rem; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); }
+  .settings-card-head > span:nth-child(2) { min-width: 0; }
+  .settings-card-head h2 { margin: 0; font-size: 0.9375rem; font-weight: 600; }
+  .settings-card-head small { display: block; margin-top: var(--s1); color: var(--faint); font-size: var(--text-xs); line-height: 1.4; }
+  .settings-icon { display: inline-grid; place-items: center; flex: none; width: 2.25rem; height: 2.25rem; border-radius: var(--r-m); background: var(--surface-2); color: var(--ink); }
+  .general-card .row { grid-template-columns: minmax(10rem, 12rem) minmax(0, 1fr); gap: var(--s4); padding: var(--s4) var(--s5); }
+  .general-card .row > .act { grid-column: 2; justify-self: stretch; }
+  .general-card .id strong { color: var(--ink); }
+  .general-card .id small { margin-top: var(--s1); color: var(--faint); line-height: 1.4; }
+  .general-card .rename input { width: auto; flex: 1; min-width: 0; }
+  .setting-value { min-width: 0; }
+  .appearance-options { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  .appearance-options button { display: grid; justify-items: center; align-content: center; gap: var(--s1); min-width: 3.5rem; min-height: 3.25rem; padding: var(--s2) var(--s2); border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--surface); color: var(--ink); font-size: var(--text-xs); cursor: pointer; }
+  .appearance-options button:hover { background: var(--surface-2); }
+  .appearance-options button[aria-pressed='true'] { border-color: var(--accent); background: var(--surface-2); }
+  .appearance-options button:focus-visible, .settings-tabs a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .select-field { margin: 0; }
+  .select-field select { width: 100%; background: var(--surface); }
+  .select-field small { line-height: 1.5; }
+  .settings-aside { align-self: stretch; }
+  .aside-block { display: flex; align-items: start; gap: var(--s3); padding: var(--s4); border-bottom: 1px solid var(--line); }
+  .aside-block:last-child { border-bottom: 0; }
+  .aside-block .settings-icon { width: 2rem; height: 2rem; }
+  .aside-block strong { display: block; font-size: var(--text-sm); font-weight: 600; }
+  .aside-block p, .aside-block small { display: block; margin-top: var(--s3); color: var(--faint); font-size: var(--text-xs); line-height: 1.55; }
+  .aside-block .btn { margin-top: var(--s3); }
+  .aside-block .dot { display: inline-block; }
+  .status-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: center; gap: 0; padding: var(--s3) var(--s5); }
+  .status-grid > div { display: grid; align-content: start; gap: var(--s3); min-height: 4.25rem; padding: var(--s2) var(--s5); border-right: 1px solid var(--line); }
+  .status-grid > div:first-child { padding-left: 0; }
+  .status-grid > div:nth-child(3) { border-right: 0; }
+  .status-grid strong { font-size: var(--text-xs); font-weight: 600; }
+  .status-grid span { font-size: var(--text-sm); }
+  .status-grid small { color: var(--faint); font-size: var(--text-xs); }
+  .status-grid .btn { margin-left: var(--s4); }
+  .account-card > .row { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .account-card > .row .act { grid-column: 3; }
+  .password-toggle { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s5); }
+  .password-toggle > span:nth-child(2) { flex: 1; min-width: 0; }
+  .password-toggle strong, .password-toggle small { display: block; }
+  .password-toggle strong { font-size: var(--text-sm); }
+  .password-toggle small { margin-top: var(--s1); color: var(--faint); font-size: var(--text-xs); }
+  .password-toggle .settings-icon { width: 2rem; height: 2rem; }
+  .password-form { border-top: 1px solid var(--line); }
+  .account-create { margin-left: auto; }
+  .accounts .settings-card-head { border-bottom: 1px solid var(--line); }
+  .accounts .footnote { margin: 0; }
 
   /* Le nom de l'instance se corrige sur place : le champ occupe la colonne du
    * geste, avec sa commande à côté, et le refus du serveur paraît sous la
@@ -842,6 +897,11 @@
     color: var(--warn);
   }
 
+  .accounts .notes { gap: 0; margin-top: 0; padding: var(--s3); border-top: 1px solid var(--warn-line); background: var(--warn-bg); }
+  .accounts .note, .accounts .note.warn { padding: var(--s2) var(--s4); border: 0; border-radius: 0; background: transparent; }
+  .accounts .note + .note { border-left: 1px solid var(--warn-line); }
+  .accounts .note strong, .accounts .note p { color: var(--warn); }
+
   .narrow {
     max-width: 32rem;
   }
@@ -850,13 +910,28 @@
     font-family: var(--font-num);
   }
 
-  @media (max-width: 48rem) {
-    .band-row {
-      align-items: flex-start;
-      flex-direction: column;
-      gap: var(--s1);
-    }
+  @media (max-width: 58rem) {
+    .settings-layout { grid-template-columns: minmax(0, 1fr); }
+    .settings-aside { grid-column: 1; }
+    .settings-aside { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .aside-block:nth-child(2) { border-right: 0; }
+    .aside-block { border-right: 1px solid var(--line); }
+    .aside-block:nth-child(even) { border-right: 0; }
+  }
 
+  @media (max-width: 48rem) {
+    .page { padding: var(--s4); }
+    .settings-aside { grid-template-columns: minmax(0, 1fr); }
+    .aside-block { border-right: 0; }
+    .general-card .row { grid-template-columns: minmax(0, 1fr); }
+    .general-card .row > .act, .general-card .row > .setting-value { grid-column: 1; }
+    .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+    .status-grid > div { padding: var(--s2); }
+    .status-grid > div:nth-child(2) { border-right: 0; }
+    .status-grid .btn { justify-self: start; margin-left: 0; }
+    .account-card > .row { grid-template-columns: minmax(0, 1fr) auto; }
+    .account-card > .row .means { grid-row: 2; }
+    .account-card > .row .act { grid-column: 2; grid-row: 1; }
     .row {
       grid-template-columns: minmax(0, 1fr);
       align-items: start;
@@ -887,5 +962,6 @@
     .notes {
       grid-template-columns: minmax(0, 1fr);
     }
+    .accounts .note + .note { border-left: 0; border-top: 1px solid var(--warn-line); }
   }
 </style>

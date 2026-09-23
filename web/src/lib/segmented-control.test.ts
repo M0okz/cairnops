@@ -4,7 +4,6 @@ import test from 'node:test';
 
 const consumers = [
   '../routes/incidents/+page.svelte',
-  '../routes/reglages/+page.svelte',
   './components/TargetWorkshop.svelte',
   './components/MaintenanceWorkshop.svelte',
   '../routes/cibles/[id]/+page.svelte',
@@ -18,4 +17,10 @@ test('tous les groupes segmentés utilisent le même composant', () => {
     assert.doesNotMatch(consumer, /<div class="[^"]*\bsegments\b[^"]*"/);
     assert.match(consumer, /SegmentedControl/);
   }
+});
+
+test('les préférences des paramètres gardent des contrôles explicites', () => {
+  const settings = readFileSync(new URL('../routes/reglages/+page.svelte', import.meta.url), 'utf8');
+  assert.match(settings, /<select id="settings-language"/);
+  assert.match(settings, /aria-pressed=\{appearance\.mode === mode\}/);
 });

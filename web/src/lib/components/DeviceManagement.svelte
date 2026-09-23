@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import DevicePairingDialog from './DevicePairingDialog.svelte';
   import DeviceRevocation from './DeviceRevocation.svelte';
+  import Icon from './Icon.svelte';
   import { api, type Device } from '$lib/api';
   import { since } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
@@ -58,17 +59,17 @@
   });
 </script>
 
-<div class="band-row devices-band">
+<section class="card devices-card" aria-labelledby="devices-title">
+<header class="devices-band">
+  <span class="devices-icon"><Icon name="devices" size={18} /></span>
   <div>
-    <h2 class="band">{t('devices.title')}</h2>
+    <h2 id="devices-title">{t('devices.title')}</h2>
     <p>{t('devices.lead')}</p>
   </div>
   <button class="btn primary sm" type="button" onclick={() => (pairing = true)}>
     {t('devices.pairAction')}
   </button>
-</div>
-
-<div class="card devices-card">
+</header>
   {#if loading}
     <div class="empty">{t('devices.loading')}</div>
   {:else if error}
@@ -119,7 +120,7 @@
 
     <p class="device-footnote">{t('devices.identityDoctrine')}</p>
   {/if}
-</div>
+</section>
 
 {#if pairing}
   <DevicePairingDialog
@@ -142,7 +143,9 @@
     display: flex;
     align-items: center;
     gap: var(--s4);
-    margin: var(--s6) 0 var(--s4);
+    min-height: 3.75rem;
+    padding: var(--s3) var(--s4);
+    border-bottom: 1px solid var(--line);
   }
 
   .devices-band > div {
@@ -150,7 +153,7 @@
     flex: 1;
   }
 
-  .devices-band .band {
+  .devices-band h2 {
     margin: 0;
     font-size: 0.9375rem;
     font-weight: 600;
@@ -161,6 +164,8 @@
     color: var(--faint);
     font-size: 0.75rem;
   }
+
+  .devices-icon { display: inline-grid; place-items: center; flex: none; width: 2.25rem; height: 2.25rem; border-radius: var(--r-m); background: var(--surface-2); }
 
   .devices-card {
     --cols: minmax(12rem, 1fr) minmax(16rem, 1.25fr) 7rem 6rem;
