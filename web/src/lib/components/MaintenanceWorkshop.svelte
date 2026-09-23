@@ -233,7 +233,7 @@
     gap: 0.375rem;
     padding: 0.3125rem 0.625rem;
     border: 1px solid var(--line-strong);
-    border-radius: var(--r-pill);
+    border-radius: var(--r-button);
     background: var(--bg);
     color: var(--muted);
     font-size: 0.75rem;

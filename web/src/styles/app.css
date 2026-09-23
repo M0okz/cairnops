@@ -7,26 +7,34 @@
  * Tout passe par les jetons ci-dessous. Aucune couleur littérale sous ce bloc. */
 
 @font-face {
-  font-family: 'IBM Plex Sans';
-  src: url('/fonts/IBMPlexSans-Regular.woff2') format('woff2');
+  font-family: 'Inter';
+  src: url('/fonts/InterVariable.woff2') format('woff2');
   font-style: normal;
-  font-weight: 400;
+  font-weight: 100 900;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'IBM Plex Sans';
-  src: url('/fonts/IBMPlexSans-SemiBold.woff2') format('woff2');
-  font-style: normal;
-  font-weight: 600;
+  font-family: 'Inter';
+  src: url('/fonts/InterVariable-Italic.woff2') format('woff2');
+  font-style: italic;
+  font-weight: 100 900;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'IBM Plex Sans Condensed';
-  src: url('/fonts/IBMPlexSansCondensed-SemiBold.woff2') format('woff2');
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMonoVariable.woff2') format('woff2');
   font-style: normal;
-  font-weight: 600;
+  font-weight: 100 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-ItalicVariable.woff2') format('woff2');
+  font-style: italic;
+  font-weight: 100 800;
   font-display: swap;
 }
 
@@ -62,8 +70,8 @@
   --chart-history-height: 17.5rem;
   --chart-history-compact-height: 12rem;
   --chart-text-size: 0.75rem;
-  --r-chart: 1rem;
-  --r-overview: 16px;
+  --r-chart: var(--r-l);
+  --r-overview: var(--r-l);
   --incident-drawer-width: 52rem;
   --drawer-backdrop: rgb(0 0 0 / 0.3);
 
@@ -91,8 +99,8 @@
   --source-webhook: #a78bfa;
 
   /* Typographie */
-  --font: system-ui, -apple-system, 'Segoe UI', 'IBM Plex Sans', sans-serif;
-  --font-num: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font: 'Inter', sans-serif;
+  --font-num: 'JetBrains Mono', monospace;
   --text-xs: 0.8125rem;
   --text-sm: 0.875rem;
   --text-md: 1rem;
@@ -109,10 +117,12 @@
   --s7: 2.5rem;
 
   /* Formes */
-  --r-s: 0.25rem;
-  --r-m: 0.375rem;
-  --r-l: 0.5rem;
-  --r-pill: 1.25rem;
+  --r-s: 4px;
+  --r-button: 10px;
+  --r-m: 12px;
+  --r-l: 16px;
+  --r-pill: 9999px;
+  --r-bar: 2px;
   --line-width: 1px;
 
   /* Ossature */
@@ -241,6 +251,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font);
+  font-optical-sizing: auto;
   font-size: var(--text-md);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -281,6 +292,10 @@ button {
 /* Tous les nombres alignés en colonne sont tabulaires. */
 .num,
 kbd,
+code,
+pre,
+time,
+input[type="number"],
 td.num,
 .mono {
   font-family: var(--font-num);
@@ -314,7 +329,7 @@ td.num,
 .rail-brand .brand-full .cairnops-brand { width: 100%; height: auto; }
 .brand-symbol { display: none; }
 .instance-card { background: var(--instance-bg); display: flex; align-items: center; gap: var(--s3); margin: var(--s4) 0 var(--s5); padding: var(--s3); min-height: 4rem; border: 1px solid var(--line); border-radius: var(--r-m); }
-.instance-mark { display: grid; place-items: center; flex: none; width: 2rem; height: 2rem; border: 1px solid var(--line-strong); border-radius: var(--r-s); font-size: var(--text-sm); }
+.instance-mark { display: grid; place-items: center; flex: none; width: 2rem; height: 2rem; border: 1px solid var(--line-strong); border-radius: var(--r-m); font-size: var(--text-sm); }
 .instance-copy { min-width: 0; }
 .instance-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); font-weight: 600; }
 .instance-copy small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--s1); color: var(--faint); font-size: 0.75rem; }
@@ -367,7 +382,7 @@ td.num,
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 0.1875rem;
+  border-radius: var(--r-pill);
   background: var(--surface-2);
   color: var(--muted);
   font-size: 0.75rem;
@@ -402,7 +417,7 @@ td.num,
   gap: 0.75rem;
   height: 2.75rem;
   padding: 0 var(--s3);
-  border-radius: var(--r-m);
+  border-radius: var(--r-button);
   color: var(--muted);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -454,7 +469,7 @@ td.num,
   min-width: var(--counter-pill-h);
   height: var(--counter-pill-h);
   padding: 0 calc(var(--s3) - var(--s1));
-  border-radius: var(--r-pill);
+  border-radius: var(--r-s);
   background: var(--crit-bg);
   color: var(--crit);
   font-size: 0.75rem;
@@ -627,7 +642,7 @@ kbd {
   align-items: center;
   gap: 0.375rem;
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-m);
+  border-radius: var(--r-button);
   background: var(--surface);
   color: var(--ink);
   font-size: var(--text-sm);
@@ -755,10 +770,12 @@ kbd {
   padding: 2px 0.4375rem;
   justify-self: start;
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-s);
   background: var(--surface-2);
   color: var(--muted);
   font-size: var(--text-xs);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -1182,7 +1199,7 @@ a.trow:hover .caret {
   display: grid;
   place-items: center;
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-m);
+  border-radius: var(--r-button);
   background: none;
   color: var(--muted);
   flex: none;

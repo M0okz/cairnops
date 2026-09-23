@@ -164,7 +164,7 @@
     right: -0.3125rem;
     min-width: 0.9375rem;
     padding: 0 0.25rem;
-    border-radius: var(--r-pill);
+    border-radius: var(--r-s);
     background: var(--crit);
     color: var(--on-accent, #fff);
     font-family: var(--font-num);

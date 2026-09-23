@@ -363,7 +363,7 @@
     place-items: center;
     flex: none;
     border: 1px solid currentColor;
-    border-radius: var(--r-pill);
+    border-radius: var(--r-s);
     font-family: var(--font-num);
     font-size: 0.6875rem;
   }

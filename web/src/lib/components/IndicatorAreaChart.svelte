@@ -328,7 +328,7 @@
 
   .area-chart.expanded { height: 17.5rem; }
   .area-chart.tone-context { color: var(--chart-context); }
-  .expanded .axis text, .value-tick { font-size: 13px; fill: var(--faint); font-family: var(--font); }
+  .expanded .axis text, .value-tick { font-size: 13px; fill: var(--faint); font-family: var(--font-num); }
   .expanded .tooltip-time { font-size: 12px; }
   .expanded .tooltip-value { font-size: 14px; }
   .expanded .grid line { stroke-dasharray: 3 6; }
@@ -417,7 +417,7 @@
   .marker-guide { stroke: currentColor; stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.8; }
   .marker-point { fill: var(--surface); stroke: currentColor; stroke-width: 1.75; }
   .marker-label rect { fill: var(--surface); stroke: currentColor; }
-  .marker-label text { fill: var(--ink); font-family: var(--font); font-size: 9px; font-weight: var(--weight-semibold); }
+  .marker-label text { fill: var(--ink); font-family: var(--font-num); font-size: 9px; font-weight: var(--weight-semibold); }
 
   .tooltip rect {
     fill: var(--surface-3);
@@ -432,7 +432,7 @@
 
   .tooltip-time {
     fill: var(--faint);
-    font-family: var(--font);
+    font-family: var(--font-num);
     font-size: 9px;
   }
 

@@ -82,7 +82,7 @@
     <div class="overview-metrics">
       <section class="metric card">
         <div class="metric-label"><h2>{t('dashboard.operational')}</h2><Icon name="targets" size={20} /></div>
-        <div class="metric-value"><b><Odometer value={health.total ? health.counts.ok : '—'} /></b><span>/ {health.total}</span></div>
+        <div class="metric-value"><b><Odometer value={health.total ? health.counts.ok : '—'} /></b><span class="metric-number">/ {health.total}</span></div>
         <svg class="fleet-strip" viewBox="0 0 400 12" preserveAspectRatio="none" role="img" aria-label={distributionLabel}>
           <rect width="400" height="12" class="strip-idle" />
           {#if health.total}
@@ -94,7 +94,7 @@
       </section>
       <section class="metric card">
         <div class="metric-label"><h2>{t('dashboard.coverage')}</h2><Icon name="activity" size={20} /></div>
-        <div class="metric-value"><b><Odometer value={coverage === null ? '—' : new Intl.NumberFormat(localeTag(), { maximumFractionDigits: 2 }).format(coverage * 100)} /></b>{#if coverage !== null}<span>%</span>{/if}</div>
+        <div class="metric-value"><b><Odometer value={coverage === null ? '—' : new Intl.NumberFormat(localeTag(), { maximumFractionDigits: 2 }).format(coverage * 100)} /></b>{#if coverage !== null}<span class="metric-number">%</span>{/if}</div>
         <svg class="coverage-strip" viewBox="0 0 400 6" preserveAspectRatio="none" aria-hidden="true"><rect width="400" height="6" class="strip-idle" />{#if coverage !== null}<rect width={coverage * 400} height="6" class="strip-accent" />{/if}</svg>
         <small>{t(coverage === null ? 'dashboard.notMeasured' : 'dashboard.measured')}</small>
       </section>
@@ -174,6 +174,7 @@
   .metric-label { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); color: var(--faint); }
   .metric-label h2 { font-size: var(--text-sm); color: var(--muted); font-weight: 500; line-height: 1.5; letter-spacing: 0; }
   .metric-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s3); min-height: 2rem; }
+  .metric-number { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
   .metric-value b { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
   .metric-value > span { color: var(--faint); font-size: var(--text-sm); }
   .metric small { font-size: var(--text-xs); color: var(--faint); margin-top: auto; }
@@ -193,12 +194,12 @@
   .current-incidents > header > div { width: 100%; }
   .current-incidents h2 { justify-content: space-between; font-size: var(--text-sm); }
   .current-incidents header p, .current-incidents > header > :global(svg) { display: none; }
-  .tally { font-family: var(--font-num); font-size: var(--text-xs); color: var(--crit); background: var(--crit-bg); padding: var(--s1) var(--s3); border-radius: var(--r-pill); }
+  .tally { font-family: var(--font-num); font-size: var(--text-xs); color: var(--crit); background: var(--crit-bg); padding: var(--s1) var(--s3); border-radius: var(--r-s); }
   .incident-list { display: grid; gap: var(--s3); }
   .incident-summary, .incidents-empty { padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-overview); background: var(--surface); }
-  .incident-action .btn { border-radius: var(--r-pill); }
+  .incident-action .btn { border-radius: var(--r-button); }
   .incident-meta, .incident-action { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); font-size: var(--text-xs); color: var(--faint); }
-  .severity { display: inline-flex; align-items: center; gap: var(--s2); border: 1px solid var(--line); border-radius: var(--r-s); padding: var(--s1) var(--s2); font-size: 0.75rem; }
+  .severity { font-family: var(--font-num); display: inline-flex; align-items: center; gap: var(--s2); border: 1px solid var(--line); border-radius: var(--r-s); padding: var(--s1) var(--s2); font-size: 0.75rem; }
   .incident-open { display: block; width: 100%; border: 0; background: none; text-align: left; padding: var(--s4) 0; }
   .incident-open strong { display: block; font-size: var(--text-md); font-weight: 600; overflow-wrap: anywhere; }
   .incident-open span { display: block; color: var(--muted); font-size: var(--text-sm); margin-top: var(--s2); }

@@ -259,7 +259,7 @@
   .warnings i { width: .375rem; height: .375rem; margin-top: .3rem; border-radius: 50%; background: var(--warn); }
   .conflicts { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-bottom: var(--s4); }
   .conflicts strong { font-size: .6875rem; }
-  .conflicts span { padding: var(--s1) var(--s2); border-radius: var(--r-pill); background: var(--surface-2); color: var(--muted); font-size: .625rem; }
+  .conflicts span { font-family: var(--font-num); padding: var(--s1) var(--s2); border-radius: var(--r-s); background: var(--surface-2); color: var(--muted); font-size: .625rem; }
   .archive-option { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s4); color: var(--muted); font-size: .6875rem; }
   .comparison input { width: auto; height: auto; }
   .confirmation { margin-top: var(--s4); }

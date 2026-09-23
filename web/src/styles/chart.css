@@ -19,7 +19,12 @@
   --color-foreground: var(--ink);
   --color-muted-foreground: var(--faint);
   --color-border: var(--line-strong);
+  --font-sans: var(--font);
   --font-mono: var(--font-num);
+  --radius-sm: var(--r-s);
+  --radius-md: var(--r-button);
+  --radius-lg: var(--r-m);
+  --radius-xl: var(--r-l);
   --text-xs: var(--chart-text-size);
 }
 @scope (.shadcn-chart, .shadcn-control) {

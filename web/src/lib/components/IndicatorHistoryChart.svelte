@@ -239,7 +239,7 @@
   .history-chart.compact { --history-height: var(--chart-history-compact-height); }
   .history-chart:focus-visible { outline-offset: var(--s2); border-radius: var(--r-m); }
   .chart-grid line { stroke: var(--line); stroke-width: 1; }
-  .axis text { fill: var(--faint); font-family: var(--font); font-size: var(--chart-text-size); font-variant-numeric: tabular-nums; }
+  .axis text { fill: var(--faint); font-family: var(--font-num); font-size: var(--chart-text-size); font-variant-numeric: tabular-nums; }
   .fill-start { stop-color: var(--chart-series); stop-opacity: 0.38; }
   .fill-end { stop-color: var(--chart-series); stop-opacity: 0.025; }
   .maximum-start { stop-color: var(--chart-maximum); stop-opacity: 0.26; }

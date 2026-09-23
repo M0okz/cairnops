@@ -743,7 +743,7 @@
     display: grid;
     place-items: center;
     border: 1px solid var(--line-strong);
-    border-radius: var(--r-m);
+    border-radius: var(--r-button);
     background: none;
     color: var(--muted);
     flex: none;

@@ -31,6 +31,9 @@
     label?: string;
   } = $props();
 
+  let renderedWidth = $state(0);
+  let renderedHeight = $state(0);
+
   let hovered = $state<number | null>(null);
   let focused = $state<number | null>(null);
 
@@ -70,7 +73,7 @@
   }
 </script>
 
-<span class="bars-shell">
+<span class="bars-shell" bind:clientWidth={renderedWidth} bind:clientHeight={renderedHeight}>
   <svg
     class="bars {mode}"
     viewBox="0 0 {width} {height}"
@@ -83,7 +86,9 @@
       <line x1="0" y1={height - 1} x2={width} y2={height - 1} vector-effect="non-scaling-stroke" />
     {:else}
       {#each drawn as bar, index (index)}
-        <rect x={bar.x} y={bar.y} width={bar.w} height={bar.h} rx="1" />
+        {@const rx = Math.min(2 * width / (renderedWidth || width), bar.w / 2)}
+        {@const ry = Math.min(2 * height / (renderedHeight || height), bar.h)}
+        <path d={`M${bar.x},${bar.y + bar.h}V${bar.y + ry}Q${bar.x},${bar.y} ${bar.x + rx},${bar.y}H${bar.x + bar.w - rx}Q${bar.x + bar.w},${bar.y} ${bar.x + bar.w},${bar.y + ry}V${bar.y + bar.h}Z`} />
       {/each}
     {/if}
   </svg>
@@ -130,12 +135,12 @@
     height: 100%;
   }
 
-  rect {
+  path {
     fill: currentColor;
   }
 
   /* Des emplacements vides : la forme du graphe est là, la matière non. */
-  .slots rect {
+  .slots path {
     fill: var(--surface-2);
   }
 
@@ -159,7 +164,7 @@
     min-width: 0;
     padding: 0;
     border: 0;
-    border-radius: var(--r-s);
+    border-radius: var(--r-bar) var(--r-bar) 0 0;
     background: transparent;
     color: inherit;
     cursor: help;
@@ -168,7 +173,7 @@
   button::before {
     position: absolute;
     inset: 0;
-    border-radius: var(--r-s);
+    border-radius: var(--r-bar) var(--r-bar) 0 0;
     background: currentColor;
     content: '';
     opacity: 0;

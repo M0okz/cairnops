@@ -104,6 +104,8 @@
 
 <style>
   .odometer {
+    font-family: var(--font-num);
+    font-variant-numeric: tabular-nums;
     position: relative;
     display: inline-block;
     height: 1em;
