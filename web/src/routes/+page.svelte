@@ -5,6 +5,8 @@
   import Uptime from '$lib/components/Uptime.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import IndicatorOverview from '$lib/components/IndicatorOverview.svelte';
+  import InfrastructureHealth from '$lib/components/InfrastructureHealth.svelte';
+  import DashboardInsights from '$lib/components/DashboardInsights.svelte';
   import IncidentDetailDrawer from '$lib/components/IncidentDetailDrawer.svelte';
   import { Input } from '$lib/components/ui/input/index.js';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
@@ -112,7 +114,6 @@
       </section>
     </div>
 
-    <IndicatorOverview />
   </div>
   <section class="current-incidents" aria-labelledby="current-incidents-title">
     <header><div><h2 id="current-incidents-title">{t('dashboard.currentIncidents')} <span class="tally">{active.length}</span></h2><p>{t('dashboard.pending', { count: session.unacknowledged.length })}</p></div><Icon name="incidents" size={20} /></header>
@@ -130,6 +131,10 @@
     </div>
     <footer><a href="/incidents">{t('overview.allIncidents')} →</a></footer>
   </section>
+
+  <InfrastructureHealth />
+  <DashboardInsights />
+  <div class="overview-context"><IndicatorOverview /></div>
 
   <section class="card overview-targets" aria-labelledby="overview-targets-title">
     <header><div><h2 id="overview-targets-title">{t('nav.targets')}</h2><p>{t('dashboard.targetsLead')}</p></div>
@@ -155,7 +160,7 @@
 <style>
   .overview-page { display: grid; grid-template-columns: minmax(0, 1fr) clamp(17rem, 22vw, 20rem); gap: var(--s6); align-items: start; }
   .overview-main { min-width: 0; display: flex; flex-direction: column; gap: var(--s5); }
-  .overview-targets, .instance-health { grid-column: 1 / -1; }
+  .overview-targets, .instance-health, .overview-context { grid-column: 1 / -1; }
   .overview-main :global(.card), .overview-targets { border-radius: var(--r-overview); }
   .intro { display: flex; justify-content: space-between; align-items: center; gap: var(--s5); margin-bottom: var(--s3); }
   .eyebrow { display: block; color: var(--faint); font-size: var(--text-xs); margin-bottom: var(--s3); }
