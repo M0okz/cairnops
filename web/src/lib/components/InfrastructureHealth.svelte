@@ -6,8 +6,19 @@
   import { t } from '$lib/i18n.svelte';
 
   let selectedID = $state('');
-  const candidates = $derived(session.targets.filter((target) => session.measures[target.id]));
-  const selected = $derived(candidates.find((target) => target.id === selectedID) ?? candidates[0]);
+  const candidates = $derived(session.targets.filter((target) => {
+    const measure = inWindow(session.measures[target.id], '24h');
+    return measure.availability !== null || measure.average_latency_milliseconds !== null;
+  }));
+  const preferred = $derived(candidates.find((target) =>
+    session.indicatorOverview[target.id]?.indicators.some((indicator) =>
+      indicator.pinned && indicator.semantic_key === 'response.time'
+    )
+  ) ?? candidates.find((target) => {
+    const measure = inWindow(session.measures[target.id], '24h');
+    return measure.availability !== null && measure.average_latency_milliseconds !== null;
+  }) ?? candidates[0]);
+  const selected = $derived(candidates.find((target) => target.id === selectedID) ?? preferred);
   const measured = $derived(selected ? session.measures[selected.id] : undefined);
   const summary = $derived(inWindow(measured, '24h'));
   const availability = $derived((measured?.trend ?? []).filter(Number.isFinite));
@@ -54,7 +65,7 @@
 </section>
 
 <style>
-  .infrastructure-health { grid-column: 1 / -1; min-width: 0; padding: var(--s5); border-radius: var(--r-overview); }
+  .infrastructure-health { min-width: 0; padding: var(--s5); border-radius: var(--r-overview); }
   header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: var(--s4); margin-bottom: var(--s4); }
   h2 { font-size: 1.125rem; font-weight: 600; }
   header p { color: var(--faint); font-size: var(--text-sm); margin-top: var(--s2); }

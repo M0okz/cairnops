@@ -35,8 +35,8 @@ test('counts each incident once per affected target and sorts leaders by count',
 
 test('recent activity uses event time across incidents', () => {
   const incidents = [
-    { id: 'first', activity: [{ id: 1, occurred_at: '2026-09-22T10:00:00Z' }] },
+    { id: 'first', activity: [{ id: 1, occurred_at: '2026-09-22T10:00:00Z' }, { id: 3, occurred_at: '2026-09-22T12:00:00Z' }] },
     { id: 'second', activity: [{ id: 2, occurred_at: '2026-09-22T11:00:00Z' }] }
   ];
-  assert.deepEqual(dashboardRecentActivity(incidents).map(({ entry }) => entry.id), [2, 1]);
+  assert.deepEqual(dashboardRecentActivity(incidents).map(({ entry }) => entry.id), [3, 2]);
 });

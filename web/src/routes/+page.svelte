@@ -113,7 +113,7 @@
         <small>{t('dashboard.sourceSplit', { native: nativeSources, external: externalSources })}</small>
       </section>
     </div>
-
+    <InfrastructureHealth />
   </div>
   <section class="current-incidents" aria-labelledby="current-incidents-title">
     <header><div><h2 id="current-incidents-title">{t('dashboard.currentIncidents')} <span class="tally">{active.length}</span></h2><p>{t('dashboard.pending', { count: session.unacknowledged.length })}</p></div><Icon name="incidents" size={20} /></header>
@@ -132,7 +132,6 @@
     <footer><a href="/incidents">{t('overview.allIncidents')} →</a></footer>
   </section>
 
-  <InfrastructureHealth />
   <DashboardInsights />
   <div class="overview-context"><IndicatorOverview /></div>
 

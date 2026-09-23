@@ -37,9 +37,14 @@ export function dashboardIncidentLeaders(incidents: Incident[], targets: Target[
 }
 
 export function dashboardRecentActivity(incidents: Incident[]) {
-  return incidents
+  const ordered = incidents
     .flatMap((incident) => incident.activity.map((entry) => ({ incident, entry })))
     .filter(({ entry }) => Number.isFinite(Date.parse(entry.occurred_at)))
-    .sort((left, right) => Date.parse(right.entry.occurred_at) - Date.parse(left.entry.occurred_at))
-    .slice(0, 5);
+    .sort((left, right) => Date.parse(right.entry.occurred_at) - Date.parse(left.entry.occurred_at));
+  const seen = new Set<string>();
+  return ordered.filter(({ incident }) => {
+    if (seen.has(incident.id)) return false;
+    seen.add(incident.id);
+    return true;
+  }).slice(0, 5);
 }
