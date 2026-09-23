@@ -296,6 +296,7 @@ code,
 pre,
 time,
 input[type="number"],
+.field input[type="number"],
 td.num,
 .mono {
   font-family: var(--font-num);

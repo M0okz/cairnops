@@ -29,6 +29,6 @@
   {@render children()}
 </div>
 <style>
-  .tooltip-trigger { color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: var(--r-s); padding: var(--s1) var(--s2); min-height: 1.75rem; font: inherit; cursor: pointer; text-align: left; }
+  .tooltip-trigger { color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: var(--r-s); padding: var(--s1) var(--s2); min-height: 1.75rem; font: inherit; font-family: var(--font-num); font-variant-numeric: tabular-nums; cursor: pointer; text-align: left; }
   .resource-tooltip { position: fixed; inset: auto; margin: 0; width: min(25rem, calc(100vw - 1.5rem)); max-height: calc(100dvh - 1.5rem); overflow: auto; padding: var(--s4); border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--surface); color: var(--ink); box-shadow: var(--shadow); font-size: var(--text-sm); }
 </style>
