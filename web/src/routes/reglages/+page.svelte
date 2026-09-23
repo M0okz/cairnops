@@ -653,9 +653,7 @@
 {/if}
 
 <style>
-  .page { max-width: 94rem; }
   .page-head { margin-bottom: var(--s5); }
-  .page-head h1 { font-size: 1.5rem; }
   .settings-tabs { display: flex; align-items: center; gap: var(--s2); overflow-x: auto; margin-bottom: var(--s4); border-bottom: 1px solid var(--line); scrollbar-width: none; }
   .settings-tabs::-webkit-scrollbar { display: none; }
   .settings-tabs a { display: inline-flex; align-items: center; gap: var(--s2); flex: none; min-height: 2.75rem; padding: 0 var(--s3); border-bottom: 2px solid transparent; color: var(--faint); font-size: var(--text-sm); font-weight: 500; white-space: nowrap; }
