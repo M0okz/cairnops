@@ -3,7 +3,7 @@
   import { solarCities, themeModes } from '$lib/appearance';
   import type { IconName } from '$lib/components/Icon.svelte';
   import { localeTag } from '$lib/i18n.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   /* Réglages.
    * Les Écrans placent « Réglages » dans la navigation et font passer les
    * Connecteurs par lui. S'y ajoutent les gestes qui portent sur les comptes,
@@ -35,14 +35,43 @@
   const solarTime = (date: Date | null) => date
     ? new Intl.DateTimeFormat(localeTag(), { hour: '2-digit', minute: '2-digit' }).format(date)
     : '—';
+  type SettingsTab = 'general' | 'connectors' | 'account' | 'devices' | 'ai' | 'advanced';
   let passwordOpen = $state(false);
-  let activeSection = $state('general');
+  let activeSection = $state<SettingsTab>('general');
   onMount(() => {
-    const update = () => (activeSection = location.hash.slice(1) || 'general');
-    update();
-    window.addEventListener('hashchange', update);
-    return () => window.removeEventListener('hashchange', update);
+    const activateHash = () => {
+      const anchor = location.hash.slice(1);
+      const tab = (anchor === 'software-analysis' ? 'ai' : anchor === 'accounts' ? 'advanced' : anchor) as SettingsTab;
+      if (!availableTabs.includes(tab)) return;
+      activeSection = tab;
+      void tick().then(() => document.getElementById(anchor)?.scrollIntoView());
+    };
+    activateHash();
+    window.addEventListener('hashchange', activateHash);
+    return () => window.removeEventListener('hashchange', activateHash);
   });
+
+  function selectTab(tab: SettingsTab) {
+    activeSection = tab;
+    if (location.hash) history.replaceState(history.state, '', location.pathname + location.search);
+  }
+
+  function handleTabKeydown(event: KeyboardEvent) {
+    const focusedTab = (event.target as HTMLElement).closest<HTMLButtonElement>('[role="tab"]');
+    if (!focusedTab) return;
+    const current = focusedTab.dataset.tab as SettingsTab;
+    const index = availableTabs.indexOf(current);
+    let next = index;
+    if (event.key === 'ArrowRight') next = (index + 1) % availableTabs.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + availableTabs.length) % availableTabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = availableTabs.length - 1;
+    else return;
+    event.preventDefault();
+    const tab = availableTabs[next];
+    selectTab(tab);
+    document.getElementById(`settings-tab-${tab}`)?.focus();
+  }
 
   function exportConfiguration() {
     const configuration = {
@@ -145,6 +174,14 @@
   const isLocalAdministrator = $derived(
     isAdministrator && session.user?.authorization_regime === 'local'
   );
+  const availableTabs = $derived<SettingsTab[]>([
+    'general', 'connectors', 'account', 'devices',
+    ...(isAdministrator ? ['ai', 'advanced'] as const : [])
+  ]);
+
+  $effect(() => {
+    if (!availableTabs.includes(activeSection)) activeSection = 'general';
+  });
 
   $effect(() => {
     if (!isAdministrator || loaded) return;
@@ -304,16 +341,18 @@
       <p>{t('settings.lead')}</p>
     </div>
   </div>
-  <nav class="settings-tabs" aria-label={t('settings.sections')}>
-    <a href="#general" class:active={activeSection === 'general'} aria-current={activeSection === 'general' ? 'location' : undefined}><Icon name="settings" size={14} />{t('settings.general')}</a>
-    <a href="#connectors" class:active={activeSection === 'connectors'} aria-current={activeSection === 'connectors' ? 'location' : undefined}><Icon name="connectors" size={14} />{t('nav.connectors')}</a>
-    <a href="#account" class:active={activeSection === 'account'} aria-current={activeSection === 'account' ? 'location' : undefined}><Icon name="user" size={14} />{t('settings.yourAccount')}</a>
-    <a href="#devices" class:active={activeSection === 'devices'} aria-current={activeSection === 'devices' ? 'location' : undefined}><Icon name="devices" size={14} />{t('devices.title')}</a>
-    {#if isAdministrator}<a href="#ai" class:active={activeSection === 'ai'} aria-current={activeSection === 'ai' ? 'location' : undefined}><Icon name="activity" size={14} />{t('settings.aiTab')}</a>{/if}
-    {#if isLocalAdministrator}<a href="#advanced" class:active={activeSection === 'advanced'} aria-current={activeSection === 'advanced' ? 'location' : undefined}><Icon name="health" size={14} />{t('settings.advanced')}</a>{/if}
-  </nav>
+  <div class="settings-tabs" role="tablist" aria-label={t('settings.sections')} tabindex="-1" onkeydown={handleTabKeydown}>
+    <button id="settings-tab-general" data-tab="general" role="tab" type="button" aria-selected={activeSection === 'general'} aria-controls="settings-panel-general" tabindex={activeSection === 'general' ? 0 : -1} class:active={activeSection === 'general'} onclick={() => selectTab('general')}><Icon name="settings" size={14} />{t('settings.general')}</button>
+    <button id="settings-tab-connectors" data-tab="connectors" role="tab" type="button" aria-selected={activeSection === 'connectors'} aria-controls="settings-panel-connectors" tabindex={activeSection === 'connectors' ? 0 : -1} class:active={activeSection === 'connectors'} onclick={() => selectTab('connectors')}><Icon name="connectors" size={14} />{t('nav.connectors')}</button>
+    <button id="settings-tab-account" data-tab="account" role="tab" type="button" aria-selected={activeSection === 'account'} aria-controls="settings-panel-account" tabindex={activeSection === 'account' ? 0 : -1} class:active={activeSection === 'account'} onclick={() => selectTab('account')}><Icon name="user" size={14} />{t('settings.yourAccount')}</button>
+    <button id="settings-tab-devices" data-tab="devices" role="tab" type="button" aria-selected={activeSection === 'devices'} aria-controls="settings-panel-devices" tabindex={activeSection === 'devices' ? 0 : -1} class:active={activeSection === 'devices'} onclick={() => selectTab('devices')}><Icon name="devices" size={14} />{t('devices.title')}</button>
+    {#if isAdministrator}
+      <button id="settings-tab-ai" data-tab="ai" role="tab" type="button" aria-selected={activeSection === 'ai'} aria-controls="settings-panel-ai" tabindex={activeSection === 'ai' ? 0 : -1} class:active={activeSection === 'ai'} onclick={() => selectTab('ai')}><Icon name="activity" size={14} />{t('settings.aiTab')}</button>
+      <button id="settings-tab-advanced" data-tab="advanced" role="tab" type="button" aria-selected={activeSection === 'advanced'} aria-controls="settings-panel-advanced" tabindex={activeSection === 'advanced' ? 0 : -1} class:active={activeSection === 'advanced'} onclick={() => selectTab('advanced')}><Icon name="health" size={14} />{t('settings.advanced')}</button>
+    {/if}
+  </div>
 
-  <div class="settings-layout">
+  <div id="settings-panel-general" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-general" tabindex="0" hidden={activeSection !== 'general'}>
   <section id="general" class="card general-card" aria-labelledby="general-title">
     <header class="settings-card-head">
       <span class="settings-icon"><Icon name="settings" size={18} /></span>
@@ -396,7 +435,9 @@
     <div class="aside-block"><span class="settings-icon"><Icon name="book" size={16} /></span><div><strong>{t('settings.help')}</strong><p>{t('settings.helpHint')}</p><a class="btn sm" href="https://github.com/M0okz/cairnops#readme" target="_blank" rel="noopener noreferrer">{t('settings.documentation')} ↗</a></div></div>
     <div class="aside-block"><span class="settings-icon"><Icon name="changelog" size={16} /></span><div><strong>{t('settings.export')}</strong><button class="btn sm" type="button" onclick={exportConfiguration}>{t('settings.exportJSON')}</button></div></div>
   </aside>
+  </div>
 
+  <div id="settings-panel-connectors" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-connectors" tabindex="0" hidden={activeSection !== 'connectors'}>
   <section id="connectors" class="card status-card" aria-labelledby="connectors-title">
     <header class="settings-card-head"><span class="settings-icon"><Icon name="connectors" size={18} /></span><span><h2 id="connectors-title">{t('settings.statusConnectors')}</h2><small>{t('settings.statusConnectorsHint')}</small></span></header>
     <div class="status-grid">
@@ -406,7 +447,9 @@
       <a class="btn sm" href="/connecteurs">{t('settings.manageConnectors')} →</a>
     </div>
   </section>
+  </div>
 
+  <div id="settings-panel-account" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-account" tabindex="0" hidden={activeSection !== 'account'}>
   <section id="account" class="card account-card" aria-labelledby="account-title">
     <header class="settings-card-head"><span class="settings-icon"><Icon name="user" size={18} /></span><span><h2 id="account-title">{t('settings.yourAccount')}</h2><small>{t('settings.accountHint')}</small></span></header>
     <div class="row">
@@ -473,11 +516,18 @@
       </div>
     {/if}
   </section>
+  </div>
 
+  <div id="settings-panel-devices" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-devices" tabindex="0" hidden={activeSection !== 'devices'}>
   <div id="devices" class="settings-section"><DeviceManagement /></div>
-  {#if isAdministrator}<div id="ai" class="settings-section"><SoftwareAISettings/></div>{/if}
+  </div>
 
   {#if isAdministrator}
+    <div id="settings-panel-ai" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-ai" tabindex="0" hidden={activeSection !== 'ai'}>
+      <div id="ai" class="settings-section"><SoftwareAISettings /></div>
+    </div>
+
+    <div id="settings-panel-advanced" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-advanced" tabindex="0" hidden={activeSection !== 'advanced'}>
     {#if isLocalAdministrator}
       <div id="advanced" class="settings-section"><OIDCSettings /></div>
     {/if}
@@ -594,8 +644,8 @@
       </div>
     </div>
     </section>
+    </div>
   {/if}
-  </div>
 </div>
 
 {#if creating}
@@ -656,10 +706,11 @@
   .page-head { margin-bottom: var(--s5); }
   .settings-tabs { display: flex; align-items: center; gap: var(--s2); overflow-x: auto; margin-bottom: var(--s4); border-bottom: 1px solid var(--line); scrollbar-width: none; }
   .settings-tabs::-webkit-scrollbar { display: none; }
-  .settings-tabs a { display: inline-flex; align-items: center; gap: var(--s2); flex: none; min-height: 2.75rem; padding: 0 var(--s3); border-bottom: 2px solid transparent; color: var(--faint); font-size: var(--text-sm); font-weight: 500; white-space: nowrap; }
-  .settings-tabs a:hover, .settings-tabs a:focus-visible { color: var(--ink); }
-  .settings-tabs a.active { border-bottom-color: var(--ink); color: var(--ink); }
+  .settings-tabs button { display: inline-flex; align-items: center; gap: var(--s2); flex: none; min-height: 2.75rem; padding: 0 var(--s3); border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--faint); font-size: var(--text-sm); font-weight: 500; white-space: nowrap; }
+  .settings-tabs button:hover, .settings-tabs button:focus-visible { color: var(--ink); }
+  .settings-tabs button.active { border-bottom-color: var(--ink); color: var(--ink); }
   .settings-layout { display: grid; grid-template-columns: minmax(0, 1fr) 18rem; align-items: start; gap: var(--s4); }
+  .settings-layout[hidden] { display: none; }
   .settings-layout > :not(.general-card):not(.settings-aside) { grid-column: 1 / -1; }
   .settings-layout > section, .settings-section { min-width: 0; scroll-margin-top: calc(var(--topbar-h) + var(--s7) + var(--s7)); }
   .settings-card-head { display: flex; align-items: center; gap: var(--s4); min-height: 3.75rem; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); }
@@ -677,7 +728,7 @@
   .appearance-options button { display: grid; justify-items: center; align-content: center; gap: var(--s1); min-width: 3.5rem; min-height: 3.25rem; padding: var(--s2) var(--s2); border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--surface); color: var(--ink); font-size: var(--text-xs); cursor: pointer; }
   .appearance-options button:hover { background: var(--surface-2); }
   .appearance-options button[aria-pressed='true'] { border-color: var(--accent); background: var(--surface-2); }
-  .appearance-options button:focus-visible, .settings-tabs a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .appearance-options button:focus-visible, .settings-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .select-field { margin: 0; }
   .select-field select { width: 100%; background: var(--surface); }
   .select-field small { line-height: 1.5; }
