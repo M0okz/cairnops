@@ -34,23 +34,23 @@
 
 :root {
   /* Surfaces */
-  --bg: #11100e;
+  --bg: #11100f;
   --rail-bg: var(--surface);
   --topbar-bg: #181715;
   --instance-bg: var(--bg);
   --surface: #1a1917;
   --surface-2: #272624;
-  --surface-3: #2f2e2b;
-  --line: color-mix(in srgb, var(--ink) 10%, var(--bg));
-  --line-strong: color-mix(in srgb, var(--ink) 18%, var(--bg));
-  --line-row: color-mix(in srgb, var(--ink) 5%, var(--bg));
+  --surface-3: var(--surface-2);
+  --line: #2e2e2b;
+  --line-strong: var(--line);
+  --line-row: var(--line);
 
   /* Encres */
-  --ink: #faf8f4;
-  --muted: #bbc3cc;
-  --faint: #a39b90;
-  --dim: #a39b90;
-  --icon: #a39b90;
+  --ink: #f1f0ed;
+  --muted: #9a9893;
+  --faint: var(--muted);
+  --dim: var(--muted);
+  --icon: var(--muted);
 
   /* Titane — une seule couleur d'action, distincte des verdicts. */
   --accent: #ccc6bc;
@@ -68,13 +68,13 @@
   --drawer-backdrop: rgb(0 0 0 / 0.3);
 
   /* Sémantique — réservée à l'État de santé et à la Gravité. */
-  --ok: #34d399;
+  --ok: #53be70;
   --ok-bg: #0f2e22;
   --ok-line: #174c39;
   --warn: #fbbf24;
   --warn-bg: #2a2110;
   --warn-line: #4a3a18;
-  --crit: #f87171;
+  --crit: #f75d58;
   --crit-bg: #2a1513;
   --crit-line: #4a2320;
   --info: #60a5fa;
@@ -170,31 +170,32 @@
 
 :root[data-theme='light'] {
   --chart-popover: #ffffff;
-  --bg: #faf8f4;
+  --bg: #faf9f5;
   --rail-bg: #ffffff;
   --topbar-bg: var(--bg);
   --instance-bg: transparent;
   --surface: #ffffff;
-  --surface-2: color-mix(in srgb, var(--ink) 3%, var(--bg));
-  --surface-3: color-mix(in srgb, var(--ink) 6%, var(--bg));
+  --surface-2: #f5f4f1;
+  --surface-3: var(--surface-2);
+  --line: #e3e2df;
 
-  --ink: #1c1b19;
-  --muted: #706a61;
-  --faint: #706a61;
-  --dim: #706a61;
-  --icon: #706a61;
+  --ink: #181818;
+  --muted: #717177;
+  --faint: var(--muted);
+  --dim: var(--muted);
+  --icon: var(--muted);
 
   /* Valeurs de marque retenues ; les teintes sémantiques gardent leur rôle. */
   --accent: #58534c;
   --accent-ink: #ffffff;
 
-  --ok: #0f7a47;
+  --ok: #2ea957;
   --ok-bg: #eaf6ef;
   --ok-line: #c8e6d5;
   --warn: #8a6410;
   --warn-bg: #fdf5e3;
   --warn-line: #ecdcb4;
-  --crit: #c0392b;
+  --crit: #ef4444;
   --crit-bg: #fdecea;
   --crit-line: #f3cfca;
   --info: #2b6cb0;
@@ -718,7 +719,7 @@ kbd {
   padding: 0 0.5625rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
-  background: var(--surface);
+  background: var(--surface-2);
   color: var(--ink);
   font: inherit;
   font-size: var(--text-sm);
@@ -1034,7 +1035,7 @@ a.trow:hover .caret {
   padding: 0 0.625rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-m);
-  background: var(--bg);
+  background: var(--surface-2);
   color: var(--ink);
   font: inherit;
   font-size: var(--text-sm);
