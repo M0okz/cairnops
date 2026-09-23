@@ -34,11 +34,13 @@
 
 :root {
   /* Surfaces */
-  --bg: #1c1b19;
-  --rail-bg: #000000;
-  --surface: color-mix(in srgb, var(--ink) 3%, var(--bg));
-  --surface-2: color-mix(in srgb, var(--ink) 6%, var(--bg));
-  --surface-3: color-mix(in srgb, var(--ink) 9%, var(--bg));
+  --bg: #11100e;
+  --rail-bg: var(--surface);
+  --topbar-bg: #181715;
+  --instance-bg: var(--bg);
+  --surface: #1a1917;
+  --surface-2: #272624;
+  --surface-3: #2f2e2b;
   --line: color-mix(in srgb, var(--ink) 10%, var(--bg));
   --line-strong: color-mix(in srgb, var(--ink) 18%, var(--bg));
   --line-row: color-mix(in srgb, var(--ink) 5%, var(--bg));
@@ -170,6 +172,8 @@
   --chart-popover: #ffffff;
   --bg: #faf8f4;
   --rail-bg: #ffffff;
+  --topbar-bg: var(--bg);
+  --instance-bg: transparent;
   --surface: #ffffff;
   --surface-2: color-mix(in srgb, var(--ink) 3%, var(--bg));
   --surface-3: color-mix(in srgb, var(--ink) 6%, var(--bg));
@@ -308,7 +312,7 @@ td.num,
 .rail-brand .brand-full { width: min(100%, var(--rail-brand-w)); }
 .rail-brand .brand-full .cairnops-brand { width: 100%; height: auto; }
 .brand-symbol { display: none; }
-.instance-card { display: flex; align-items: center; gap: var(--s3); margin: var(--s4) 0 var(--s5); padding: var(--s3); min-height: 4rem; border: 1px solid var(--line); border-radius: var(--r-m); }
+.instance-card { background: var(--instance-bg); display: flex; align-items: center; gap: var(--s3); margin: var(--s4) 0 var(--s5); padding: var(--s3); min-height: 4rem; border: 1px solid var(--line); border-radius: var(--r-m); }
 .instance-mark { display: grid; place-items: center; flex: none; width: 2rem; height: 2rem; border: 1px solid var(--line-strong); border-radius: var(--r-s); font-size: var(--text-sm); }
 .instance-copy { min-width: 0; }
 .instance-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); font-weight: 600; }
@@ -478,7 +482,7 @@ td.num,
   align-items: center;
   gap: 0.625rem;
   border-bottom: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--topbar-bg);
   position: sticky;
   top: 0;
   z-index: 20;
