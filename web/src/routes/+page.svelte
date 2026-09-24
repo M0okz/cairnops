@@ -268,4 +268,7 @@
     .target-head { display: none; } .target-grid { grid-template-columns: minmax(0, 1fr) auto; gap: var(--s3); padding: var(--s4); } .target-name { grid-column: 1; gap: var(--s3); } .target-name strong { white-space: normal; overflow-wrap: anywhere; } .target-state { grid-column: 1; margin-left: 3rem; } .row-arrow { grid-column: 2; grid-row: 1 / span 2; } .target-latency, .target-availability { display: none; }
     footer { flex-wrap: wrap; padding: var(--s4); } .components { margin-left: 0; gap: var(--s3); }
   }
+  @media (max-width: 26rem) {
+    .overview-metrics { grid-template-columns: minmax(0, 1fr); }
+  }
 </style>
