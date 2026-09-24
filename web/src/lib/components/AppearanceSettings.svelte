@@ -38,9 +38,9 @@
 <style>
   .appearance-settings { display: grid; gap: var(--s3); min-width: 0; }
   .appearance-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); }
-  .appearance-options button { min-width: 0; display: grid; justify-items: center; gap: var(--s3); padding: var(--s4) var(--s2); border: 1px solid var(--line); border-radius: var(--r-m); background: var(--bg); font-size: var(--text-sm); cursor: pointer; }
+  .appearance-options button { min-width: 0; display: grid; justify-items: center; gap: var(--s3); padding: var(--s4) var(--s2); border: 0; border-radius: var(--r-m); background: transparent; font-size: var(--text-sm); cursor: pointer; }
   .appearance-options button:hover { background: var(--surface-2); }
-  .appearance-options button[aria-pressed='true'] { border-color: var(--accent); background: var(--surface-3); }
+  .appearance-options button[aria-pressed='true'] { background: var(--surface-2); font-weight: 600; }
   label { margin-top: var(--s3); font-size: var(--text-sm); font-weight: 600; }
   select { width: 100%; min-width: 0; height: var(--ctl-h-lg); border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--bg); padding: 0 var(--s3); color: var(--ink); font: inherit; }
   p { color: var(--muted); font-size: var(--text-xs); line-height: 1.6; overflow-wrap: anywhere; }
