@@ -113,7 +113,7 @@
             class="tooltip"
             id={`${componentId}-${index}`}
             role="tooltip"
-          ><span>{tooltip.before} · </span><span class="tooltip-number">{tooltip.number}</span><span> {tooltip.after}</span></span>
+          ><span>{tooltip.before}</span>{' · '}<span class="tooltip-number">{tooltip.number}</span>{' '}<span>{tooltip.after}</span></span>
         </button>
       {/each}
     </span>
