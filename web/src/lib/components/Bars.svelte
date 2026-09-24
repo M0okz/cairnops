@@ -266,6 +266,26 @@
     transform: translate(0, 0);
   }
 
+  @media (max-width: 48rem) {
+    /* Une infobulle peut être plus large qu'une carte sur deux colonnes. */
+    button { position: static; }
+    button::before { display: none; }
+
+    .tooltip,
+    button:nth-child(-n + 3) .tooltip,
+    button:nth-last-child(-n + 3) .tooltip {
+      left: 0;
+      right: auto;
+      transform: translate(0, var(--s2));
+    }
+
+    .tooltip.visible,
+    button:nth-child(-n + 3) .tooltip.visible,
+    button:nth-last-child(-n + 3) .tooltip.visible {
+      transform: translate(0, 0);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     button::before,
     .tooltip {
