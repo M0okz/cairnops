@@ -16,9 +16,16 @@ export function incidentHref(incidentID: string): string {
 
 /** Le Journal d'un détail opérationnel commence par ce qui vient de changer. */
 export function incidentActivity(incident: Incident): Incident['activity'] {
-  return [...incident.activity].sort(
+  return visibleIncidentActivity(incident).sort(
     (left, right) =>
       new Date(right.occurred_at).getTime() - new Date(left.occurred_at).getTime()
+  );
+}
+
+/** La fermeture du regroupement n'intéresse l'opérateur que si une autre Atteinte l'a rejoint. */
+export function visibleIncidentActivity(incident: Incident): Incident['activity'] {
+  return incident.activity.filter(
+    (entry) => entry.kind !== 'propagation_closed' || incident.impact_count > 1
   );
 }
 
