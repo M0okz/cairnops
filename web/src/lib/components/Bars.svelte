@@ -27,7 +27,7 @@
     slots?: number;
     width?: number;
     height?: number;
-    tooltips?: string[];
+    tooltips?: Array<{ label: string; before: string; number: string; after: string }>;
     label?: string;
   } = $props();
 
@@ -99,7 +99,7 @@
         <button
           type="button"
           class:active={active === index}
-          aria-label={tooltip}
+          aria-label={tooltip.label}
           aria-controls={`${componentId}-${index}`}
           aria-expanded={active === index}
           onpointerenter={() => (hovered = index)}
@@ -113,7 +113,7 @@
             class="tooltip"
             id={`${componentId}-${index}`}
             role="tooltip"
-          >{tooltip}</span>
+          ><span>{tooltip.before} · </span><span class="tooltip-number">{tooltip.number}</span><span> {tooltip.after}</span></span>
         </button>
       {/each}
     </span>
@@ -203,8 +203,8 @@
     background: var(--surface-3);
     box-shadow: var(--shadow);
     color: var(--ink);
-    font-family: var(--font-num);
-    font-size: 0.6875rem;
+    font-family: var(--font);
+    font-size: var(--text-xs);
     font-weight: 400;
     line-height: 1.4;
     opacity: 0;
@@ -215,6 +215,11 @@
       transform var(--d1) var(--ease);
     visibility: hidden;
     white-space: nowrap;
+  }
+
+  .tooltip-number {
+    font-family: var(--font-num);
+    font-variant-numeric: tabular-nums;
   }
 
   button:nth-child(-n + 3) .tooltip {

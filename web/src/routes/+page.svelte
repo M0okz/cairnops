@@ -40,9 +40,13 @@
     const dateFormat = new Intl.DateTimeFormat(localeTag(), {
       day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'
     });
-    return session.incidentDays.map((day) => plural('overview.fig.openedOnDay', day.opened, {
-      date: dateFormat.format(new Date(day.day))
-    }));
+    const numberFormat = new Intl.NumberFormat(localeTag());
+    return session.incidentDays.map((day) => {
+      const before = dateFormat.format(new Date(day.day));
+      const number = numberFormat.format(day.opened);
+      const after = plural('overview.fig.incident', day.opened);
+      return { label: `${before} · ${number} ${after}`, before, number, after };
+    });
   });
   const active = $derived([...session.actionable].sort((a, b) => Number(Boolean(a.acknowledged_at)) - Number(Boolean(b.acknowledged_at)) || severityWeight(b.severity) - severityWeight(a.severity) || a.opened_at.localeCompare(b.opened_at)));
   const selectedIncident = $derived(session.incidents.find((incident) => incident.id === selectedIncidentID) ?? null);
