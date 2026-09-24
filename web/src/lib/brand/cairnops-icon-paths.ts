@@ -11,6 +11,8 @@ export const cairnopsIconPaths = {
   "settings": "<path d=\"M5.5 3.5v3m0 6.5v7.5M12 3.5v9m0 6.5v1.5m6.5-17v3m0 6.5v7.5\"/><rect x=\"3\" y=\"7\" width=\"5\" height=\"6\" rx=\"2.5\"/><rect x=\"9.5\" y=\"12.5\" width=\"5\" height=\"6\" rx=\"2.5\"/><rect x=\"16\" y=\"7\" width=\"5\" height=\"6\" rx=\"2.5\"/>",
   "search": "<path d=\"M10.5 3.5c5 0 7 2 7 7s-2 7-7 7-7-2-7-7 2-7 7-7Zm5.7 12.7 4.3 4.3\"/>",
   "server": "<rect x=\"4.5\" y=\"3.5\" width=\"15\" height=\"17\" rx=\"4.5\"/><path d=\"M4.5 12h15m-8-4.25h4m-4 8.5h4\"/><circle cx=\"8.2\" cy=\"7.75\" r=\".85\" fill=\"currentColor\" stroke=\"none\"/><circle cx=\"8.2\" cy=\"16.25\" r=\".85\" fill=\"currentColor\" stroke=\"none\"/>",
+  "monitor": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"13\" rx=\"2\"/><path d=\"M9 21h6m-3-4v4\"/>",
+  "cube": "<path d=\"m12 2.8 8 4.6v9.2l-8 4.6-8-4.6V7.4Zm0 9.2 8-4.6M12 12 4 7.4M12 12v9.2\"/>",
   "database": "<ellipse cx=\"12\" cy=\"6.5\" rx=\"7.5\" ry=\"3\"/><path d=\"M4.5 6.5v10c0 2.2 3.4 4 7.5 4s7.5-1.8 7.5-4v-10M4.5 11.5c0 2.2 3.4 3.5 7.5 3.5s7.5-1.3 7.5-3.5\"/>",
   "worker": "<path d=\"M5.1 9a7.5 7.5 0 0 1 12.3-2.8L20 8.5m0-5v5h-5m3.9 6.5a7.5 7.5 0 0 1-12.3 2.8L4 15.5m0 5v-5h5\"/>",
   "webhook": "<path d=\"M9 7H7.5C4.4 7 3 8.6 3 12s1.4 5 4.5 5H9m6-10h1.5c3.1 0 4.5 1.6 4.5 5s-1.4 5-4.5 5H15M8 12h8\"/>",

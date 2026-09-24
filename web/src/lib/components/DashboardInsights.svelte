@@ -58,6 +58,7 @@
 </script>
 
 <div class="dashboard-insights">
+  <ResourceCategoryOverview />
   <section class="insight-card card" aria-labelledby="dashboard-leaders-title">
     <header><div><h2 id="dashboard-leaders-title">{t('dashboard.topIncidents')}</h2><p>{t('dashboard.last7d')}</p></div><Icon name="incidents" size={18} /></header>
     {#if loading}
@@ -102,13 +103,12 @@
       </ol>
     {/if}
   </section>
-  <ResourceCategoryOverview />
 </div>
 
 <style>
-  .dashboard-insights { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s4); min-width: 0; }
+  .dashboard-insights { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr)); gap: var(--s4); min-width: 0; }
   .insight-card { min-width: 0; padding: var(--s4); border-radius: var(--r-overview); }
-  header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); min-height: 2.5rem; margin-bottom: var(--s3); }
+  .insight-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); min-height: var(--s7); margin-bottom: var(--s3); padding: 0; border: 0; }
   h2 { font-size: var(--text-sm); font-weight: 600; }
   header p, header a { color: var(--faint); font-size: var(--text-xs); }
   header p { margin-top: var(--s2); }
@@ -126,17 +126,20 @@
   .leader-row.lead .bar { fill: var(--ink); }
   .leader-row.lead .row-name, .leader-row.lead .row-count { color: var(--ink); font-weight: 600; }
   .activity-list { list-style: none; display: grid; }
-  .activity-list li { display: grid; grid-template-columns: var(--s3) 2.75rem minmax(0, 1fr); align-items: start; gap: var(--s3); padding: var(--s3) 0; border-left: 1px solid var(--line); margin-left: var(--s2); }
+  .activity-list li { display: grid; grid-template-columns: var(--s3) 2.75rem minmax(0, 1fr); align-items: start; gap: var(--s3); padding: var(--s2) 0; border-left: 1px solid var(--line); margin-inline-start: var(--s2); }
   .activity-dot { display: block; width: var(--s3); height: var(--s3); border-radius: 50%; transform: translateX(calc(-50% - 1px)); background: var(--info); }
   .activity-dot.ok { background: var(--ok); } .activity-dot.warn { background: var(--warn); } .activity-dot.crit { background: var(--crit); }
   time { color: var(--faint); font: var(--text-xs) var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .activity-list a { display: grid; gap: var(--s2); min-width: 0; color: var(--muted); font-size: var(--text-xs); }
+  .activity-list a { display: grid; min-width: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.3; }
   .activity-list strong { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .activity-list span { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+  .activity-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty { color: var(--faint); font-size: var(--text-sm); padding: var(--s5) 0; }
   @media (max-width: 100rem) {
-    .dashboard-insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .dashboard-insights :global(.category-overview) { grid-column: 1 / -1; }
+    .dashboard-insights { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+    .dashboard-insights .insight-card:last-child { grid-column: 1 / -1; }
   }
-  @media (max-width: 48rem) { .dashboard-insights { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 48rem) {
+    .dashboard-insights { grid-template-columns: minmax(0, 1fr); }
+    .dashboard-insights .insight-card:last-child { grid-column: auto; }
+  }
 </style>
