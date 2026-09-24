@@ -35,6 +35,14 @@
   const sourceCount = $derived(nativeSources + externalSources);
   const freshest = $derived(Object.values(session.measures).map((row) => row.latest_observed_at).filter((at): at is string => Boolean(at)).sort().at(-1));
   const openedDays = $derived(session.incidentDays.map((day) => day.opened));
+  const openedDayTooltips = $derived.by(() => {
+    const dateFormat = new Intl.DateTimeFormat(localeTag(), {
+      day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'
+    });
+    return session.incidentDays.map((day) => plural('overview.fig.openedOnDay', day.opened, {
+      date: dateFormat.format(new Date(day.day))
+    }));
+  });
   const active = $derived([...session.actionable].sort((a, b) => Number(Boolean(a.acknowledged_at)) - Number(Boolean(b.acknowledged_at)) || severityWeight(b.severity) - severityWeight(a.severity) || a.opened_at.localeCompare(b.opened_at)));
   const selectedIncident = $derived(session.incidents.find((incident) => incident.id === selectedIncidentID) ?? null);
   const canAcknowledge = $derived(session.user?.role === 'administrator' || session.user?.role === 'operator');
@@ -103,7 +111,7 @@
       <section class="metric card">
         <div class="metric-label"><h2>{t('dashboard.currentIncidents')}</h2><Icon name="incidents" size={20} /></div>
         <div class="metric-value"><b><Odometer value={active.length} /></b><span>{t('dashboard.pending', { count: session.unacknowledged.length })}</span></div>
-        <div class="metric-history">{#if openedDays.length}<Bars values={openedDays} label={t('overview.fig.dailyHistory')} />{:else}<Bars mode="rule" />{/if}</div>
+        <div class="metric-history">{#if openedDays.length}<Bars values={openedDays} tooltips={openedDayTooltips} label={t('overview.fig.dailyHistory')} />{:else}<Bars mode="rule" />{/if}</div>
         <small>{t('overview.fig.dailyHistory')}</small>
       </section>
       <section class="metric card">
