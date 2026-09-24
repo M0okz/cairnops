@@ -84,6 +84,7 @@ type Problem struct {
 type remoteTrigger struct {
 	Prototype          bool            `json:"-"`
 	TriggerID          string          `json:"triggerid"`
+	Status             string          `json:"status"`
 	TemplateID         string          `json:"templateid"`
 	UUID               string          `json:"uuid"`
 	Description        string          `json:"description"`
@@ -453,10 +454,15 @@ func (client *Client) Problems(ctx context.Context, endpoint, token string, host
 	hostsByTrigger := make(map[string][]string, len(remoteTriggers))
 	triggerByID := make(map[string]remoteTrigger, len(remoteTriggers))
 	for _, trigger := range remoteTriggers {
-		triggerByID[trigger.TriggerID] = trigger
 		if _, expected := triggerSeen[trigger.TriggerID]; !expected {
 			continue
 		}
+		if trigger.Status == "1" {
+			// Zabbix conserve les problèmes sans rétablissement après la
+			// désactivation d'un déclencheur. Ils ne sont plus surveillés.
+			continue
+		}
+		triggerByID[trigger.TriggerID] = trigger
 		for _, host := range trigger.Hosts {
 			if _, allowed := allowedHosts[host.HostID]; allowed {
 				hostsByTrigger[trigger.TriggerID] = append(hostsByTrigger[trigger.TriggerID], host.HostID)
@@ -516,7 +522,7 @@ func (client *Client) triggerPrototypes(ctx context.Context, endpoint, token str
 func (client *Client) triggerObjects(ctx context.Context, endpoint, token, method string, triggerIDs []string, hosts, prototypes bool) ([]remoteTrigger, bool, error) {
 	params := map[string]any{
 		"output": []string{
-			"triggerid", "templateid", "uuid", "description", "expression",
+			"triggerid", "status", "templateid", "uuid", "description", "expression",
 			"recovery_expression", "correlation_tag", "flags",
 		},
 		"triggerids":          triggerIDs,
@@ -539,7 +545,7 @@ func (client *Client) triggerObjects(ctx context.Context, endpoint, token, metho
 	// encore tous les champs de description. L'identité se replie alors sur le
 	// trigger, toujours dans la portée stricte du Connecteur.
 	fallback := map[string]any{
-		"output": []string{"triggerid"}, "triggerids": triggerIDs,
+		"output": []string{"triggerid", "status"}, "triggerids": triggerIDs,
 	}
 	if hosts {
 		fallback["selectHosts"] = []string{"hostid"}

@@ -118,6 +118,53 @@ func TestAcknowledgementAcceptsNumericAndStringEventIdentities(t *testing.T) {
 	}
 }
 
+func TestProblemsIgnoreOpenEventsWhoseTriggersWereDisabled(t *testing.T) {
+	t.Parallel()
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var body struct {
+			Method string         `json:"method"`
+			Params map[string]any `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		response := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header)}
+		switch body.Method {
+		case "problem.get":
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":[
+				{"eventid":"115914","objectid":"40243","clock":"1790159959","name":"Retired OSD is OUT","acknowledged":"1","severity":"2","suppressed":"0"},
+				{"eventid":"109611","objectid":"40256","clock":"1790159959","name":"BlueStore slow operation","acknowledged":"0","severity":"2","suppressed":"0"}
+			],"id":1}`))
+		case "trigger.get":
+			output, _ := body.Params["output"].([]any)
+			requestedStatus := false
+			for _, field := range output {
+				requestedStatus = requestedStatus || field == "status"
+			}
+			if !requestedStatus {
+				t.Fatal("trigger status must be requested to distinguish retired problems")
+			}
+			response.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","result":[
+				{"triggerid":"40243","status":"1","hosts":[{"hostid":"10783"}]},
+				{"triggerid":"40256","status":"0","hosts":[{"hostid":"10783"}]}
+			],"id":1}`))
+		default:
+			t.Fatalf("unexpected method %q", body.Method)
+		}
+		return response, nil
+	})}
+
+	problems, err := NewClientWithHTTP(client).Problems(
+		context.Background(), "https://zabbix.example.net", "token", []string{"10783"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(problems) != 1 || problems[0].EventID != "109611" {
+		t.Fatalf("disabled trigger's unresolved event must not remain active: %#v", problems)
+	}
+}
+
 func TestProblemsUseTemplateRootUUIDAsTargetIndependentNature(t *testing.T) {
 	t.Parallel()
 	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
