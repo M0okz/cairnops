@@ -74,7 +74,7 @@
   select { max-width: 16rem; }
   .period { color: var(--muted); background: var(--surface-2); }
   .health-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
-  .health-panel { min-width: 0; display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-overview); }
+  .health-panel { min-width: 0; display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4); border-radius: var(--r-overview); background: var(--surface-2); }
   .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); color: var(--muted); font-size: var(--text-sm); }
   .panel-heading span { display: inline-flex; align-items: center; gap: var(--s3); }
   .indicator { display: inline-block; width: var(--s2); height: var(--s4); border-radius: var(--r-s); }

@@ -38,7 +38,7 @@
   summary { list-style: none; display: flex; align-items: center; gap: var(--s3); min-height: var(--ctl-h-lg); padding: 0 var(--s3); border-radius: var(--r-m); color: var(--muted); cursor: pointer; font-size: var(--text-sm); }
   summary::-webkit-details-marker { display: none; }
   summary:hover, details[open] summary { background: var(--surface-2); color: var(--ink); }
-  .theme-panel { position: absolute; right: 0; top: calc(100% + var(--s3)); width: 22rem; max-width: calc(100vw - 2rem); padding: var(--s4); border: 1px solid var(--line-strong); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow); z-index: 40; max-height: calc(100dvh - 2 * var(--topbar-h) - 2 * var(--s4)); overflow-y: auto; }
+  .theme-panel { position: absolute; right: 0; top: calc(100% + var(--s3)); width: 22rem; max-width: calc(100vw - 2rem); padding: var(--s4); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow); z-index: 40; max-height: calc(100dvh - 2 * var(--topbar-h) - 2 * var(--s4)); overflow-y: auto; }
   strong { display: block; margin-bottom: var(--s4); font-size: var(--text-md); }
   @media (max-width: 48rem) { summary > span { display: none; } .theme-panel { position: fixed; top: auto; margin-top: var(--s3); right: var(--s4); } }
 </style>

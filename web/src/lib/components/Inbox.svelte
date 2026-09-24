@@ -141,7 +141,7 @@
     place-items: center;
     width: var(--ctl-h-lg);
     height: var(--ctl-h-lg);
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: var(--r-m);
     background: none;
     color: var(--muted);
@@ -180,7 +180,6 @@
     width: 22rem;
     max-width: calc(100vw - 1.5rem);
     z-index: 40;
-    border: 1px solid var(--line-strong);
     border-radius: var(--r-l);
     background: var(--surface);
     box-shadow: var(--shadow);

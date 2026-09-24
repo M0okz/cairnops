@@ -330,7 +330,6 @@
     display: grid;
     gap: 1px;
     padding: 0.25rem;
-    border: 1px solid var(--line-strong);
     border-radius: var(--r-l);
     background: var(--surface);
     box-shadow: var(--shadow);

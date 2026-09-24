@@ -166,8 +166,8 @@
   h1 { font-size: 2rem; letter-spacing: -0.045em; margin-bottom: var(--s3); }
   .intro p { color: var(--muted); font-size: var(--text-sm); }
   .intro time { font-size: var(--text-xs); color: var(--faint); flex: none; }
-  .overview-verdict { display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s5); border: 1px solid var(--line-strong); border-radius: var(--r-overview); font-size: var(--text-sm); }
-  .overview-verdict.crit { background: color-mix(in srgb, var(--crit) 4%, var(--surface)); border-color: color-mix(in srgb, var(--crit) 25%, var(--line)); }
+  .overview-verdict { display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s5); border-radius: var(--r-overview); background: var(--surface); font-size: var(--text-sm); }
+  .overview-verdict.crit { background: color-mix(in srgb, var(--crit) 4%, var(--surface)); }
   .overview-verdict.warn { background: color-mix(in srgb, var(--warn) 4%, var(--surface)); }
   .overview-verdict strong { color: var(--ink); font-weight: 600; }
   .monitoring-gap { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s3); color: var(--warn); font-size: var(--text-sm); }
@@ -200,10 +200,10 @@
   .current-incidents header p, .current-incidents > header > :global(svg) { display: none; }
   .tally { font-family: var(--font-num); font-size: var(--text-xs); color: var(--crit); background: var(--crit-bg); padding: var(--s1) var(--s3); border-radius: var(--r-s); }
   .incident-list { display: grid; gap: var(--s3); }
-  .incident-summary, .incidents-empty { padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-overview); background: var(--surface); }
+  .incident-summary, .incidents-empty { padding: var(--s4); border-radius: var(--r-overview); background: var(--surface); }
   .incident-action .btn { border-radius: var(--r-button); }
   .incident-meta, .incident-action { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); font-size: var(--text-xs); color: var(--faint); }
-  .severity { font-family: var(--font-num); display: inline-flex; align-items: center; gap: var(--s2); border: 1px solid var(--line); border-radius: var(--r-s); padding: var(--s1) var(--s2); font-size: 0.75rem; }
+  .severity { font-family: var(--font-num); display: inline-flex; align-items: center; gap: var(--s2); border-radius: var(--r-s); padding: var(--s1) var(--s2); background: var(--surface-2); font-size: 0.75rem; }
   .incident-open { display: block; width: 100%; border: 0; background: none; text-align: left; padding: var(--s4) 0; }
   .incident-open strong { display: block; font-size: var(--text-md); font-weight: 600; overflow-wrap: anywhere; }
   .incident-open span { display: block; color: var(--muted); font-size: var(--text-sm); margin-top: var(--s2); }
@@ -213,7 +213,8 @@
   footer { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); padding: var(--s4) var(--s5); border-top: 1px solid var(--line); color: var(--faint); font-size: var(--text-xs); }
   footer a { color: var(--muted); } footer a:hover { color: var(--ink); }
   .current-incidents footer { padding: 0; border: 0; }
-  .current-incidents footer a { display: block; width: 100%; padding: var(--s4); border: 1px dashed var(--line); border-radius: var(--r-overview); text-align: center; }
+  .current-incidents footer a { display: block; width: 100%; padding: var(--s4); border-radius: var(--r-overview); text-align: center; }
+  .current-incidents footer a:hover { background: var(--surface-2); }
   .overview-targets { overflow: hidden; }
   .overview-targets > header { align-items: center; flex-wrap: wrap; }
   .target-tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s4); }
@@ -226,7 +227,7 @@
   .overview-target-row:hover { background: var(--surface-2); }
   .target-name { min-width: 0; display: flex; align-items: center; gap: var(--s4); }
   .target-name > span:last-child { min-width: 0; }
-  .target-symbol { flex: none; display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border: 1px solid var(--line); border-radius: var(--r-m); color: var(--muted); background: var(--bg); }
+  .target-symbol { flex: none; display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: var(--r-m); color: var(--muted); background: var(--surface-2); }
   .target-name strong { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .target-name small, .target-availability small { display: block; margin-top: var(--s2); color: var(--faint); font-size: 0.75rem; }
   .target-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

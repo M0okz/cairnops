@@ -725,9 +725,9 @@
   .general-card .rename input { width: auto; flex: 1; min-width: 0; }
   .setting-value { min-width: 0; }
   .appearance-options { display: flex; flex-wrap: wrap; gap: var(--s2); }
-  .appearance-options button { display: grid; justify-items: center; align-content: center; gap: var(--s1); min-width: 3.5rem; min-height: 3.25rem; padding: var(--s2) var(--s2); border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--surface); color: var(--ink); font-size: var(--text-xs); cursor: pointer; }
+  .appearance-options button { display: grid; justify-items: center; align-content: center; gap: var(--s1); min-width: 3.5rem; min-height: 3.25rem; padding: var(--s2) var(--s2); border: 0; border-radius: var(--r-m); background: transparent; color: var(--ink); font-size: var(--text-xs); cursor: pointer; }
   .appearance-options button:hover { background: var(--surface-2); }
-  .appearance-options button[aria-pressed='true'] { border-color: var(--accent); background: var(--surface-2); }
+  .appearance-options button[aria-pressed='true'] { background: var(--surface-2); color: var(--ink); font-weight: 600; }
   .appearance-options button:focus-visible, .settings-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .select-field { margin: 0; }
   .select-field select { width: 100%; background: var(--surface); }
@@ -915,7 +915,6 @@
 
   .note {
     padding: var(--s4) 1rem;
-    border: 1px solid var(--line-strong);
     border-radius: var(--r-l);
     background: var(--surface);
   }
