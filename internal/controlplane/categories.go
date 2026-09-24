@@ -13,6 +13,13 @@ type Category string
 const (
 	CategoryService        Category = "service"
 	CategoryInfrastructure Category = "infrastructure"
+	CategoryVirtualMachine Category = "virtual_machine"
+	CategoryContainer      Category = "container"
+	CategoryVirtualHost    Category = "virtualization_host"
+	CategoryStorage        Category = "storage"
+	CategoryHost           Category = "host"
+	CategoryNetwork        Category = "network"
+	CategoryApplication    Category = "application"
 	CategoryScheduledTask  Category = "scheduled_task"
 	CategorySoftware       Category = "software"
 	CategoryUnclassified   Category = "unclassified"
@@ -20,7 +27,9 @@ const (
 
 func (c Category) Valid() bool {
 	switch c {
-	case CategoryService, CategoryInfrastructure, CategoryScheduledTask, CategorySoftware, CategoryUnclassified:
+	case CategoryService, CategoryInfrastructure, CategoryVirtualMachine, CategoryContainer,
+		CategoryVirtualHost, CategoryStorage, CategoryHost, CategoryNetwork, CategoryApplication,
+		CategoryScheduledTask, CategorySoftware, CategoryUnclassified:
 		return true
 	}
 	return false
@@ -34,6 +43,9 @@ type categorySignal struct {
 func suggestCategory(signals []categorySignal) Category {
 	found := map[Category]bool{}
 	unknown := false
+	// A typed inventory identifies the resource itself. Generic connectivity or
+	// host checks describe how it is observed and must not hide that identity.
+	inventory := map[Category]bool{}
 	for _, signal := range signals {
 		category := CategoryUnclassified
 		switch signal.Kind {
@@ -50,12 +62,23 @@ func suggestCategory(signals []categorySignal) Category {
 			}
 		case "patchmon":
 			if signal.Metadata["machine_id"] != nil || signal.Metadata["os_type"] != nil {
-				category = CategoryInfrastructure
+				category = CategoryHost
 			}
 		case "proxmox":
 			switch signal.Metadata["resource_type"] {
-			case "node", "qemu", "lxc", "storage", "cluster":
+			case "qemu":
+				category = CategoryVirtualMachine
+			case "lxc":
+				category = CategoryContainer
+			case "node":
+				category = CategoryVirtualHost
+			case "storage":
+				category = CategoryStorage
+			case "cluster":
 				category = CategoryInfrastructure
+			}
+			if category != CategoryUnclassified && category != CategoryInfrastructure {
+				inventory[category] = true
 			}
 		case "zabbix":
 			if items, ok := signal.Metadata["interfaces"].([]any); ok && len(items) > 0 {
@@ -71,6 +94,14 @@ func suggestCategory(signals []categorySignal) Category {
 		} else {
 			found[category] = true
 		}
+	}
+	if len(inventory) == 1 {
+		for category := range inventory {
+			return category
+		}
+	}
+	if len(inventory) > 1 {
+		return CategoryUnclassified
 	}
 	// Version tracking enriches a resource whose operational type is known.
 	if len(found) > 1 {

@@ -1,6 +1,6 @@
 import type { Incident, IncidentEvidence, IncidentImpact, Maintenance, ResourceCategory, Target, TargetMeasures } from './api.ts';
 
-export const resourceCategories: ResourceCategory[] = ['service', 'infrastructure', 'scheduled_task', 'software', 'unclassified'];
+export const resourceCategories: ResourceCategory[] = ['virtual_machine', 'container', 'virtualization_host', 'storage', 'network', 'host', 'service', 'application', 'scheduled_task', 'software', 'infrastructure', 'unclassified'];
 export function resourceCategoryFromParam(value: string | null): ResourceCategory | 'all' {
   return resourceCategories.find((category) => category === value) ?? 'all';
 }

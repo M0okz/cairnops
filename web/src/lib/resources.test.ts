@@ -6,6 +6,7 @@ import { resourceCategoryFromParam, resourceState, resourceProblems, resourceDiv
 
 test('accepts only known category links', () => {
  assert.equal(resourceCategoryFromParam('infrastructure'), 'infrastructure');
+ assert.equal(resourceCategoryFromParam('virtual_machine'), 'virtual_machine');
  assert.equal(resourceCategoryFromParam('proxmox'), 'all');
  assert.equal(resourceCategoryFromParam(null), 'all');
 });

@@ -18,22 +18,23 @@ test('preserves outage and degradation precedence over missing data and maintena
 });
 
 test('ranks categories by operational urgency and counts every resource once', () => {
-  const categories = ['service', 'infrastructure', 'scheduled_task', 'software', 'unclassified'];
+  const categories = ['virtual_machine', 'container', 'service', 'infrastructure', 'scheduled_task', 'software', 'unclassified'];
   const groups = dashboardCategoryHealth([
     { category: 'service', state: 'ok' },
     { category: 'service', state: 'unknown' },
     { category: 'infrastructure', state: 'down' },
     { category: 'infrastructure', state: 'ok' },
+    { category: 'virtual_machine', state: 'ok' },
     { category: 'scheduled_task', state: 'degraded', problem: true },
     { category: 'software', state: 'maintenance' },
     { state: 'ok' }
   ], categories);
   assert.deepEqual(groups.map(({ category, total }) => [category, total]), [
-    ['infrastructure', 2], ['scheduled_task', 1], ['service', 2], ['software', 1], ['unclassified', 1]
+    ['infrastructure', 2], ['scheduled_task', 1], ['service', 2], ['virtual_machine', 1], ['software', 1], ['unclassified', 1]
   ]);
   assert.deepEqual(groups[0].counts, { ok: 1, down: 1, degraded: 0, unknown: 0, maintenance: 0 });
   assert.equal(groups[1].problems, 1);
-  assert.equal(groups.reduce((total, group) => total + group.total, 0), 7);
+  assert.equal(groups.reduce((total, group) => total + group.total, 0), 8);
   assert.deepEqual(dashboardCategoryHealth([], categories), []);
 });
 

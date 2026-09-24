@@ -89,7 +89,7 @@ Chose identifiable et durable dont l'état opérationnel importe à l'utilisateu
 _Éviter_ : Cible, monitor, moniteur
 
 **Catégorie de ressource** :
-Classement d’une Ressource selon ce qu’elle représente : Service, Infrastructure, Tâche planifiée ou Logiciel suivi. Une Ressource conserve une seule fiche regroupant ses Contrôles ; le suivi de sa version ne transforme pas un Service en Logiciel suivi.
+Classement d’une Ressource selon ce qu’elle représente : machine virtuelle, conteneur, hôte de virtualisation, stockage, équipement réseau, hôte, service, application, tâche planifiée ou logiciel suivi. « Autre infrastructure » conserve les ressources dont le type précis n'est pas établi. Une Ressource conserve une seule fiche regroupant ses Contrôles ; le suivi de sa version ne transforme pas un Service en Logiciel suivi.
 _Éviter_ : Connecteur, gravité, état de fonctionnement
 
 **À classer** :
@@ -101,7 +101,7 @@ Ressource qui fournit une fonction utilisable, telle que Home Assistant ou Nextc
 _Éviter_ : Logiciel suivi uniquement pour ses versions, serveur hôte
 
 **Infrastructure** :
-Catégorie des Ressources qui hébergent, relient ou stockent les services, notamment les serveurs, machines virtuelles, équipements réseau et systèmes de stockage. Leur suivi porte notamment sur le fonctionnement, la capacité et les problèmes constatés.
+Famille des Ressources qui hébergent, relient ou stockent les services. Les types connus sont distingués ; « Autre infrastructure » est réservé aux ressources dont les signaux prouvent seulement l'appartenance à cette famille. Leur suivi porte notamment sur le fonctionnement, la capacité et les problèmes constatés.
 _Éviter_ : Service applicatif, Connecteur
 
 **Tâche planifiée** :

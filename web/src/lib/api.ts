@@ -126,7 +126,7 @@ export type Observation = {
   details: Record<string, unknown>;
 };
 
-export type ResourceCategory = 'service' | 'infrastructure' | 'scheduled_task' | 'software' | 'unclassified';
+export type ResourceCategory = 'service' | 'application' | 'virtual_machine' | 'container' | 'virtualization_host' | 'storage' | 'host' | 'network' | 'infrastructure' | 'scheduled_task' | 'software' | 'unclassified';
 
 export type Target = {
   last_success_at?: string;

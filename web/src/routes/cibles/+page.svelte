@@ -171,10 +171,10 @@
             <span>{t('resources.lastSuccess')} <b>{row.target.last_success_at ? since(row.target.last_success_at) : t('common.none')}</b></span>
             <span>{t('targets.sourceLastObservation')} <b>{row.measured?.latest_observed_at ? since(row.measured.latest_observed_at) : t('common.none')}</b></span>
           {:else}
-            {#if resourceCategory === 'service'}<span>{t('targets.column.averageLatency')} <b class="num">{latency(row.measure.average_latency_milliseconds)}</b></span>{/if}
+            {#if resourceCategory === 'service' || resourceCategory === 'application'}<span>{t('targets.column.averageLatency')} <b class="num">{latency(row.measure.average_latency_milliseconds)}</b></span>{/if}
             <span>{t('resources.availability')} <b class="num">{ratio(row.measure.availability)}</b></span>
             <span title={t('targets.coverageTitle')}>{t('resources.observedTime')} <b class="num">{ratio(row.measure.coverage)}</b></span>
-            {#if resourceCategory === 'infrastructure'}{#each (session.indicatorOverview[row.target.id]?.indicators ?? []).slice(0, 2) as indicator (indicator.id)}
+            {#if !['service', 'application'].includes(resourceCategory)}{#each (session.indicatorOverview[row.target.id]?.indicators ?? []).slice(0, 2) as indicator (indicator.id)}
               <span>{indicator.label} <b class="num">{formatIndicator(indicator.last_value, indicator.unit)}</b></span>
             {/each}{/if}
           {/if}
@@ -193,7 +193,7 @@
           {#if resourceCategory === 'service'}<span class="trend" aria-hidden="true"><Spark values={row.measured?.latency_trend ?? []} /></span>{/if}
         </div>
       </div>
-    {:else}<div class="empty"><strong>{session.targets.length === 0 ? t('targets.emptyTitle') : t('targets.noMatchTitle')}</strong>{session.targets.length === 0 ? t('targets.emptyHint') : t('targets.noMatchHint')}</div>{/each}
+    {:else}<div class="empty"><strong>{session.targets.length === 0 ? t('targets.emptyTitle') : category !== 'all' && scoped.length === 0 ? t('resources.noCategoryResources') : t('targets.noMatchTitle')}</strong>{session.targets.length === 0 ? t('targets.emptyHint') : category !== 'all' && scoped.length === 0 ? t('resources.assignCategoryHint') : t('targets.noMatchHint')}</div>{/each}
   </div>
 </div>
 {#if workshopOpen}

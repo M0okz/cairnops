@@ -16,6 +16,7 @@
     problem: problemTargets.has(target.id),
     update: updateTargets.has(target.id)
   })), resourceCategories));
+  const virtualMachinesUnidentified = $derived(!groups.some((group) => group.category === 'virtual_machine'));
 
   function details(counts: Record<HealthState, number>): string {
     const parts = [
@@ -83,6 +84,15 @@
           {/if}
         </a>
       {/each}
+      {#if virtualMachinesUnidentified}
+        <a class="category-row" href="/cibles?category=virtual_machine">
+          <span class="row-top">
+            <strong>{t('resources.category.virtual_machine')}</strong>
+            <span class="row-count"><b>0</b> <span aria-hidden="true">→</span></span>
+          </span>
+          <span class="row-details">{t('dashboard.category.noVirtualMachine')}</span>
+        </a>
+      {/if}
     </div>
   {:else}
     <p class="category-empty">{t('dashboard.noTargets')}</p>

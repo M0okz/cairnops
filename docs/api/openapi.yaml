@@ -536,7 +536,7 @@ components:
             vide désactive le Push et annule les livraisons en attente.
     ResourceCategory:
       type: string
-      enum: [service, infrastructure, scheduled_task, software, unclassified]
+      enum: [service, application, virtual_machine, container, virtualization_host, storage, host, network, infrastructure, scheduled_task, software, unclassified]
     Target:
       type: object
       required: [id, name, description, created_at, external_source_count, aliases, sources]
