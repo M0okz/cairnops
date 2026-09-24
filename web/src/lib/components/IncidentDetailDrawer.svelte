@@ -356,14 +356,16 @@
         </div>
         <div class="summary-notes">
           <span>{t('incidents.impactsActive', { active: incident.active_impact_count, total: incident.impact_count })}</span>
-          <span class="propagation-state">
-            {t(`incidents.propagation.${incident.propagation_status}`)}
-            <InfoHint
-              id={`propagation-state-hint-${incident.id}`}
-              ariaLabel={t('incidents.propagation.help', { state: t(`incidents.propagation.${incident.propagation_status}`) })}
-              text={t(`incidents.propagation.${incident.propagation_status}Hint`)}
-            />
-          </span>
+          {#if incident.impact_count > 1}
+            <span class="propagation-state">
+              {t(`incidents.propagation.${incident.propagation_status}`)}
+              <InfoHint
+                id={`propagation-state-hint-${incident.id}`}
+                ariaLabel={t('incidents.propagation.help', { state: t(`incidents.propagation.${incident.propagation_status}`) })}
+                text={t(`incidents.propagation.${incident.propagation_status}Hint`)}
+              />
+            </span>
+          {/if}
           {#if incident.acknowledgement_sync_status === 'pending'}
             <span class="warn">{t('incidents.detail.syncPending')}</span>
           {:else if incident.acknowledgement_sync_status === 'failed'}

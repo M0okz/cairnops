@@ -1,4 +1,6 @@
 import type { Incident } from './api';
+// @ts-expect-error Node executes this shared journal helper directly in the regression suite.
+import { visibleIncidentActivity } from './incident-detail.ts';
 
 export type IncidentTimelineEntry = {
   incident: Incident;
@@ -23,7 +25,7 @@ export function incidentTimelineForTarget(
 
   return [...incidents.values()]
     .filter((incident) => incident.impacts.some((impact) => impact.target_id === targetId))
-    .flatMap((incident) => incident.activity
+    .flatMap((incident) => visibleIncidentActivity(incident)
       .filter((entry) => !entry.impact_id || incident.impacts.some((impact) => impact.id === entry.impact_id && impact.target_id === targetId))
       .map((entry) => ({ incident, entry })))
     .sort(

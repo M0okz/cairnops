@@ -9,7 +9,7 @@
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Incident, type IncidentSeverity, type ResolvedIncidentPage } from '$lib/api';
-  import { incidentHref } from '$lib/incident-detail';
+  import { incidentHref, visibleIncidentActivity } from '$lib/incident-detail';
   import { activityMessage } from '$lib/activity-timeline';
   import { resolvedHistoryChanged, type IncidentScope } from '$lib/resolved-incidents';
   import {
@@ -138,7 +138,7 @@
   }
 
   function lastEntry(incident: Incident) {
-    const entry = incident.activity.at(-1);
+    const entry = visibleIncidentActivity(incident).at(-1);
     return entry ? activityMessage(entry, t) : t('common.none');
   }
 

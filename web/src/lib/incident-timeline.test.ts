@@ -90,3 +90,16 @@ test('does not duplicate an active incident already present in history', () => {
 
   assert.equal(incidentTimelineForTarget([active], [active], 'target-1').length, 1);
 });
+
+test('shows grouping closure in a Resource journal only when another Resource joined', () => {
+  const activity = [
+    { id: 1, kind: 'opened', occurred_at: '2026-09-24T10:00:00Z' },
+    { id: 2, kind: 'propagation_closed', occurred_at: '2026-09-24T10:05:00Z' }
+  ];
+  const impacts = [{ id: 'impact-1', target_id: 'target-1' }];
+  const single = incident({ id: 'single', status: 'active', impacts, activity, impact_count: 1 });
+  const grouped = incident({ id: 'grouped', status: 'active', impacts, activity, impact_count: 2 });
+
+  assert.deepEqual(incidentTimelineForTarget([single], [], 'target-1').map(({ entry }) => entry.kind), ['opened']);
+  assert.deepEqual(incidentTimelineForTarget([grouped], [], 'target-1').map(({ entry }) => entry.kind), ['propagation_closed', 'opened']);
+});

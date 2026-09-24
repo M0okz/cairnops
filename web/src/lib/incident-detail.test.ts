@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { ContextIndicator, Incident, IncidentIndicators } from './api.ts';
-import { incidentActivity, incidentHref, incidentIndicatorRows } from './incident-detail.ts';
+import { incidentActivity, incidentHref, incidentIndicatorRows, visibleIncidentActivity } from './incident-detail.ts';
 
 describe('incident detail', () => {
   it('builds the shared address of an Incident', () => {
@@ -21,6 +21,19 @@ describe('incident detail', () => {
       incidentActivity(incident).map((entry) => entry.id),
       [2, 1]
     );
+  });
+
+  it('hides the grouping window when no second Resource joined', () => {
+    const activity = [
+      { id: 1, kind: 'opened', message: 'Incident ouvert', occurred_at: '2026-09-24T10:00:00Z' },
+      { id: 2, kind: 'propagation_closed', message: 'Regroupement terminé', occurred_at: '2026-09-24T10:05:00Z' }
+    ];
+    const single = { impact_count: 1, activity } as Incident;
+    const grouped = { impact_count: 2, activity } as Incident;
+
+    assert.deepEqual(visibleIncidentActivity(single).map((entry) => entry.kind), ['opened']);
+    assert.deepEqual(incidentActivity(single).map((entry) => entry.kind), ['opened']);
+    assert.deepEqual(visibleIncidentActivity(grouped).map((entry) => entry.kind), ['opened', 'propagation_closed']);
   });
 
   it('keeps captured values first even when their Indicator no longer exists', () => {
