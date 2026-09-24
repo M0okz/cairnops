@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Target, TargetMeasures, Incident, IncidentEvidence, Maintenance } from './api.ts';
 // @ts-ignore -- Node executes tests directly with its TypeScript loader.
-import { resourceState, resourceProblems, resourceDivergence, resourceUnderMaintenance, problemText } from './resources.ts';
+import { resourceCategoryFromParam, resourceState, resourceProblems, resourceDivergence, resourceUnderMaintenance, problemText } from './resources.ts';
+
+test('accepts only known category links', () => {
+ assert.equal(resourceCategoryFromParam('infrastructure'), 'infrastructure');
+ assert.equal(resourceCategoryFromParam('proxmox'), 'all');
+ assert.equal(resourceCategoryFromParam(null), 'all');
+});
 const now = Date.parse('2026-09-22T12:00:00Z');
 const date = new Date(now).toISOString();
 const target: Target = { id: 'r', name: 'Home Assistant', description: '', created_at: date, external_source_count: 2, aliases: [], sources: [] };

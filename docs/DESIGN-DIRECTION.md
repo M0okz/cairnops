@@ -134,6 +134,8 @@ Une Divergence de Sources ne crée pas un cinquième État de santé. Une pastil
 
 La [clarification du vocabulaire](clarification-du-vocabulaire.md) remplace les intitulés historiques de ce document : Ressources, Contrôles, Doublons possibles, État de CairnOps et Temps observé. La liste regroupe les ressources par catégorie avec compteurs ; les mesures affichées dépendent de l’objet suivi. Le problème précis reste visible sur mobile, avec sa gravité et son origine. Les problèmes supplémentaires sont accessibles depuis « +N autres problèmes » au survol, au clavier et au toucher ; les mises à jour sont affichées séparément. Les infobulles restent dans les limites de l’écran et se ferment avec Échap.
 
+La Vue d'ensemble classe les catégories présentes selon la situation à examiner, en comptant chaque Ressource une seule fois. Services, Infrastructure et À classer affichent les effectifs par État de santé et la part disponible ; chaque ligne ouvre la liste sur sa catégorie. Tâches planifiées et Logiciels suivis montrent leur nombre et leurs problèmes ou mises à jour à examiner, sans leur attribuer artificiellement une disponibilité.
+
 ## Barre de la liste des ressources
 
 Les catégories sont des filtres de navigation soulignés, sur une ligne défilante sur mobile. La sélection se distingue par son soulignement et son poids. La recherche et un bouton Filtres occupent la ligne suivante ; le panneau regroupe la portée (tous les états, problèmes, maintenance) et les résultats contradictoires. Les filtres actifs se retirent individuellement sous la recherche. Le nombre de résultats et la catégorie affichée précèdent le tableau. Un seul menu Ajouter une ressource propose la création et l’import depuis un connecteur.

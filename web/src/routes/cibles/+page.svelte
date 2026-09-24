@@ -14,7 +14,7 @@
   import { inWindow, latency, ratio, severityLabel, severityTone, since, stateLabel, stateTones } from '$lib/format';
   import { i18n, plural, t } from '$lib/i18n.svelte';
   import { formatIndicator } from '$lib/indicator-format';
-  import { resourceCategories, resourceProblems, problemText, problemOrigin, isVersionNotice, fresh } from '$lib/resources';
+  import { resourceCategories, resourceCategoryFromParam, resourceProblems, problemText, problemOrigin, isVersionNotice, fresh } from '$lib/resources';
   import { api, type ResourceCategory, type SourceMeasures } from '$lib/api';
   import type { SoftwareService } from '$lib/software-updates';
 
@@ -23,6 +23,7 @@
   let category = $state<ResourceCategory | 'all'>('all');
   let scope = $state<'all' | 'problems' | 'maintenance' | 'unknown'>('all');
   $effect(() => {
+    category = resourceCategoryFromParam(page.url.searchParams.get('category'));
     const requested = page.url.searchParams.get('scope');
     scope = requested === 'problems' || requested === 'maintenance' || requested === 'unknown' ? requested : 'all';
   });

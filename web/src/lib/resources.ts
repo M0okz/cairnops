@@ -1,6 +1,9 @@
 import type { Incident, IncidentEvidence, IncidentImpact, Maintenance, ResourceCategory, Target, TargetMeasures } from './api.ts';
 
 export const resourceCategories: ResourceCategory[] = ['service', 'infrastructure', 'scheduled_task', 'software', 'unclassified'];
+export function resourceCategoryFromParam(value: string | null): ResourceCategory | 'all' {
+  return resourceCategories.find((category) => category === value) ?? 'all';
+}
 const weights = { critical: 4, major: 3, warning: 2, information: 1 };
 export const isVersionNotice = (incident: Incident) => incident.nature_key === 'software-update-available';
 export function resourceProblems(targetId: string, incidents: Incident[]) {
