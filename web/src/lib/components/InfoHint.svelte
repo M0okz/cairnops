@@ -28,6 +28,7 @@
   function dismiss(event: KeyboardEvent) {
     if (event.key !== 'Escape') return;
     dismissed = true;
+    event.preventDefault();
     event.stopPropagation();
   }
 </script>

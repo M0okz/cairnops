@@ -10,6 +10,7 @@
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Incident, type IncidentSeverity, type ResolvedIncidentPage } from '$lib/api';
   import { incidentHref } from '$lib/incident-detail';
+  import { activityMessage } from '$lib/activity-timeline';
   import { resolvedHistoryChanged, type IncidentScope } from '$lib/resolved-incidents';
   import {
     compareActiveIncidents, historyBounds, incidentFilterOptions, localDateValue,
@@ -137,7 +138,8 @@
   }
 
   function lastEntry(incident: Incident) {
-    return incident.activity.at(-1)?.message ?? t('common.none');
+    const entry = incident.activity.at(-1);
+    return entry ? activityMessage(entry, t) : t('common.none');
   }
 
   async function dismissIncident() {
