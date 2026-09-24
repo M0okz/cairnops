@@ -1,4 +1,5 @@
 import type { CairnOpsIconName } from './brand/cairnops-icon-paths';
+import type { MessageKey } from './i18n.svelte';
 
 export type TimelineEntry = {
   id: string | number;
@@ -43,4 +44,18 @@ export function activityMarker(kind: string): { icon: CairnOpsIconName; restored
 export function activityOrigin(origin: string): string {
   return ({ cairnops: 'CairnOps', native: 'CairnOps', zabbix: 'Zabbix', uptime_kuma: 'Uptime Kuma',
     patchmon: 'PatchMon', argus: 'Argus', proxmox: 'Proxmox VE', webhook: 'Webhook' } as Record<string, string>)[origin] ?? origin;
+}
+
+/** Render known state changes from their kind so older stored messages use current copy. */
+export function activityMessage(
+  entry: Pick<TimelineEntry, 'kind' | 'message'>,
+  translate: (key: MessageKey) => string
+): string {
+  if (entry.kind === 'propagation_closed') return translate('incidents.propagation.closed');
+  if (entry.message.trim()) return entry.message;
+  const emptyMessageLabels: Record<string, MessageKey> = {
+    ack_sync_succeeded: 'timeline.ackSyncSucceeded',
+    ack_sync_failed: 'timeline.ackSyncFailed'
+  };
+  return translate(emptyMessageLabels[entry.kind] ?? 'timeline.recordedEvent');
 }

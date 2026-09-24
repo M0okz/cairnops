@@ -916,7 +916,7 @@ func recomputeIncident(ctx context.Context, tx pgx.Tx, incidentID string, observ
 	}
 	if propagation == "closed" && previousPropagation == "open" {
 		if err := appendActivity(ctx, tx, incidentID, "", "",
-			"propagation_closed", "cairnops", "", "Propagation fermée", nil); err != nil {
+			"propagation_closed", "cairnops", "", "Regroupement terminé", nil); err != nil {
 			return err
 		}
 	}

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { prefersReducedMotion } from 'svelte/motion';
   import Icon from './Icon.svelte';
+  import InfoHint from './InfoHint.svelte';
   import ActivityTimeline from './ActivityTimeline.svelte';
   import IndicatorHistoryChart from './IndicatorHistoryChart.svelte';
   import { APIError, api, type Incident, type IncidentEvidence, type IncidentIndicators } from '$lib/api';
@@ -355,7 +356,14 @@
         </div>
         <div class="summary-notes">
           <span>{t('incidents.impactsActive', { active: incident.active_impact_count, total: incident.impact_count })}</span>
-          <span>{t(`incidents.propagation.${incident.propagation_status}`)}</span>
+          <span class="propagation-state">
+            {t(`incidents.propagation.${incident.propagation_status}`)}
+            <InfoHint
+              id={`propagation-state-hint-${incident.id}`}
+              ariaLabel={t('incidents.propagation.help', { state: t(`incidents.propagation.${incident.propagation_status}`) })}
+              text={t(`incidents.propagation.${incident.propagation_status}Hint`)}
+            />
+          </span>
           {#if incident.acknowledgement_sync_status === 'pending'}
             <span class="warn">{t('incidents.detail.syncPending')}</span>
           {:else if incident.acknowledgement_sync_status === 'failed'}
@@ -794,6 +802,11 @@
     overflow: hidden;
   }
 
+  .summary,
+  .detail-section.activity {
+    overflow: visible;
+  }
+
   .detail-section {
     margin-top: var(--s5);
   }
@@ -847,6 +860,21 @@
     color: var(--faint);
     font-size: var(--chart-text-size);
     flex-wrap: wrap;
+  }
+
+  .propagation-state {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s1);
+  }
+
+  .propagation-state :global(.info-hint) {
+    position: static;
+  }
+
+  .propagation-state :global(.info-hint .tooltip) {
+    width: min(19rem, calc(100vw - 3rem));
   }
 
   .grouping-note {

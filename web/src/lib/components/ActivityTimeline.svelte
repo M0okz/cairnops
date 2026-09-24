@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
-  import { activityDays, activityMarker, activityOrigin, type TimelineEntry } from '$lib/activity-timeline';
+  import InfoHint from './InfoHint.svelte';
+  import { activityDays, activityMarker, activityMessage, activityOrigin, type TimelineEntry } from '$lib/activity-timeline';
   import { localeTag, t, type MessageKey } from '$lib/i18n.svelte';
 
   let { entries }: { entries: TimelineEntry[] } = $props();
@@ -8,10 +9,6 @@
   const detailLabels: Record<string, MessageKey> = {
     evidence_added: 'timeline.evidence_added', evidence_resolved: 'timeline.evidence_resolved',
     invalidated: 'timeline.invalidated', impact_joined: 'timeline.impact_joined', impact_reopened: 'timeline.impact_reopened'
-  };
-  const emptyMessageLabels: Record<string, MessageKey> = {
-    ack_sync_succeeded: 'timeline.ackSyncSucceeded',
-    ack_sync_failed: 'timeline.ackSyncFailed'
   };
   const date = (at: string) => new Intl.DateTimeFormat(localeTag(), {
     day: 'numeric', month: 'long', year: 'numeric'
@@ -34,7 +31,16 @@
             </time>
             <span class="event-marker" class:restored={marker.restored} aria-hidden="true"><Icon name={marker.icon} size={16} /></span>
             <div class="event-body">
-              <p class="event-message">{entry.message.trim() ? entry.message : t(emptyMessageLabels[entry.kind] ?? 'timeline.recordedEvent')}</p>
+              <p class="event-message">
+                {activityMessage(entry, t)}
+                {#if entry.kind === 'propagation_closed'}
+                  <InfoHint
+                    id={`propagation-activity-hint-${entry.id}`}
+                    ariaLabel={t('incidents.propagation.help', { state: t('incidents.propagation.closed') })}
+                    text={t('incidents.propagation.closedHint')}
+                  />
+                {/if}
+              </p>
               <div class="event-meta">
                 {#if detailLabels[entry.kind]}
                   <span>{t(detailLabels[entry.kind])}</span>
@@ -66,7 +72,9 @@
   .event-marker { position: relative; display: grid; place-items: center; width: var(--event-marker-size); height: var(--event-marker-size); border: 1px solid var(--line-strong); border-radius: 50%; color: var(--faint); background: var(--surface); }
   .event-marker.restored { color: var(--ok); border-color: var(--ok-line); background: var(--ok-bg); }
   .event-body { min-width: 0; padding-top: var(--s1); }
-  .event-message { margin: 0; color: var(--ink); font-size: var(--text-sm); font-weight: var(--weight-medium); line-height: 1.5; overflow-wrap: anywhere; }
+  .event-message { position: relative; margin: 0; color: var(--ink); font-size: var(--text-sm); font-weight: var(--weight-medium); line-height: 1.5; overflow-wrap: anywhere; }
+  .event-message :global(.info-hint) { position: static; margin-left: var(--s1); vertical-align: middle; }
+  .event-message :global(.info-hint .tooltip) { width: min(19rem, calc(100cqw - 6rem)); }
   .event-meta { display: flex; flex-wrap: wrap; column-gap: var(--s3); row-gap: var(--s1); margin-top: var(--s2); color: var(--faint); font-size: var(--chart-text-size); line-height: 1.5; overflow-wrap: anywhere; }
   .event-meta > span + span::before { content: '·'; margin-right: var(--s3); color: var(--faint); }
   .timeline-empty { margin: 0; color: var(--faint); font-size: var(--text-sm); }
