@@ -6,7 +6,6 @@
   import Odometer from '$lib/components/Odometer.svelte';
   import IndicatorOverview from '$lib/components/IndicatorOverview.svelte';
   import InfrastructureHealth from '$lib/components/InfrastructureHealth.svelte';
-  import ResourceCategoryOverview from '$lib/components/ResourceCategoryOverview.svelte';
   import DashboardInsights from '$lib/components/DashboardInsights.svelte';
   import IncidentDetailDrawer from '$lib/components/IncidentDetailDrawer.svelte';
   import { Input } from '$lib/components/ui/input/index.js';
@@ -126,7 +125,6 @@
         <small>{t('dashboard.sourceSplit', { native: nativeSources, external: externalSources })}</small>
       </section>
     </div>
-    <ResourceCategoryOverview />
     <InfrastructureHealth />
   </div>
   <section class="current-incidents" aria-labelledby="current-incidents-title">

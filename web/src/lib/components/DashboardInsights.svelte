@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
+  import ResourceCategoryOverview from './ResourceCategoryOverview.svelte';
   import { api, type Incident } from '$lib/api';
   import { dashboardIncidentLeaders, dashboardRecentActivity } from '$lib/dashboard';
   import { localeTag, t } from '$lib/i18n.svelte';
@@ -101,10 +102,11 @@
       </ol>
     {/if}
   </section>
+  <ResourceCategoryOverview />
 </div>
 
 <style>
-  .dashboard-insights { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); min-width: 0; }
+  .dashboard-insights { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s4); min-width: 0; }
   .insight-card { min-width: 0; padding: var(--s4); border-radius: var(--r-overview); }
   header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); min-height: 2.5rem; margin-bottom: var(--s3); }
   h2 { font-size: var(--text-sm); font-weight: 600; }
@@ -132,5 +134,9 @@
   .activity-list strong { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .activity-list span { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
   .empty { color: var(--faint); font-size: var(--text-sm); padding: var(--s5) 0; }
+  @media (max-width: 100rem) {
+    .dashboard-insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dashboard-insights :global(.category-overview) { grid-column: 1 / -1; }
+  }
   @media (max-width: 48rem) { .dashboard-insights { grid-template-columns: minmax(0, 1fr); } }
 </style>

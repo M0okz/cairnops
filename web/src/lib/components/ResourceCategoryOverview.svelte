@@ -49,11 +49,9 @@
 
 <section class="category-overview card" aria-labelledby="category-overview-title">
   <header>
-    <div>
-      <h2 id="category-overview-title">{t('dashboard.category.title')}</h2>
-      <p>{t('dashboard.category.hint')}</p>
-    </div>
+    <h2 id="category-overview-title">{t('dashboard.category.title')}</h2>
     <a href="/cibles">{t('dashboard.viewTargets')} <span aria-hidden="true">→</span></a>
+    <p>{t('dashboard.category.hint')}</p>
   </header>
   {#if groups.length}
     <div class="category-list">
@@ -100,31 +98,28 @@
 </section>
 
 <style>
-  .category-overview { overflow: hidden; }
-  header { display: flex; align-items: start; justify-content: space-between; gap: var(--s4); padding: var(--s5); }
-  header h2 { font-size: var(--text-md); font-weight: 600; }
-  header p { margin-top: var(--s2); font-size: var(--text-xs); color: var(--faint); }
-  header a { flex: none; color: var(--muted); font-size: var(--text-xs); }
+  .category-overview { min-width: 0; overflow: hidden; }
+  header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--s2) var(--s4); padding: var(--s4); }
+  header h2 { font-size: var(--text-sm); font-weight: 600; }
+  header p { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--faint); }
+  header a { color: var(--muted); font-size: var(--text-xs); text-align: end; }
   header a:hover { color: var(--ink); }
   .category-list { display: grid; }
-  .category-row { display: grid; gap: var(--s3); padding: var(--s4) var(--s5); border-top: var(--line-width) solid var(--line); }
+  .category-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2) var(--s3); padding: var(--s2) var(--s4); border-top: var(--line-width) solid var(--line); }
   .category-row:hover { background: var(--surface-2); }
   .category-row:focus-visible { outline: var(--s1) solid var(--ink); outline-offset: calc(-1 * var(--s1)); }
-  .row-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); min-width: 0; font-size: var(--text-sm); }
+  .row-top { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); min-width: 0; font-size: var(--text-xs); line-height: 1.2; }
   .row-top strong { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
-  .row-count { flex: none; color: var(--muted); font-size: var(--text-xs); }
+  .row-count { color: var(--muted); font-size: 0.75rem; text-align: end; }
   .row-count b { color: var(--ink); font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 600; }
-  .row-count > span { margin-left: var(--s2); color: var(--faint); }
-  .category-bar { display: block; width: 100%; height: var(--s3); border-radius: var(--r-pill); overflow: hidden; background: var(--surface-3); }
+  .row-count > span { margin-inline-start: var(--s2); color: var(--faint); }
+  .category-bar { display: block; width: 100%; height: var(--s2); align-self: center; border-radius: var(--r-pill); overflow: hidden; background: var(--surface-3); }
   .segment.ok { fill: var(--ok); }
   .segment.warn { fill: var(--warn); }
   .segment.crit { fill: var(--crit); }
   .segment.info { fill: var(--info); }
   .segment.idle { fill: var(--dim); }
-  .row-details { color: var(--muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+  .row-details { grid-column: 2; color: var(--muted); font-size: 0.75rem; line-height: 1.2; text-align: end; overflow-wrap: anywhere; }
   .category-empty { padding: var(--s5); border-top: var(--line-width) solid var(--line); color: var(--faint); font-size: var(--text-sm); }
-  @media (max-width: 48rem) {
-    header, .category-row { padding-inline: var(--s4); }
-    header { flex-wrap: wrap; }
-  }
+  @media (max-width: 48rem) { header { grid-template-columns: minmax(0, 1fr); } header p { grid-column: 1; } header a { grid-row: 2; text-align: start; } }
 </style>
