@@ -851,6 +851,7 @@
   }
 
   .summary-notes {
+    position: relative;
     display: flex;
     align-items: center;
     gap: var(--s4);
@@ -863,7 +864,6 @@
   }
 
   .propagation-state {
-    position: relative;
     display: inline-flex;
     align-items: center;
     gap: var(--s1);
@@ -874,7 +874,9 @@
   }
 
   .propagation-state :global(.info-hint .tooltip) {
-    width: min(19rem, calc(100vw - 3rem));
+    top: 100%;
+    left: var(--s5);
+    width: min(19rem, calc(100% - 2 * var(--s5)));
   }
 
   .grouping-note {
