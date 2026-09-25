@@ -154,11 +154,18 @@ services = [
     {
         "id": "software",
         "target_id": "0",
+        "resource_name": "Home Assistant",
         "name": "Home Assistant",
         "installed_version": "2026.8.1",
         "target_version": "2026.9.1",
         "observed_at": now,
         "known": True,
+        "situation": "update",
+        "level": "minor",
+        "group": "apply",
+        "approved": False,
+        "skipped": False,
+        "security_mentioned": False,
         "source": {
             "kind": "github",
             "url": "https://github.com/home-assistant/core",
@@ -171,6 +178,7 @@ services = [
         "state": "awaiting_ai",
         "last_error": "",
         "checked_at": now,
+        "next_check_at": now,
         "collection": None,
         "collection_revision": None,
         "analyses": [],
@@ -178,6 +186,14 @@ services = [
             {
                 "installed_version": "2026.8.1",
                 "target_version": "2026.9.1",
+                "observed_at": now,
+            }
+        ],
+        "events": [
+            {
+                "kind": "first",
+                "version": "2026.8.1",
+                "target": "2026.9.1",
                 "observed_at": now,
             }
         ],

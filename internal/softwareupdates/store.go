@@ -21,28 +21,43 @@ func NewStore(pool *pgxpool.Pool, secrets *secretbox.Box) *Store {
 	return &Store{pool: pool, secrets: secrets}
 }
 
-const serviceSelect = `SELECT s.binding_id::text,b.target_id::text,b.external_name,s.installed_version,s.target_version,s.observed_at,
- s.known AND b.integration_enabled AND c.status <> 'disabled' AND c.last_checked_at > now()-make_interval(secs => c.sync_interval_seconds*3),
- s.source,s.source_origin,s.confirmed_at,s.revision,s.state,s.last_error,s.checked_at,s.collection,s.collection_revision,s.content_hash,
- coalesce(nullif(b.metadata->>'release_source_url',''),b.metadata->>'version_url','')
+const serviceSelect = `SELECT s.binding_id::text,b.target_id::text,t.name,b.external_name,s.installed_version,s.target_version,s.observed_at,
+ s.known, b.integration_enabled AND c.status <> 'disabled' AND c.last_checked_at > now()-make_interval(secs => c.sync_interval_seconds*3),
+ coalesce(b.metadata->>'unknown_reason',''),coalesce(b.metadata->>'deployed_version_query_ok',''),coalesce(b.metadata->>'latest_version_query_ok',''),
+ coalesce(b.metadata->>'approved','') = 'true',coalesce(b.metadata->>'skipped','') = 'true',
+ s.state = 'ready' AND EXISTS(SELECT 1 FROM cairnops_software_analyses a
+   CROSS JOIN LATERAL jsonb_array_elements(coalesce(a.result->'overview','[]'::jsonb) || coalesce(a.result->'details','[]'::jsonb)) point
+   WHERE a.binding_id=s.binding_id AND a.revision=s.revision AND a.content_hash=s.content_hash AND point->>'category'='security'),
+s.source,s.source_origin,s.confirmed_at,s.revision,s.state,s.last_error,s.checked_at,s.collection,s.collection_revision,s.content_hash,
+ coalesce(nullif(b.metadata->>'release_source_url',''),b.metadata->>'version_url',''),s.next_check_at
  FROM cairnops_software_services s JOIN cairnops_connector_bindings b ON b.id=s.binding_id
  JOIN cairnops_connectors c ON c.id=b.connector_id JOIN cairnops_targets t ON t.id=b.target_id `
 
 func scanService(row pgx.Row) (Service, error) {
 	var s Service
 	var candidate string
-	err := row.Scan(&s.ID, &s.TargetID, &s.Name, &s.Installed, &s.Target, &s.ObservedAt, &s.Known, &s.Source, &s.SourceOrigin, &s.ConfirmedAt, &s.Revision, &s.State, &s.LastError, &s.CheckedAt, &s.Collection, &s.CollectionRevision, &s.ContentHash, &candidate)
+	var facts argusFacts
+	var known bool
+	err := row.Scan(&s.ID, &s.TargetID, &s.ResourceName, &s.Name, &s.Installed, &s.Target, &s.ObservedAt,
+		&known, &facts.reachable, &facts.unknownReason, &facts.installedOK, &facts.targetOK,
+		&s.Approved, &s.Skipped, &s.SecurityMentioned,
+		&s.Source, &s.SourceOrigin, &s.ConfirmedAt, &s.Revision, &s.State, &s.LastError, &s.CheckedAt, &s.Collection, &s.CollectionRevision, &s.ContentHash, &candidate, &s.NextCheckAt)
 	s.Suggested = Suggest(candidate)
 	s.Analyses = []Analysis{}
 	s.History = []History{}
+	s.Events = []Event{}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, ErrNotFound
+	}
+	if err == nil {
+		s.Known = known && facts.reachable
+		s.project(facts)
 	}
 	return s, err
 }
 func (s *Store) List(ctx context.Context, targetID string) ([]Service, error) {
 	projection := strings.Replace(serviceSelect, "s.collection,s.collection_revision", "NULL::jsonb,s.collection_revision", 1)
-	rows, err := s.pool.Query(ctx, projection+`WHERE ($1='' OR b.target_id::text=$1) AND t.archived_at IS NULL ORDER BY b.external_name,s.binding_id`, targetID)
+	rows, err := s.pool.Query(ctx, projection+`WHERE ($1='' OR b.target_id::text=$1) AND t.archived_at IS NULL ORDER BY lower(t.name),lower(b.external_name),s.binding_id`, targetID)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +96,8 @@ func (s *Store) Get(ctx context.Context, id string) (Service, error) {
 	if err != nil {
 		return v, err
 	}
-	rows, err = s.pool.Query(ctx, `SELECT installed_version,target_version,observed_at FROM cairnops_software_history WHERE binding_id=$1::uuid ORDER BY id DESC LIMIT 500`, id)
+	const historyLimit = 500
+	rows, err = s.pool.Query(ctx, `SELECT installed_version,target_version,observed_at FROM cairnops_software_history WHERE binding_id=$1::uuid ORDER BY id DESC LIMIT $2`, id, historyLimit+1)
 	if err != nil {
 		return v, err
 	}
@@ -93,7 +109,15 @@ func (s *Store) Get(ctx context.Context, id string) (Service, error) {
 		}
 		v.History = append(v.History, h)
 	}
-	return v, rows.Err()
+	if err = rows.Err(); err != nil {
+		return v, err
+	}
+	truncated := len(v.History) > historyLimit
+	v.Events = events(v.History, truncated)
+	if truncated {
+		v.History = v.History[:historyLimit]
+	}
+	return v, nil
 }
 func (s *Store) Confirm(ctx context.Context, id, actor string, input Source) error {
 	source, err := NormalizeSource(input)

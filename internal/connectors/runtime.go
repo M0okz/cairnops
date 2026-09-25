@@ -16,6 +16,7 @@ import (
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/secretbox"
+	"github.com/M0okz/cairnops/internal/versions"
 )
 
 type RuntimeBinding struct {
@@ -566,6 +567,7 @@ func (synchronizer *ArgusSynchronizer) syncOne(ctx context.Context, connector Ru
 			unknownCount++
 			details := argusMissingDetails(inspection.Endpoint, binding)
 			details["unknown"] = true
+			details["unknown_reason"] = "argus_service_missing"
 			bindingSnapshots = append(bindingSnapshots, ArgusBindingSnapshot{BindingID: binding.ID, ExternalName: binding.ExternalName, Metadata: details})
 			observations = append(observations, IntegrationObservation{
 				BindingID: binding.ID, Outcome: "unknown", Reason: "argus_service_missing",
@@ -576,27 +578,41 @@ func (synchronizer *ArgusSynchronizer) syncOne(ctx context.Context, connector Ru
 		}
 		details := argusDetails(inspection.Endpoint, discoveredService)
 		details["unknown"] = discoveredService.Unknown || !discoveredService.Importable
+		unknownReason := discoveredService.UnknownReason
+		if unknownReason == "" && !discoveredService.Importable {
+			unknownReason = "argus_service_" + discoveredService.Ineligibility
+		}
+		details["unknown_reason"] = unknownReason
 		bindingSnapshots = append(bindingSnapshots, ArgusBindingSnapshot{
 			BindingID: binding.ID, ExternalName: discoveredService.Name, Metadata: details,
 		})
 		if !discoveredService.Importable || discoveredService.Unknown {
 			unknownCount++
-			reason := discoveredService.UnknownReason
-			if reason == "" {
-				reason = "argus_service_" + discoveredService.Ineligibility
-			}
 			observations = append(observations, IntegrationObservation{
-				BindingID: binding.ID, Outcome: "unknown", Reason: reason,
+				BindingID: binding.ID, Outcome: "unknown", Reason: unknownReason,
 				Message: "État de version Argus inconnu", Details: details,
 			})
 			continue
 		}
 		observedBindings = append(observedBindings, binding.ID)
-		pending := !discoveredService.Skipped && discoveredService.DeployedVersion != discoveredService.LatestVersion
+		// Argus fournit les valeurs ; CairnOps établit leur ordre. Seule une cible
+		// plus récente et au moins aussi stable que l'installation ouvre une preuve.
+		assessment := versions.Assess(discoveredService.DeployedVersion, discoveredService.LatestVersion)
+		details["situation"], details["level"] = string(assessment.Situation), string(assessment.Level)
 		outcome, reason, message := "healthy", "", "Version déployée à jour"
-		if discoveredService.Skipped {
+		switch {
+		case discoveredService.Skipped:
 			message = "Version ignorée dans Argus"
-		} else if pending {
+		case assessment.Situation == versions.Prerelease:
+			reason = "argus_prerelease_target"
+			message = fmt.Sprintf("Préversion %s proposée, %s déployée", discoveredService.LatestVersion, discoveredService.DeployedVersion)
+		case assessment.Situation == versions.TargetOlder:
+			outcome, reason = "unknown", "argus_target_older"
+			message = fmt.Sprintf("Cible Argus %s antérieure à la version déployée %s", discoveredService.LatestVersion, discoveredService.DeployedVersion)
+		case assessment.Situation == versions.Unordered:
+			outcome, reason = "unknown", "argus_versions_unordered"
+			message = fmt.Sprintf("Versions %s et %s impossibles à ordonner", discoveredService.DeployedVersion, discoveredService.LatestVersion)
+		case assessment.Actionable():
 			outcome, reason = "unhealthy", "argus_update_available"
 			message = fmt.Sprintf("Version %s disponible, %s déployée", discoveredService.LatestVersion, discoveredService.DeployedVersion)
 			signals = append(signals, incidents.ArgusSignal{

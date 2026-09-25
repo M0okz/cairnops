@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -71,10 +73,86 @@ func publicClient() *http.Client {
 
 var errResponseTooLarge = errors.New("response too large")
 
+// RateLimitedError signale qu'un hôte a demandé de suspendre les requêtes.
+// Tant que la date n'est pas atteinte, aucune requête ne lui est envoyée :
+// insister consommerait le quota anonyme partagé par tous les services.
+type RateLimitedError struct {
+	Host  string
+	Until time.Time
+}
+
+func (e *RateLimitedError) Error() string { return "rate_limited:" + e.Host }
+
+type hostLimits struct {
+	mu    sync.Mutex
+	until map[string]time.Time
+}
+
+var limits = hostLimits{until: map[string]time.Time{}}
+
+func (l *hostLimits) blocked(host string, now time.Time) (time.Time, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	until, ok := l.until[host]
+	if ok && !now.Before(until) {
+		delete(l.until, host)
+		return time.Time{}, false
+	}
+	return until, ok
+}
+
+func (l *hostLimits) block(host string, until time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if until.After(l.until[host]) {
+		l.until[host] = until
+	}
+}
+
+// rateLimitUntil lit les en-têtes standard et ceux de GitHub. Une réponse 403
+// sans indication de quota reste un refus ordinaire.
+func rateLimitUntil(res *http.Response, now time.Time) (time.Time, bool) {
+	if res.StatusCode != http.StatusTooManyRequests && res.StatusCode != http.StatusForbidden {
+		return time.Time{}, false
+	}
+	var until time.Time
+	if value := strings.TrimSpace(res.Header.Get("Retry-After")); value != "" {
+		if seconds, err := strconv.Atoi(value); err == nil {
+			until = now.Add(time.Duration(seconds) * time.Second)
+		} else if at, err := http.ParseTime(value); err == nil {
+			until = at
+		}
+	}
+	if until.IsZero() && res.Header.Get("X-RateLimit-Remaining") == "0" {
+		if reset, err := strconv.ParseInt(res.Header.Get("X-RateLimit-Reset"), 10, 64); err == nil {
+			until = time.Unix(reset, 0)
+		} else {
+			until = now.Add(time.Hour)
+		}
+	}
+	if until.IsZero() {
+		if res.StatusCode != http.StatusTooManyRequests {
+			return time.Time{}, false
+		}
+		until = now.Add(time.Hour)
+	}
+	if until.Before(now.Add(time.Minute)) {
+		until = now.Add(time.Minute)
+	}
+	if until.After(now.Add(24 * time.Hour)) {
+		until = now.Add(24 * time.Hour)
+	}
+	return until, true
+}
+
 func request(ctx context.Context, client *http.Client, method, endpoint, key string, body io.Reader) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
 		return nil, fmt.Errorf("invalid request")
+	}
+	host := strings.ToLower(req.URL.Hostname())
+	if until, blocked := limits.blocked(host, time.Now()); blocked {
+		return nil, &RateLimitedError{Host: host, Until: until}
 	}
 	req.Header.Set("User-Agent", "CairnOps-Version-Insights")
 	req.Header.Set("Accept", "application/json, text/html, text/plain")
@@ -90,6 +168,10 @@ func request(ctx context.Context, client *http.Client, method, endpoint, key str
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		if until, limited := rateLimitUntil(res, time.Now()); limited {
+			limits.block(host, until)
+			return nil, &RateLimitedError{Host: host, Until: until}
+		}
 		return nil, fmt.Errorf("remote HTTP %d", res.StatusCode)
 	}
 	b, err := io.ReadAll(io.LimitReader(res.Body, 2<<20+1))

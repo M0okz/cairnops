@@ -213,6 +213,55 @@ func TestArgusSynchronizerKeepsValidServicesAndDegradesPartialFailures(t *testin
 	}
 }
 
+// Cas relevés en production : une différence de chaînes n'établit pas une
+// mise à jour. Ces services restent observés afin de résoudre une preuve
+// ouverte par l'ancienne comparaison.
+func TestArgusSynchronizerSignalsOnlyOrderedUpdates(t *testing.T) {
+	t.Parallel()
+	box, _ := secretbox.New(bytes.Repeat([]byte{0x3c}, 32))
+	credential, _ := json.Marshal(argus.Credentials{})
+	sealed, _ := box.Seal(credential, "connector:argus:https://argus.example.net")
+	services := []argus.Service{
+		{ID: "grafana", DeployedVersion: "12.4.9", LatestVersion: "13.2.2"},
+		{ID: "mattermost", DeployedVersion: "11.6.0", LatestVersion: "12.0.0-rc1"},
+		{ID: "cairnops", DeployedVersion: "0.1.147", LatestVersion: "0.1.146"},
+		{ID: "it-tools", DeployedVersion: "2024.10.22", LatestVersion: "2024.10.22-7ca5933"},
+		{ID: "custom", DeployedVersion: "stable", LatestVersion: "edge"},
+	}
+	bindings := make([]RuntimeBinding, 0, len(services))
+	for index := range services {
+		services[index].Name, services[index].Active, services[index].Importable = services[index].ID, true, true
+		services[index].LatestQueryOK, services[index].DeployedQueryOK = true, true
+		bindings = append(bindings, RuntimeBinding{ID: "binding-" + services[index].ID, TargetID: "target-" + services[index].ID, ExternalID: services[index].ID})
+	}
+	store := &runtimeStore{connectors: []RuntimeConnector{{ID: "connector-argus", Endpoint: "https://argus.example.net", CredentialSealed: sealed, Bindings: bindings}}}
+	reconciler := &incidentReconciler{}
+	synchronizer := NewArgusSynchronizer(store, reconciler, argusInspectionClient{inspection: argus.Inspection{
+		Endpoint: "https://argus.example.net", Version: "0.38.0", Compatibility: "supported", Services: services,
+	}}, box, "server-one", nil)
+	if err := synchronizer.tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(reconciler.argusInput.Signals) != 1 || reconciler.argusInput.Signals[0].BindingID != "binding-grafana" {
+		t.Fatalf("only the ordered stable update may open an incident: %#v", reconciler.argusInput.Signals)
+	}
+	if len(reconciler.argusInput.ObservedBindings) != len(services) {
+		t.Fatalf("every readable service must be able to resolve an earlier signal: %#v", reconciler.argusInput.ObservedBindings)
+	}
+	if !store.completed || store.failed != "" {
+		t.Fatalf("readable services do not degrade the connector: %#v", store)
+	}
+	situations := map[string]any{}
+	for _, snapshot := range store.argusBindings {
+		situations[snapshot.BindingID] = snapshot.Metadata["situation"]
+	}
+	for binding, want := range map[string]string{"binding-grafana": "update", "binding-mattermost": "prerelease", "binding-cairnops": "target_older", "binding-it-tools": "current", "binding-custom": "unordered"} {
+		if situations[binding] != want {
+			t.Errorf("%s situation = %v, want %s", binding, situations[binding], want)
+		}
+	}
+}
+
 func TestSynchronizerProjectsProblemsThroughImportedBindings(t *testing.T) {
 	t.Parallel()
 	box, _ := secretbox.New(bytes.Repeat([]byte{0x52}, 32))

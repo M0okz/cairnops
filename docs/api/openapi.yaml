@@ -193,12 +193,18 @@ components:
         target_id:
           type: string
           format: uuid
+        resource_name:
+          type: string
+          description: Nom de la Ressource à laquelle le service Argus est rattaché.
         name:
           type: string
+          description: Libellé du service dans Argus.
         installed_version:
           type: string
+          description: Dernière version installée valide ; conservée lorsque known est faux.
         target_version:
           type: string
+          description: Dernière version cible valide ; conservée lorsque known est faux.
         observed_at:
           type:
           - string
@@ -206,6 +212,37 @@ components:
           format: date-time
         known:
           type: boolean
+          description: Vrai lorsque la dernière lecture récente d'Argus confirme les deux versions.
+        situation:
+          type: string
+          enum: [update, prerelease, target_older, unordered, current, unknown]
+          description: >-
+            Relation établie par CairnOps entre les versions : seule update
+            désigne une cible plus récente et au moins aussi stable que
+            l'installation. prerelease propose une préversion à une installation
+            stable ; target_older et unordered demandent une vérification d'Argus.
+        level:
+          type: string
+          enum: [major, minor, patch]
+          description: Première composante modifiée, pour update et prerelease.
+        group:
+          type: string
+          enum: [apply, review, current]
+          description: >-
+            Classement de la vue : apply pour une mise à jour à appliquer,
+            review pour des versions non confirmées ou une situation à vérifier,
+            current pour des versions identiques ou une version ignorée dans Argus.
+        verification_issue:
+          type: string
+          enum: [argus_unavailable, installed_unreadable, target_unreadable, service_missing, service_inactive, unconfirmed]
+          description: Raison pour laquelle known est faux ; absente sinon.
+        approved:
+          type: boolean
+        skipped:
+          type: boolean
+        security_mentioned:
+          type: boolean
+          description: La synthèse courante cite au moins un point de sécurité.
         source:
           description: Objet vide avant adoption, sinon source officielle reprise d’Argus ou personnalisée.
           anyOf:
@@ -236,9 +273,21 @@ components:
           - ready
           - retry
           - up_to_date
+          - not_applicable
+          - notes_unavailable
+          description: >-
+            not_applicable indique qu'aucune cible plus récente ne justifie de
+            collecte ; notes_unavailable qu'aucune note publiée n'a été trouvée
+            (vérification quotidienne).
         last_error:
           type: string
+          description: Pour retry, « rate_limited:hôte » signale une limite de débit respectée jusqu'à next_check_at.
         checked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        next_check_at:
           type:
           - string
           - 'null'
@@ -259,14 +308,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SoftwareVersionObservation'
+        events:
+          type: array
+          description: Historique lisible, du plus récent au plus ancien ; vide dans la liste.
+          items:
+            $ref: '#/components/schemas/SoftwareVersionEvent'
       required:
       - id
       - target_id
+      - resource_name
       - name
       - installed_version
       - target_version
       - observed_at
       - known
+      - situation
+      - group
+      - approved
+      - skipped
+      - security_mentioned
       - source
       - source_origin
       - suggested_source
@@ -275,10 +335,34 @@ components:
       - state
       - last_error
       - checked_at
+      - next_check_at
       - collection
       - collection_revision
       - analyses
       - history
+      - events
+    SoftwareVersionEvent:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [first, installed, target]
+        version:
+          type: string
+        previous:
+          type: string
+        target:
+          type: string
+        direction:
+          type: string
+          enum: [upgrade, rollback, changed]
+        observed_at:
+          type: string
+          format: date-time
+      required:
+      - kind
+      - version
+      - observed_at
     SoftwareAIConfiguration:
       type: object
       properties:
@@ -1811,8 +1895,8 @@ paths:
         schema:
           type: string
           format: uuid
-      description: Liste sans notes ni analyses détaillées. Les tableaux analyses et
-        history sont vides ; collection est null.
+      description: Liste sans notes ni analyses détaillées, triée par nom de Ressource.
+        Les tableaux analyses, history et events sont vides ; collection est null.
   /api/v1/software-updates/{serviceID}:
     get:
       summary: Consulter notes, synthèses et historique

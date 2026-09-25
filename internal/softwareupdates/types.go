@@ -58,11 +58,19 @@ type Service struct {
 	ContentHash        string      `json:"-"`
 	ID                 string      `json:"id"`
 	TargetID           string      `json:"target_id"`
+	ResourceName       string      `json:"resource_name"`
 	Name               string      `json:"name"`
 	Installed          string      `json:"installed_version"`
 	Target             string      `json:"target_version"`
 	ObservedAt         *time.Time  `json:"observed_at"`
 	Known              bool        `json:"known"`
+	Situation          string      `json:"situation"`
+	Level              string      `json:"level,omitempty"`
+	Group              string      `json:"group"`
+	VerificationIssue  string      `json:"verification_issue,omitempty"`
+	Approved           bool        `json:"approved"`
+	Skipped            bool        `json:"skipped"`
+	SecurityMentioned  bool        `json:"security_mentioned"`
 	Source             Source      `json:"source"`
 	SourceOrigin       string      `json:"source_origin"`
 	Suggested          *Source     `json:"suggested_source"`
@@ -71,10 +79,12 @@ type Service struct {
 	State              string      `json:"state"`
 	LastError          string      `json:"last_error"`
 	CheckedAt          *time.Time  `json:"checked_at"`
+	NextCheckAt        *time.Time  `json:"next_check_at"`
 	Collection         *Collection `json:"collection"`
 	CollectionRevision *int64      `json:"collection_revision"`
 	Analyses           []Analysis  `json:"analyses"`
 	History            []History   `json:"history"`
+	Events             []Event     `json:"events"`
 }
 type AIConfig struct {
 	Enabled       bool   `json:"enabled"`

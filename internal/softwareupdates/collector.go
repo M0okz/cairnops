@@ -49,6 +49,11 @@ func Suggest(raw string) *Source {
 		return nil
 	}
 	p := strings.Split(strings.Trim(u.Path, "/"), "/")
+	// Argus accepte l'adresse d'API d'un dépôt GitHub (…/repos/o/r/releases/latest) :
+	// elle désigne le dépôt, pas une page de notes.
+	if strings.EqualFold(u.Hostname(), "api.github.com") && len(p) >= 3 && p[0] == "repos" {
+		u.Host, p = "github.com", p[1:]
+	}
 	if len(p) < 2 {
 		return nil
 	}
@@ -83,7 +88,7 @@ func Collect(ctx context.Context, client *http.Client, s Source, installed, targ
 	if s.Kind == "changelog" {
 		all, c.Incomplete, err = collectChangelog(ctx, client, s, installed, target)
 	} else {
-		all, c.Incomplete, err = collectRepository(ctx, client, s)
+		all, c.Incomplete, err = collectRepository(ctx, client, s, installed)
 	}
 	if err != nil {
 		return c, err
@@ -115,7 +120,29 @@ func Collect(ctx context.Context, client *http.Client, s Source, installed, targ
 	sort.Slice(c.Notes, func(i, j int) bool { v, _ := compareVersions(c.Notes[i].Version, c.Notes[j].Version); return v > 0 })
 	return c, nil
 }
-func collectRepository(ctx context.Context, client *http.Client, s Source) ([]Note, bool, error) {
+
+// olderPage indique qu'une page triée de la plus récente à la plus ancienne ne
+// contient que des versions antérieures à l'installation : les pages suivantes
+// ne peuvent plus rien apporter. Un ordre inattendu ne permet pas de conclure.
+func olderPage(page []string, installed string) bool {
+	if len(page) == 0 {
+		return false
+	}
+	for index, version := range page {
+		order, ok := compareVersions(version, installed)
+		if !ok || order >= 0 {
+			return false
+		}
+		if index > 0 {
+			if order, ok := compareVersions(page[index-1], version); !ok || order < 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func collectRepository(ctx context.Context, client *http.Client, s Source, installed string) ([]Note, bool, error) {
 	u, _ := url.Parse(s.URL)
 	repo := strings.Trim(u.Path, "/")
 	base := "https://" + u.Host
@@ -164,6 +191,7 @@ func collectRepository(ctx context.Context, client *http.Client, s Source) ([]No
 			if err = json.Unmarshal(b, &rows); err != nil {
 				return nil, false, fmt.Errorf("invalid release catalogue")
 			}
+			listed := make([]string, 0, len(rows))
 			for _, r := range rows {
 				if r.Draft {
 					continue
@@ -175,6 +203,7 @@ func collectRepository(ctx context.Context, client *http.Client, s Source) ([]No
 				if versionPattern.FindString(v) == "" {
 					continue
 				}
+				listed = append(listed, v)
 				body := r.Body
 				if body == "" {
 					body = r.Description
@@ -192,7 +221,7 @@ func collectRepository(ctx context.Context, client *http.Client, s Source) ([]No
 				notes = append(notes, Note{Version: v, URL: link, Body: body})
 			}
 			offset += size
-			if len(rows) < size {
+			if len(rows) < size || olderPage(listed, installed) {
 				break
 			}
 			if attempt == 19 {

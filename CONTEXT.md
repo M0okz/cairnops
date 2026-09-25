@@ -329,5 +329,5 @@ Contexte d'un Incident survenu pendant une Fenêtre de maintenance, indiquant qu
 _Éviter_ : Résolu, ignoré
 
 **Mise à jour disponible** :
-Indication qu’une version logicielle proposée pour une Ressource diffère de sa version installée. Cette indication reste distincte de son état de fonctionnement : un service dont le fonctionnement normal est établi reste Disponible lorsqu’une mise à jour est disponible.
-_Éviter_ : Fonctionnement dégradé, indisponibilité
+Indication qu’une version logicielle proposée pour une Ressource est plus récente que sa version installée et au moins aussi stable qu’elle. Une préversion proposée à une installation stable, une cible antérieure à l’installation ou des versions impossibles à ordonner ne constituent pas une mise à jour disponible et restent à vérifier. Cette indication reste distincte de son état de fonctionnement : un service dont le fonctionnement normal est établi reste Disponible lorsqu’une mise à jour est disponible.
+_Éviter_ : Version différente, fonctionnement dégradé, indisponibilité

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/versions"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -73,12 +74,25 @@ func (w *Worker) tick(ctx context.Context) error {
 		_, e := w.store.pool.Exec(ctx, `UPDATE cairnops_software_services SET state=CASE WHEN revision=$3 THEN $4 ELSE state END,last_error=CASE WHEN revision=$3 THEN $5 ELSE last_error END,next_check_at=CASE WHEN revision=$3 THEN now()+make_interval(secs=>$6) ELSE next_check_at END,lease_token=NULL,lease_until=NULL WHERE binding_id=$1::uuid AND lease_token=$2`, id, token, service.Revision, state, message, delay)
 		return e
 	}
-	if service.Installed == service.Target {
+	// Seule une cible plus récente justifie une collecte : une cible antérieure
+	// ou non ordonnable n'a pas de notes à comparer et ne doit pas consommer de quota.
+	switch versions.Assess(service.Installed, service.Target).Situation {
+	case versions.Current:
 		return finish("up_to_date", "", 86400)
+	case versions.TargetOlder, versions.Unordered:
+		return finish("not_applicable", "", 86400)
+	}
+	deferred := func(err error) error {
+		var limited *RateLimitedError
+		if errors.As(err, &limited) {
+			delay := int(time.Until(limited.Until).Seconds()) + 30
+			return finish("retry", limited.Error(), max(delay, 60))
+		}
+		return finish("retry", err.Error(), 3600)
 	}
 	c, err := Collect(jobCtx, w.client, service.Source, service.Installed, service.Target)
 	if err != nil {
-		return finish("retry", err.Error(), 3600)
+		return deferred(err)
 	}
 	bytes, _ := json.Marshal(c)
 	hashBytes := sha256.Sum256(bytes)
@@ -103,6 +117,10 @@ func (w *Worker) tick(ctx context.Context) error {
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
+	if !hasNotes(c) {
+		// Aucune note publiée : la vérification quotidienne détectera leur arrivée.
+		return finish("notes_unavailable", "", 86400)
+	}
 	cfg, err := w.store.runtimeConfig(jobCtx)
 	if err != nil {
 		return finish("retry", "ai_configuration_unavailable", 3600)
@@ -112,7 +130,7 @@ func (w *Worker) tick(ctx context.Context) error {
 	}
 	summary, err := Generate(jobCtx, w.client, cfg, c)
 	if err != nil {
-		return finish("retry", err.Error(), 3600)
+		return deferred(err)
 	}
 	_, err = w.store.pool.Exec(jobCtx, `INSERT INTO cairnops_software_analyses(binding_id,revision,installed_version,target_version,source,content_hash,result,model,notes)
  SELECT binding_id,revision,installed_version,target_version,source,$4,$5::jsonb,$6,$7::jsonb FROM cairnops_software_services
@@ -128,4 +146,13 @@ func mustJSON(v any) []byte {
 		panic(fmt.Sprintf("encode software data: %v", err))
 	}
 	return b
+}
+
+func hasNotes(c Collection) bool {
+	for _, note := range c.Notes {
+		if !note.Missing {
+			return true
+		}
+	}
+	return false
 }

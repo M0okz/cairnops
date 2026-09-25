@@ -45,6 +45,10 @@ conserve l'ancienne Source dans son histoire.
 
 ## Projection opérationnelle
 
+> Ajustement : l'ADR 0049 remplace la comparaison par égalité de chaînes.
+> Seule une cible plus récente et au moins aussi stable que l'installation
+> ouvre désormais un Incident.
+
 La Source Argus porte `measures_availability: false`. Ses Observations gardent
 les versions déployée et disponible, `approved`, `skipped`, `last_checked`, les
 résultats des deux requêtes de version et les liens HTTP rendus.

@@ -1,13 +1,15 @@
 <script lang="ts">
   import { api } from "$lib/api";
-  import { t } from "$lib/i18n.svelte";
+  import { t, type MessageKey } from "$lib/i18n.svelte";
   import { session, messageFrom } from "$lib/session.svelte";
   import { stamp } from "$lib/format";
   import {
     currentAnalysis,
+    rateLimitedHost,
     safeReleaseURL,
     type ReleaseSource,
     type SoftwareService,
+    type VersionEvent,
   } from "$lib/software-updates";
   import ReleasePoints from "./ReleasePoints.svelte";
   import SegmentedControl from "./ui/SegmentedControl.svelte";
@@ -30,6 +32,31 @@
   const missing = $derived(
     service?.collection?.notes.filter((n) => n.missing) ?? [],
   );
+  const comparable = $derived(
+    service?.situation === "update" || service?.situation === "prerelease",
+  );
+  const reviewNotice = $derived.by(() => {
+    if (!service) return "";
+    if (!service.known)
+      return t(
+        `updates.issue.${service.verification_issue ?? "unconfirmed"}` as MessageKey,
+      );
+    if (service.group === "review")
+      return t(`updates.situation.${service.situation}` as MessageKey);
+    return service.skipped ? t("updates.skipped") : "";
+  });
+  const limitedHost = $derived(service ? rateLimitedHost(service) : undefined);
+  function eventLabel(event: VersionEvent) {
+    const key =
+      event.kind === "installed"
+        ? `updates.event.${event.direction ?? "changed"}`
+        : `updates.event.${event.kind}`;
+    return t(key as MessageKey, {
+      version: event.version,
+      previous: event.previous ?? "—",
+      target: event.target ?? "—",
+    });
+  }
   $effect(() => {
     const serviceID = id;
     let alive = true;
@@ -92,12 +119,12 @@
   {#if !service}<p role="status">{t("updates.loading")}</p>{:else}
     <div class="detail-meta">
       <span
-        >{t("updates.observed")} : {service.observed_at
+      >{t("updates.observed")} : {service.observed_at
           ? stamp(service.observed_at)
           : "—"}</span
-      >{#if !service.known}<span class="pill warn">{t("updates.unknown")}</span
-        >{/if}
+      >
     </div>
+    {#if reviewNotice}<p class="detail-note">{reviewNotice}</p>{/if}
     {#if effectiveSource || session.user?.role === "administrator"}
       <details class="source-box" open={!effectiveSource}>
         <summary
@@ -166,19 +193,23 @@
         {/if}
       </details>
     {/if}
-    {#if service.state === "awaiting_ai"}<p class="notice">
+    {#if comparable && service.state === "awaiting_ai"}<p class="detail-note">
         {t("updates.awaiting_ai")}{#if session.user?.role === "administrator"}
           · <a href="/reglages#software-analysis">{t("updates.settings")}</a
           >{/if}
       </p>{/if}
-    {#if service.state === "retry"}<p role="status">
-        {service.last_error === "versions_not_comparable"
-          ? t("updates.unsupportedVersions")
+    {#if comparable && service.state === "notes_unavailable"}<p role="status">
+        {t("updates.notesUnavailable")}
+      </p>{/if}
+    {#if comparable && service.state === "retry"}<p role="status">
+        {limitedHost
+          ? t("updates.rateLimitedUntil", {
+              host: limitedHost,
+              time: service.next_check_at ? stamp(service.next_check_at) : "—",
+            })
           : service.last_error.startsWith("invalid_ai_")
             ? t("updates.invalidAI")
-            : service.last_error === "remote HTTP 429"
-              ? t("updates.rateLimited")
-              : t("updates.failed")}
+            : t("updates.failed")}
       </p>{/if}
     {#if service.collection && service.collection_revision !== service.revision}<p
         class="muted"
@@ -195,7 +226,7 @@
           </p>{/if}
       </aside>
     {/if}
-    <section>
+    {#if analysis || comparable || service.situation === "current"}<section>
       <div class="section-title">
         <h3>{t("updates.overview")}</h3>
         {#if analysis}<small class="muted"
@@ -209,10 +240,10 @@
         />{#if !analysis.result.overview.length}<p class="muted">
             {t("updates.noChanges")}
           </p>{/if}
-      {:else if service.installed_version === service.target_version}<p>
-          {t("updates.upToDate")}
-        </p>{:else}<p class="muted">{t("updates.noSummary")}</p>{/if}
-    </section>
+      {:else if service.situation === "current"}<p>
+          {t("updates.current")}
+        </p>{:else if comparable}<p class="muted">{t("updates.noSummary")}</p>{/if}
+    </section>{/if}
     {#if service.collection?.notes.length}
       <section>
         <h3>{t("updates.byVersion")}</h3>
@@ -264,18 +295,12 @@
       </details>
     {/if}
     <details>
-      <summary>{t("updates.history")} · {service.history.length}</summary>
+      <summary>{t("updates.history")} · {service.events.length}</summary>
       <p class="muted">{t("updates.historyHint")}</p>
       <ol class="history">
-        {#each service.history as entry, i (i)}<li>
-            <time datetime={entry.observed_at}>{stamp(entry.observed_at)}</time
-            ><span
-              >{t("updates.installed")}
-              <strong class="mono">{entry.installed_version}</strong></span
-            ><span
-              >{t("updates.target")}
-              <strong class="mono">{entry.target_version}</strong></span
-            >
+        {#each service.events as event, i (i)}<li class:secondary={event.kind === "target"}>
+            <time datetime={event.observed_at}>{stamp(event.observed_at)}</time
+            ><span>{eventLabel(event)}</span>
           </li>{/each}
       </ol>
     </details>
@@ -364,6 +389,15 @@
   }
   .history time {
     color: var(--muted);
+  }
+  .history li.secondary span {
+    color: var(--muted);
+  }
+  .detail-note {
+    margin: 0;
+    border-left: 2px solid var(--line-strong);
+    padding: var(--s3) var(--s4);
+    background: var(--surface-2);
   }
   @media (max-width: 48rem) {
     .software-detail {

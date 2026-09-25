@@ -2,6 +2,16 @@
 
 La vue **Mises à jour** et l'onglet homonyme d'une Cible montrent les services importés depuis Argus. Les versions réellement observées déterminent la comparaison, y compris après un retour arrière. Aucun bouton ne déclenche un déploiement.
 
+## Classement des services
+
+CairnOps ordonne les versions remontées par Argus (ADR 0049) et range chaque service dans un seul groupe :
+
+- **À appliquer** : la cible est plus récente et au moins aussi stable que l'installation. Le badge indique une version majeure, mineure ou corrective ; « Sécurité » signale une synthèse qui cite un point de sécurité. Seul ce cas ouvre l'Incident « Mise à jour logicielle disponible ». Les mentions de sécurité et les versions majeures passent en tête.
+- **À vérifier** : Argus ne relit plus une version (les dernières versions valides restent affichées avec la raison), propose une préversion à une installation stable, remonte une cible antérieure à l'installation, ou fournit des versions impossibles à ordonner. Ces cas indiquent généralement un suivi Argus à corriger.
+- **À jour** : même publication, y compris avec un préfixe `v` ou un identifiant de build, ou version ignorée dans Argus.
+
+L'historique distingue les mises à jour constatées, les retours à une version antérieure et les nouvelles cibles proposées par Argus.
+
 ## Première configuration
 
 1. Dans **Réglages → Analyse des notes de version**, choisir le fournisseur (Gemini, OpenAI, Mistral ou DeepSeek), puis un modèle proposé et saisir sa clé. L'adresse HTTPS est préremplie. Les choix sont une sélection de modèles compatibles, pas un inventaire du compte fournisseur. **Personnalisé** permet une autre API compatible Chat Completions ; **Autre modèle** permet de saisir son identifiant. Une configuration existante hors liste reste conservée. La clé est scellée avec la clé maîtresse CairnOps et ne revient jamais dans la réponse API. Une nouvelle adresse de fournisseur exige de ressaisir la clé.
@@ -12,7 +22,9 @@ Les formats disponibles sont les dépôts publics GitHub, Forgejo/Gitea et GitLa
 
 ## Comparaison et actualisation
 
-Les versions numériques à deux, trois ou quatre composantes, éventuellement préfixées par `v` et accompagnées d'une préversion, sont ordonnées explicitement. Les tags arbitraires comme `latest` ne sont pas ordonnés à l'aveugle. Les préversions intermédiaires sont exclues lorsque la cible est stable. Le catalogue est limité à vingt requêtes par ressource, avec cent entrées par page au départ. Si une réponse dépasse 2 Mio, la collecte réduit la taille des pages sans sauter d’entrée. Un dépassement du budget est indiqué comme incomplet. Les tags du dépôt permettent de signaler les versions sans notes, sans inventer les numéros intermédiaires.
+Les versions numériques à deux, trois ou quatre composantes, éventuellement préfixées par `v` et accompagnées d'une préversion, sont ordonnées explicitement. Les tags arbitraires comme `latest` ne sont pas ordonnés à l'aveugle. Les préversions intermédiaires sont exclues lorsque la cible est stable. Le catalogue est limité à vingt requêtes par ressource, avec cent entrées par page au départ ; la pagination des publications s'arrête dès qu'une page triée ne contient que des versions antérieures à l'installation. Si une réponse dépasse 2 Mio, la collecte réduit la taille des pages sans sauter d’entrée. Un dépassement du budget est indiqué comme incomplet. Les tags du dépôt permettent de signaler les versions sans notes, sans inventer les numéros intermédiaires. Une adresse d'API GitHub fournie par Argus (`api.github.com/repos/…`) est ramenée à son dépôt.
+
+Aucune collecte n'a lieu lorsque la cible n'est pas plus récente que l'installation. Lorsqu'aucune note n'est publiée, le service affiche « Notes officielles introuvables » et la source est revérifiée chaque jour. Les requêtes anonymes vers GitHub sont limitées à 60 par heure : une limite signalée par `Retry-After` ou `X-RateLimit` suspend toute requête vers cet hôte jusqu'à l'heure de reprise affichée.
 
 La comparaison en cours est contrôlée chaque jour. Un changement de contenu déclenche une nouvelle analyse ; une consultation ne relance pas l'IA. Une panne reporte le traitement et conserve les résultats précédents avec leurs versions couvertes. Les reprises sont espacées d'une heure et les traitements sont bornés à huit minutes avec un bail de dix minutes. Une analyse trop volumineuse reste différée ; les notes déjà collectées restent accessibles.
 
