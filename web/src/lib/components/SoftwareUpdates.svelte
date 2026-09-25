@@ -178,8 +178,10 @@
                 <li class="update-row">
                   <div class="row-main">
                     <div class="identity">
-                      <a href={`/cibles/${service.target_id}`}>{serviceTitle(service)}</a>
-                      {#if service.resource_name && service.resource_name !== service.name}<small class="mono service-id" title={service.name}>{service.name}</small>{/if}
+                      <strong class="service-name"
+                        >{#each serviceTitle(service).split("/") as part, index}{#if index}/<wbr />{/if}{part}{/each}</strong
+                      >
+                      {#if service.resource_name && service.resource_name !== service.name}<a class="resource-link" href={`/cibles/${service.target_id}`} title={service.resource_name}>{service.resource_name}</a>{:else}<a class="resource-link" href={`/cibles/${service.target_id}`}>{t("updates.openResource")}</a>{/if}
                     </div>
                     <div class="versions">
                       <span class="version-pair mono" class:unverified={!service.known}
@@ -256,7 +258,7 @@
     /* Une grille commune garde les colonnes alignées d'une ligne à l'autre,
        y compris lorsqu'une ligne ouverte change le libellé de son bouton. */
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.3fr) max-content;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.1fr) minmax(0, 1.3fr) max-content;
   }
   .update-row,
   .row-main {
@@ -287,19 +289,19 @@
     gap: var(--s1);
     min-width: 0;
   }
-  .identity a {
+  .service-name {
     font-weight: 600;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
-  .service-id {
+  .resource-link {
+    color: var(--muted);
+    font-size: var(--text-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  small,
   .status {
     color: var(--muted);
-    font-size: var(--text-xs);
     overflow-wrap: anywhere;
   }
   .status {

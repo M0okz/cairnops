@@ -12,14 +12,15 @@ test('only the matching current comparison is presented as current', () => {
 });
 test('updates are ordered by group, security mention, level and name', () => {
  const services = [
-  service({id:'current',resource_name:'Alpha',group:'current',situation:'current',level:undefined}),
-  service({id:'patch',resource_name:'Beta',level:'patch'}),
-  service({id:'prerelease',resource_name:'Gamma',group:'review',situation:'prerelease',level:'major'}),
-  service({id:'unverified',resource_name:'Zeta',group:'review',known:false}),
-  service({id:'major',resource_name:'Delta',level:'major'}),
-  service({id:'security',resource_name:'Omega',level:'patch',security_mentioned:true}),
+  service({id:'current',name:'Alpha',group:'current',situation:'current',level:undefined}),
+  service({id:'patch-b',name:'Beta',level:'patch'}),
+  service({id:'patch-a',name:'alpha',level:'patch'}),
+  service({id:'prerelease',name:'Gamma',group:'review',situation:'prerelease',level:'major'}),
+  service({id:'unverified',name:'Zeta',group:'review',known:false}),
+  service({id:'major',name:'Delta',level:'major'}),
+  service({id:'security',name:'Omega',level:'patch',security_mentioned:true}),
  ];
- assert.deepEqual(services.sort(compareServices).map((s)=>s.id),['security','major','patch','unverified','prerelease','current']);
+ assert.deepEqual(services.sort(compareServices).map((s)=>s.id),['security','major','patch-a','patch-b','unverified','prerelease','current']);
 });
 test('only a rate-limited retry names the limited host', () => {
  assert.equal(rateLimitedHost(service({state:'retry',last_error:'rate_limited:api.github.com'})),'api.github.com');

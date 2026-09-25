@@ -105,6 +105,7 @@ export const fr = {
   "updates.summaryFrench": "Synthèse IA en français",
   "updates.oldNotes": "Notes conservées pour une comparaison précédente",
   "updates.group.apply": "À appliquer",
+  "updates.openResource": "Voir la ressource",
   "updates.group.review": "À vérifier",
   "updates.group.current": "À jour",
   "updates.level.major": "Majeure",

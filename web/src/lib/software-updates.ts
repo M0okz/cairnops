@@ -130,9 +130,10 @@ const situationRank: Partial<Record<UpdateSituation, number>> = {
 };
 export const updateGroups: UpdateGroup[] = ["apply", "review", "current"];
 
-/** Le libellé principal d'un service : sa Ressource, puis l'identifiant Argus. */
+/** Le libellé principal d'un service est le logiciel suivi : une même
+ *  Ressource peut porter plusieurs services Argus. */
 export const serviceTitle = (service: SoftwareService) =>
-  service.resource_name || service.name;
+  service.name || service.resource_name;
 
 /** Ordonne un groupe du plus important au moins important : mentions de
  *  sécurité et versions majeures d'abord, versions non vérifiées en tête des
