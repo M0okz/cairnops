@@ -6,7 +6,7 @@ La vue **Mises à jour** et l'onglet homonyme d'une Cible montrent les services 
 
 CairnOps ordonne les versions remontées par Argus (ADR 0049) et range chaque service dans un seul groupe :
 
-- **À appliquer** : la cible est plus récente et au moins aussi stable que l'installation. Le badge indique une version majeure, mineure ou corrective ; « Sécurité » signale une synthèse qui cite un point de sécurité. Seul ce cas ouvre l'Incident « Mise à jour logicielle disponible ». Les mentions de sécurité et les versions majeures passent en tête.
+- **À appliquer** : la cible est plus récente et au moins aussi stable que l'installation. Le badge indique une version majeure, mineure ou corrective ; « Sécurité » signale une synthèse qui cite un point de sécurité. Une mise à jour n'est pas un Incident : seule une mise à jour marquée « Sécurité » ouvre l'Incident « Mise à jour de sécurité disponible » (ADR 0050). Les mentions de sécurité et les versions majeures passent en tête.
 - **À vérifier** : Argus ne relit plus une version (les dernières versions valides restent affichées avec la raison), propose une préversion à une installation stable, remonte une cible antérieure à l'installation, ou fournit des versions impossibles à ordonner. Ces cas indiquent généralement un suivi Argus à corriger.
 - **À jour** : même publication, y compris avec un préfixe `v` ou un identifiant de build, ou version ignorée dans Argus.
 

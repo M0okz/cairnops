@@ -27,6 +27,10 @@ const (
 	SecurityUpdates     Kind = "software.security_updates"
 	RebootRequired      Kind = "system.reboot_required"
 	SoftwareUpdate      Kind = "software.update_available"
+	// SoftwareSecurityUpdate désigne une mise à jour dont les notes officielles
+	// citent un correctif de sécurité. SoftwareUpdate reste lisible pour
+	// l'historique des preuves ouvertes avant cette distinction.
+	SoftwareSecurityUpdate Kind = "software.security_update_available"
 )
 
 // Fact is presentation-only enrichment supplied by a trusted connector adapter.
@@ -51,23 +55,24 @@ type Localized struct {
 }
 
 var titles = map[Kind][2]string{
-	BackupFailure:       {"Échec de sauvegarde", "Backup failure"},
-	BackupFreshness:     {"Sauvegarde trop ancienne", "Outdated backup"},
-	Unavailable:         {"Indisponibilité", "Unavailability"},
-	DiskLatency:         {"Latence disque élevée", "High disk latency"},
-	DiskSpace:           {"Espace disque insuffisant", "Low disk space"},
-	DiskInodes:          {"Peu d’inodes disponibles", "Low free inodes"},
-	CPUUsage:            {"Utilisation CPU élevée", "High CPU utilization"},
-	SystemLoad:          {"Charge système moyenne élevée", "High average system load"},
-	MemoryUsage:         {"Utilisation mémoire élevée", "High memory utilization"},
-	MemoryAvailable:     {"Mémoire disponible insuffisante", "Low available memory"},
-	SwapSpace:           {"Espace swap insuffisant", "Low swap space"},
-	PackageCountChanged: {"Nombre de paquets installés modifié", "Installed package count changed"},
-	CertificateExpiry:   {"Expiration de certificat proche", "Certificate nearing expiry"},
-	CertificateInvalid:  {"Certificat invalide", "Invalid certificate"},
-	SecurityUpdates:     {"Correctifs de sécurité requis", "Security updates required"},
-	RebootRequired:      {"Redémarrage requis", "Restart required"},
-	SoftwareUpdate:      {"Mise à jour logicielle disponible", "Software update available"},
+	BackupFailure:          {"Échec de sauvegarde", "Backup failure"},
+	BackupFreshness:        {"Sauvegarde trop ancienne", "Outdated backup"},
+	Unavailable:            {"Indisponibilité", "Unavailability"},
+	DiskLatency:            {"Latence disque élevée", "High disk latency"},
+	DiskSpace:              {"Espace disque insuffisant", "Low disk space"},
+	DiskInodes:             {"Peu d’inodes disponibles", "Low free inodes"},
+	CPUUsage:               {"Utilisation CPU élevée", "High CPU utilization"},
+	SystemLoad:             {"Charge système moyenne élevée", "High average system load"},
+	MemoryUsage:            {"Utilisation mémoire élevée", "High memory utilization"},
+	MemoryAvailable:        {"Mémoire disponible insuffisante", "Low available memory"},
+	SwapSpace:              {"Espace swap insuffisant", "Low swap space"},
+	PackageCountChanged:    {"Nombre de paquets installés modifié", "Installed package count changed"},
+	CertificateExpiry:      {"Expiration de certificat proche", "Certificate nearing expiry"},
+	CertificateInvalid:     {"Certificat invalide", "Invalid certificate"},
+	SecurityUpdates:        {"Correctifs de sécurité requis", "Security updates required"},
+	RebootRequired:         {"Redémarrage requis", "Restart required"},
+	SoftwareUpdate:         {"Mise à jour logicielle disponible", "Software update available"},
+	SoftwareSecurityUpdate: {"Mise à jour de sécurité disponible", "Security update available"},
 }
 
 func Title(kind Kind, locale string) (string, bool) {
@@ -88,7 +93,7 @@ func (f Fact) Normalize() Fact {
 	if f.Kind != SecurityUpdates || f.Count == nil || *f.Count < 0 {
 		f.Count = nil
 	}
-	if f.Kind != SoftwareUpdate {
+	if !f.Kind.versioned() {
 		f.CurrentVersion, f.AvailableVersion = "", ""
 	} else {
 		f.CurrentVersion, f.AvailableVersion = bounded(f.CurrentVersion), bounded(f.AvailableVersion)
@@ -121,7 +126,7 @@ func Render(f Fact, locale string) Text {
 			}
 		}
 	}
-	if f.Kind == SoftwareUpdate && f.CurrentVersion != "" && f.AvailableVersion != "" {
+	if f.Kind.versioned() && f.CurrentVersion != "" && f.AvailableVersion != "" {
 		description = fmt.Sprintf("Version %s disponible · %s déployée", f.AvailableVersion, f.CurrentVersion)
 		if locale == "en" {
 			description = fmt.Sprintf("Version %s available · %s deployed", f.AvailableVersion, f.CurrentVersion)
@@ -132,6 +137,10 @@ func Render(f Fact, locale string) Text {
 
 func Localize(f Fact) Localized {
 	return Localized{FR: Render(f, "fr"), EN: Render(f, "en")}
+}
+
+func (kind Kind) versioned() bool {
+	return kind == SoftwareUpdate || kind == SoftwareSecurityUpdate
 }
 
 // Common returns only a shared title meaning. Parameters belong to individual

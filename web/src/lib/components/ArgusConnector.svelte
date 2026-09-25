@@ -237,7 +237,7 @@
           {/each}
         </ul>
         {#if selectedPendingCount > 0}
-          <div class="banner warn impact" role="status"><i class="dot warn"></i><div><strong>{plural('argus.incidentsMayOpen', selectedPendingCount)}</strong><p class="muted">{t('argus.notificationsApply')}</p></div></div>
+          <div class="banner impact" role="status"><i class="dot info"></i><div><strong>{plural('argus.pendingUpdates', selectedPendingCount)}</strong><p class="muted">{t('argus.securityIncidentsOnly')}</p></div></div>
         {/if}
         {#if error}<p class="error" role="alert" aria-live="assertive">{error}</p>{/if}
       </div>

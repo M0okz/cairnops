@@ -90,10 +90,10 @@ func TestOtherConnectorPresentationsSurvivePersistence(t *testing.T) {
 					TargetID: target, BindingID: binding, ConditionKey: "security_updates", NatureKey: "security-patches-required", NatureLabel: "Correctifs de sécurité requis", Name: source, Severity: SeverityMajor, Details: map[string]any{"security_updates_count": 3},
 				}}})
 			case "argus":
-				expected = alerttext.SoftwareUpdate
+				expected = alerttext.SoftwareSecurityUpdate
 				description = "Version 2.4.0 available · 2.3.1 deployed"
 				err = store.ReconcileArgus(ctx, ReconcileArgusInput{ConnectorID: connector, ObservedAt: at, ObservedBindings: []string{binding}, Signals: []ArgusSignal{{
-					TargetID: target, BindingID: binding, NatureKey: "software-update-available", NatureLabel: "Mise à jour disponible", Name: source, Severity: SeverityWarning, DeployedVersion: "2.3.1", LatestVersion: "2.4.0",
+					TargetID: target, BindingID: binding, NatureKey: "software-security-update-available", NatureLabel: "Mise à jour de sécurité disponible", Name: source, Severity: SeverityMajor, DeployedVersion: "2.3.1", LatestVersion: "2.4.0",
 				}}})
 			case "uptime_kuma":
 				expected = alerttext.Unavailable

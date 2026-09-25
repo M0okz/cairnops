@@ -14,6 +14,7 @@ import (
 	"github.com/M0okz/cairnops/internal/connectors/zabbix"
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/secretbox"
+	"github.com/M0okz/cairnops/internal/softwareupdates"
 )
 
 type runtimeStore struct {
@@ -150,6 +151,12 @@ func (client argusInspectionClient) Inspect(context.Context, string, argus.Crede
 	return client.inspection, client.err
 }
 
+type releaseSecurity map[string]softwareupdates.SecurityAssessment
+
+func (assessments releaseSecurity) SecurityAssessments(context.Context, []string) (map[string]softwareupdates.SecurityAssessment, error) {
+	return assessments, nil
+}
+
 func TestArgusSynchronizerKeepsValidServicesAndDegradesPartialFailures(t *testing.T) {
 	t.Parallel()
 	box, _ := secretbox.New(bytes.Repeat([]byte{0x7a}, 32))
@@ -175,7 +182,7 @@ func TestArgusSynchronizerKeepsValidServicesAndDegradesPartialFailures(t *testin
 			{ID: "skipped", Name: "Skipped", Active: true, Importable: true, DeployedVersion: "2.0.0", LatestVersion: "2.1.0", Skipped: true, DeploymentState: argus.DeploymentStateSkipped, LatestQueryOK: true, DeployedQueryOK: true},
 			{ID: "broken", Name: "Broken", Active: true, Importable: true, DeployedVersion: "3.0.0", LatestVersion: "3.1.0", Unknown: true, UnknownReason: "latest_version_query_failed", DeploymentState: argus.DeploymentStateUnactioned, DeployedQueryOK: true},
 		},
-	}}, box, "server-one", nil)
+	}}, releaseSecurity{"binding-api": {Installed: "1.2.2", Target: "1.2.3", Status: softwareupdates.SecurityFixes}}, box, "server-one", nil)
 	synchronizer.now = func() time.Time { return time.Date(2026, 8, 29, 10, 0, 0, 0, time.UTC) }
 
 	if err := synchronizer.tick(context.Background()); err != nil {
@@ -205,8 +212,8 @@ func TestArgusSynchronizerKeepsValidServicesAndDegradesPartialFailures(t *testin
 			t.Fatalf("a missing Argus service must keep its last posture details: %#v", observation)
 		}
 	}
-	if len(reconciler.argusInput.Signals) != 1 || reconciler.argusInput.Signals[0].LatestVersion != "1.2.3" || reconciler.argusInput.Signals[0].NatureKey != "software-update-available" {
-		t.Fatalf("expected one active software update signal: %#v", reconciler.argusInput)
+	if len(reconciler.argusInput.Signals) != 1 || reconciler.argusInput.Signals[0].LatestVersion != "1.2.3" || reconciler.argusInput.Signals[0].NatureKey != "software-security-update-available" || reconciler.argusInput.Signals[0].Severity != incidents.SeverityMajor {
+		t.Fatalf("expected one active security update signal: %#v", reconciler.argusInput)
 	}
 	if len(reconciler.argusInput.ObservedBindings) != 2 {
 		t.Fatalf("only valid update and skipped states may resolve incidents: %#v", reconciler.argusInput)
@@ -238,7 +245,7 @@ func TestArgusSynchronizerSignalsOnlyOrderedUpdates(t *testing.T) {
 	reconciler := &incidentReconciler{}
 	synchronizer := NewArgusSynchronizer(store, reconciler, argusInspectionClient{inspection: argus.Inspection{
 		Endpoint: "https://argus.example.net", Version: "0.38.0", Compatibility: "supported", Services: services,
-	}}, box, "server-one", nil)
+	}}, releaseSecurity{"binding-grafana": {Installed: "12.4.9", Target: "13.2.2", Status: softwareupdates.SecurityFixes}}, box, "server-one", nil)
 	if err := synchronizer.tick(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -259,6 +266,71 @@ func TestArgusSynchronizerSignalsOnlyOrderedUpdates(t *testing.T) {
 		if situations[binding] != want {
 			t.Errorf("%s situation = %v, want %s", binding, situations[binding], want)
 		}
+	}
+}
+
+// Une mise à jour disponible n'est pas un problème : seule une faille corrigée,
+// établie par l'analyse des notes de la comparaison observée, ouvre une preuve.
+func TestArgusSynchronizerOpensIncidentsOnlyForSecurityFixes(t *testing.T) {
+	t.Parallel()
+	box, _ := secretbox.New(bytes.Repeat([]byte{0x4d}, 32))
+	credential, _ := json.Marshal(argus.Credentials{})
+	sealed, _ := box.Seal(credential, "connector:argus:https://argus.example.net")
+	services := []argus.Service{
+		{ID: "plain", DeployedVersion: "1.0.0", LatestVersion: "1.1.0"},
+		{ID: "secure", DeployedVersion: "2.0.0", LatestVersion: "2.0.1"},
+		{ID: "analysing", DeployedVersion: "3.0.0", LatestVersion: "3.1.0"},
+		{ID: "stale", DeployedVersion: "4.0.0", LatestVersion: "4.2.0"},
+		{ID: "untracked", DeployedVersion: "5.0.0", LatestVersion: "5.1.0"},
+	}
+	bindings := make([]RuntimeBinding, 0, len(services))
+	for index := range services {
+		services[index].Name, services[index].Active, services[index].Importable = services[index].ID, true, true
+		services[index].LatestQueryOK, services[index].DeployedQueryOK = true, true
+		bindings = append(bindings, RuntimeBinding{ID: "binding-" + services[index].ID, TargetID: "target-" + services[index].ID, ExternalID: services[index].ID})
+	}
+	store := &runtimeStore{connectors: []RuntimeConnector{{ID: "connector-argus", Endpoint: "https://argus.example.net", CredentialSealed: sealed, Bindings: bindings}}}
+	reconciler := &incidentReconciler{}
+	synchronizer := NewArgusSynchronizer(store, reconciler, argusInspectionClient{inspection: argus.Inspection{
+		Endpoint: "https://argus.example.net", Version: "0.38.0", Compatibility: "supported", Services: services,
+	}}, releaseSecurity{
+		"binding-plain":     {Installed: "1.0.0", Target: "1.1.0", Status: softwareupdates.SecurityNotEstablished},
+		"binding-secure":    {Installed: "2.0.0", Target: "2.0.1", Status: softwareupdates.SecurityFixes},
+		"binding-analysing": {Installed: "3.0.0", Target: "3.1.0", Status: softwareupdates.SecurityPending},
+		// Verdict d'une comparaison précédente : il ne vaut pas pour 4.2.0.
+		"binding-stale": {Installed: "4.0.0", Target: "4.1.0", Status: softwareupdates.SecurityFixes},
+	}, box, "server-one", nil)
+	if err := synchronizer.tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(reconciler.argusInput.Signals) != 1 {
+		t.Fatalf("only the security fix may open an incident: %#v", reconciler.argusInput.Signals)
+	}
+	signal := reconciler.argusInput.Signals[0]
+	if signal.BindingID != "binding-secure" || signal.NatureKey != "software-security-update-available" || signal.NatureLabel != "Mise à jour de sécurité disponible" || signal.Severity != incidents.SeverityMajor {
+		t.Fatalf("unexpected security update signal: %#v", signal)
+	}
+	observed := map[string]bool{}
+	for _, binding := range reconciler.argusInput.ObservedBindings {
+		observed[binding] = true
+	}
+	for binding, want := range map[string]bool{"binding-plain": true, "binding-secure": true, "binding-analysing": false, "binding-stale": false, "binding-untracked": true} {
+		if observed[binding] != want {
+			t.Errorf("%s observed = %v, want %v: an analysis in progress must neither open nor resolve", binding, observed[binding], want)
+		}
+	}
+	outcomes := map[string]IntegrationObservation{}
+	for _, observation := range store.observations {
+		outcomes[observation.BindingID] = observation
+	}
+	if got := outcomes["binding-plain"]; got.Outcome != "healthy" || got.Reason != "argus_update_available" {
+		t.Errorf("an ordinary update is information, not a failure: %#v", got)
+	}
+	if got := outcomes["binding-secure"]; got.Outcome != "unhealthy" || got.Reason != "argus_security_update_available" {
+		t.Errorf("a security fix must be reported as needing attention: %#v", got)
+	}
+	if !store.completed || store.failed != "" {
+		t.Fatalf("security qualification does not degrade the connector: %#v", store)
 	}
 }
 
@@ -511,7 +583,7 @@ func TestDiscoveryFailureStopsEveryFamilyBeforeReconciliation(t *testing.T) {
 			case "patchmon":
 				NewPatchMonSynchronizer(store, reconciler, patchMonHostClient{}, box, "worker", nil).syncOne(context.Background(), c)
 			case "argus":
-				NewArgusSynchronizer(store, reconciler, argusInspectionClient{}, box, "worker", nil).syncOne(context.Background(), c)
+				NewArgusSynchronizer(store, reconciler, argusInspectionClient{}, releaseSecurity{}, box, "worker", nil).syncOne(context.Background(), c)
 			}
 			if store.failed == "" || store.completed || len(store.observations) != 0 || reconciler.input.ConnectorID != "" || reconciler.kumaInput.ConnectorID != "" || reconciler.patchMonInput.ConnectorID != "" || reconciler.argusInput.ConnectorID != "" {
 				t.Fatalf("discovery failure changed supervision: %+v", store)

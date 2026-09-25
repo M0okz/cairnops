@@ -154,6 +154,11 @@ export function compareServices(a: SoftwareService, b: SoftwareService) {
   );
 }
 
+/** Ressources portant au moins un logiciel dont une mise à jour est à appliquer.
+ *  Une mise à jour disponible est une information de suivi, pas un Incident. */
+export const updateTargetIds = (services: SoftwareService[]) =>
+  new Set(services.filter((service) => service.group === "apply").map((service) => service.target_id));
+
 /** Hôte d'une limite de débit signalée par le worker (« rate_limited:hôte »). */
 export function rateLimitedHost(service: SoftwareService): string | undefined {
   return service.state === "retry" && service.last_error.startsWith("rate_limited:")

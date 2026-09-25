@@ -16,6 +16,7 @@ func TestFactsRenderWithoutInventingMissingParameters(t *testing.T) {
 		{Fact{Kind: SecurityUpdates}, "en", Text{"Security updates required", ""}},
 		{Fact{Kind: SoftwareUpdate, CurrentVersion: "1.0", AvailableVersion: "2.0"}, "en", Text{"Software update available", "Version 2.0 available · 1.0 deployed"}},
 		{Fact{Kind: SoftwareUpdate, AvailableVersion: "2.0"}, "fr", Text{"Mise à jour logicielle disponible", ""}},
+		{Fact{Kind: SoftwareSecurityUpdate, CurrentVersion: "1.0", AvailableVersion: "1.1"}, "fr", Text{"Mise à jour de sécurité disponible", "Version 1.1 disponible · 1.0 déployée"}},
 		{Fact{Kind: "custom", Resource: "CPU usage high"}, "fr", Text{}},
 	} {
 		if got := Render(tt.fact, tt.locale); got != tt.want {

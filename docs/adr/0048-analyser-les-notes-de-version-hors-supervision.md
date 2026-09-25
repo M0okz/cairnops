@@ -4,6 +4,8 @@ status: accepted
 
 # Analyser les notes de version indépendamment de la supervision
 
+> Ajustement : l'ADR 0050 fait du classement `security` de l'analyse courante la condition d'ouverture de l'Incident « Mise à jour de sécurité disponible ». L'analyse ne produit toujours ni Gravité propre, ni notification directe, ni déploiement.
+
 Le suivi des versions utilise une IA externe configurable pour synthétiser les notes officielles issues de la source publique fournie par Argus ou personnalisée par un Administrateur, car une compilation déterministe ne restitue pas les bénéfices cumulés entre deux versions. Cette analyse documentaire est distincte des Synthèses opérationnelles de l'ADR 0043 : elle ne produit ni Preuve d'Incident, ni Gravité, ni notification et n'exécute aucun déploiement. Argus reste l'autorité sur les versions observées et sur la version cible.
 
 Les notes collectées et les analyses sont persistées avec leur comparaison et leur provenance. Un traitement asynchrone reprend les échecs et refuse de publier un résultat devenu obsolète pendant son calcul ; une indisponibilité du fournisseur IA ne bloque pas Argus. Chaque affirmation générée porte un extrait contrôlé dans les notes collectées, ce qui assure sa traçabilité sans constituer une garantie automatique de justesse de la reformulation.

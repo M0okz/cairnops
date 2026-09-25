@@ -194,3 +194,58 @@ func TestWorkerReusesExactResultAndReanalysesChangedNotes(t *testing.T) {
 		t.Fatal("historical note snapshot was overwritten")
 	}
 }
+
+func TestSecurityAssessmentFollowsTheCurrentComparison(t *testing.T) {
+	s, id, actor := fixture(t)
+	ctx := context.Background()
+	if err := s.Confirm(ctx, id, actor, Source{Kind: "github", URL: "https://github.com/example/project", Software: "Project"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveConfig(ctx, AIConfig{Enabled: true, Endpoint: "https://provider.example/v1", Model: "test", APIKey: "private-key"}); err != nil {
+		t.Fatal(err)
+	}
+	assessment := func() SecurityAssessment {
+		t.Helper()
+		result, err := s.SecurityAssessments(ctx, []string{id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result[id]
+	}
+	if got := assessment(); got.Status != SecurityPending || got.Installed != "2.6.0" || got.Target != "2.9.1" {
+		t.Fatalf("an unanalysed comparison must stay pending: %+v", got)
+	}
+	w := NewWorker(s, slog.Default())
+	w.client = &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method == "POST" {
+			return response(`{"choices":[{"finish_reason":"stop","message":{"content":"{\"overview\":[{\"category\":\"security\",\"text\":\"Correction d'une injection SQL\",\"evidence_id\":\"e1\"}],\"details\":[]}"}}]}`), nil
+		}
+		if strings.HasSuffix(r.URL.Path, "/tags") {
+			return response(`[]`), nil
+		}
+		return response(`[{"tag_name":"2.9.1","body":"Fixed an SQL injection (CVE-2026-0001)."}]`), nil
+	})}
+	if err := w.tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := assessment(); got.Status != SecurityFixes {
+		t.Fatalf("a cited security point must establish a security fix: %+v", got)
+	}
+	// Une nouvelle cible invalide le verdict jusqu'à l'analyse de sa comparaison.
+	if _, err := s.pool.Exec(ctx, `UPDATE cairnops_connector_bindings SET metadata=metadata||'{"latest_version":"2.10.0"}' WHERE id=$1::uuid`, id); err != nil {
+		t.Fatal(err)
+	}
+	if got := assessment(); got.Status != SecurityPending || got.Target != "2.10.0" {
+		t.Fatalf("a new comparison must wait for its own analysis: %+v", got)
+	}
+	// Une installation à jour ne laisse aucun correctif en attente.
+	if _, err := s.pool.Exec(ctx, `UPDATE cairnops_connector_bindings SET metadata=metadata||'{"deployed_version":"2.10.0"}' WHERE id=$1::uuid`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := assessment(); got.Status != SecurityNotEstablished {
+		t.Fatalf("an up-to-date service has no pending security fix: %+v", got)
+	}
+}

@@ -25,6 +25,7 @@ ni de la Nature, ni du regroupement, ni des seuils, ni de la Gravité, ni des en
 | `software.security_updates` | Correctifs de sécurité requis | Security updates required |
 | `system.reboot_required` | Redémarrage requis | Restart required |
 | `software.update_available` | Mise à jour logicielle disponible | Software update available |
+| `software.security_update_available` | Mise à jour de sécurité disponible | Security update available |
 | `backup.failure` | Échec de sauvegarde | Backup failure |
 | `backup.freshness` | Sauvegarde trop ancienne | Outdated backup |
 
@@ -91,7 +92,7 @@ identiques aux extraits vérifiés gardent leur texte original.
 | Proxmox VE | Ressource attendue démarrée, constatée indisponible | Indisponibilité |
 | Contrôles natifs | Verdict négatif déjà converti en Preuve | Indisponibilité |
 | PatchMon | Condition `security_updates` ou `reboot_required` | Correctifs de sécurité / redémarrage requis |
-| Argus | Différence de version déjà qualifiée par l’adapter | Mise à jour logicielle disponible |
+| Argus | Mise à jour dont les notes officielles citent un correctif de sécurité | Mise à jour de sécurité disponible |
 | Webhook générique | Aucune convention standard de sens | Message original |
 
 Ces mappings s’appliquent aux contrats déjà gérés par les adapters. Ils

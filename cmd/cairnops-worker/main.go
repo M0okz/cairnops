@@ -74,7 +74,8 @@ func run(logger *slog.Logger) error {
 	connectorSync := connectors.NewSynchronizer(connectorStore, incidentStore, zabbixClient, secrets, runnerOwner, logger)
 	uptimeKumaSync := connectors.NewUptimeKumaSynchronizer(connectorStore, incidentStore, uptimeKumaClient, secrets, runnerOwner, logger)
 	patchMonSync := connectors.NewPatchMonSynchronizer(connectorStore, incidentStore, patchMonClient, secrets, runnerOwner, logger)
-	argusSync := connectors.NewArgusSynchronizer(connectorStore, incidentStore, argusClient, secrets, runnerOwner, logger)
+	softwareStore := softwareupdates.NewStore(pool, secrets)
+	argusSync := connectors.NewArgusSynchronizer(connectorStore, incidentStore, argusClient, softwareStore, secrets, runnerOwner, logger)
 	proxmoxSync := connectors.NewProxmoxSynchronizer(connectorStore, incidentStore, proxmoxClient, secrets, runnerOwner, logger)
 	indicatorCollector := indicators.NewCollector(
 		indicators.NewStore(pool), zabbixClient, uptimeKumaClient, patchMonClient, secrets, logger,
@@ -115,7 +116,7 @@ func run(logger *slog.Logger) error {
 			reconciliationDetector, reconciliationProcessor,
 		).WithSupervisedRunners(
 			connectorSync, uptimeKumaSync, patchMonSync, argusSync, proxmoxSync,
-			indicatorCollector, incidentRuntime, softwareupdates.NewWorker(softwareupdates.NewStore(pool, secrets), logger),
+			indicatorCollector, incidentRuntime, softwareupdates.NewWorker(softwareStore, logger),
 		)
 		errCh <- runtime.Run(ctx)
 	}()

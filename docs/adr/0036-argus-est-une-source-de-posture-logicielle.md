@@ -48,6 +48,10 @@ conserve l'ancienne Source dans son histoire.
 > Ajustement : l'ADR 0049 remplace la comparaison par égalité de chaînes.
 > Seule une cible plus récente et au moins aussi stable que l'installation
 > ouvre désormais un Incident.
+>
+> Ajustement : l'ADR 0050 retire l'Incident « Mise à jour logicielle
+> disponible ». Seule une mise à jour dont les notes officielles citent un
+> correctif de sécurité ouvre l'Incident « Mise à jour de sécurité disponible ».
 
 La Source Argus porte `measures_availability: false`. Ses Observations gardent
 les versions déployée et disponible, `approved`, `skipped`, `last_checked`, les

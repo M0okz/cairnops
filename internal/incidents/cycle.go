@@ -131,7 +131,7 @@ func (store *PostgresStore) ReconcileArgus(ctx context.Context, input ReconcileA
 		metadata["deployed_version"] = signal.DeployedVersion
 		metadata["latest_version"] = signal.LatestVersion
 		facts = append(facts, EvidenceFact{
-			Alert:  alerttext.Fact{Kind: alerttext.SoftwareUpdate, CurrentVersion: signal.DeployedVersion, AvailableVersion: signal.LatestVersion},
+			Alert:  alerttext.Fact{Kind: alerttext.SoftwareSecurityUpdate, CurrentVersion: signal.DeployedVersion, AvailableVersion: signal.LatestVersion},
 			Origin: "argus", ConnectorID: input.ConnectorID,
 			BindingID: signal.BindingID, IdentityScope: signal.BindingID,
 			IdentityKey: "software_update", TargetID: signal.TargetID,

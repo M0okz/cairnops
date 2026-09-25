@@ -14,9 +14,9 @@
   import { inWindow, latency, ratio, severityLabel, severityTone, since, stateLabel, stateTones } from '$lib/format';
   import { i18n, plural, t } from '$lib/i18n.svelte';
   import { formatIndicator } from '$lib/indicator-format';
-  import { resourceCategories, resourceCategoryFromParam, resourceProblems, problemText, problemOrigin, isVersionNotice, fresh } from '$lib/resources';
+  import { resourceCategories, resourceCategoryFromParam, resourceProblems, problemText, problemOrigin, fresh } from '$lib/resources';
   import { api, type ResourceCategory, type SourceMeasures } from '$lib/api';
-  import type { SoftwareService } from '$lib/software-updates';
+  import { updateTargetIds, type SoftwareService } from '$lib/software-updates';
 
   let filter = $state('');
   let addOpen = $state(false);
@@ -52,11 +52,12 @@
     const names: Record<string, string> = { uptime_kuma: 'Uptime Kuma', zabbix: 'Zabbix', argus: 'Argus', proxmox: 'Proxmox VE', patchmon: 'PatchMon', generic_webhook: 'Webhook' };
     return source.origin === 'native' ? `CairnOps · ${source.kind.toUpperCase()}` : names[source.kind] ?? source.kind;
   }
+  const updateTargets = $derived(updateTargetIds(software));
   const allRows = $derived(session.targets.map((target) => {
     const measured = session.measuresFor(target.id);
     const problems = resourceProblems(target.id, session.incidents);
     const versions = software.filter((service) => service.target_id === target.id);
-    const update = session.incidentsFor(target.id).some((incident) => isVersionNotice(incident) && incident.impacts.some((impact) => impact.target_id === target.id && impact.status === 'active'));
+    const update = updateTargets.has(target.id);
     return { target, measured, problems, versions, update, state: session.targetState(target), divergent: session.hasDivergence(target), measure: inWindow(measured, '24h') };
   }));
   const rows = $derived(allRows.filter((row) => {

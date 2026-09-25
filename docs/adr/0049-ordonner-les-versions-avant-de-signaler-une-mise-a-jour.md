@@ -4,6 +4,8 @@ status: accepted
 
 # Ordonner les versions avant de signaler une mise à jour
 
+> Ajustement : depuis l'ADR 0050, une mise à jour (`update`) n'ouvre une Preuve que si ses notes officielles citent un correctif de sécurité.
+
 L'ADR 0036 ouvrait un Incident dès que la version disponible remontée par Argus différait de la version déployée. En production, cette égalité de chaînes signalait comme mises à jour une préversion proposée à une installation stable (`11.6.0` → `12.0.0-rc1`), une cible en retard sur l'installation (`0.1.147` → `0.1.146`) et un identifiant de build (`2024.10.22` → `2024.10.22-7ca5933`). À l'inverse, un échec de lecture de la version installée masquait les dernières versions connues, y compris une vraie mise à jour.
 
 Argus reste l'autorité sur les valeurs observées et sur la version cible. CairnOps établit désormais leur ordre selon la précédence SemVer, étendue à une à quatre composantes numériques ; un suffixe formé d'un identifiant de commit désigne un build et non une préversion. Chaque comparaison reçoit une situation unique, partagée par le Connecteur, le suivi des notes et les interfaces :

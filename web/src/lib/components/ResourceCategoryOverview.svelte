@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Icon, { type IconName } from './Icon.svelte';
-  import type { ResourceCategory } from '$lib/api';
+  import { api, type ResourceCategory } from '$lib/api';
   import { session } from '$lib/session.svelte';
   import { dashboardCategoryHealth, type CategoryHealth, type HealthState } from '$lib/dashboard';
   import { isVersionNotice, resourceCategories } from '$lib/resources';
+  import { updateTargetIds, type SoftwareService } from '$lib/software-updates';
   import { stateTones } from '$lib/format';
   import { plural, t } from '$lib/i18n.svelte';
 
@@ -15,8 +17,24 @@
   };
   const problemTargets = $derived(new Set(session.incidents.filter((incident) => incident.status === 'active' && !isVersionNotice(incident))
     .flatMap((incident) => incident.impacts.filter((impact) => impact.status === 'active').map((impact) => impact.target_id))));
-  const updateTargets = $derived(new Set(session.incidents.filter((incident) => incident.status === 'active' && isVersionNotice(incident))
-    .flatMap((incident) => incident.impacts.filter((impact) => impact.status === 'active').map((impact) => impact.target_id))));
+  // Les mises à jour disponibles viennent du suivi des versions : elles
+  // n'ouvrent plus d'Incident, sauf correctif de sécurité.
+  let software = $state<SoftwareService[]>([]);
+  const updateTargets = $derived(updateTargetIds(software));
+  onMount(() => {
+    let disposed = false;
+    let loading = false;
+    async function loadVersions() {
+      if (loading) return;
+      loading = true;
+      try { const result = await api<{services: SoftwareService[]}>('/api/v1/software-updates'); if (!disposed) software = result.services ?? []; }
+      catch { if (!disposed) software = []; }
+      finally { loading = false; }
+    }
+    void loadVersions();
+    const timer = setInterval(loadVersions, 60_000);
+    return () => { disposed = true; clearInterval(timer); };
+  });
   const groups = $derived(dashboardCategoryHealth(session.targets.map((target) => ({
     category: target.category,
     state: session.targetState(target),

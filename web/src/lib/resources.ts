@@ -5,6 +5,9 @@ export function resourceCategoryFromParam(value: string | null): ResourceCategor
   return resourceCategories.find((category) => category === value) ?? 'all';
 }
 const weights = { critical: 4, major: 3, warning: 2, information: 1 };
+// Nature des anciennes preuves Argus ouvertes pour toute mise à jour. Elles ne
+// sont plus produites, mais une preuve restée active ne doit pas passer pour un
+// problème. Une mise à jour de sécurité, elle, reste un problème à traiter.
 export const isVersionNotice = (incident: Incident) => incident.nature_key === 'software-update-available';
 export function resourceProblems(targetId: string, incidents: Incident[]) {
   return incidents.filter((incident) => incident.status === 'active' && !isVersionNotice(incident)).flatMap((incident) =>
