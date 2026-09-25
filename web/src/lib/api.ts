@@ -881,6 +881,9 @@ export type InboxEntry = {
   extended: boolean;
   occurred_at: string;
   read_at: string | null;
+  /* Absents avant cette version du serveur. */
+  incident_status?: 'active' | 'resolved';
+  acknowledged_at?: string | null;
 };
 
 export type RealtimeMessage = {

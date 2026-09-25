@@ -1719,6 +1719,9 @@ export const en: Record<MessageKey, string> = {
   'inbox.resolved': '{nature} · resolved',
   'inbox.empty': 'Nothing received.',
   'inbox.emptyHint': 'Openings and resolutions will land here.',
+  'inbox.new': 'New: ',
+  'inbox.state.acknowledged': 'acknowledged',
+  'inbox.state.resolved': 'resolved',
   'notifications.inAppName': 'In-app notifications',
   'notifications.inAppEndpoint': 'inside this interface',
   'connectors.contract.inApp':

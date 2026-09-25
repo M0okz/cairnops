@@ -575,7 +575,15 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO cairnops_push_outbox (device_id, inbox_id, revision, presentation, next_attempt_at, attempts)
 			SELECT device.id, inbox.id, $2,
-			       CASE WHEN inbox.event_kind = 'resolved' THEN 'silent'
+			       -- La Résolution remplace l'ouverture affichée sur l'appareil qui
+			       -- l'a reçue. Elle n'est donc visible que là : un appareil qui
+			       -- n'a jamais montré l'ouverture n'apprend pas une fin sans début.
+			       CASE WHEN inbox.event_kind = 'resolved' THEN
+			                CASE WHEN EXISTS (
+			                    SELECT 1 FROM cairnops_push_outbox opened
+			                    WHERE opened.device_id = device.id AND opened.inbox_id = inbox.id
+			                      AND opened.status = 'delivered' AND opened.presentation = 'alert'
+			                ) THEN 'alert' ELSE 'silent' END
 			            WHEN $3 = 'alert' OR pending.alert THEN 'alert' ELSE 'silent' END,
 			       coalesce(pending.next_attempt_at, now()), coalesce(pending.attempts, 0)
 			FROM cairnops_notification_inbox inbox

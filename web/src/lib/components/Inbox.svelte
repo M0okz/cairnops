@@ -11,7 +11,9 @@
 
   import Icon from './Icon.svelte';
   import { incidentHref } from '$lib/incident-detail';
+  import { inboxEntryState, unreadEntryIds, type InboxEntryState } from '$lib/inbox';
   import { session } from '$lib/session.svelte';
+  import type { IncidentSeverity } from '$lib/api';
   import { natureLabel, severityTone, since, stamp } from '$lib/format';
   import { i18n, plural, t } from '$lib/i18n.svelte';
 
@@ -20,6 +22,7 @@
   let triggerElement = $state<HTMLButtonElement | null>(null);
   let clearing = $state(false);
   let status = $state('');
+  let freshIds = $state<Set<number>>(new Set());
 
   /* Le panneau se referme sur Échap et sur tout clic à l'extérieur, comme le
    * menu du compte. */
@@ -46,7 +49,9 @@
 
   function toggle() {
     open = !open;
-    if (open && session.unread > 0) void session.markInboxRead();
+    if (!open) return;
+    freshIds = unreadEntryIds(session.inbox);
+    if (session.unread > 0) void session.markInboxRead();
   }
 
   async function clearInbox() {
@@ -61,6 +66,27 @@
   /* Au-delà d'une centaine, le compte exact n'aide plus personne à décider. */
   const badge = $derived(session.unread > 99 ? '99+' : String(session.unread));
   const entryHref = (entry: { incident_id: string }) => incidentHref(entry.incident_id);
+
+  /* La pastille suit l'état actuel de l'Incident : une ouverture acquittée
+   * passe au neutre et une ouverture déjà résolue au vert. */
+  function entryTone(state: InboxEntryState, severity: IncidentSeverity): string {
+    if (state === 'resolved') return 'ok';
+    if (state === 'acknowledged') return 'idle';
+    return severityTone(severity);
+  }
+
+  function entryDetail(entry: (typeof session.inbox)[number], state: InboxEntryState): string {
+    const received =
+      entry.summary?.[i18n.locale].body ??
+      (entry.event_kind === 'resolved'
+        ? t('inbox.resolved', { nature: natureLabel(entry) })
+        : t('inbox.opened', { nature: natureLabel(entry) }));
+    /* Une Résolution reçue le dit déjà : seul l'état survenu après la
+     * réception s'ajoute au texte. */
+    if (state === 'acknowledged') return `${received} · ${t('inbox.state.acknowledged')}`;
+    if (state === 'resolved' && entry.event_kind !== 'resolved') return `${received} · ${t('inbox.state.resolved')}`;
+    return received;
+  }
 </script>
 
 <div class="inbox" bind:this={anchor}>
@@ -97,22 +123,19 @@
 
       <div class="entries">
         {#each session.inbox as entry (entry.id)}
+          {@const state = inboxEntryState(entry)}
+          {@const fresh = !entry.read_at || freshIds.has(entry.id)}
           <a
             class="entry"
-            class:fresh={!entry.read_at}
+            class:fresh
             href={entryHref(entry)}
             onclick={() => (open = false)}
           >
-            <i
-              class="dot {entry.event_kind === 'resolved' ? 'ok' : severityTone(entry.severity)}"
-            ></i>
+            <i class="dot {entryTone(state, entry.severity)}"></i>
             <span class="what">
+              {#if fresh}<span class="visually-hidden">{t('inbox.new')}</span>{/if}
               <strong>{entry.summary?.[i18n.locale].title ?? entry.target_name}</strong>
-              <small class="faint">
-                {entry.summary?.[i18n.locale].body ?? (entry.event_kind === 'resolved'
-                  ? t('inbox.resolved', { nature: natureLabel(entry) })
-                  : t('inbox.opened', { nature: natureLabel(entry) }))}
-              </small>
+              <small class="faint">{entryDetail(entry, state)}</small>
             </span>
             <span class="when num faint" title={stamp(entry.occurred_at)}>
               {since(entry.occurred_at)}

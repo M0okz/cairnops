@@ -26,6 +26,8 @@ type Message struct {
 	MaxAffected       int          `json:"max_affected_targets,omitempty"`
 	PropagationStatus string       `json:"propagation_status,omitempty"`
 	Extended          bool         `json:"extended,omitempty"`
+	Acknowledged      bool         `json:"acknowledged,omitempty"`
+	UnreadCount       int          `json:"unread_count"`
 	OccurredAt        time.Time    `json:"occurred_at"`
 	InstanceURL       string       `json:"instance_url"`
 	Presentation      Presentation `json:"presentation"`
@@ -39,6 +41,7 @@ func messageFor(delivery Delivery, publicURL string) Message {
 		Severity:         delivery.Severity, ImpactCount: delivery.ImpactCount,
 		AffectedTargets: delivery.AffectedTargets, MaxAffected: delivery.MaxAffected,
 		PropagationStatus: delivery.PropagationStatus, Extended: delivery.Extended,
+		Acknowledged: delivery.Acknowledged, UnreadCount: delivery.UnreadCount,
 		OccurredAt:   delivery.OccurredAt,
 		InstanceURL:  strings.TrimSuffix(publicURL, "/"),
 		Presentation: presentationFor(delivery),

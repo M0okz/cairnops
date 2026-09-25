@@ -16,7 +16,10 @@ Pour chaque notification, l'instance :
 
 L'enveloppe transporte la clé publique éphémère, le nonce et le texte chiffré.
 Le JSON déchiffré contient `version`, `event_kind`, `incident_id`, `severity`,
-`occurred_at`, `instance_url` et `presentation`. La présentation porte seulement
+`occurred_at`, `instance_url`, `unread_count` et `presentation`, ainsi que
+`acknowledged` lorsque l'Incident actif est acquitté. `unread_count` est le
+nombre d'entrées non lues de la boîte du destinataire au moment de l'envoi ; le
+compagnon s'en sert comme pastille. La présentation porte seulement
 `title` et `body` ; son niveau de détail dépend du mode `complete`, `discreet` ou
 `masked` enregistré pour l'appareil.
 
@@ -32,6 +35,10 @@ opaque indiqué par l'instance.
 Une priorité `high` produit une alerte visible. Une priorité `normal` reste une
 mise à jour d'état silencieuse : sur APNs, le Relais emploie une notification
 d'arrière-plan sans `alert` ni `sound`. Les révisions ordinaires d'un Incident et
-les Résolutions utilisent cette voie ; seules l'ouverture, une hausse de
-Gravité encore jamais notifiée ou la première Propagation étendue interrompent
-l'utilisateur.
+les acquittements utilisent cette voie ; l'ouverture, une hausse de Gravité
+encore jamais notifiée ou la première Propagation étendue interrompent
+l'utilisateur. Une Résolution est visible sur chaque appareil qui a reçu
+l'ouverture en alerte, afin de la remplacer par le même identifiant de
+regroupement ; le compagnon décide ensuite, selon son réglage de son de
+rétablissement, si elle sonne ou s'ajoute discrètement
+([ADR 0051](../adr/0051-remplacer-l-ouverture-par-sa-resolution-sur-l-appareil.md)).

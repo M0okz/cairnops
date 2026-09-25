@@ -37,6 +37,8 @@ type Delivery struct {
 	PropagationStatus   string
 	Extended            bool
 	OccurredAt          time.Time
+	Acknowledged        bool
+	UnreadCount         int
 }
 
 type DeliveryStore interface {
@@ -84,7 +86,11 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		       inbox.target_name, incident.nature_key, incident.nature_scope, inbox.nature_label, inbox.alert_kind, inbox.severity,
 		       inbox.impact_count, inbox.affected_target_count,
 		       inbox.max_affected_targets, inbox.propagation_status,
-		       inbox.extended, inbox.occurred_at
+		       inbox.extended, inbox.occurred_at,
+		       incident.status = 'active' AND incident.acknowledged_at IS NOT NULL,
+		       (SELECT count(*)::integer FROM cairnops_notification_inbox unread
+		        WHERE unread.user_id = device.user_id
+		          AND unread.read_at IS NULL AND unread.dismissed_at IS NULL)
 		FROM claimed
 		JOIN cairnops_devices device ON device.id = claimed.device_id
 		JOIN cairnops_notification_inbox inbox ON inbox.id = claimed.inbox_id
@@ -97,7 +103,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		&delivery.PresentationMode, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureScope, &delivery.NatureLabel, &delivery.AlertKind,
 		&delivery.Severity, &delivery.ImpactCount, &delivery.AffectedTargets,
 		&delivery.MaxAffected, &delivery.PropagationStatus, &delivery.Extended,
-		&delivery.OccurredAt,
+		&delivery.OccurredAt, &delivery.Acknowledged, &delivery.UnreadCount,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Delivery{}, ErrNoDelivery

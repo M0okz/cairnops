@@ -210,3 +210,67 @@ func TestIntegratedResolutionUpdatesStateWithoutAlertingAgain(t *testing.T) {
 		t.Fatalf("resolution scheduled a visible device push: %s", presentation)
 	}
 }
+func TestDisplayedOpeningIsReplacedByItsResolutionOnTheSameDevice(t *testing.T) {
+	ctx := context.Background()
+	pool := testsupport.Pool(t)
+	user := seedAccount(t, pool, "operator")
+	_, incidentID := seedActiveIncident(t, pool, "major")
+	if _, err := pool.Exec(ctx, `INSERT INTO cairnops_devices (user_id,name,platform,encryption_public_key,push_recipient_sealed,token_digest)
+		VALUES ($1::uuid,'Test phone','ios',$2,'sealed-recipient-with-sufficient-length',$3)`, user, curve25519.Basepoint, make([]byte, 32)); err != nil {
+		t.Fatal(err)
+	}
+	store := immediateNotificationStore(pool)
+	pushes := push.NewPostgresStore(pool)
+	claimPush := func(wantKind, wantPresentation string) push.Delivery {
+		t.Helper()
+		delivery, err := pushes.Claim(ctx, "push-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if delivery.EventKind != wantKind || delivery.PresentationMode != wantPresentation {
+			t.Fatalf("unexpected push: got %s/%s, want %s/%s", delivery.EventKind, delivery.PresentationMode, wantKind, wantPresentation)
+		}
+		if err := pushes.Complete(ctx, delivery.ID, "push-test"); err != nil {
+			t.Fatal(err)
+		}
+		return delivery
+	}
+
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	claimAndDeliver(t, ctx, store, "firing", "alert")
+	opening := claimPush("firing", "alert")
+	if opening.UnreadCount != 1 || opening.Acknowledged {
+		t.Fatalf("opening must carry the unread count and no acknowledgement: %#v", opening)
+	}
+
+	if _, err := pool.Exec(ctx, `UPDATE cairnops_incidents SET acknowledged_at = now(), revision = revision + 1 WHERE id = $1::uuid`, incidentID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	claimAndDeliver(t, ctx, store, "incident_update", "silent")
+	acknowledged := claimPush("firing", "silent")
+	if !acknowledged.Acknowledged {
+		t.Fatalf("silent revision lost the acknowledgement: %#v", acknowledged)
+	}
+	inbox, err := store.Inbox(ctx, user, notifications.InboxLimit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inbox.Entries) != 1 || inbox.Entries[0].AcknowledgedAt == nil || inbox.Entries[0].IncidentStatus != "active" {
+		t.Fatalf("inbox must expose the current incident state: %#v", inbox.Entries)
+	}
+
+	resolveSeedIncident(t, pool, incidentID)
+	if err := store.Schedule(ctx); err != nil {
+		t.Fatal(err)
+	}
+	claimAndDeliver(t, ctx, store, "incident_update", "silent")
+	resolution := claimPush("resolved", "alert")
+	if resolution.Acknowledged {
+		t.Fatalf("a resolved incident is no longer reported as acknowledged: %#v", resolution)
+	}
+}

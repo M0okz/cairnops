@@ -37,6 +37,8 @@ type InboxEntry struct {
 	Extended            bool                `json:"extended"`
 	OccurredAt          time.Time           `json:"occurred_at"`
 	ReadAt              *time.Time          `json:"read_at"`
+	IncidentStatus      string              `json:"incident_status"`
+	AcknowledgedAt      *time.Time          `json:"acknowledged_at"`
 	Summary             synthesis.Localized `json:"summary"`
 }
 
@@ -62,6 +64,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		       inbox.affected_target_count, inbox.max_affected_targets,
 		       inbox.propagation_status, inbox.extended,
 		       inbox.occurred_at, inbox.read_at,
+		       incident.status, incident.acknowledged_at,
 		       CASE WHEN inbox.event_kind = 'resolved' AND inbox.max_affected_targets = 1
 		                 AND inbox.target_id IS NULL
 		                 AND inbox.target_name = '1 Cibles affectées au maximum'
@@ -94,7 +97,8 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 			&entry.TargetName, &entry.NatureKey, &entry.NatureScope, &entry.NatureLabel, &entry.AlertKind, &entry.Severity,
 			&entry.ImpactCount, &entry.AffectedTargetCount,
 			&entry.MaxAffectedTargets, &entry.PropagationStatus, &entry.Extended,
-			&entry.OccurredAt, &entry.ReadAt, &summaryTargetName,
+			&entry.OccurredAt, &entry.ReadAt, &entry.IncidentStatus, &entry.AcknowledgedAt,
+			&summaryTargetName,
 		); err != nil {
 			return Inbox{}, fmt.Errorf("scan notification inbox: %w", err)
 		}

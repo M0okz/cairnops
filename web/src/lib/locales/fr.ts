@@ -1731,6 +1731,9 @@ export const fr = {
   'inbox.resolved': '{nature} · résolu',
   'inbox.empty': 'Rien reçu.',
   'inbox.emptyHint': 'Les ouvertures et les résolutions arriveront ici.',
+  'inbox.new': 'Nouveau : ',
+  'inbox.state.acknowledged': 'acquitté',
+  'inbox.state.resolved': 'résolu',
   'notifications.inAppName': 'Notifications intégrées',
   'notifications.inAppEndpoint': 'dans cette interface',
   'connectors.contract.inApp':
