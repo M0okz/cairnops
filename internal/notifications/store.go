@@ -2,12 +2,14 @@ package notifications
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/M0okz/cairnops/internal/incidents"
+	"github.com/M0okz/cairnops/internal/synthesis"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -367,6 +369,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 
 func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Delivery, error) {
 	var delivery Delivery
+	var contextJSON []byte
 	err := store.pool.QueryRow(ctx, `
 		WITH candidate AS (
 		    SELECT delivery.id
@@ -392,16 +395,67 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		       claimed.severity, claimed.impact_count,
 		       claimed.affected_target_count, claimed.max_affected_targets,
 		       claimed.propagation_status, claimed.extended, claimed.opened_at,
-		       claimed.resolved_at, channel.credential_sealed
+		       claimed.resolved_at, channel.credential_sealed,
+		       jsonb_strip_nulls(jsonb_build_object(
+		           'sources', evidence_context.sources,
+		           'fact', evidence_context.fact,
+		           'target_names', impact_context.names,
+		           'previous_severity', CASE
+		               WHEN claimed.presentation = 'alert' AND claimed.resolved_at IS NULL
+		                AND cairnops_severity_rank(claimed.severity) > cairnops_severity_rank(previous_alert.severity)
+		               THEN previous_alert.severity END,
+		           'duration_seconds', CASE WHEN claimed.resolved_at IS NOT NULL
+		               THEN greatest(floor(extract(epoch FROM claimed.resolved_at - claimed.opened_at)), 0)::bigint END
+		       ))
 		FROM claimed JOIN cairnops_notification_channels channel ON channel.id = claimed.channel_id
 		JOIN cairnops_incidents incident ON incident.id = claimed.incident_id
+		-- Les Preuves actives non invalidées décrivent l'Incident en cours ; une
+		-- Résolution relit toutes celles de son cycle. Un fait n'est repris que
+		-- s'il est identique sur chacune, jamais celui d'un membre arbitraire.
+		LEFT JOIN LATERAL (
+		    SELECT to_jsonb(array_agg(DISTINCT source.label ORDER BY source.label)) AS sources,
+		           CASE WHEN count(*) > 0 AND count(DISTINCT source.alert_facts) = 1
+		                     AND bool_and(source.alert_facts <> '{}'::jsonb)
+		                THEN (array_agg(source.alert_facts))[1] END AS fact
+		    FROM (
+		        SELECT evidence.alert_facts,
+		               coalesce(nullif(btrim(connector.name), ''), CASE evidence.origin
+		                   WHEN 'zabbix' THEN 'Zabbix' WHEN 'uptime_kuma' THEN 'Uptime Kuma'
+		                   WHEN 'patchmon' THEN 'PatchMon' WHEN 'argus' THEN 'Argus'
+		                   WHEN 'proxmox' THEN 'Proxmox VE' WHEN 'webhook' THEN 'Webhook'
+		                   ELSE 'CairnOps' END) AS label
+		        FROM cairnops_incident_evidence evidence
+		        LEFT JOIN cairnops_connectors connector ON connector.id = evidence.connector_id
+		        WHERE evidence.incident_id = claimed.incident_id AND evidence.invalidated_at IS NULL
+		          AND (evidence.active OR claimed.resolved_at IS NOT NULL OR NOT EXISTS (
+		              SELECT 1 FROM cairnops_incident_evidence current
+		              WHERE current.incident_id = claimed.incident_id
+		                AND current.active AND current.invalidated_at IS NULL))
+		    ) source
+		) evidence_context ON true
+		LEFT JOIN LATERAL (
+		    SELECT to_jsonb((array_agg(target.name ORDER BY impact.opened_at, impact.id))[1:3]) AS names
+		    FROM cairnops_incident_impacts impact
+		    JOIN cairnops_targets target ON target.id = impact.target_id
+		    WHERE impact.incident_id = claimed.incident_id
+		      AND (claimed.resolved_at IS NOT NULL OR impact.status = 'active')
+		) impact_context ON true
+		-- Même référence que la décision d'alerte : la plus forte Gravité déjà
+		-- livrée en alerte sur ce Canal.
+		LEFT JOIN LATERAL (
+		    SELECT previous.severity FROM cairnops_notification_outbox previous
+		    WHERE previous.incident_id = claimed.incident_id
+		      AND previous.channel_id = claimed.channel_id AND previous.id <> claimed.id
+		      AND previous.status = 'delivered' AND previous.presentation = 'alert'
+		    ORDER BY cairnops_severity_rank(previous.severity) DESC LIMIT 1
+		) previous_alert ON true
 	`, strings.TrimSpace(workerID)).Scan(
 		&delivery.ID, &delivery.IncidentID, &delivery.IncidentRevision,
 		&delivery.ChannelID, &delivery.ChannelKind, &delivery.EventKind,
 		&delivery.Presentation, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureScope, &delivery.NatureLabel, &delivery.AlertKind,
 		&delivery.Severity, &delivery.ImpactCount, &delivery.AffectedTargets,
 		&delivery.MaxAffected, &delivery.PropagationStatus, &delivery.Extended,
-		&delivery.OpenedAt, &delivery.ResolvedAt, &delivery.CredentialSealed,
+		&delivery.OpenedAt, &delivery.ResolvedAt, &delivery.CredentialSealed, &contextJSON,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Delivery{}, ErrNoDelivery
@@ -409,6 +463,7 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 	if err != nil {
 		return Delivery{}, fmt.Errorf("claim notification delivery: %w", err)
 	}
+	delivery.Context = decodeContext(contextJSON)
 	return delivery, nil
 }
 
@@ -469,6 +524,10 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 	if presentation == "" {
 		presentation = "alert"
 	}
+	contextJSON, err := json.Marshal(delivery.Context)
+	if err != nil {
+		return 0, fmt.Errorf("encode notification context: %w", err)
+	}
 	var affected int64
 	if delivery.EventKind == "firing" {
 		command, err := tx.Exec(ctx, `
@@ -476,14 +535,14 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 				user_id, incident_id, target_id, revision, event_kind,
 				target_name, nature_label, alert_kind, severity, occurred_at,
 				impact_count, affected_target_count, max_affected_targets,
-				propagation_status, extended
+				propagation_status, extended, context
 			)
 			SELECT users.id, $1::uuid,
 			       CASE WHEN $8 = 1 THEN (
 			           SELECT target_id FROM cairnops_incident_impacts
 			           WHERE incident_id = $1::uuid ORDER BY opened_at, id LIMIT 1
 			       ) ELSE NULL END,
-			       $2, 'firing', $3, $4, $12, $5, $6, $7, $8, $9, $10, $11
+			       $2, 'firing', $3, $4, $12, $5, $6, $7, $8, $9, $10, $11, $13::jsonb
 			FROM cairnops_users users
 			WHERE users.deactivated_at IS NULL AND users.external_suspended_at IS NULL
 			ON CONFLICT (user_id, incident_id) DO UPDATE SET
@@ -494,11 +553,11 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 				affected_target_count = EXCLUDED.affected_target_count,
 				max_affected_targets = EXCLUDED.max_affected_targets,
 				propagation_status = EXCLUDED.propagation_status,
-				extended = EXCLUDED.extended
+				extended = EXCLUDED.extended, context = EXCLUDED.context
 		`, delivery.IncidentID, delivery.IncidentRevision, delivery.TargetName,
 			delivery.NatureLabel, string(delivery.Severity), delivery.OpenedAt,
 			delivery.ImpactCount, delivery.AffectedTargets, delivery.MaxAffected,
-			delivery.PropagationStatus, delivery.Extended, string(delivery.AlertKind))
+			delivery.PropagationStatus, delivery.Extended, string(delivery.AlertKind), string(contextJSON))
 		if err != nil {
 			return 0, fmt.Errorf("deposit in-app incident opening: %w", err)
 		}
@@ -522,7 +581,7 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 			    nature_label = $5, alert_kind = $14, severity = $6, occurred_at = $7,
 			    impact_count = $8, affected_target_count = $9,
 			    max_affected_targets = $10, propagation_status = $11,
-			    extended = $12,
+			    extended = $12, context = $15::jsonb,
 			    read_at = CASE WHEN $13 = 'alert' THEN NULL ELSE read_at END,
 			    dismissed_at = CASE WHEN $13 = 'alert' THEN NULL ELSE dismissed_at END
 			WHERE incident_id = $1::uuid AND revision < $2
@@ -530,7 +589,7 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 			delivery.TargetName, delivery.NatureLabel, string(delivery.Severity),
 			occurredAt, delivery.ImpactCount, delivery.AffectedTargets,
 			delivery.MaxAffected, delivery.PropagationStatus, delivery.Extended,
-			presentation, string(delivery.AlertKind))
+			presentation, string(delivery.AlertKind), string(contextJSON))
 		if err != nil {
 			return 0, fmt.Errorf("revise in-app incident notification: %w", err)
 		}
@@ -625,4 +684,14 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 		return 0, fmt.Errorf("commit in-app delivery: %w", err)
 	}
 	return int(affected), nil
+}
+
+// decodeContext lit un contexte de notification enregistré. Un contenu
+// illisible est ignoré : la notification garde alors ses deux premières lignes.
+func decodeContext(value []byte) synthesis.Context {
+	var decoded synthesis.Context
+	if len(value) == 0 || json.Unmarshal(value, &decoded) != nil {
+		return synthesis.Context{}
+	}
+	return decoded
 }

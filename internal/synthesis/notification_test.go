@@ -8,21 +8,21 @@ import (
 	"github.com/M0okz/cairnops/internal/alerttext"
 )
 
-func TestNotificationKeepsTheIncidentFactsInBothLanguages(t *testing.T) {
+func TestNotificationPutsTheResourceAndSeverityFirstInBothLanguages(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
 		s      Situation
 		fr, en Text
 	}{
-		{"information", Situation{AffectedTargets: 1, TargetName: "API", Severity: "information"}, Text{"Indisponibilité", "API · information"}, Text{"Unavailability", "API · information"}},
-		{"warning", Situation{AffectedTargets: 1, TargetName: "API", Severity: "warning"}, Text{"Indisponibilité", "API · avertissement"}, Text{"Unavailability", "API · warning"}},
-		{"major group", Situation{AffectedTargets: 3, TargetName: "First VM", Severity: "major"}, Text{"Indisponibilité", "3 Cibles concernées · majeur"}, Text{"Unavailability", "3 affected targets · major"}},
-		{"critical", Situation{AffectedTargets: 1, TargetName: "API", Severity: "critical"}, Text{"Indisponibilité", "API · critique"}, Text{"Unavailability", "API · critical"}},
-		{"unnamed target", Situation{AffectedTargets: 1, Severity: "warning"}, Text{"Indisponibilité", "1 Cible concernée · avertissement"}, Text{"Unavailability", "1 affected target · warning"}},
-		{"pending recovery", Situation{AffectedTargets: 0}, Text{"Indisponibilité", "Aucune Cible encore affectée · rétablissement en cours de confirmation"}, Text{"Unavailability", "No targets still affected · recovery awaiting confirmation"}},
-		{"resolved target", Situation{Resolved: true, MaxAffected: 1, TotalTargets: 1, TargetName: "API", Severity: "critical"}, Text{"Résolu · Indisponibilité", "API"}, Text{"Resolved · Unavailability", "API"}},
-		{"resolved group", Situation{Resolved: true, MaxAffected: 3, TotalTargets: 5}, Text{"Résolu · Indisponibilité", "Jusqu’à 3 Cibles concernées"}, Text{"Resolved · Unavailability", "Up to 3 affected targets"}},
-		{"successive targets", Situation{Resolved: true, MaxAffected: 1, TotalTargets: 2, TargetName: "First VM"}, Text{"Résolu · Indisponibilité", "Jusqu’à 1 Cible concernée à la fois"}, Text{"Resolved · Unavailability", "Up to 1 affected target at a time"}},
+		{"information", Situation{AffectedTargets: 1, TargetName: "API", Severity: "information"}, Text{"API · information", "Indisponibilité"}, Text{"API · information", "Unavailability"}},
+		{"warning", Situation{AffectedTargets: 1, TargetName: "API", Severity: "warning"}, Text{"API · avertissement", "Indisponibilité"}, Text{"API · warning", "Unavailability"}},
+		{"major group", Situation{AffectedTargets: 3, TargetName: "First VM", Severity: "major"}, Text{"3 Ressources · majeur", "Indisponibilité"}, Text{"3 resources · major", "Unavailability"}},
+		{"critical", Situation{AffectedTargets: 1, TargetName: "API", Severity: "critical"}, Text{"API · critique", "Indisponibilité"}, Text{"API · critical", "Unavailability"}},
+		{"unnamed target", Situation{AffectedTargets: 1, Severity: "warning"}, Text{"1 Ressource · avertissement", "Indisponibilité"}, Text{"1 resource · warning", "Unavailability"}},
+		{"pending recovery", Situation{AffectedTargets: 0, Severity: "major"}, Text{"Rétablissement à confirmer", "Indisponibilité\nAucune Ressource encore affectée"}, Text{"Recovery awaiting confirmation", "Unavailability\nNo resources still affected"}},
+		{"resolved target", Situation{Resolved: true, MaxAffected: 1, TotalTargets: 1, TargetName: "API", Severity: "critical"}, Text{"API · résolu", "Indisponibilité"}, Text{"API · resolved", "Unavailability"}},
+		{"resolved group", Situation{Resolved: true, MaxAffected: 3, TotalTargets: 5}, Text{"5 Ressources · résolu", "Indisponibilité"}, Text{"5 resources · resolved", "Unavailability"}},
+		{"successive targets", Situation{Resolved: true, MaxAffected: 1, TotalTargets: 2, TargetName: "First VM"}, Text{"2 Ressources · résolu", "Indisponibilité"}, Text{"2 resources · resolved", "Unavailability"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.s
@@ -34,15 +34,74 @@ func TestNotificationKeepsTheIncidentFactsInBothLanguages(t *testing.T) {
 	}
 }
 
-func TestUnknownNotificationTitlesAreReadableAndBounded(t *testing.T) {
+func TestNotificationContextLineStatesOnlyDeliveredFacts(t *testing.T) {
+	count := 4
+	for _, tt := range []struct {
+		name   string
+		s      Situation
+		fr, en string
+	}{
+		{"source", Situation{AffectedTargets: 1, TargetName: "Vikunja Todo", Severity: "critical", Context: Context{Sources: []string{"Uptime Kuma"}}},
+			"Indisponibilité\nvia Uptime Kuma", "Unavailability\nvia Uptime Kuma"},
+		{"technical resource", Situation{AlertKind: alerttext.DiskSpace, AffectedTargets: 1, TargetName: "trust-cairnops-01", Severity: "major", Context: Context{Fact: &alerttext.Fact{Kind: alerttext.DiskSpace, Resource: "/var"}, Sources: []string{"Zabbix"}}},
+			"Espace disque insuffisant\n/var · via Zabbix", "Low disk space\n/var · via Zabbix"},
+		{"security update count", Situation{AlertKind: alerttext.SecurityUpdates, AffectedTargets: 1, TargetName: "dmz-docker-01", Severity: "warning", Context: Context{Fact: &alerttext.Fact{Kind: alerttext.SecurityUpdates, Count: &count}, Sources: []string{"PatchMon"}}},
+			"Correctifs de sécurité requis\n4 correctifs de sécurité disponibles · via PatchMon", "Security updates required\n4 security updates available · via PatchMon"},
+		{"escalation", Situation{AffectedTargets: 1, TargetName: "trust-cairnops-01", Severity: "critical", Context: Context{PreviousSeverity: "major"}},
+			"Indisponibilité\nAuparavant : majeur", "Unavailability\nPreviously: major"},
+		{"lower previous alert is not an escalation", Situation{AffectedTargets: 1, TargetName: "API", Severity: "warning", Context: Context{PreviousSeverity: "major"}},
+			"Indisponibilité", "Unavailability"},
+		{"group names", Situation{AffectedTargets: 5, Severity: "critical", Extended: true, Context: Context{TargetNames: []string{"Vikunja Todo", "Outline", "Gitea"}, Sources: []string{"Uptime Kuma", "Zabbix", "Proxmox VE"}}},
+			"Indisponibilité\nPropagation étendue · Vikunja Todo, Outline, Gitea +2 · via 3 Intégrations", "Unavailability\nExtended propagation · Vikunja Todo, Outline, Gitea +2 · via 3 integrations"},
+		{"resolution duration", Situation{Resolved: true, MaxAffected: 1, TotalTargets: 1, TargetName: "Vikunja Todo", Severity: "critical", Context: Context{DurationSeconds: 7500, Sources: []string{"Uptime Kuma"}, PreviousSeverity: "warning"}},
+			"Indisponibilité\nRétabli après 2 h 05 · via Uptime Kuma", "Unavailability\nRecovered after 2 h 05 · via Uptime Kuma"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := tt.s
+			s.NatureScope, s.NatureKey = "canonical", "availability"
+			if s.AlertKind != "" {
+				s.NatureScope, s.NatureKey, s.NatureLabel = "connector", "zabbix:connector:local", "Source text"
+			}
+			if got := LocalizeNotification(s); got.FR.Body != tt.fr || got.EN.Body != tt.en {
+				t.Fatalf("wrong context line: %#v", got)
+			}
+		})
+	}
+}
+
+func TestNotificationDurationsStayCompact(t *testing.T) {
+	for seconds, want := range map[int64]string{30: "moins d’1 min", 180: "3 min", 3600: "1 h", 90000: "1 j 1 h", 172800: "2 j"} {
+		s := Situation{Resolved: true, MaxAffected: 1, TotalTargets: 1, TargetName: "API", NatureScope: "canonical", NatureKey: "availability", Context: Context{DurationSeconds: seconds}}
+		if got := RenderNotification(s, "fr").Body; got != "Indisponibilité\nRétabli après "+want {
+			t.Fatalf("%d seconds rendered as %q", seconds, got)
+		}
+	}
+}
+
+func TestNotificationMarkersFollowTheSeverityRegister(t *testing.T) {
+	for severity, want := range map[string]string{"information": "🔵", "warning": "🟡", "major": "🟠", "critical": "🔴", "future": ""} {
+		if got := NotificationMarker(severity, false); got != want {
+			t.Fatalf("%s marker = %q", severity, got)
+		}
+	}
+	if NotificationMarker("critical", true) != "🟢" {
+		t.Fatal("a resolution must use the recovery marker")
+	}
+}
+
+func TestUnknownNotificationProblemsGetTwoLinesAndStayBounded(t *testing.T) {
 	s := Situation{NatureScope: "connector", NatureLabel: "  Préfixe\n" + strings.Repeat("é", 100), TargetName: "\t API\n publique  ", AffectedTargets: 1, Severity: "future"}
 	got := RenderNotification(s, "fr")
-	if !utf8.ValidString(got.Title) || utf8.RuneCountInString(got.Title) != 80 || !strings.HasSuffix(got.Title, "…") || strings.Contains(got.Title, "\n") || got.Body != "API publique" {
+	if got.Title != "API publique" || !utf8.ValidString(got.Body) || utf8.RuneCountInString(got.Body) != 80 || !strings.HasSuffix(got.Body, "…") || strings.Contains(got.Body, "\n") {
 		t.Fatalf("unreadable fallback: %#v", got)
 	}
 	s.NatureLabel = "\n\t"
-	if got := LocalizeNotification(s); got.FR.Title != "Signal de supervision" || got.EN.Title != "Monitoring signal" {
-		t.Fatalf("missing fallback title: %#v", got)
+	if got := LocalizeNotification(s); got.FR.Body != "Signal de supervision" || got.EN.Body != "Monitoring signal" {
+		t.Fatalf("missing fallback problem: %#v", got)
+	}
+	s.TargetName = strings.Repeat("x", 120)
+	if title := RenderNotification(s, "fr").Title; utf8.RuneCountInString(title) != 60 {
+		t.Fatalf("resource title is not bounded: %q", title)
 	}
 }
 
@@ -58,7 +117,7 @@ func TestNotificationTranslationsRequireStructuredFacts(t *testing.T) {
 	} {
 		s := Situation{AlertKind: tt.kind, NatureScope: "connector", NatureKey: "provider:local", NatureLabel: tt.label, TargetName: "Host", AffectedTargets: 1, Severity: "major"}
 		got := LocalizeNotification(s)
-		if got.FR.Title != tt.fr || got.EN.Title != tt.en || got.FR.Body != "Host · majeur" || got.EN.Body != "Host · major" {
+		if got.FR.Body != tt.fr || got.EN.Body != tt.en || got.FR.Title != "Host · majeur" || got.EN.Title != "Host · major" {
 			t.Fatalf("wrong translation: %+v", got)
 		}
 		if Render(s, "fr").Title != tt.fr || s.NatureLabel != tt.label {
@@ -68,7 +127,7 @@ func TestNotificationTranslationsRequireStructuredFacts(t *testing.T) {
 		s.AlertKind = ""
 		for _, scope := range []string{"zabbix:connector:local", "webhook:custom", "storage.latency"} {
 			s.NatureKey = scope
-			if got := RenderNotification(s, "fr"); got.Title != oneLine(tt.label, 80) {
+			if got := RenderNotification(s, "fr"); got.Body != oneLine(tt.label, 80) {
 				t.Fatalf("source text guessed a meaning: %+v", got)
 			}
 		}

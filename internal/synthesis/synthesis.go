@@ -41,6 +41,10 @@ type Situation struct {
 	MaxAffected     int
 	TotalTargets    int // Cibles distinctes sur tout le cycle, pas seulement au pic.
 	Resolved        bool
+	Extended        bool // Propagation étendue déjà qualifiée.
+	// Context porte les faits complémentaires figés lors d'une livraison de
+	// notification. Il reste vide pour les Synthèses détaillées.
+	Context Context
 }
 
 type Text struct {
@@ -74,10 +78,6 @@ func Localize(s Situation) Localized {
 }
 
 func Render(s Situation, locale string) Text {
-	return render(s, locale, false)
-}
-
-func render(s Situation, locale string, notification bool) Text {
 	english := locale == "en"
 	title, known := NatureLabel(s.NatureKey, locale)
 	known = known && s.NatureScope == "canonical"
@@ -96,9 +96,6 @@ func render(s Situation, locale string, notification bool) Text {
 				title = fmt.Sprintf("Reported: %s", label)
 			}
 		}
-	}
-	if notification && !known {
-		title = notificationSourceTitle(s, locale)
 	}
 	if translated := presentationTitle(s, locale); translated != "" {
 		title = translated
@@ -148,24 +145,7 @@ func render(s Situation, locale string, notification bool) Text {
 			}
 		}
 	} else if severity, ok := severityLabel(s.Severity, english); ok {
-		if notification {
-			switch s.Severity {
-			case "major":
-				severity = "majeur"
-				if english {
-					severity = "major"
-				}
-			case "critical":
-				severity = "critique"
-				if english {
-					severity = "critical"
-				}
-			}
-		}
 		body = fmt.Sprintf("%s · %s", body, severity)
-	}
-	if notification {
-		title = oneLine(title, 80)
 	}
 	return Text{Title: title, Body: body}
 }

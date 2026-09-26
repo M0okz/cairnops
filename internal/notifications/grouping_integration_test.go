@@ -117,7 +117,9 @@ func TestDiskBurstProducesOneOpeningForFifteenTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(inbox.Entries) != 1 || inbox.Entries[0].Summary.FR.Body != "15 Cibles concernées · majeur" {
+	if len(inbox.Entries) != 1 || inbox.Entries[0].Summary.FR.Title != "15 Ressources · majeur" ||
+		!strings.HasPrefix(inbox.Entries[0].Summary.FR.Body, "Latence disque élevée\nPropagation étendue · ") ||
+		!strings.HasSuffix(inbox.Entries[0].Summary.FR.Body, " +12 · via Zabbix") {
 		t.Fatalf("unexpected inbox: %#v", inbox)
 	}
 }

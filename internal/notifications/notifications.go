@@ -13,6 +13,7 @@ import (
 	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/secretbox"
+	"github.com/M0okz/cairnops/internal/synthesis"
 )
 
 const mattermostSecretPurpose = "mattermost-webhook-v1"
@@ -179,6 +180,7 @@ type Delivery struct {
 	OpenedAt          time.Time
 	ResolvedAt        *time.Time
 	CredentialSealed  string
+	Context           synthesis.Context
 }
 
 type DeliveryStore interface {
@@ -212,6 +214,7 @@ type Message struct {
 	OpenedAt          time.Time
 	ResolvedAt        *time.Time
 	PublicURL         string
+	Context           synthesis.Context
 }
 
 type Dispatcher struct {
@@ -294,5 +297,6 @@ func (dispatcher *Dispatcher) deliver(ctx context.Context, delivery Delivery) er
 		AffectedTargets: delivery.AffectedTargets, MaxAffected: delivery.MaxAffected,
 		PropagationStatus: delivery.PropagationStatus, Extended: delivery.Extended,
 		OpenedAt: delivery.OpenedAt, ResolvedAt: delivery.ResolvedAt, PublicURL: dispatcher.publicURL,
+		Context: delivery.Context,
 	})
 }

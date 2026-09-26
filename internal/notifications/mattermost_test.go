@@ -10,6 +10,7 @@ import (
 
 	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/incidents"
+	"github.com/M0okz/cairnops/internal/synthesis"
 )
 
 func TestMattermostResolutionMessageKeepsOperationalContext(t *testing.T) {
@@ -32,7 +33,7 @@ func TestMattermostResolutionMessageKeepsOperationalContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded, _ := json.Marshal(payload)
-	for _, expected := range []string{"Résolu", "Nextcloud", "Réponse HTTP invalide", "https://cairnops.example.test/incidents?incident=incident-1"} {
+	for _, expected := range []string{"🟢 Nextcloud · résolu", "Réponse HTTP invalide", "https://cairnops.example.test/incidents?incident=incident-1"} {
 		if !strings.Contains(string(encoded), expected) {
 			t.Fatalf("Mattermost payload does not contain %q: %s", expected, encoded)
 		}
@@ -59,7 +60,7 @@ func TestMattermostMultiTargetIncidentKeepsItsImpactSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	encoded, _ := json.Marshal(payload)
-	for _, expected := range []string{"Résolu", "Jusqu’à 7 Cibles", "https://cairnops.example.test/incidents?incident=incident-1"} {
+	for _, expected := range []string{"🟢 7 Ressources · résolu", "Latence disque élevée", "https://cairnops.example.test/incidents?incident=incident-1"} {
 		if !strings.Contains(string(encoded), expected) {
 			t.Fatalf("Mattermost incident payload does not contain %q: %s", expected, encoded)
 		}
@@ -82,10 +83,11 @@ func TestMattermostUsesTheCompactNotificationTemplate(t *testing.T) {
 		AlertKind: alerttext.SystemLoad, NatureKey: "zabbix:connector:load", NatureScope: "connector",
 		NatureLabel: "Linux: Load average is too high (per CPU load over 1.5 for 5m)",
 		Severity:    incidents.SeverityMajor, AffectedTargets: 1,
+		Context: synthesis.Context{Sources: []string{"Zabbix"}},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(payload.Attachments) != 1 || payload.Attachments[0].Title != "⚠️ Charge système moyenne élevée" || payload.Attachments[0].Text != "VictoriaLogs · majeur" {
+	if len(payload.Attachments) != 1 || payload.Attachments[0].Title != "🟠 VictoriaLogs · majeur" || payload.Attachments[0].Text != "Charge système moyenne élevée\nvia Zabbix" {
 		t.Fatalf("Mattermost diverged from the shared template: %+v", payload)
 	}
 }

@@ -3,6 +3,7 @@ package notifications_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,10 +115,11 @@ func TestStructuredPresentationDoesNotChangeIncidentOrDeliveryDecisions(t *testi
 			if entry.AlertKind != initialKind {
 				t.Fatalf("inbox did not snapshot kind: %+v", entry)
 			}
-			if initiallyKnown && entry.Summary.FR.Title != "Charge système moyenne élevée" {
+			problem, _, _ := strings.Cut(entry.Summary.FR.Body, "\n")
+			if initiallyKnown && problem != "Charge système moyenne élevée" {
 				t.Fatalf("snapshot lost translation: %+v", entry.Summary)
 			}
-			if !initiallyKnown && entry.Summary.FR.Title != "Source wording kept verbatim" {
+			if !initiallyKnown && problem != "Source wording kept verbatim" {
 				t.Fatalf("old delivery retroactively translated: %+v", entry.Summary)
 			}
 			// Recovery keeps the evidence's meaning; it doesn't classify the recovery text.

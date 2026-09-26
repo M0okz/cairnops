@@ -491,7 +491,10 @@ components:
         Une notification reçue par la personne connectée. Elle appartient à un
         compte : cette API ne rend jamais la boîte de quelqu'un d'autre.
         Sa summary utilise le gabarit compact partagé avec le Push et Mattermost :
-        problème en title, Cible ou nombre de Cibles et gravité en body.
+        « Ressource · gravité » (ou nombre de Ressources) en title ; en body, le
+        problème puis, après un saut de ligne facultatif, le contexte figé lors
+        de la livraison (hausse de gravité, durée, Ressources, détail et
+        Intégrations d'origine). Les entrées antérieures n'ont pas ce contexte.
         Le libellé source complet reste disponible dans nature_label.
         incident_status et acknowledged_at décrivent l'état actuel de
         l'Incident, qui a pu avancer depuis la réception de l'entrée.

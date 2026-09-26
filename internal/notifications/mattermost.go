@@ -34,24 +34,28 @@ func (client *MattermostClient) Test(ctx context.Context, webhookURL string) err
 
 func (client *MattermostClient) Send(ctx context.Context, webhookURL string, message Message) error {
 	resolved := message.EventKind == "resolved" || message.ResolvedAt != nil
-	color, _, icon := severityPresentation(string(message.Severity))
+	color := severityColor(string(message.Severity))
 	summary := synthesis.RenderNotification(synthesis.Situation{
 		AlertKind: message.AlertKind,
 		NatureKey: message.NatureKey, NatureLabel: message.NatureLabel,
 		NatureScope: message.NatureScope, Severity: string(message.Severity),
 		TargetName: message.TargetName, AffectedTargets: message.AffectedTargets,
 		MaxAffected: message.MaxAffected, Resolved: resolved,
-		TotalTargets: message.ImpactCount,
+		TotalTargets: message.ImpactCount, Extended: message.Extended,
+		Context: message.Context,
 	}, "fr")
-	title := fmt.Sprintf("%s %s", icon, summary.Title)
+	title := summary.Title
+	if marker := synthesis.NotificationMarker(string(message.Severity), resolved); marker != "" {
+		title = marker + " " + title
+	}
 	if resolved {
-		color, title = "#39d98a", fmt.Sprintf("✅ %s", summary.Title)
+		color = "#39d98a"
 	}
 	text := summary.Body
 
 	if message.PublicURL != "" {
 		link := message.PublicURL + "/incidents?incident=" + url.QueryEscape(message.IncidentID)
-		text += " [Ouvrir CairnOps](" + link + ")"
+		text += "\n[Ouvrir CairnOps](" + link + ")"
 	}
 	return client.post(ctx, webhookURL, map[string]any{
 		"username": "CairnOps",
@@ -62,16 +66,16 @@ func (client *MattermostClient) Send(ctx context.Context, webhookURL string, mes
 	})
 }
 
-func severityPresentation(severity string) (color, label, icon string) {
+func severityColor(severity string) string {
 	switch severity {
 	case "critical":
-		return "#ff5d5d", "CRITIQUE", "🚨"
+		return "#ff5d5d"
 	case "major":
-		return "#ff8a3d", "MAJEURE", "⚠️"
+		return "#ff8a3d"
 	case "warning":
-		return "#e9b949", "AVERTISSEMENT", "⚠️"
+		return "#e9b949"
 	default:
-		return "#7aa2f7", "INFORMATION", "ℹ️"
+		return "#7aa2f7"
 	}
 }
 

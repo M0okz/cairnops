@@ -23,9 +23,12 @@ compagnon s'en sert comme pastille. La présentation porte seulement
 `title` et `body` ; son niveau de détail dépend du mode `complete`, `discreet` ou
 `masked` enregistré pour l'appareil.
 
-En mode `complete`, le rendu est commun à la boîte intégrée et à Mattermost :
-un titre de problème concis, puis « Cible · gravité » (ou le nombre de Cibles).
-Les résolutions restent explicitement nommées et conservent leur contexte.
+En mode `complete`, le rendu est commun à la boîte intégrée et à Mattermost.
+`title` porte une pastille de gravité, puis « Ressource · gravité » (ou le nombre
+de Ressources, et « résolu » pour une Résolution). `body` porte le problème,
+puis, après un saut de ligne, le contexte connu lors de la livraison :
+hausse de gravité, durée, Ressources, détail et Intégrations d'origine. Le
+compagnon affiche ces deux champs tels quels.
 Les textes `discreet` et `masked` ne révèlent ni Cible, ni Nature, ni Gravité.
 
 Le Relais Push ne participe à aucune de ces opérations cryptographiques. Il

@@ -74,9 +74,16 @@ func presentationFor(delivery Delivery) Presentation {
 			NatureScope: delivery.NatureScope, Severity: delivery.Severity,
 			TargetName: delivery.TargetName, AffectedTargets: delivery.AffectedTargets,
 			MaxAffected: delivery.MaxAffected, Resolved: delivery.EventKind == "resolved",
-			TotalTargets: delivery.ImpactCount,
+			TotalTargets: delivery.ImpactCount, Extended: delivery.Extended,
+			Context: delivery.Context,
 		}, delivery.Locale)
-		return Presentation{Title: text.Title, Body: text.Body}
+		// La pastille double la gravité écrite pour une lecture d'un coup d'œil
+		// sur l'écran verrouillé ; les modes discret et masqué n'en ont pas.
+		title := text.Title
+		if marker := synthesis.NotificationMarker(delivery.Severity, delivery.EventKind == "resolved"); marker != "" {
+			title = marker + " " + title
+		}
+		return Presentation{Title: title, Body: text.Body}
 	}
 }
 

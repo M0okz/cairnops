@@ -74,6 +74,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		                WHERE impact.incident_id = inbox.incident_id
 		                HAVING count(DISTINCT impact.target_id) = 1
 		            ), '') ELSE inbox.target_name END
+		       , inbox.context
 		FROM cairnops_notification_inbox inbox
 		JOIN cairnops_incidents incident ON incident.id = inbox.incident_id
 		WHERE inbox.user_id = $1::uuid AND inbox.dismissed_at IS NULL
@@ -91,6 +92,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 		// Les anciennes Résolutions stockaient un compteur français comme nom.
 		// Seule la Synthèse retrouve leur Cible unique ; l'entrée reçue reste intacte.
 		var summaryTargetName string
+		var contextJSON []byte
 		if err := rows.Scan(
 			&entry.ID, &entry.IncidentID, &entry.Revision,
 			&entry.TargetID, &entry.EventKind,
@@ -98,7 +100,7 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 			&entry.ImpactCount, &entry.AffectedTargetCount,
 			&entry.MaxAffectedTargets, &entry.PropagationStatus, &entry.Extended,
 			&entry.OccurredAt, &entry.ReadAt, &entry.IncidentStatus, &entry.AcknowledgedAt,
-			&summaryTargetName,
+			&summaryTargetName, &contextJSON,
 		); err != nil {
 			return Inbox{}, fmt.Errorf("scan notification inbox: %w", err)
 		}
@@ -108,6 +110,8 @@ func (store *PostgresStore) Inbox(ctx context.Context, userID string, limit int)
 			AffectedTargets: entry.AffectedTargetCount, MaxAffected: entry.MaxAffectedTargets,
 			TotalTargets: entry.ImpactCount,
 			Resolved:     entry.EventKind == "resolved",
+			Extended:     entry.Extended,
+			Context:      decodeContext(contextJSON),
 		})
 		inbox.Entries = append(inbox.Entries, entry)
 	}

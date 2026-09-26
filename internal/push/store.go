@@ -2,12 +2,14 @@ package push
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/M0okz/cairnops/internal/alerttext"
+	"github.com/M0okz/cairnops/internal/synthesis"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -39,6 +41,7 @@ type Delivery struct {
 	OccurredAt          time.Time
 	Acknowledged        bool
 	UnreadCount         int
+	Context             synthesis.Context
 }
 
 type DeliveryStore interface {
@@ -55,6 +58,7 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore { return &PostgresStore
 
 func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Delivery, error) {
 	var delivery Delivery
+	var contextJSON []byte
 	err := store.pool.QueryRow(ctx, `
 		WITH candidate AS (
 			SELECT outgoing.id
@@ -90,7 +94,8 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		       incident.status = 'active' AND incident.acknowledged_at IS NOT NULL,
 		       (SELECT count(*)::integer FROM cairnops_notification_inbox unread
 		        WHERE unread.user_id = device.user_id
-		          AND unread.read_at IS NULL AND unread.dismissed_at IS NULL)
+		          AND unread.read_at IS NULL AND unread.dismissed_at IS NULL),
+		       inbox.context
 		FROM claimed
 		JOIN cairnops_devices device ON device.id = claimed.device_id
 		JOIN cairnops_notification_inbox inbox ON inbox.id = claimed.inbox_id
@@ -103,13 +108,18 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		&delivery.PresentationMode, &delivery.TargetName, &delivery.NatureKey, &delivery.NatureScope, &delivery.NatureLabel, &delivery.AlertKind,
 		&delivery.Severity, &delivery.ImpactCount, &delivery.AffectedTargets,
 		&delivery.MaxAffected, &delivery.PropagationStatus, &delivery.Extended,
-		&delivery.OccurredAt, &delivery.Acknowledged, &delivery.UnreadCount,
+		&delivery.OccurredAt, &delivery.Acknowledged, &delivery.UnreadCount, &contextJSON,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Delivery{}, ErrNoDelivery
 	}
 	if err != nil {
 		return Delivery{}, fmt.Errorf("claim push delivery: %w", err)
+	}
+	// Un contexte illisible ne bloque pas l'envoi : le titre et le problème
+	// suffisent à la notification.
+	if len(contextJSON) > 0 {
+		_ = json.Unmarshal(contextJSON, &delivery.Context)
 	}
 	return delivery, nil
 }

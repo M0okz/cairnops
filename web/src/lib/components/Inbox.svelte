@@ -75,17 +75,21 @@
     return severityTone(severity);
   }
 
-  function entryDetail(entry: (typeof session.inbox)[number], state: InboxEntryState): string {
+  /* Le résumé partagé porte le problème puis, sur une seconde ligne, son
+   * contexte (Ressources, détail, Intégrations). */
+  function entryDetail(entry: (typeof session.inbox)[number], state: InboxEntryState): string[] {
     const received =
       entry.summary?.[i18n.locale].body ??
       (entry.event_kind === 'resolved'
         ? t('inbox.resolved', { nature: natureLabel(entry) })
         : t('inbox.opened', { nature: natureLabel(entry) }));
+    const [problem, ...context] = received.split('\n').filter((line) => line.trim() !== '');
     /* Une Résolution reçue le dit déjà : seul l'état survenu après la
      * réception s'ajoute au texte. */
-    if (state === 'acknowledged') return `${received} · ${t('inbox.state.acknowledged')}`;
-    if (state === 'resolved' && entry.event_kind !== 'resolved') return `${received} · ${t('inbox.state.resolved')}`;
-    return received;
+    let first = problem ?? '';
+    if (state === 'acknowledged') first = `${first} · ${t('inbox.state.acknowledged')}`;
+    if (state === 'resolved' && entry.event_kind !== 'resolved') first = `${first} · ${t('inbox.state.resolved')}`;
+    return [first, ...context];
   }
 </script>
 
@@ -135,7 +139,9 @@
             <span class="what">
               {#if fresh}<span class="visually-hidden">{t('inbox.new')}</span>{/if}
               <strong>{entry.summary?.[i18n.locale].title ?? entry.target_name}</strong>
-              <small class="faint">{entryDetail(entry, state)}</small>
+              {#each entryDetail(entry, state) as line, index (index)}
+                <small class="faint" title={line}>{line}</small>
+              {/each}
             </span>
             <span class="when num faint" title={stamp(entry.occurred_at)}>
               {since(entry.occurred_at)}

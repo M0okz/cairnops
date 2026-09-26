@@ -432,10 +432,10 @@ func TestPostgresInboxSummaryReadsLegacySingleTargetResolutions(t *testing.T) {
 			if _, err := pool.Exec(ctx, `UPDATE cairnops_targets SET name = 'NAS' WHERE id = $1::uuid`, targetID); err != nil {
 				t.Fatal(err)
 			}
-			storedName, expectedFR, expectedEN := "NAS at delivery", "NAS at delivery", "NAS at delivery"
+			storedName, expectedFR, expectedEN := "NAS at delivery", "NAS at delivery · résolu", "NAS at delivery · resolved"
 			impactCount := 1
 			if scenario.legacy {
-				storedName, expectedFR, expectedEN = "1 Cibles affectées au maximum", "NAS", "NAS"
+				storedName, expectedFR, expectedEN = "1 Cibles affectées au maximum", "NAS · résolu", "NAS · resolved"
 			}
 			if scenario.multipleTargets {
 				// Un maximum simultané de 1 ne prouve pas que la même Cible était
@@ -452,7 +452,7 @@ func TestPostgresInboxSummaryReadsLegacySingleTargetResolutions(t *testing.T) {
 				if _, err := pool.Exec(ctx, `UPDATE cairnops_incidents SET impact_count = 2 WHERE id = $1::uuid`, incidentID); err != nil {
 					t.Fatal(err)
 				}
-				impactCount, expectedFR, expectedEN = 2, "Jusqu’à 1 Cible concernée à la fois", "Up to 1 affected target at a time"
+				impactCount, expectedFR, expectedEN = 2, "2 Ressources · résolu", "2 resources · resolved"
 			}
 			if _, err := pool.Exec(ctx, `
 				INSERT INTO cairnops_notification_inbox (
@@ -472,7 +472,7 @@ func TestPostgresInboxSummaryReadsLegacySingleTargetResolutions(t *testing.T) {
 				t.Fatalf("expected one historical notification: %+v", inbox)
 			}
 			entry := inbox.Entries[0]
-			if entry.Summary.FR.Body != expectedFR || entry.Summary.EN.Body != expectedEN {
+			if entry.Summary.FR.Title != expectedFR || entry.Summary.EN.Title != expectedEN {
 				t.Fatalf("resolution summary used a generated label instead of the target: %+v", entry.Summary)
 			}
 			if entry.TargetName != storedName || entry.ReadAt == nil || inbox.Unread != 0 {
@@ -508,7 +508,7 @@ func TestPostgresInboxUsesTheCompactTemplateWithoutRewritingTheIncident(t *testi
 		t.Fatalf("expected one notification: %+v", inbox)
 	}
 	entry := inbox.Entries[0]
-	if entry.Summary.FR.Title != "Charge système moyenne élevée" || entry.Summary.FR.Body != "VictoriaLogs · majeur" || entry.Summary.EN.Title != "High average system load" || entry.Summary.EN.Body != "VictoriaLogs · major" {
+	if entry.Summary.FR.Body != "Charge système moyenne élevée" || entry.Summary.FR.Title != "VictoriaLogs · majeur" || entry.Summary.EN.Body != "High average system load" || entry.Summary.EN.Title != "VictoriaLogs · major" {
 		t.Fatalf("inbox diverged from the shared template: %+v", entry.Summary)
 	}
 	if entry.IncidentID != incident || entry.NatureScope != "connector" || entry.NatureLabel != label || delivery.NatureLabel != label || entry.Revision != delivery.IncidentRevision || inbox.Unread != 1 {

@@ -103,15 +103,29 @@ Le parcours suit trois strates stables — Adresse, Autorisation, Aperçu — et
 
 ## Gabarit des notifications
 
-Les notifications complètes partagent deux lignes : le problème en titre, puis
-« Cible · gravité ». Les quatre libellés courts sont « information »,
-« avertissement », « majeur » et « critique ». Une notification concernant
-plusieurs Cibles affiche leur nombre à la place d'un nom individuel.
+Les notifications complètes tiennent sur trois lignes. Le titre nomme la
+Ressource puis la gravité, par exemple « VictoriaLogs · majeur » ; une
+notification concernant plusieurs Ressources affiche leur nombre à la place
+d'un nom. Les quatre libellés courts sont « information », « avertissement »,
+« majeur » et « critique » ; une Résolution les remplace par « résolu ».
+
+La deuxième ligne donne le problème. Un libellé source long peut occuper aussi
+la troisième ligne, dans la limite de 80 caractères. Sinon, la troisième ligne
+porte le contexte figé lors de la livraison, dans cet ordre : Propagation
+étendue, gravité précédente d'une hausse (« Auparavant : majeur »), durée d'une
+Résolution, premières Ressources d'un groupe, détail d'un fait identique sur
+toutes les Preuves (disque, domaine, nombre de correctifs, versions) et
+Intégrations d'origine (« via Zabbix »). Une donnée absente n'est jamais
+remplacée par une valeur supposée.
+
+Le Push et Mattermost placent une pastille de gravité en tête du titre :
+🔵 information, 🟡 avertissement, 🟠 majeur, 🔴 critique et 🟢 résolu. Elle
+double toujours le libellé écrit. La boîte intégrée garde sa pastille graphique.
 
 Le Push, la boîte intégrée et Mattermost utilisent le même rendu de
-`internal/synthesis`. Les titres de notification omettent le préambule
+`internal/synthesis`. Les problèmes affichés omettent le préambule
 « Signalement : ». Un sens vérifié à partir des faits du Connecteur peut être traduit et abrégé, comme
-« Charge système moyenne élevée » ; les autres sont conservés sur une ligne, bornée à
+« Charge système moyenne élevée » ; les autres sont conservés, bornés à
 80 caractères. Le détail conserve le texte original attribué à sa Source.
 
 Le [lexique de supervision](notification-lexicon.md) fixe les termes connus :
