@@ -191,25 +191,30 @@ func (synchronizer *Synchronizer) syncOne(ctx context.Context, connector Runtime
 	signals := make([]incidents.ZabbixSignal, 0)
 	// Chaque hôte importé conclut une Observation : c'est elle qui donne à une
 	// Cible découverte par Zabbix sa Disponibilité, sa Couverture et sa
-	// fraîcheur, exactement comme un monitor Uptime Kuma. Un problème actif
-	// conclut à la défaillance ; un problème supprimé — une maintenance côté
-	// Zabbix — reste neutre, comme la maintenance Uptime Kuma ; l'absence de
-	// problème conclut au bon fonctionnement.
+	// fraîcheur, exactement comme un monitor Uptime Kuma. Seul un problème de
+	// Nature canonique « availability » mesure la Disponibilité (ADR 0039) :
+	// actif, il conclut à l'indisponibilité ; supprimé — une maintenance côté
+	// Zabbix —, il reste neutre, comme la maintenance Uptime Kuma. Un problème
+	// d'une autre Nature reste un problème de la Ressource, transmis au cycle
+	// d'Incident, mais ne la rend pas Indisponible.
 	outcomeByBinding := make(map[string]string, len(connector.Bindings))
 	for _, binding := range connector.Bindings {
 		outcomeByBinding[binding.ID] = "healthy"
 	}
 	for _, problem := range problems {
+		unavailability := problem.CanonicalNature == incidents.NatureAvailability
 		for _, hostID := range problem.HostIDs {
 			binding, ok := bindingByHost[hostID]
 			if !ok {
 				continue
 			}
-			if problem.Suppressed {
+			switch {
+			case !unavailability:
+			case problem.Suppressed:
 				if outcomeByBinding[binding.ID] == "healthy" {
 					outcomeByBinding[binding.ID] = "unknown"
 				}
-			} else {
+			default:
 				outcomeByBinding[binding.ID] = "unhealthy"
 			}
 			signals = append(signals, incidents.ZabbixSignal{
@@ -952,14 +957,15 @@ func zabbixSeverity(value int) incidents.Severity {
 //
 // À la différence d'Uptime Kuma, Zabbix ne publie pas de temps de réponse par
 // hôte : l'Observation porte la Disponibilité et la Couverture, jamais une
-// latence. « unhealthy » et « healthy » concluent ; « unknown » — un problème
-// supprimé, c'est-à-dire une maintenance côté Zabbix — reste neutre et fait
-// seulement baisser la Couverture, comme la maintenance Uptime Kuma.
+// latence. « unhealthy » et « healthy » concluent ; « unknown » — une
+// indisponibilité supprimée, c'est-à-dire une maintenance côté Zabbix — reste
+// neutre et fait seulement baisser la Couverture, comme la maintenance Uptime
+// Kuma.
 func zabbixObservation(bindingID, outcome string) IntegrationObservation {
 	observation := IntegrationObservation{BindingID: bindingID, Outcome: outcome}
 	switch outcome {
 	case "unhealthy":
-		observation.Reason = "zabbix_problem_active"
+		observation.Reason = "zabbix_unavailability_active"
 	case "unknown":
 		observation.Reason = "zabbix_problem_suppressed"
 	}

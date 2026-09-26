@@ -26,6 +26,15 @@ concluent rien — ils restent neutres ici comme partout ailleurs dans le
 Connecteur, et font seulement baisser la Couverture. La cadence de
 synchronisation du Connecteur tient lieu d'Observations attendues.
 
+Pour Zabbix, l'Observation d'un hôte ne mesure que son indisponibilité. Seul un
+problème portant la Nature canonique d'indisponibilité, établie par le tag
+`cairnops.nature=availability` de l'[ADR 0039](0039-regrouper-les-rafales-sans-inventer-de-cause.md),
+conclut à l'indisponibilité ; supprimé par une maintenance Zabbix, il reste
+neutre. Un problème d'une autre Nature, par exemple une version déployée
+illisible ou un disque presque plein, reste un problème de la Ressource et suit
+le cycle d'Incident, mais l'hôte conclut au bon fonctionnement : la gravité ou
+le libellé d'une alerte ne suffisent pas à rendre une Ressource Indisponible.
+
 Ces Observations n'entrent pas dans la Politique de déclenchement. L'Incident
 d'une Intégration est décidé par le rapprochement de ses propres signaux, qui
 sait des choses qu'une suite d'Observations ignore : identité de l'événement

@@ -345,8 +345,8 @@ func TestSynchronizerProjectsProblemsThroughImportedBindings(t *testing.T) {
 	reconciler := &incidentReconciler{}
 	synchronizer := NewSynchronizer(store, reconciler, problemClient{problems: []zabbix.Problem{{
 		EventID: "20427", TriggerID: "15112", Name: "Database unavailable", Severity: 4,
-		EvaluationWindow: 15 * time.Minute,
-		StartedAt:        time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC), HostIDs: []string{"10084"},
+		CanonicalNature: incidents.NatureAvailability, EvaluationWindow: 15 * time.Minute,
+		StartedAt: time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC), HostIDs: []string{"10084"},
 	}}}, box, "server-one", nil)
 	synchronizer.now = func() time.Time { return time.Date(2026, 8, 14, 12, 1, 0, 0, time.UTC) }
 
@@ -364,15 +364,15 @@ func TestSynchronizerProjectsProblemsThroughImportedBindings(t *testing.T) {
 		t.Fatalf("synchronizer lost the condition period: %s", projected.EvaluationWindow)
 	}
 
-	// Un hôte importé qui porte un problème actif conclut une Observation en
-	// défaut : c'est elle qui donne à la Cible sa Disponibilité et sa
-	// Couverture, comme un monitor Uptime Kuma DOWN.
+	// Un hôte importé qui porte une indisponibilité active conclut une
+	// Observation en défaut : c'est elle qui donne à la Cible sa Disponibilité
+	// et sa Couverture, comme un monitor Uptime Kuma DOWN.
 	if len(store.observations) != 1 {
 		t.Fatalf("expected an observation per imported host, got %#v", store.observations)
 	}
 	observation := store.observations[0]
 	if observation.BindingID != "binding-one" || observation.Outcome != "unhealthy" || observation.LatencyMilliseconds != nil {
-		t.Fatalf("an active Zabbix problem must conclude unhealthy without latency: %#v", observation)
+		t.Fatalf("an active Zabbix unavailability must conclude unhealthy without latency: %#v", observation)
 	}
 }
 
@@ -381,9 +381,10 @@ type kumaMonitorClient struct {
 	err      error
 }
 
-// Sans problème actif, un hôte importé conclut au bon fonctionnement : c'est
-// cette Observation « healthy » qui remplit la Couverture d'une Cible Zabbix
-// et met à jour sa fraîcheur, là où un Incident n'ouvrirait rien.
+// Sans indisponibilité active, un hôte importé conclut au bon fonctionnement :
+// c'est cette Observation « healthy » qui remplit la Couverture d'une Cible
+// Zabbix et met à jour sa fraîcheur. Un problème d'une autre Nature reste un
+// problème de la Ressource, mais ne mesure pas sa Disponibilité (ADR 0039).
 func TestSynchronizerMeasuresHealthyHostsWithoutProblems(t *testing.T) {
 	t.Parallel()
 	box, _ := secretbox.New(bytes.Repeat([]byte{0x52}, 32))
@@ -393,12 +394,21 @@ func TestSynchronizerMeasuresHealthyHostsWithoutProblems(t *testing.T) {
 		Bindings: []RuntimeBinding{
 			{ID: "binding-ok", TargetID: "target-ok", ExternalID: "10084"},
 			{ID: "binding-down", TargetID: "target-down", ExternalID: "10099"},
+			{ID: "binding-other", TargetID: "target-other", ExternalID: "10100"},
+			{ID: "binding-maintenance", TargetID: "target-maintenance", ExternalID: "10101"},
 		},
 	}}}
 	reconciler := &incidentReconciler{}
+	startedAt := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
 	synchronizer := NewSynchronizer(store, reconciler, problemClient{problems: []zabbix.Problem{{
 		EventID: "20427", TriggerID: "15112", Name: "Database unavailable", Severity: 4,
-		StartedAt: time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC), HostIDs: []string{"10099"},
+		CanonicalNature: incidents.NatureAvailability, StartedAt: startedAt, HostIDs: []string{"10099"},
+	}, {
+		EventID: "20428", TriggerID: "15113", Name: "Traefik: Deployed version unavailable for 15 minutes", Severity: 4,
+		StartedAt: startedAt, HostIDs: []string{"10100"},
+	}, {
+		EventID: "20429", TriggerID: "15112", Name: "Database unavailable", Severity: 4,
+		CanonicalNature: incidents.NatureAvailability, Suppressed: true, StartedAt: startedAt, HostIDs: []string{"10101"},
 	}}}, box, "server-one", nil)
 	synchronizer.now = func() time.Time { return time.Date(2026, 8, 14, 12, 1, 0, 0, time.UTC) }
 
@@ -408,8 +418,11 @@ func TestSynchronizerMeasuresHealthyHostsWithoutProblems(t *testing.T) {
 	if !store.completed || store.failed != "" {
 		t.Fatalf("unexpected synchronization: completed=%v failed=%q", store.completed, store.failed)
 	}
-	if len(store.observations) != 2 {
+	if len(store.observations) != 4 {
 		t.Fatalf("expected an observation per imported host, got %#v", store.observations)
+	}
+	if len(reconciler.input.Signals) != 3 {
+		t.Fatalf("every active problem must still reach the incident cycle: %#v", reconciler.input.Signals)
 	}
 	byBinding := make(map[string]IntegrationObservation, len(store.observations))
 	for _, observation := range store.observations {
@@ -418,8 +431,14 @@ func TestSynchronizerMeasuresHealthyHostsWithoutProblems(t *testing.T) {
 	if ok := byBinding["binding-ok"]; ok.Outcome != "healthy" {
 		t.Fatalf("a host without any problem must conclude healthy: %#v", ok)
 	}
-	if down := byBinding["binding-down"]; down.Outcome != "unhealthy" {
-		t.Fatalf("a host carrying a problem must conclude unhealthy: %#v", down)
+	if down := byBinding["binding-down"]; down.Outcome != "unhealthy" || down.Reason != "zabbix_unavailability_active" {
+		t.Fatalf("a host carrying an unavailability must conclude unhealthy: %#v", down)
+	}
+	if other := byBinding["binding-other"]; other.Outcome != "healthy" {
+		t.Fatalf("a problem of another nature must not measure unavailability: %#v", other)
+	}
+	if maintenance := byBinding["binding-maintenance"]; maintenance.Outcome != "unknown" || maintenance.Reason != "zabbix_problem_suppressed" {
+		t.Fatalf("a suppressed unavailability must stay neutral: %#v", maintenance)
 	}
 }
 
