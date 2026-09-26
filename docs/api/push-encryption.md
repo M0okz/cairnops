@@ -27,8 +27,8 @@ En mode `complete`, le rendu est commun à la boîte intégrée et à Mattermost
 `title` porte une pastille de gravité, puis « Ressource · gravité » (ou le nombre
 de Ressources, et « résolu » pour une Résolution). `body` porte le problème,
 puis, après un saut de ligne, le contexte connu lors de la livraison :
-hausse de gravité, durée, Ressources, détail et Intégrations d'origine. Le
-compagnon affiche ces deux champs tels quels.
+hausse de gravité, durée, Ressources et détail. Le compagnon affiche ces deux
+champs tels quels.
 Les textes `discreet` et `masked` ne révèlent ni Cible, ni Nature, ni Gravité.
 
 Le Relais Push ne participe à aucune de ces opérations cryptographiques. Il

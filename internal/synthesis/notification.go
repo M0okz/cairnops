@@ -12,8 +12,6 @@ import (
 // figés au moment de la livraison, pour que la boîte intégrée relise ce que
 // l'appareil a reçu. Un champ absent reste absent : rien n'est déduit.
 type Context struct {
-	// Sources nomme les Intégrations dont les Preuves soutiennent l'Incident.
-	Sources []string `json:"sources,omitempty"`
 	// Fact n'est présent que si toutes les Preuves retenues portent le même.
 	Fact *alerttext.Fact `json:"fact,omitempty"`
 	// TargetNames liste les premières Ressources concernées, dans leur ordre
@@ -30,7 +28,7 @@ type Context struct {
 //
 //	Ressource · gravité
 //	problème (jusqu'à deux lignes lorsqu'il est long)
-//	contexte : hausse, durée, Ressources, détail et Intégrations
+//	contexte : hausse, durée, Ressources et détail
 //
 // Le titre reste court pour ne jamais tronquer le problème. Les compteurs et
 // la Résolution suivent les mêmes faits que Render.
@@ -79,9 +77,6 @@ func RenderNotification(s Situation, locale string) Text {
 	}
 	if detail := factDetail(s.Context.Fact, locale); detail != "" {
 		details = append(details, detail)
-	}
-	if sources := sourceList(s.Context.Sources, english); sources != "" {
-		details = append(details, sources)
 	}
 
 	body := notificationProblem(s, locale)
@@ -187,25 +182,6 @@ func factDetail(fact *alerttext.Fact, locale string) string {
 		return normalized.Resource
 	}
 	return description
-}
-
-func sourceList(sources []string, english bool) string {
-	seen := map[string]bool{}
-	names := make([]string, 0, len(sources))
-	for _, source := range sources {
-		if source = oneLine(source, 40); source != "" && !seen[source] {
-			seen[source] = true
-			names = append(names, source)
-		}
-	}
-	switch {
-	case len(names) == 0:
-		return ""
-	case len(names) <= 2:
-		return "via " + strings.Join(names, ", ")
-	default:
-		return fmt.Sprintf(pick(english, "via %d Intégrations", "via %d integrations"), len(names))
-	}
 }
 
 func formatDuration(duration time.Duration, english bool) string {

@@ -397,7 +397,6 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		       claimed.propagation_status, claimed.extended, claimed.opened_at,
 		       claimed.resolved_at, channel.credential_sealed,
 		       jsonb_strip_nulls(jsonb_build_object(
-		           'sources', evidence_context.sources,
 		           'fact', evidence_context.fact,
 		           'target_names', impact_context.names,
 		           'previous_severity', CASE
@@ -413,25 +412,15 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		-- Résolution relit toutes celles de son cycle. Un fait n'est repris que
 		-- s'il est identique sur chacune, jamais celui d'un membre arbitraire.
 		LEFT JOIN LATERAL (
-		    SELECT to_jsonb(array_agg(DISTINCT source.label ORDER BY source.label)) AS sources,
-		           CASE WHEN count(*) > 0 AND count(DISTINCT source.alert_facts) = 1
-		                     AND bool_and(source.alert_facts <> '{}'::jsonb)
-		                THEN (array_agg(source.alert_facts))[1] END AS fact
-		    FROM (
-		        SELECT evidence.alert_facts,
-		               coalesce(nullif(btrim(connector.name), ''), CASE evidence.origin
-		                   WHEN 'zabbix' THEN 'Zabbix' WHEN 'uptime_kuma' THEN 'Uptime Kuma'
-		                   WHEN 'patchmon' THEN 'PatchMon' WHEN 'argus' THEN 'Argus'
-		                   WHEN 'proxmox' THEN 'Proxmox VE' WHEN 'webhook' THEN 'Webhook'
-		                   ELSE 'CairnOps' END) AS label
-		        FROM cairnops_incident_evidence evidence
-		        LEFT JOIN cairnops_connectors connector ON connector.id = evidence.connector_id
-		        WHERE evidence.incident_id = claimed.incident_id AND evidence.invalidated_at IS NULL
-		          AND (evidence.active OR claimed.resolved_at IS NOT NULL OR NOT EXISTS (
-		              SELECT 1 FROM cairnops_incident_evidence current
-		              WHERE current.incident_id = claimed.incident_id
-		                AND current.active AND current.invalidated_at IS NULL))
-		    ) source
+		    SELECT CASE WHEN count(*) > 0 AND count(DISTINCT evidence.alert_facts) = 1
+		                     AND bool_and(evidence.alert_facts <> '{}'::jsonb)
+		                THEN (array_agg(evidence.alert_facts))[1] END AS fact
+		    FROM cairnops_incident_evidence evidence
+		    WHERE evidence.incident_id = claimed.incident_id AND evidence.invalidated_at IS NULL
+		      AND (evidence.active OR claimed.resolved_at IS NOT NULL OR NOT EXISTS (
+		          SELECT 1 FROM cairnops_incident_evidence current
+		          WHERE current.incident_id = claimed.incident_id
+		            AND current.active AND current.invalidated_at IS NULL))
 		) evidence_context ON true
 		LEFT JOIN LATERAL (
 		    SELECT to_jsonb((array_agg(target.name ORDER BY impact.opened_at, impact.id))[1:3]) AS names

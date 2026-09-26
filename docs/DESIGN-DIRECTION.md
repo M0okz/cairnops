@@ -114,9 +114,9 @@ la troisième ligne, dans la limite de 80 caractères. Sinon, la troisième lign
 porte le contexte figé lors de la livraison, dans cet ordre : Propagation
 étendue, gravité précédente d'une hausse (« Auparavant : majeur »), durée d'une
 Résolution, premières Ressources d'un groupe, détail d'un fait identique sur
-toutes les Preuves (disque, domaine, nombre de correctifs, versions) et
-Intégrations d'origine (« via Zabbix »). Une donnée absente n'est jamais
-remplacée par une valeur supposée.
+toutes les Preuves (disque, domaine, nombre de correctifs, versions). Le nom de
+l'Intégration qui a produit l'alerte n'est pas affiché : il reste dans le détail
+de l'Incident. Une donnée absente n'est jamais remplacée par une valeur supposée.
 
 Le Push et Mattermost placent une pastille de gravité en tête du titre :
 🔵 information, 🟡 avertissement, 🟠 majeur, 🔴 critique et 🟢 résolu. Elle

@@ -41,20 +41,20 @@ func TestNotificationContextLineStatesOnlyDeliveredFacts(t *testing.T) {
 		s      Situation
 		fr, en string
 	}{
-		{"source", Situation{AffectedTargets: 1, TargetName: "Vikunja Todo", Severity: "critical", Context: Context{Sources: []string{"Uptime Kuma"}}},
-			"Indisponibilité\nvia Uptime Kuma", "Unavailability\nvia Uptime Kuma"},
-		{"technical resource", Situation{AlertKind: alerttext.DiskSpace, AffectedTargets: 1, TargetName: "trust-cairnops-01", Severity: "major", Context: Context{Fact: &alerttext.Fact{Kind: alerttext.DiskSpace, Resource: "/var"}, Sources: []string{"Zabbix"}}},
-			"Espace disque insuffisant\n/var · via Zabbix", "Low disk space\n/var · via Zabbix"},
-		{"security update count", Situation{AlertKind: alerttext.SecurityUpdates, AffectedTargets: 1, TargetName: "dmz-docker-01", Severity: "warning", Context: Context{Fact: &alerttext.Fact{Kind: alerttext.SecurityUpdates, Count: &count}, Sources: []string{"PatchMon"}}},
-			"Correctifs de sécurité requis\n4 correctifs de sécurité disponibles · via PatchMon", "Security updates required\n4 security updates available · via PatchMon"},
+		{"no integration name", Situation{AffectedTargets: 1, TargetName: "Vikunja Todo", Severity: "critical", Context: Context{}},
+			"Indisponibilité", "Unavailability"},
+		{"technical resource", Situation{AlertKind: alerttext.DiskSpace, AffectedTargets: 1, TargetName: "trust-cairnops-01", Severity: "major", Context: Context{Fact: &alerttext.Fact{Kind: alerttext.DiskSpace, Resource: "/var"}}},
+			"Espace disque insuffisant\n/var", "Low disk space\n/var"},
+		{"security update count", Situation{AlertKind: alerttext.SecurityUpdates, AffectedTargets: 1, TargetName: "dmz-docker-01", Severity: "warning", Context: Context{Fact: &alerttext.Fact{Kind: alerttext.SecurityUpdates, Count: &count}}},
+			"Correctifs de sécurité requis\n4 correctifs de sécurité disponibles", "Security updates required\n4 security updates available"},
 		{"escalation", Situation{AffectedTargets: 1, TargetName: "trust-cairnops-01", Severity: "critical", Context: Context{PreviousSeverity: "major"}},
 			"Indisponibilité\nAuparavant : majeur", "Unavailability\nPreviously: major"},
 		{"lower previous alert is not an escalation", Situation{AffectedTargets: 1, TargetName: "API", Severity: "warning", Context: Context{PreviousSeverity: "major"}},
 			"Indisponibilité", "Unavailability"},
-		{"group names", Situation{AffectedTargets: 5, Severity: "critical", Extended: true, Context: Context{TargetNames: []string{"Vikunja Todo", "Outline", "Gitea"}, Sources: []string{"Uptime Kuma", "Zabbix", "Proxmox VE"}}},
-			"Indisponibilité\nPropagation étendue · Vikunja Todo, Outline, Gitea +2 · via 3 Intégrations", "Unavailability\nExtended propagation · Vikunja Todo, Outline, Gitea +2 · via 3 integrations"},
-		{"resolution duration", Situation{Resolved: true, MaxAffected: 1, TotalTargets: 1, TargetName: "Vikunja Todo", Severity: "critical", Context: Context{DurationSeconds: 7500, Sources: []string{"Uptime Kuma"}, PreviousSeverity: "warning"}},
-			"Indisponibilité\nRétabli après 2 h 05 · via Uptime Kuma", "Unavailability\nRecovered after 2 h 05 · via Uptime Kuma"},
+		{"group names", Situation{AffectedTargets: 5, Severity: "critical", Extended: true, Context: Context{TargetNames: []string{"Vikunja Todo", "Outline", "Gitea"}}},
+			"Indisponibilité\nPropagation étendue · Vikunja Todo, Outline, Gitea +2", "Unavailability\nExtended propagation · Vikunja Todo, Outline, Gitea +2"},
+		{"resolution duration", Situation{Resolved: true, MaxAffected: 1, TotalTargets: 1, TargetName: "Vikunja Todo", Severity: "critical", Context: Context{DurationSeconds: 7500, PreviousSeverity: "warning"}},
+			"Indisponibilité\nRétabli après 2 h 05", "Unavailability\nRecovered after 2 h 05"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.s

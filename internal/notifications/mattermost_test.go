@@ -83,11 +83,11 @@ func TestMattermostUsesTheCompactNotificationTemplate(t *testing.T) {
 		AlertKind: alerttext.SystemLoad, NatureKey: "zabbix:connector:load", NatureScope: "connector",
 		NatureLabel: "Linux: Load average is too high (per CPU load over 1.5 for 5m)",
 		Severity:    incidents.SeverityMajor, AffectedTargets: 1,
-		Context: synthesis.Context{Sources: []string{"Zabbix"}},
+		Context: synthesis.Context{},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(payload.Attachments) != 1 || payload.Attachments[0].Title != "🟠 VictoriaLogs · majeur" || payload.Attachments[0].Text != "Charge système moyenne élevée\nvia Zabbix" {
+	if len(payload.Attachments) != 1 || payload.Attachments[0].Title != "🟠 VictoriaLogs · majeur" || payload.Attachments[0].Text != "Charge système moyenne élevée" {
 		t.Fatalf("Mattermost diverged from the shared template: %+v", payload)
 	}
 }
