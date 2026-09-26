@@ -1,4 +1,4 @@
-import type { Incident, Measure, ResourceCategory, Target } from './api';
+import type { Incident, IncidentSeverity, Measure, ResourceCategory, Target } from './api';
 
 export type HealthState = 'ok' | 'down' | 'degraded' | 'unknown' | 'maintenance';
 
@@ -16,23 +16,32 @@ export type CategoryHealth = {
   total: number;
   problems: number;
   updates: number;
+  tracking: { problems: number; updates: number; other: number };
+  attention: { crit: number; warn: number; info: number };
 };
 
 /** Une ressource contribue à une seule catégorie et à un seul état courant. */
-export function dashboardCategoryHealth(resources: Array<{ category?: ResourceCategory; state: HealthState; problem?: boolean; update?: boolean }>, categories: readonly ResourceCategory[]): CategoryHealth[] {
+export function dashboardCategoryHealth(resources: Array<{ category?: ResourceCategory; state: HealthState; problem?: boolean; problemSeverity?: IncidentSeverity; update?: boolean }>, categories: readonly ResourceCategory[]): CategoryHealth[] {
   const groups = new Map<ResourceCategory, CategoryHealth>();
   for (const resource of resources) {
     const category = categories.includes(resource.category ?? 'unclassified')
       ? resource.category ?? 'unclassified' : 'unclassified';
     let group = groups.get(category);
     if (!group) {
-      group = { category, counts: { ok: 0, down: 0, degraded: 0, unknown: 0, maintenance: 0 }, total: 0, problems: 0, updates: 0 };
+      group = { category, counts: { ok: 0, down: 0, degraded: 0, unknown: 0, maintenance: 0 }, total: 0, problems: 0, updates: 0,
+        tracking: { problems: 0, updates: 0, other: 0 }, attention: { crit: 0, warn: 0, info: 0 } };
       groups.set(category, group);
     }
     group.counts[resource.state]++;
     group.total++;
     if (resource.problem) group.problems++;
     if (resource.update) group.updates++;
+    if (resource.problem) group.attention[resource.problemSeverity === 'critical' || resource.problemSeverity === 'major' ? 'crit'
+      : resource.problemSeverity === 'information' ? 'info' : 'warn']++;
+    // Une seule part par ressource : un problème actif prime sur une mise à jour.
+    if (resource.problem) group.tracking.problems++;
+    else if (resource.update) group.tracking.updates++;
+    else group.tracking.other++;
   }
   const trackedOnly = (category: ResourceCategory) => category === 'scheduled_task' || category === 'software';
   const rank = (group: CategoryHealth) => {
@@ -72,17 +81,35 @@ export function dashboardCoverage(measures: Measure[]): number | null {
   return expected > 0 ? covered / expected : null;
 }
 
+/** Ressources affectées maintenant, classées par gravité puis par prise en charge. */
 export function dashboardIncidentLeaders(incidents: Incident[], targets: Target[]) {
-  const counts = new Map<string, number>();
+  const ranks: Record<IncidentSeverity, number> = { information: 1, warning: 2, major: 3, critical: 4 };
+  const counts = new Map<string, { count: number; unacknowledged: number; severity: IncidentSeverity }>();
   for (const incident of incidents) {
-    for (const targetID of new Set(incident.impacts.map((impact) => impact.target_id))) {
-      counts.set(targetID, (counts.get(targetID) ?? 0) + 1);
+    // Les anciennes notifications Argus de mise à jour ne sont pas des problèmes actifs.
+    if (incident.status !== 'active' || incident.nature_key === 'software-update-available') continue;
+    const impacts = new Map<string, IncidentSeverity>();
+    for (const impact of incident.impacts) {
+      if (impact.status !== 'active') continue;
+      const previous = impacts.get(impact.target_id);
+      if (!previous || ranks[impact.effective_severity] > ranks[previous]) impacts.set(impact.target_id, impact.effective_severity);
+    }
+    for (const [targetID, severity] of impacts) {
+      const current = counts.get(targetID);
+      counts.set(targetID, {
+        count: (current?.count ?? 0) + 1,
+        unacknowledged: (current?.unacknowledged ?? 0) + (incident.acknowledged_at ? 0 : 1),
+        severity: current && ranks[current.severity] > ranks[severity] ? current.severity : severity
+      });
     }
   }
   return targets
     .filter((target) => counts.has(target.id))
-    .map((target) => ({ target, count: counts.get(target.id)! }))
-    .sort((left, right) => right.count - left.count || left.target.name.localeCompare(right.target.name))
+    .map((target) => ({ target, ...counts.get(target.id)! }))
+    .sort((left, right) => ranks[right.severity] - ranks[left.severity]
+      || right.unacknowledged - left.unacknowledged
+      || right.count - left.count
+      || left.target.name.localeCompare(right.target.name))
     .slice(0, 7);
 }
 
