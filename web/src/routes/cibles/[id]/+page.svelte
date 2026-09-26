@@ -394,7 +394,7 @@
                 : t('incident.unacknowledged')}
             </strong>
             <p>
-              {plural('target.failingSources', failingCount, {
+              {plural(lead.nature_key === 'availability' ? 'target.failingSources' : 'target.reportingSources', failingCount, {
                 live: liveCount,
                 duration: since(lead.opened_at, now)
               })}

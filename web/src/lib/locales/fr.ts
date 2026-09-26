@@ -786,6 +786,10 @@ export const fr = {
     '{count} Contrôle sur {live} ne joint plus le service depuis {duration}.',
   'target.failingSources_other':
     '{count} Contrôles sur {live} ne joignent plus le service depuis {duration}.',
+  'target.reportingSources_one':
+    '{count} Contrôle sur {live} signale ce problème depuis {duration}.',
+  'target.reportingSources_other':
+    '{count} Contrôles sur {live} signalent ce problème depuis {duration}.',
   'target.dissenting_one':
     '{sources} répond toujours Opérationnel — le désaccord est signalé sans créer un État de santé supplémentaire.',
   'target.dissenting_other':

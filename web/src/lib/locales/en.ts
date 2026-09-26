@@ -787,6 +787,10 @@ export const en: Record<MessageKey, string> = {
     '{count} Check out of {live} has not reached the service for {duration}.',
   'target.failingSources_other':
     '{count} Checks out of {live} have not reached the service for {duration}.',
+  'target.reportingSources_one':
+    '{count} Check out of {live} has reported this problem for {duration}.',
+  'target.reportingSources_other':
+    '{count} Checks out of {live} have reported this problem for {duration}.',
   'target.dissenting_one':
     '{sources} still answers Operational — the disagreement is reported without creating another health State.',
   'target.dissenting_other':
