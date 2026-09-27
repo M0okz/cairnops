@@ -5,6 +5,7 @@
   import { stamp } from "$lib/format";
   import {
     currentAnalysis,
+    currentCollection,
     rateLimitedHost,
     safeReleaseURL,
     type ReleaseSource,
@@ -26,12 +27,13 @@
   );
   let source = $state<ReleaseSource>({ kind: "github", url: "", software: "" });
   const analysis = $derived(service ? currentAnalysis(service) : undefined);
+  const collection = $derived(service ? currentCollection(service) : null);
   const previous = $derived(
     service?.analyses.filter((a) => a.id !== analysis?.id) ?? [],
   );
   const archives = $derived(service?.archives.filter((archive) => !archive.current) ?? []);
   const missing = $derived(
-    service?.collection?.notes.filter((n) => n.missing) ?? [],
+    collection?.notes.filter((n) => n.missing) ?? [],
   );
   const comparable = $derived(
     service?.situation === "update" || service?.situation === "prerelease",
@@ -212,17 +214,11 @@
             ? t("updates.invalidAI")
             : t("updates.failed")}
       </p>{/if}
-    {#if service.collection && service.collection_revision !== service.revision}<p
-        class="muted"
-      >
-        {t("updates.oldNotes")} · {service.collection.installed_version} → {service
-          .collection.target_version}
-      </p>{/if}
-    {#if missing.length || service.collection?.incomplete}
+    {#if missing.length || collection?.incomplete}
       <aside class="partial">
         <strong>{t("updates.partial")}</strong>{#if missing.length}<p>
             {t("updates.missing")} : {missing.map((n) => n.version).join(", ")}
-          </p>{/if}{#if service.collection?.incomplete}<p>
+          </p>{/if}{#if collection?.incomplete}<p>
             {t("updates.catalogueIncomplete")}
           </p>{/if}
       </aside>
@@ -236,7 +232,7 @@
       </div>
       {#if analysis}<ReleasePoints
           points={analysis.result.overview}
-          notes={service.collection?.notes}
+          notes={collection?.notes}
           source={analysis.source}
         />{#if !analysis.result.overview.length}<p class="muted">
             {t("updates.noChanges")}
@@ -245,10 +241,10 @@
           {t("updates.current")}
         </p>{:else if comparable}<p class="muted">{t("updates.noSummary")}</p>{/if}
     </section>{/if}
-    {#if service.collection?.notes.length}
+    {#if collection?.notes.length}
       <section>
         <h3>{t("updates.byVersion")}</h3>
-        {#each service.collection.notes as note (note.version)}
+        {#each collection.notes as note (note.version)}
           <details class="release">
             <summary
               ><strong class="mono">{note.version}</strong

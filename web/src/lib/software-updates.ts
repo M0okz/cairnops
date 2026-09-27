@@ -130,6 +130,13 @@ export function currentAnalysis(
       a.target_version === service.target_version,
   );
 }
+export function currentCollection(service: SoftwareService): SoftwareService["collection"] {
+  return service.collection_revision === service.revision &&
+    service.collection?.installed_version === service.installed_version &&
+    service.collection?.target_version === service.target_version
+    ? service.collection
+    : null;
+}
 
 const levelRank: Record<UpdateLevel, number> = { major: 0, minor: 1, patch: 2 };
 const situationRank: Partial<Record<UpdateSituation, number>> = {

@@ -107,7 +107,7 @@ func (s *Store) Get(ctx context.Context, id string) (Service, error) {
 			rows.Close()
 			return v, err
 		}
-		archive.Current = v.Collection != nil && archive.Installed == v.Collection.Installed && archive.Target == v.Collection.Target && archive.Source == v.Source && archive.Hash == v.ContentHash
+		archive.Current = v.Collection != nil && v.CollectionRevision != nil && *v.CollectionRevision == v.Revision && archive.Installed == v.Installed && archive.Target == v.Target && archive.Source == v.Source && archive.Hash == v.ContentHash
 		v.Archives = append(v.Archives, archive)
 	}
 	err = rows.Err()

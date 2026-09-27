@@ -139,6 +139,10 @@ func TestWorkerKeepsOfficialNotesAfterAnInstalledVersionChangeWithoutAI(t *testi
 	if _, err := s.pool.Exec(ctx, `UPDATE cairnops_connector_bindings SET metadata=metadata||'{"deployed_version":"2.7.0"}' WHERE id=$1::uuid`, id); err != nil {
 		t.Fatal(err)
 	}
+	changed, err := s.Get(ctx, id)
+	if err != nil || len(changed.Archives) != 1 || changed.Archives[0].Current {
+		t.Fatalf("previous collection was still classified as current: %+v %v", changed.Archives, err)
+	}
 	if err := w.tick(ctx); err != nil {
 		t.Fatal(err)
 	}

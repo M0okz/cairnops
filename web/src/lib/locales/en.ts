@@ -106,7 +106,6 @@ export const en: Record<MessageKey, string> = {
   "updates.save": "Save",
   "updates.settings": "Configure AI analysis",
   "updates.summaryFrench": "AI summary in French",
-  "updates.oldNotes": "Notes retained for a previous comparison",
   "updates.group.apply": "To apply",
   "updates.group.review": "To review",
   "updates.group.current": "Up to date",
