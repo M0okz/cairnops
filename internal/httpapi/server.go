@@ -117,6 +117,7 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("GET /api/v1/software-updates/{serviceID}", identityHTTP.requireSession(http.HandlerFunc(h.get)))
 		mux.Handle("PUT /api/v1/software-updates/{serviceID}/source", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(h.confirm)))))
 		mux.Handle("GET /api/v1/software-update-settings", identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(h.config))))
+		mux.Handle("GET /api/v1/software-update-settings/usage", identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(h.usage))))
 		mux.Handle("PUT /api/v1/software-update-settings", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(h.saveConfig)))))
 	}
 	if options.ControlPlane != nil && options.Identity != nil {

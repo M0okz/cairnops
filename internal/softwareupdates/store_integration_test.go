@@ -36,6 +36,29 @@ func fixture(t *testing.T) (*Store, string, string) {
 	}
 	return s, id, actor
 }
+func TestAIUsageHistoryTracksCurrentProviderAndUnreportedCalls(t *testing.T) {
+	s, _, _ := fixture(t)
+	ctx := context.Background()
+	for _, item := range []struct {
+		endpoint string
+		usage    AIUsage
+	}{
+		{"https://provider.example/v1", AIUsage{PromptTokens: 10, CompletionTokens: 4, TotalTokens: 18, Reported: true}},
+		{"https://provider.example/v1", AIUsage{}},
+		{"https://other.example/v1", AIUsage{PromptTokens: 99, CompletionTokens: 99, TotalTokens: 198, Reported: true}},
+	} {
+		if err := s.RecordAIUsage(ctx, AIConfig{Endpoint: item.endpoint, Model: "test"}, item.usage); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SaveConfig(ctx, AIConfig{Endpoint: "https://provider.example/v1", Model: "test", APIKey: "private-key"}); err != nil {
+		t.Fatal(err)
+	}
+	history, err := s.AIUsageHistory(ctx)
+	if err != nil || len(history.Days) != 1 || history.Days[0].Requests != 2 || history.Days[0].Unreported != 1 || history.Days[0].TotalTokens != 18 {
+		t.Fatalf("history=%+v err=%v", history, err)
+	}
+}
 func TestHistoryPreservesRollbackAndUnknownValues(t *testing.T) {
 	s, id, _ := fixture(t)
 	ctx := context.Background()

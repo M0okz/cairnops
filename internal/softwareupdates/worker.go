@@ -144,7 +144,11 @@ func (w *Worker) tick(ctx context.Context) error {
 	if !cfg.Enabled {
 		return finish("awaiting_ai", "", 86400)
 	}
-	summary, err := Generate(jobCtx, w.client, cfg, c)
+	summary, err := GenerateWithUsage(jobCtx, w.client, cfg, c, func(usage AIUsage) {
+		if recordErr := w.store.RecordAIUsage(jobCtx, cfg, usage); recordErr != nil {
+			w.logger.Warn("software AI usage recording failed", "error", recordErr)
+		}
+	})
 	if err != nil {
 		return deferred(err)
 	}

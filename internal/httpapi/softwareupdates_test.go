@@ -31,6 +31,9 @@ func (f *fakeSoftware) SaveConfig(context.Context, softwareupdates.AIConfig) err
 	f.saved = true
 	return nil
 }
+func (f *fakeSoftware) AIUsageHistory(context.Context) (softwareupdates.AIUsageHistory, error) {
+	return softwareupdates.AIUsageHistory{Days: []softwareupdates.AIUsageDay{}}, nil
+}
 func TestSoftwareSettingsRequireAdministratorAndSameOrigin(t *testing.T) {
 	for _, tt := range []struct {
 		role, origin string
@@ -70,6 +73,22 @@ func TestSoftwareReadNeedsSessionAndRejectsInvalidTarget(t *testing.T) {
 		s.Handler.ServeHTTP(rec, req)
 		if rec.Code != tt.want {
 			t.Fatalf("%s: %d", tt.path, rec.Code)
+		}
+	}
+}
+
+func TestSoftwareUsageRequiresAdministrator(t *testing.T) {
+	for _, tt := range []struct {
+		role string
+		want int
+	}{{"observer", 403}, {"operator", 403}, {"administrator", 200}} {
+		s := NewServer(ServerOptions{Identity: &roleIdentity{fakeIdentity: &fakeIdentity{}, role: tt.role}, SoftwareUpdates: &fakeSoftware{}})
+		req := httptest.NewRequest("GET", "/api/v1/software-update-settings/usage", nil)
+		req.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+		rec := httptest.NewRecorder()
+		s.Handler.ServeHTTP(rec, req)
+		if rec.Code != tt.want {
+			t.Fatalf("role=%s: %d %s", tt.role, rec.Code, rec.Body.String())
 		}
 	}
 }

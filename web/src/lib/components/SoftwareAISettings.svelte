@@ -1,9 +1,9 @@
 <script lang="ts">
   import { aiProviders, providerForEndpoint } from "$lib/ai-providers";
   import { api } from "$lib/api";
-  import { t } from "$lib/i18n.svelte";
+  import { localeTag, t } from "$lib/i18n.svelte";
   import { messageFrom } from "$lib/session.svelte";
-  import type { SoftwareAIConfig } from "$lib/software-updates";
+  import type { SoftwareAIConfig, SoftwareAIUsageHistory } from "$lib/software-updates";
   import { Input } from "./ui/input";
   import { Button } from "./ui/button";
   import Switch from "./ui/Switch.svelte";
@@ -13,6 +13,17 @@
   let providerID = $state("");
   let customModel = $state(false);
   let savedEndpoint = $state("");
+  let usage = $state<SoftwareAIUsageHistory | null>(null);
+  let usageError = $state("");
+  const totals = $derived((usage?.days ?? []).reduce((sum, day) => ({
+    requests: sum.requests + day.requests,
+    unreported: sum.unreported + day.unreported,
+    prompt: sum.prompt + day.prompt_tokens,
+    completion: sum.completion + day.completion_tokens,
+    tokens: sum.tokens + day.total_tokens,
+  }), { requests: 0, unreported: 0, prompt: 0, completion: 0, tokens: 0 }));
+  const number = (value: number) => new Intl.NumberFormat(localeTag()).format(value);
+  const date = (value: string) => new Intl.DateTimeFormat(localeTag(), { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`));
   const provider = $derived(
     aiProviders.find((entry) => entry.id === providerID),
   );
@@ -60,8 +71,17 @@
       config = await api<SoftwareAIConfig>("/api/v1/software-update-settings");
       restoreSelection();
       error = "";
+      await loadUsage();
     } catch (e) {
       error = messageFrom(e);
+    }
+  }
+  async function loadUsage() {
+    try {
+      usage = await api<SoftwareAIUsageHistory>("/api/v1/software-update-settings/usage");
+      usageError = "";
+    } catch (e) {
+      usageError = messageFrom(e);
     }
   }
   $effect(() => {
@@ -81,6 +101,7 @@
       key = "";
       restoreSelection();
       saved = true;
+      await loadUsage();
     } catch (e) {
       error = messageFrom(e);
     } finally {
@@ -182,6 +203,32 @@
         {#if saved}<span role="status">{t("updates.saved")}</span>{/if}
       </div>
     </form>
+    <div class="usage-section">
+      <div class="usage-heading">
+        <div><h3>{t("updates.usageTitle")}</h3><p>{t("updates.usageScope")}</p></div>
+        {#if providerForEndpoint(savedEndpoint)?.id === 'gemini'}
+          <a href="https://aistudio.google.com/billing" target="_blank" rel="noopener noreferrer">{t("updates.geminiBilling")}</a>
+        {/if}
+      </div>
+      {#if usageError}<p role="alert">{usageError} <button class="usage-retry" onclick={loadUsage}>{t("updates.retry")}</button></p>{/if}
+      {#if usage}
+        {#if totals.requests > 0}
+          <div class="usage-totals">
+            <div><strong>{number(totals.tokens)}</strong><span>{t("updates.usageTokens")}</span></div>
+            <div><strong>{number(totals.requests)}</strong><span>{t("updates.usageRequests")}</span></div>
+          </div>
+          <p class="usage-note">{t("updates.usageNote")}</p>
+          {#if totals.unreported > 0}<p class="usage-note">{t("updates.usageUnreported", { count: number(totals.unreported) })}</p>{/if}
+          <details>
+            <summary>{t("updates.usageDetails")}</summary>
+            <div class="usage-scroll"><table>
+              <thead><tr><th scope="col">{t("updates.usageDate")}</th><th scope="col">{t("updates.usageRequests")}</th><th scope="col">{t("updates.usageInput")}</th><th scope="col">{t("updates.usageOutput")}</th><th scope="col">{t("updates.usageTokens")}</th></tr></thead>
+              <tbody>{#each usage.days as day}<tr><th scope="row">{date(day.date)}</th><td>{number(day.requests)}</td><td>{number(day.prompt_tokens)}</td><td>{number(day.completion_tokens)}</td><td>{number(day.total_tokens)}</td></tr>{/each}</tbody>
+            </table></div>
+          </details>
+        {:else}<p class="usage-note">{t("updates.usageEmpty")}</p>{/if}
+      {:else if !usageError}<p class="usage-note" role="status">{t("updates.loading")}</p>{/if}
+    </div>
   {:else if error}<button class="btn" onclick={load}
       >{t("updates.retry")}</button
     >{:else}<p role="status">{t("updates.loading")}</p>{/if}
@@ -223,6 +270,23 @@
     align-items: center;
     gap: var(--s3);
   }
+  .usage-section { padding: var(--s4) var(--s5) var(--s5); border-top: 1px solid var(--line); }
+  .usage-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--s3); }
+  .usage-heading h3 { margin: 0; font-size: var(--text-sm); }
+  .usage-heading p, .usage-note { margin: var(--s2) 0; color: var(--faint); font-size: var(--text-xs); line-height: 1.5; }
+  .usage-heading a { font-size: var(--text-xs); color: var(--text); text-decoration: underline; }
+  .usage-totals { display: flex; gap: var(--s5); flex-wrap: wrap; margin: var(--s4) 0 var(--s2); }
+  .usage-totals div { display: grid; gap: var(--s1); }
+  .usage-totals strong { font-family: var(--font-num); font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+  .usage-totals span { color: var(--faint); font-size: var(--text-xs); }
+  details { margin-top: var(--s4); }
+  summary { cursor: pointer; font-size: var(--text-sm); }
+  .usage-scroll { overflow-x: auto; margin-top: var(--s3); }
+  table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+  th, td { padding: var(--s2); text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child { text-align: left; }
+  thead th { color: var(--faint); font-weight: 500; }
+  .usage-retry { text-decoration: underline; }
   @media (max-width: 58rem) { form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 48rem) { form { grid-template-columns: minmax(0, 1fr); } .software-heading { align-items: start; } }
 </style>

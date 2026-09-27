@@ -109,6 +109,15 @@ export type SoftwareAIConfig = {
   key_configured: boolean;
   api_key?: string;
 };
+export type SoftwareAIUsageDay = {
+  date: string;
+  requests: number;
+  unreported: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+};
+export type SoftwareAIUsageHistory = { days: SoftwareAIUsageDay[] };
 export function safeReleaseURL(raw: string): string | undefined {
   try {
     const url = new URL(raw);

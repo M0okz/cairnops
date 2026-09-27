@@ -424,6 +424,23 @@ components:
       - enabled
       - endpoint
       - model
+    SoftwareAIUsageDay:
+      type: object
+      required: [date, requests, unreported, prompt_tokens, completion_tokens, total_tokens]
+      properties:
+        date: { type: string, format: date, description: Jour UTC. }
+        requests: { type: integer, format: int64 }
+        unreported: { type: integer, format: int64, description: Réponses sans compteur de jetons exploitable. }
+        prompt_tokens: { type: integer, format: int64 }
+        completion_tokens: { type: integer, format: int64 }
+        total_tokens: { type: integer, format: int64 }
+    SoftwareAIUsageHistory:
+      type: object
+      required: [days]
+      properties:
+        days:
+          type: array
+          items: { $ref: '#/components/schemas/SoftwareAIUsageDay' }
     User:
       type: object
       required: [id, username, display_name, role, authorization_regime]
@@ -2052,6 +2069,23 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/SoftwareAIConfigurationInput'
+  /api/v1/software-update-settings/usage:
+    get:
+      summary: Lire la consommation locale du fournisseur IA configuré sur 30 jours UTC
+      description: Réservé aux Administrateurs. Compte les réponses HTTP réussies reçues par CairnOps, y compris les tentatives dont le contenu a été rejeté. Ne représente ni le coût facturé ni le solde du fournisseur. L'historique commence après l'installation de cette fonctionnalité.
+      security:
+      - SessionCookie: []
+      - DeviceBearer: []
+      responses:
+        '200':
+          description: Historique quotidien du fournisseur configuré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftwareAIUsageHistory'
+        '401': { description: Session requise }
+        '403': { description: Administrateur requis }
+        '500': { description: Erreur interne }
   /api/v1/health/live:
     get:
       operationId: getLiveness

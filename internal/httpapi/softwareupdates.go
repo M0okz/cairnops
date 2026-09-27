@@ -15,6 +15,7 @@ type SoftwareUpdates interface {
 	Confirm(context.Context, string, string, softwareupdates.Source) error
 	Config(context.Context) (softwareupdates.AIConfig, error)
 	SaveConfig(context.Context, softwareupdates.AIConfig) error
+	AIUsageHistory(context.Context) (softwareupdates.AIUsageHistory, error)
 }
 type softwareHandler struct{ service SoftwareUpdates }
 
@@ -73,6 +74,14 @@ func (h softwareHandler) config(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, c)
+}
+func (h softwareHandler) usage(w http.ResponseWriter, r *http.Request) {
+	history, err := h.service.AIUsageHistory(r.Context())
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	writeJSON(w, 200, history)
 }
 func (h softwareHandler) saveConfig(w http.ResponseWriter, r *http.Request) {
 	var c softwareupdates.AIConfig

@@ -207,3 +207,38 @@ func (s *Store) runtimeConfig(ctx context.Context) (AIConfig, error) {
 	c.APIKey = string(key)
 	return c, err
 }
+
+func (s *Store) RecordAIUsage(ctx context.Context, cfg AIConfig, usage AIUsage) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO cairnops_software_ai_usage
+ (endpoint,model,prompt_tokens,completion_tokens,total_tokens,reported)
+ VALUES ($1,$2,$3,$4,$5,$6)`, cfg.Endpoint, cfg.Model, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.Reported)
+	return err
+}
+
+func (s *Store) AIUsageHistory(ctx context.Context) (AIUsageHistory, error) {
+	config, err := s.Config(ctx)
+	if err != nil {
+		return AIUsageHistory{}, err
+	}
+	history := AIUsageHistory{Days: []AIUsageDay{}}
+	if config.Endpoint == "" {
+		return history, nil
+	}
+	rows, err := s.pool.Query(ctx, `SELECT (created_at AT TIME ZONE 'UTC')::date::text,
+ count(*),count(*) FILTER (WHERE NOT reported),sum(prompt_tokens),sum(completion_tokens),sum(total_tokens)
+ FROM cairnops_software_ai_usage WHERE endpoint=$1
+ AND created_at >= (date_trunc('day',now() AT TIME ZONE 'UTC') - interval '29 days') AT TIME ZONE 'UTC'
+ GROUP BY 1 ORDER BY 1 DESC`, config.Endpoint)
+	if err != nil {
+		return history, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var day AIUsageDay
+		if err := rows.Scan(&day.Date, &day.Requests, &day.Unreported, &day.PromptTokens, &day.CompletionTokens, &day.TotalTokens); err != nil {
+			return history, err
+		}
+		history.Days = append(history.Days, day)
+	}
+	return history, rows.Err()
+}

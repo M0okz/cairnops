@@ -25,6 +25,27 @@ func TestGenerateResolvesEvidenceWithoutModelRecopy(t *testing.T) {
 	}
 }
 
+func TestGenerateRecordsEveryProviderResponseIncludingRepair(t *testing.T) {
+	calls := 0
+	client := &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		id := "invalid"
+		usage := `"usage":{"prompt_tokens":13,"completion_tokens":7,"total_tokens":23}`
+		if calls == 2 {
+			id = "e1"
+			usage = `"usage":{}`
+		}
+		return response(fmt.Sprintf(`{"choices":[{"finish_reason":"stop","message":{"content":%q}}],%s}`, fmt.Sprintf(`{"overview":[{"category":"fix","text":"Correction documentée","evidence_id":%q}],"details":[]}`, id), usage)), nil
+	})}
+	var recorded []AIUsage
+	_, err := GenerateWithUsage(context.Background(), client, AIConfig{Endpoint: "https://provider.example/v1"}, Collection{Notes: []Note{{Version: "2.0", Body: "Fixed database migrations for MySQL."}}}, func(usage AIUsage) {
+		recorded = append(recorded, usage)
+	})
+	if err != nil || calls != 2 || len(recorded) != 2 || !recorded[0].Reported || recorded[0].TotalTokens != 23 || recorded[1].Reported {
+		t.Fatalf("calls=%d usage=%+v err=%v", calls, recorded, err)
+	}
+}
+
 func TestWorkerAdoptsArgusSourceWithoutConfirmation(t *testing.T) {
 	s, id, _ := fixture(t)
 	w := NewWorker(s, nil)

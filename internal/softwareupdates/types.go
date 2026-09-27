@@ -105,3 +105,25 @@ type AIConfig struct {
 	KeyConfigured bool   `json:"key_configured"`
 	APIKey        string `json:"api_key,omitempty"`
 }
+
+// AIUsage records one completed provider response, including responses whose
+// content CairnOps later rejects and retries.
+type AIUsage struct {
+	PromptTokens     int64 `json:"prompt_tokens"`
+	CompletionTokens int64 `json:"completion_tokens"`
+	TotalTokens      int64 `json:"total_tokens"`
+	Reported         bool  `json:"reported"`
+}
+
+type AIUsageDay struct {
+	Date             string `json:"date"`
+	Requests         int64  `json:"requests"`
+	Unreported       int64  `json:"unreported"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+	TotalTokens      int64  `json:"total_tokens"`
+}
+
+type AIUsageHistory struct {
+	Days []AIUsageDay `json:"days"`
+}
