@@ -1,6 +1,6 @@
 # Suivi des mises à jour logicielles
 
-La vue **Mises à jour** et l'onglet homonyme d'une Ressource montrent les services importés depuis Argus. Dans la vue globale, **Consulter les changements** ouvre un volet latéral qui regroupe la comparaison courante, les notes officielles, l'historique des versions constatées et les notes et synthèses des comparaisons passées. Les versions réellement observées déterminent la comparaison, y compris après un retour arrière. Aucun bouton ne déclenche un déploiement.
+La vue **Mises à jour** et l'onglet homonyme d'une Ressource montrent les services importés depuis Argus. Dans la vue globale, **Consulter les changements** ouvre un volet latéral. Son journal présente dans un seul ordre chronologique les constats Argus, les changements de version, les notes officielles collectées et les synthèses, y compris celles des comparaisons passées. Les notes longues affichent d'abord un extrait et peuvent être lues en entier depuis leur entrée. Les versions réellement observées déterminent la comparaison, y compris après un retour arrière. Aucun bouton ne déclenche un déploiement.
 
 ## Classement des services
 

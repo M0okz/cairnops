@@ -147,6 +147,45 @@ export function currentCollection(service: SoftwareService): SoftwareService["co
     : null;
 }
 
+export type SoftwareJournalEntry =
+  | { kind: "observation"; id: string; at: string; event: VersionEvent }
+  | { kind: "notes"; id: string; at: string; archive: ReleaseArchive; current: boolean }
+  | { kind: "analysis"; id: string; at: string; analysis: ReleaseAnalysis; current: boolean };
+
+/** Merge Argus observations and collected material into one dated reading order. */
+export function softwareJournal(service: SoftwareService): SoftwareJournalEntry[] {
+  const entries: SoftwareJournalEntry[] = [
+    ...service.events.map((event, index): SoftwareJournalEntry => ({
+      kind: "observation", id: `observation-${index}`, at: event.observed_at, event,
+    })),
+    ...service.archives.map((archive): SoftwareJournalEntry => ({
+      kind: "notes", id: `notes-${archive.id}`, at: archive.captured_at, archive,
+      current: archive.current,
+    })),
+    ...service.analyses.map((analysis): SoftwareJournalEntry => ({
+      kind: "analysis", id: `analysis-${analysis.id}`, at: analysis.created_at, analysis,
+      current: currentAnalysis(service)?.id === analysis.id,
+    })),
+  ];
+  // Older installations may have a live collection but no archived snapshot yet.
+  const collection = currentCollection(service);
+  if (collection && !service.archives.some((archive) => archive.current)) {
+    entries.push({
+      kind: "notes", id: "notes-current", at: service.checked_at ?? service.observed_at ?? new Date(0).toISOString(),
+      current: true,
+      archive: {
+        id: 0, installed_version: collection.installed_version,
+        target_version: collection.target_version, source: service.source,
+        notes: collection.notes, incomplete: collection.incomplete,
+        captured_at: service.checked_at ?? service.observed_at ?? new Date(0).toISOString(),
+        current: true,
+      },
+    });
+  }
+  const order = { observation: 0, analysis: 1, notes: 2 };
+  return entries.sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || order[a.kind] - order[b.kind] || a.id.localeCompare(b.id));
+}
+
 const levelRank: Record<UpdateLevel, number> = { major: 0, minor: 1, patch: 2 };
 const situationRank: Partial<Record<UpdateSituation, number>> = {
   unknown: 0,
