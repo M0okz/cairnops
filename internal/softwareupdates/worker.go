@@ -97,12 +97,28 @@ func (w *Worker) tick(ctx context.Context) error {
 	bytes, _ := json.Marshal(c)
 	hashBytes := sha256.Sum256(bytes)
 	hash := hex.EncodeToString(hashBytes[:])
-	result, err := w.store.pool.Exec(jobCtx, `UPDATE cairnops_software_services SET collection=$4::jsonb,collection_revision=$3,checked_at=now(),content_hash=$5 WHERE binding_id=$1::uuid AND lease_token=$2 AND revision=$3`, id, token, service.Revision, bytes, hash)
+	tx, err := w.store.pool.Begin(jobCtx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(jobCtx)
+	result, err := tx.Exec(jobCtx, `UPDATE cairnops_software_services SET collection=$4::jsonb,collection_revision=$3,checked_at=now(),content_hash=$5 WHERE binding_id=$1::uuid AND lease_token=$2 AND revision=$3`, id, token, service.Revision, bytes, hash)
 	if err != nil {
 		return err
 	}
 	if result.RowsAffected() == 0 {
+		_ = tx.Rollback(jobCtx)
 		return finish("pending", "", 0)
+	}
+	if len(c.Notes) > 0 {
+		_, err = tx.Exec(jobCtx, `INSERT INTO cairnops_software_note_archives(binding_id,installed_version,target_version,source,content_hash,notes,incomplete)
+ VALUES($1::uuid,$2,$3,$4::jsonb,$5,$6::jsonb,$7) ON CONFLICT DO NOTHING`, id, service.Installed, service.Target, mustJSON(service.Source), hash, mustJSON(c.Notes), c.Incomplete)
+		if err != nil {
+			return err
+		}
+	}
+	if err = tx.Commit(jobCtx); err != nil {
+		return err
 	}
 	// Réutiliser le résultat exact même après un retour à une comparaison déjà analysée.
 	var cachedID int64

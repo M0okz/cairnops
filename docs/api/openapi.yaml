@@ -170,6 +170,25 @@ components:
       - created_at
       - current
       - notes
+    SoftwareReleaseArchive:
+      type: object
+      description: Notes officielles conservées pour une comparaison, même sans analyse IA.
+      properties:
+        id: { type: integer }
+        installed_version: { type: string }
+        target_version: { type: string }
+        source:
+          $ref: '#/components/schemas/SoftwareReleaseSource'
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoftwareReleaseNote'
+        incomplete: { type: boolean }
+        captured_at:
+          type: string
+          format: date-time
+        current: { type: boolean }
+      required: [id, installed_version, target_version, source, notes, incomplete, captured_at, current]
     SoftwareVersionObservation:
       type: object
       properties:
@@ -304,6 +323,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SoftwareReleaseAnalysis'
+        archives:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoftwareReleaseArchive'
         history:
           type: array
           items:
@@ -339,6 +362,7 @@ components:
       - collection
       - collection_revision
       - analyses
+      - archives
       - history
       - events
     SoftwareVersionEvent:
@@ -1903,7 +1927,7 @@ paths:
           type: string
           format: uuid
       description: Liste sans notes ni analyses détaillées, triée par nom de Ressource.
-        Les tableaux analyses, history et events sont vides ; collection est null.
+        Les tableaux analyses, archives, history et events sont vides ; collection est null.
   /api/v1/software-updates/{serviceID}:
     get:
       summary: Consulter notes, synthèses et historique
@@ -1925,8 +1949,8 @@ paths:
           description: Erreur interne
         '404':
           description: Service inconnu
-      description: Renvoie les 30 dernières analyses et les 500 derniers constats ;
-        les enregistrements antérieurs restent conservés en base.
+      description: Renvoie les analyses, notes officielles archivées et constats
+        conservés pour le service, du plus récent au plus ancien.
     parameters:
     - in: path
       name: serviceID

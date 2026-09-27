@@ -27,6 +27,16 @@ export type ReleaseAnalysis = {
   created_at: string;
   current: boolean;
 };
+export type ReleaseArchive = {
+  id: number;
+  installed_version: string;
+  target_version: string;
+  source: ReleaseSource;
+  notes: ReleaseNote[];
+  incomplete: boolean;
+  captured_at: string;
+  current: boolean;
+};
 export type UpdateGroup = "apply" | "review" | "current";
 export type UpdateSituation =
   | "update"
@@ -84,6 +94,7 @@ export type SoftwareService = {
   } | null;
   collection_revision: number | null;
   analyses: ReleaseAnalysis[];
+  archives: ReleaseArchive[];
   history: {
     installed_version: string;
     target_version: string;

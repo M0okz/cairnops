@@ -44,6 +44,7 @@ func scanService(row pgx.Row) (Service, error) {
 		&s.Source, &s.SourceOrigin, &s.ConfirmedAt, &s.Revision, &s.State, &s.LastError, &s.CheckedAt, &s.Collection, &s.CollectionRevision, &s.ContentHash, &candidate, &s.NextCheckAt)
 	s.Suggested = Suggest(candidate)
 	s.Analyses = []Analysis{}
+	s.Archives = []NoteArchive{}
 	s.History = []History{}
 	s.Events = []Event{}
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -78,7 +79,7 @@ func (s *Store) Get(ctx context.Context, id string) (Service, error) {
 	if err != nil {
 		return v, err
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id,revision,installed_version,target_version,source,content_hash,result,model,created_at,notes FROM cairnops_software_analyses WHERE binding_id=$1::uuid ORDER BY id DESC LIMIT 30`, id)
+	rows, err := s.pool.Query(ctx, `SELECT id,revision,installed_version,target_version,source,content_hash,result,model,created_at,notes FROM cairnops_software_analyses WHERE binding_id=$1::uuid ORDER BY id DESC`, id)
 	if err != nil {
 		return v, err
 	}
@@ -96,8 +97,25 @@ func (s *Store) Get(ctx context.Context, id string) (Service, error) {
 	if err != nil {
 		return v, err
 	}
-	const historyLimit = 500
-	rows, err = s.pool.Query(ctx, `SELECT installed_version,target_version,observed_at FROM cairnops_software_history WHERE binding_id=$1::uuid ORDER BY id DESC LIMIT $2`, id, historyLimit+1)
+	rows, err = s.pool.Query(ctx, `SELECT id,installed_version,target_version,source,content_hash,notes,incomplete,captured_at FROM cairnops_software_note_archives WHERE binding_id=$1::uuid ORDER BY id DESC`, id)
+	if err != nil {
+		return v, err
+	}
+	for rows.Next() {
+		var archive NoteArchive
+		if err = rows.Scan(&archive.ID, &archive.Installed, &archive.Target, &archive.Source, &archive.Hash, &archive.Notes, &archive.Incomplete, &archive.CapturedAt); err != nil {
+			rows.Close()
+			return v, err
+		}
+		archive.Current = v.Collection != nil && archive.Installed == v.Collection.Installed && archive.Target == v.Collection.Target && archive.Source == v.Source && archive.Hash == v.ContentHash
+		v.Archives = append(v.Archives, archive)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return v, err
+	}
+	rows, err = s.pool.Query(ctx, `SELECT installed_version,target_version,observed_at FROM cairnops_software_history WHERE binding_id=$1::uuid ORDER BY id DESC`, id)
 	if err != nil {
 		return v, err
 	}
@@ -112,11 +130,7 @@ func (s *Store) Get(ctx context.Context, id string) (Service, error) {
 	if err = rows.Err(); err != nil {
 		return v, err
 	}
-	truncated := len(v.History) > historyLimit
-	v.Events = events(v.History, truncated)
-	if truncated {
-		v.History = v.History[:historyLimit]
-	}
+	v.Events = events(v.History, false)
 	return v, nil
 }
 func (s *Store) Confirm(ctx context.Context, id, actor string, input Source) error {

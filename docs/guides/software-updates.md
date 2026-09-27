@@ -1,6 +1,6 @@
 # Suivi des mises à jour logicielles
 
-La vue **Mises à jour** et l'onglet homonyme d'une Cible montrent les services importés depuis Argus. Les versions réellement observées déterminent la comparaison, y compris après un retour arrière. Aucun bouton ne déclenche un déploiement.
+La vue **Mises à jour** et l'onglet homonyme d'une Ressource montrent les services importés depuis Argus. Dans la vue globale, **Consulter les changements** ouvre un volet latéral qui regroupe la comparaison courante, les notes officielles, l'historique des versions constatées et les notes et synthèses des comparaisons passées. Les versions réellement observées déterminent la comparaison, y compris après un retour arrière. Aucun bouton ne déclenche un déploiement.
 
 ## Classement des services
 
@@ -11,6 +11,7 @@ CairnOps ordonne les versions remontées par Argus (ADR 0049) et range chaque se
 - **À jour** : même publication, y compris avec un préfixe `v` ou un identifiant de build, ou version ignorée dans Argus.
 
 L'historique distingue les mises à jour constatées, les retours à une version antérieure et les nouvelles cibles proposées par Argus.
+La date d'un changement est celle de sa lecture par Argus, pas nécessairement celle du déploiement. Les notes déjà collectées restent accessibles dans le volet après un changement de version installée, même sans fournisseur IA configuré. Les analyses et notes présentes au moment de l'activation de cet archivage sont reprises ; aucune note non collectée auparavant n'est reconstituée.
 
 ## Première configuration
 

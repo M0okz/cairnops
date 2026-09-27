@@ -49,42 +49,54 @@ type Analysis struct {
 	CreatedAt time.Time `json:"created_at"`
 	Current   bool      `json:"current"`
 }
+type NoteArchive struct {
+	ID         int64     `json:"id"`
+	Installed  string    `json:"installed_version"`
+	Target     string    `json:"target_version"`
+	Source     Source    `json:"source"`
+	Hash       string    `json:"-"`
+	Notes      []Note    `json:"notes"`
+	Incomplete bool      `json:"incomplete"`
+	CapturedAt time.Time `json:"captured_at"`
+	Current    bool      `json:"current"`
+}
 type History struct {
 	Installed  string    `json:"installed_version"`
 	Target     string    `json:"target_version"`
 	ObservedAt time.Time `json:"observed_at"`
 }
 type Service struct {
-	ContentHash        string      `json:"-"`
-	ID                 string      `json:"id"`
-	TargetID           string      `json:"target_id"`
-	ResourceName       string      `json:"resource_name"`
-	Name               string      `json:"name"`
-	Installed          string      `json:"installed_version"`
-	Target             string      `json:"target_version"`
-	ObservedAt         *time.Time  `json:"observed_at"`
-	Known              bool        `json:"known"`
-	Situation          string      `json:"situation"`
-	Level              string      `json:"level,omitempty"`
-	Group              string      `json:"group"`
-	VerificationIssue  string      `json:"verification_issue,omitempty"`
-	Approved           bool        `json:"approved"`
-	Skipped            bool        `json:"skipped"`
-	SecurityMentioned  bool        `json:"security_mentioned"`
-	Source             Source      `json:"source"`
-	SourceOrigin       string      `json:"source_origin"`
-	Suggested          *Source     `json:"suggested_source"`
-	ConfirmedAt        *time.Time  `json:"confirmed_at"`
-	Revision           int64       `json:"revision"`
-	State              string      `json:"state"`
-	LastError          string      `json:"last_error"`
-	CheckedAt          *time.Time  `json:"checked_at"`
-	NextCheckAt        *time.Time  `json:"next_check_at"`
-	Collection         *Collection `json:"collection"`
-	CollectionRevision *int64      `json:"collection_revision"`
-	Analyses           []Analysis  `json:"analyses"`
-	History            []History   `json:"history"`
-	Events             []Event     `json:"events"`
+	ContentHash        string        `json:"-"`
+	ID                 string        `json:"id"`
+	TargetID           string        `json:"target_id"`
+	ResourceName       string        `json:"resource_name"`
+	Name               string        `json:"name"`
+	Installed          string        `json:"installed_version"`
+	Target             string        `json:"target_version"`
+	ObservedAt         *time.Time    `json:"observed_at"`
+	Known              bool          `json:"known"`
+	Situation          string        `json:"situation"`
+	Level              string        `json:"level,omitempty"`
+	Group              string        `json:"group"`
+	VerificationIssue  string        `json:"verification_issue,omitempty"`
+	Approved           bool          `json:"approved"`
+	Skipped            bool          `json:"skipped"`
+	SecurityMentioned  bool          `json:"security_mentioned"`
+	Source             Source        `json:"source"`
+	SourceOrigin       string        `json:"source_origin"`
+	Suggested          *Source       `json:"suggested_source"`
+	ConfirmedAt        *time.Time    `json:"confirmed_at"`
+	Revision           int64         `json:"revision"`
+	State              string        `json:"state"`
+	LastError          string        `json:"last_error"`
+	CheckedAt          *time.Time    `json:"checked_at"`
+	NextCheckAt        *time.Time    `json:"next_check_at"`
+	Collection         *Collection   `json:"collection"`
+	CollectionRevision *int64        `json:"collection_revision"`
+	Analyses           []Analysis    `json:"analyses"`
+	Archives           []NoteArchive `json:"archives"`
+	History            []History     `json:"history"`
+	Events             []Event       `json:"events"`
 }
 type AIConfig struct {
 	Enabled       bool   `json:"enabled"`

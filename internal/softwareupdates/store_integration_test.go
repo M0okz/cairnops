@@ -116,6 +116,37 @@ func TestWorkerCachesNotesAndRetriesAIWithoutTouchingArgus(t *testing.T) {
 		t.Fatal("reused credential on new provider")
 	}
 }
+func TestWorkerKeepsOfficialNotesAfterAnInstalledVersionChangeWithoutAI(t *testing.T) {
+	s, id, actor := fixture(t)
+	ctx := context.Background()
+	if err := s.Confirm(ctx, id, actor, Source{Kind: "github", URL: "https://github.com/example/project", Software: "Project"}); err != nil {
+		t.Fatal(err)
+	}
+	w := NewWorker(s, slog.Default())
+	w.client = &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/tags") {
+			return response(`[]`), nil
+		}
+		return response(`[{"tag_name":"2.9.1","body":"Official notes for version 2.9.1."}]`), nil
+	})}
+	if err := w.tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.Get(ctx, id)
+	if err != nil || before.State != "awaiting_ai" || len(before.Archives) != 1 || !before.Archives[0].Current {
+		t.Fatalf("notes were not archived without AI: %+v %v", before, err)
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE cairnops_connector_bindings SET metadata=metadata||'{"deployed_version":"2.7.0"}' WHERE id=$1::uuid`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	after, err := s.Get(ctx, id)
+	if err != nil || len(after.Archives) != 2 || after.Archives[0].Installed != "2.7.0" || after.Archives[1].Installed != "2.6.0" || after.Archives[1].Notes[0].Body != "Official notes for version 2.9.1." {
+		t.Fatalf("past notes were lost after version change: %+v %v", after.Archives, err)
+	}
+}
 func TestStaleAIResultIsNotPublished(t *testing.T) {
 	s, id, actor := fixture(t)
 	ctx := context.Background()

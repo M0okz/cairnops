@@ -11,7 +11,7 @@
     type SoftwareService,
     type UpdateGroup,
   } from "$lib/software-updates";
-  import SoftwareServiceDetail from "./SoftwareServiceDetail.svelte";
+  import SoftwareUpdateDrawer from "./SoftwareUpdateDrawer.svelte";
   import SegmentedControl from "./ui/SegmentedControl.svelte";
   import { Input } from "./ui/input";
   let { targetID = "" }: { targetID?: string } = $props();
@@ -19,6 +19,7 @@
   let loading = $state(true);
   let error = $state("");
   let selected = $state("");
+  let lastTrigger: HTMLButtonElement | null = null;
   let search = $state("");
   let filter = $state<UpdateGroup | "all">("apply");
   let reload = $state(0);
@@ -116,6 +117,14 @@
     if (s.situation === "update" && s.level)
       return t(`updates.level.${s.level}` as MessageKey);
   }
+  function openDetail(serviceID: string, event: MouseEvent) {
+    lastTrigger = event.currentTarget as HTMLButtonElement;
+    selected = serviceID;
+  }
+  function closeDetail() {
+    selected = "";
+    queueMicrotask(() => lastTrigger?.focus());
+  }
 </script>
 
 <div class="software-updates">
@@ -181,7 +190,7 @@
                       <strong class="service-name"
                         >{#each serviceTitle(service).split("/") as part, index}{#if index}/<wbr />{/if}{part}{/each}</strong
                       >
-                      {#if service.resource_name && service.resource_name !== service.name}<a class="resource-link" href={`/cibles/${service.target_id}`} title={service.resource_name}>{service.resource_name}</a>{:else}<a class="resource-link" href={`/cibles/${service.target_id}`}>{t("updates.openResource")}</a>{/if}
+                      {#if service.resource_name && service.resource_name !== service.name}<span class="resource-name">{service.resource_name}</span>{/if}
                     </div>
                     <div class="versions">
                       <span class="version-pair mono" class:unverified={!service.known}
@@ -198,21 +207,22 @@
                     <p class="status" class:attention={service.group === "review"}>{statusLabel(service)}</p>
                     <button
                       class="btn"
-                      aria-expanded={selected === service.id}
-                      aria-controls={`release-detail-${service.id}`}
-                      onclick={() => (selected = selected === service.id ? "" : service.id)}
-                      >{selected === service.id ? t("updates.close") : t("updates.details")}</button
+                      onclick={(event) => openDetail(service.id, event)}
+                      >{t("updates.details")}</button
                     >
                   </div>
-                  {#if selected === service.id}<div id={`release-detail-${service.id}`}>
-                      {#key service.id}<SoftwareServiceDetail id={service.id} />{/key}
-                    </div>{/if}
                 </li>
               {/each}
             </ul>
           </section>
         {/if}
       {/each}
+    {/if}
+  {/if}
+  {#if selected}
+    {@const selectedService = services.find((service) => service.id === selected)}
+    {#if selectedService}
+      <SoftwareUpdateDrawer service={selectedService} onclose={closeDetail} />
     {/if}
   {/if}
 </div>
@@ -266,9 +276,6 @@
     display: grid;
     grid-template-columns: subgrid;
   }
-  .update-row > div:not(.row-main) {
-    grid-column: 1 / -1;
-  }
   .update-row + .update-row {
     border-top: 1px solid var(--line);
   }
@@ -293,7 +300,7 @@
     font-weight: 600;
     overflow-wrap: break-word;
   }
-  .resource-link {
+  .resource-name {
     color: var(--muted);
     font-size: var(--text-xs);
     overflow: hidden;

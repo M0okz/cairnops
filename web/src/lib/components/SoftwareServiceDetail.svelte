@@ -29,6 +29,7 @@
   const previous = $derived(
     service?.analyses.filter((a) => a.id !== analysis?.id) ?? [],
   );
+  const archives = $derived(service?.archives.filter((archive) => !archive.current) ?? []);
   const missing = $derived(
     service?.collection?.notes.filter((n) => n.missing) ?? [],
   );
@@ -272,6 +273,35 @@
         {/each}
       </section>
     {/if}
+    <details>
+      <summary>{t("updates.history")} · {service.events.length}</summary>
+      <p class="muted">{t("updates.historyHint")}</p>
+      <ol class="history">
+        {#each service.events as event, i (i)}<li class:secondary={event.kind === "target"}>
+            <time datetime={event.observed_at}>{stamp(event.observed_at)}</time
+            ><span>{eventLabel(event)}</span>
+          </li>{/each}
+      </ol>
+    </details>
+    {#if archives.length}
+      <details>
+        <summary>{t("updates.archivedNotes")} · {archives.length}</summary>
+        <p class="muted">{t("updates.archivedNotesHint")}</p>
+        {#each archives as archive (archive.id)}
+          <details class="release">
+            <summary>{archive.installed_version} → {archive.target_version} · {stamp(archive.captured_at)}</summary>
+            {#if archive.incomplete}<p class="muted">{t("updates.catalogueIncomplete")}</p>{/if}
+            {#each archive.notes as note (note.version)}
+              <details class="release archived-note">
+                <summary><strong class="mono">{note.version}</strong>{#if note.missing}<span class="muted">{t("updates.missing")}</span>{/if}</summary>
+                {#if safeReleaseURL(note.url)}<a href={safeReleaseURL(note.url)} target="_blank" rel="noreferrer noopener">{t("updates.original")} ↗</a>{/if}
+                {#if note.body}<pre class="release-body">{note.body}</pre>{/if}
+              </details>
+            {/each}
+          </details>
+        {/each}
+      </details>
+    {/if}
     {#if previous.length}
       <details>
         <summary>{t("updates.previous")} · {previous.length}</summary>
@@ -294,16 +324,6 @@
           </details>{/each}
       </details>
     {/if}
-    <details>
-      <summary>{t("updates.history")} · {service.events.length}</summary>
-      <p class="muted">{t("updates.historyHint")}</p>
-      <ol class="history">
-        {#each service.events as event, i (i)}<li class:secondary={event.kind === "target"}>
-            <time datetime={event.observed_at}>{stamp(event.observed_at)}</time
-            ><span>{eventLabel(event)}</span>
-          </li>{/each}
-      </ol>
-    </details>
   {/if}
 </div>
 
@@ -353,6 +373,7 @@
     border-bottom: 1px solid var(--line);
     padding-block: var(--s2);
   }
+  .archived-note { margin-inline-start: var(--s4); }
   .release summary span {
     margin-inline-start: var(--s3);
     font-size: var(--text-sm);
