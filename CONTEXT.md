@@ -284,6 +284,10 @@ _Éviter_ : Statut manuel, état d'acquittement
 Part du temps observable pendant laquelle une Ressource n'est pas Indisponible. Les périodes sans état connu, suspendues ou Sous maintenance sont exclues du calcul et les valeurs propres aux Contrôles restent diagnostiques.
 _Éviter_ : Temps observé, moyenne des Sources
 
+**Profil de latence** :
+Latence habituelle d'une Source de Contrôle natif, heure par heure, apprise sur ses seules Observations saines d'une fenêtre glissante. Il porte sa fenêtre, son nombre d'Observations et sa date de calcul, se relit tel quel, et ne conclut rien par lui-même : il décrit une habitude et n'établit ni Atteinte, ni Gravité, ni notification. Une heure trop peu observée n'en fournit aucune, plutôt qu'une habitude inventée.
+_Éviter_ : Seuil de latence, score d'anomalie, latence de référence, modèle de latence
+
 **Temps observé** :
 Part de la période demandée pour laquelle CairnOps possède assez de preuves valides pour conclure sur la disponibilité d’une Ressource, exprimée en pourcentage. Cette valeur accompagne toujours le pourcentage de Disponibilité, calculé uniquement sur le temps observable.
 _Éviter_ : Couverture, Disponibilité, durée depuis l’ajout de la Ressource

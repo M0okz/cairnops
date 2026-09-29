@@ -19,6 +19,7 @@
   import ReconciliationWorkshop from '$lib/components/ReconciliationWorkshop.svelte';
   import { reconciliationState } from '$lib/reconciliation.svelte';
   import { incidentHref } from '$lib/incident-detail';
+  import { latencyHabit } from '$lib/latency-profile';
   import { incidentTimelineForTarget } from '$lib/incident-timeline';
   import { session } from '$lib/session.svelte';
   import {
@@ -107,6 +108,13 @@
 
   function sourceMeasure(sourceId: string) {
     return inWindow(detail?.sources.find((source) => source.source_id === sourceId), period);
+  }
+
+  /* L'habitude de latence d'un Contrôle natif, apprise sur ses Observations
+   * saines. Elle décrit ce qui est courant à cette heure ; elle ne conclut
+   * rien sur la Cible, et reste absente tant que rien n'est établi. */
+  function sourceHabit(sourceId: string) {
+    return latencyHabit(detail?.latency_profiles?.[sourceId], now);
   }
 
   /* Les Sources apportées par une Intégration ne sont pas des Contrôles natifs
@@ -684,6 +692,7 @@
         </div>
         {#each target.sources as source (source.id)}
           {@const measured = sourceMeasure(source.id)}
+          {@const habit = sourceHabit(source.id)}
           <div class="trow">
             <span class="cell-name source-cell">
               <i class="dot {source.latest_outcome === 'healthy' ? 'ok' : source.latest_outcome === 'unhealthy' ? 'crit' : 'idle'}"></i>
@@ -694,8 +703,25 @@
             <span class="hide-sm">{outcomeLabels[source.latest_outcome ?? 'unknown']}</span>
             <span class="num hide-sm" class:dim={measured.availability === null}><Odometer value={ratio(measured.availability)} /></span>
             <span class="num hide-sm" class:dim={measured.coverage === null}><Odometer value={ratio(measured.coverage)} /></span>
+            <!-- La latence mesurée, puis l'habitude apprise sous elle. Cette
+                 habitude ne conclut rien : elle donne au lecteur de quoi juger
+                 lui-même si la mesure sort de l'ordinaire. -->
             <span class="num hide-sm" class:dim={measured.average_latency_milliseconds === null}>
               <Odometer value={latency(measured.average_latency_milliseconds)} />
+              {#if habit}
+                <small
+                  class="habit"
+                  title={plural(
+                    habit.scope === 'hour' ? 'target.latencyHabitHour' : 'target.latencyHabitAll',
+                    habit.samples
+                  )}
+                >
+                  {t('target.latencyHabit', {
+                    median: latency(habit.median),
+                    threshold: latency(habit.threshold)
+                  })}
+                </small>
+              {/if}
             </span>
             <span class="num hide-sm">
               <Odometer value={source.last_observed_at
@@ -1290,6 +1316,17 @@
     font-family: var(--font);
     color: var(--faint);
     font-size: 0.6875rem;
+  }
+
+  /* L'habitude de latence accompagne la mesure sans la concurrencer : elle se
+     lit en second, en retrait, et n'emprunte aucune couleur d'état. */
+  .habit {
+    display: block;
+    font-family: var(--font);
+    color: var(--faint);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    line-height: 1.3;
   }
 
   .invalidated {

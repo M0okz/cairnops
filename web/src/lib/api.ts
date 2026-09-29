@@ -188,6 +188,27 @@ export type SourceMeasures = {
   measures: Measure[];
 };
 
+// Une heure du Profil de latence d'une Source. Le seuil reste nul lorsque
+// l'heure ne réunit pas assez d'Observations : rien n'y est alors établi.
+export type LatencyProfileHour = {
+  hour: number;
+  samples: number;
+  median_milliseconds: number;
+  p95_milliseconds: number;
+  p99_milliseconds: number;
+  threshold_milliseconds: number | null;
+};
+
+// Le Profil de latence d'une Source : sa latence habituelle, apprise sur ses
+// Observations saines. Il décrit, il ne conclut pas.
+export type LatencyProfile = {
+  window_start: string;
+  window_end: string;
+  samples: number;
+  computed_at: string;
+  hours: LatencyProfileHour[];
+};
+
 export type TargetMeasureDetail = {
   target_id: string;
   generated_at: string;
@@ -196,6 +217,7 @@ export type TargetMeasureDetail = {
   latency_trend: number[];
   latest_observed_at?: string;
   sources: SourceMeasures[];
+  latency_profiles?: Record<string, LatencyProfile>;
 };
 
 export type ComponentStatus = 'operational' | 'stale' | 'unavailable';
