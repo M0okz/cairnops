@@ -842,7 +842,7 @@ components:
           items: { $ref: '#/components/schemas/Measure' }
     TargetMeasureDetail:
       type: object
-      required: [target_id, generated_at, measures, trend, latency_trend, sources]
+      required: [target_id, generated_at, measures, trend, latency_trend, sources, latency_profiles]
       properties:
         target_id: { type: string, format: uuid }
         generated_at: { type: string, format: date-time }
@@ -860,6 +860,44 @@ components:
         sources:
           type: array
           items: { $ref: '#/components/schemas/SourceMeasures' }
+        latency_profiles:
+          type: object
+          description: >-
+            Profils appris des Contrôles de la Ressource, indexés par identifiant
+            de Contrôle. Un Contrôle sans profil calculé est absent de cet objet.
+          additionalProperties: { $ref: '#/components/schemas/LatencyProfile' }
+    LatencyProfile:
+      type: object
+      required: [window_start, window_end, samples, computed_at, hours]
+      properties:
+        window_start: { type: string, format: date-time }
+        window_end: { type: string, format: date-time }
+        samples: { type: integer, minimum: 0 }
+        computed_at: { type: string, format: date-time }
+        hours:
+          type: array
+          items: { $ref: '#/components/schemas/LatencyProfileHour' }
+    LatencyProfileHour:
+      type: object
+      required:
+        [hour, samples, median_milliseconds, p95_milliseconds,
+         p99_milliseconds, threshold_milliseconds]
+      properties:
+        hour:
+          type: integer
+          minimum: -1
+          maximum: 23
+          description: -1 regroupe toutes les heures ; 0 à 23 désignent une heure UTC.
+        samples: { type: integer, minimum: 0 }
+        median_milliseconds: { type: integer, format: int64, minimum: 0 }
+        p95_milliseconds: { type: integer, format: int64, minimum: 0 }
+        p99_milliseconds: { type: integer, format: int64, minimum: 0 }
+        threshold_milliseconds:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+          description: Nul lorsque les observations ne suffisent pas à établir un seuil.
     Source:
       type: object
       required:
