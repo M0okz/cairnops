@@ -214,14 +214,14 @@ func (service *Service) inspectConnection(ctx context.Context, kind, endpoint st
 	switch kind {
 	case "zabbix":
 		if service.zabbix == nil {
-			return result, errors.New("Zabbix client is unavailable")
+			return result, errors.New("zabbix client is unavailable")
 		}
 		inspection, err := service.zabbix.Inspect(ctx, endpoint, string(raw))
 		result.Endpoint, result.Version, result.Compatibility, result.EncryptedTransport = inspection.Endpoint, inspection.Version, inspection.Compatibility, inspection.EncryptedTransport
 		return result, err
 	case "uptime_kuma":
 		if service.uptimeKuma == nil {
-			return result, errors.New("Uptime Kuma client is unavailable")
+			return result, errors.New("uptime Kuma client is unavailable")
 		}
 		inspection, err := service.uptimeKuma.Inspect(ctx, endpoint, string(raw))
 		result.Endpoint, result.EncryptedTransport = inspection.Endpoint, inspection.EncryptedTransport
@@ -239,7 +239,7 @@ func (service *Service) inspectConnection(ctx context.Context, kind, endpoint st
 		return result, err
 	case "argus":
 		if service.argus == nil {
-			return result, errors.New("Argus client is unavailable")
+			return result, errors.New("argus client is unavailable")
 		}
 		var credential argus.Credentials
 		if err := json.Unmarshal(raw, &credential); err != nil {
@@ -250,7 +250,7 @@ func (service *Service) inspectConnection(ctx context.Context, kind, endpoint st
 		return result, err
 	case "proxmox":
 		if service.proxmox == nil {
-			return result, errors.New("Proxmox VE client is unavailable")
+			return result, errors.New("proxmox VE client is unavailable")
 		}
 		var credential proxmox.Credentials
 		if err := json.Unmarshal(raw, &credential); err != nil {

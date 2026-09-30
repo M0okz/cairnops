@@ -168,7 +168,7 @@ func (client *Client) Inspect(ctx context.Context, address string, credentials C
 	}
 	credentials.Username = strings.TrimSpace(credentials.Username)
 	if (credentials.Username == "") != (credentials.Password == "") || len(credentials.Username) > 4096 || len(credentials.Password) > 4096 {
-		return Inspection{}, fmt.Errorf("Basic authentication requires a username and password of at most 4096 characters")
+		return Inspection{}, fmt.Errorf("basic authentication requires a username and password of at most 4096 characters")
 	}
 
 	var versionPayload struct {
@@ -179,7 +179,7 @@ func (client *Client) Inspect(ctx context.Context, address string, credentials C
 	}
 	versionPayload.Version = strings.TrimSpace(versionPayload.Version)
 	if !versionAtLeast(versionPayload.Version, minimumVersion) {
-		return Inspection{}, fmt.Errorf("Argus %s is unsupported; CairnOps requires Argus %s or newer", versionPayload.Version, minimumVersion)
+		return Inspection{}, fmt.Errorf("argus %s is unsupported; CairnOps requires Argus %s or newer", versionPayload.Version, minimumVersion)
 	}
 
 	var configPayload struct {

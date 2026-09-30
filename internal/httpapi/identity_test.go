@@ -158,7 +158,7 @@ func TestSessionLoginDoesNotDiscloseWhichCredentialFailed(t *testing.T) {
 		request.Header.Set("Content-Type", "application/json")
 		response := httptest.NewRecorder()
 		server.Handler.ServeHTTP(response, request)
-		if response.Code != http.StatusUnauthorized || response.Body.String() != "{\"error\":\"invalid credentials\"}\n" {
+		if response.Code != http.StatusUnauthorized || response.Body.String() != "{\"code\":\"invalid_credentials\",\"error\":\"invalid credentials\"}\n" {
 			t.Fatalf("unexpected login response: %d %s", response.Code, response.Body.String())
 		}
 	}

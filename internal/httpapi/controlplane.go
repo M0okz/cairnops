@@ -102,7 +102,7 @@ func (handler controlPlaneHandler) createTarget(w http.ResponseWriter, r *http.R
 func (handler controlPlaneHandler) updateTarget(w http.ResponseWriter, r *http.Request) {
 	targetID := r.PathValue("targetID")
 	if !validUUID(targetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	var input controlplane.UpdateTargetInput
@@ -121,7 +121,7 @@ func (handler controlPlaneHandler) updateTarget(w http.ResponseWriter, r *http.R
 func (handler controlPlaneHandler) archiveTarget(w http.ResponseWriter, r *http.Request) {
 	targetID := r.PathValue("targetID")
 	if !validUUID(targetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	if err := handler.controlPlane.ArchiveTarget(r.Context(), targetID); err != nil {
@@ -134,7 +134,7 @@ func (handler controlPlaneHandler) archiveTarget(w http.ResponseWriter, r *http.
 func (handler controlPlaneHandler) restoreTarget(w http.ResponseWriter, r *http.Request) {
 	targetID := r.PathValue("targetID")
 	if !validUUID(targetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	target, err := handler.controlPlane.RestoreTarget(r.Context(), targetID)
@@ -148,7 +148,7 @@ func (handler controlPlaneHandler) restoreTarget(w http.ResponseWriter, r *http.
 func (handler controlPlaneHandler) updateSource(w http.ResponseWriter, r *http.Request) {
 	sourceID := r.PathValue("sourceID")
 	if !validUUID(sourceID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid source ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid source ID", "code": "invalid_source_id"})
 		return
 	}
 	var input controlplane.UpdateSourceInput
@@ -167,7 +167,7 @@ func (handler controlPlaneHandler) updateSource(w http.ResponseWriter, r *http.R
 func (handler controlPlaneHandler) deleteSource(w http.ResponseWriter, r *http.Request) {
 	sourceID := r.PathValue("sourceID")
 	if !validUUID(sourceID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid source ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid source ID", "code": "invalid_source_id"})
 		return
 	}
 	if err := handler.controlPlane.DeleteSource(r.Context(), sourceID); err != nil {
@@ -180,7 +180,7 @@ func (handler controlPlaneHandler) deleteSource(w http.ResponseWriter, r *http.R
 func (handler controlPlaneHandler) createSource(w http.ResponseWriter, r *http.Request) {
 	targetID := r.PathValue("targetID")
 	if !validUUID(targetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	var input controlplane.CreateSourceInput
@@ -199,14 +199,14 @@ func (handler controlPlaneHandler) createSource(w http.ResponseWriter, r *http.R
 func (handler controlPlaneHandler) listObservations(w http.ResponseWriter, r *http.Request) {
 	targetID := r.PathValue("targetID")
 	if !validUUID(targetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	limit := 100
 	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
 		parsed, err := strconv.Atoi(rawLimit)
 		if err != nil || parsed < 1 || parsed > 500 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 500"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 500", "code": "limit_must_be_between_1_and_500"})
 			return
 		}
 		limit = parsed
@@ -223,7 +223,7 @@ func (handler controlPlaneHandler) receiveHeartbeat(w http.ResponseWriter, r *ht
 	token := r.PathValue("token")
 	decodedToken, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil || len(decodedToken) != 32 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "heartbeat not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "heartbeat not found", "code": "heartbeat_not_found"})
 		return
 	}
 	var payload controlplane.HeartbeatPayload
@@ -244,20 +244,20 @@ func (handler controlPlaneHandler) writeError(w http.ResponseWriter, err error) 
 	case errors.Is(err, controlplane.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), controlplane.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, controlplane.ErrNotFound), errors.Is(err, controlplane.ErrHeartbeatNotFound):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found", "code": "not_found"})
 	case errors.Is(err, controlplane.ErrIntegrationOwned):
 		writeJSON(w, http.StatusConflict, map[string]string{
-			"error": "cette Source appartient à une Intégration : réglez-la dans le produit d'origine",
+			"error": "cette Source appartient à une Intégration : réglez-la dans le produit d'origine", "code": "integration_owned_source",
 		})
 	case errors.Is(err, controlplane.ErrStructureBusy):
 		writeJSON(w, http.StatusConflict, map[string]string{
-			"error": "la structure de cette Cible est verrouillée pendant son rapprochement",
+			"error": "la structure de cette Cible est verrouillée pendant son rapprochement", "code": "target_reconciliation_locked",
 		})
 	default:
 		if handler.logger != nil {
 			handler.logger.Error("control plane request failed", "error", err)
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 	}
 }
 

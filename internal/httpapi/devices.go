@@ -53,7 +53,7 @@ func (handler deviceHandler) getPairing(w http.ResponseWriter, r *http.Request) 
 	}
 	pairingID := r.PathValue("pairingID")
 	if !validUUID(pairingID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid pairing ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid pairing ID", "code": "invalid_pairing_id"})
 		return
 	}
 	pairing, err := handler.devices.GetPairing(r.Context(), principal.ID, pairingID)
@@ -91,7 +91,7 @@ func (handler deviceHandler) confirmPairing(w http.ResponseWriter, r *http.Reque
 	}
 	pairingID := r.PathValue("pairingID")
 	if !validUUID(pairingID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid pairing ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid pairing ID", "code": "invalid_pairing_id"})
 		return
 	}
 	pairing, err := handler.devices.ConfirmPairing(r.Context(), principal.ID, pairingID)
@@ -126,7 +126,7 @@ func (handler deviceHandler) cancelPairing(w http.ResponseWriter, r *http.Reques
 	}
 	pairingID := r.PathValue("pairingID")
 	if !validUUID(pairingID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid pairing ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid pairing ID", "code": "invalid_pairing_id"})
 		return
 	}
 	if err := handler.devices.CancelPairing(r.Context(), principal.ID, pairingID); err != nil {
@@ -158,11 +158,11 @@ func (handler deviceHandler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	deviceID := r.PathValue("deviceID")
 	if !validUUID(deviceID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid device ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid device ID", "code": "invalid_device_id"})
 		return
 	}
 	if authenticatedDeviceID, mobile := r.Context().Value(deviceContextKey{}).(string); mobile && authenticatedDeviceID != deviceID {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "a mobile identity can only change its own device"})
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "a mobile identity can only change its own device", "code": "a_mobile_identity_can_only_change_its_own_device"})
 		return
 	}
 	var input devices.UpdateInput
@@ -185,11 +185,11 @@ func (handler deviceHandler) revoke(w http.ResponseWriter, r *http.Request) {
 	}
 	deviceID := r.PathValue("deviceID")
 	if !validUUID(deviceID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid device ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid device ID", "code": "invalid_device_id"})
 		return
 	}
 	if authenticatedDeviceID, mobile := r.Context().Value(deviceContextKey{}).(string); mobile && authenticatedDeviceID != deviceID {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "a mobile identity can only revoke its own device"})
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "a mobile identity can only revoke its own device", "code": "a_mobile_identity_can_only_revoke_its_own_device"})
 		return
 	}
 	if err := handler.devices.Revoke(r.Context(), principal, deviceID); err != nil {
@@ -204,7 +204,7 @@ func (handler deviceHandler) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, devices.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), devices.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, devices.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device resource not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "device resource not found", "code": "device_resource_not_found"})
 	case errors.Is(err, devices.ErrPairingExpired), errors.Is(err, devices.ErrCredentialConsumed):
 		writeJSON(w, http.StatusGone, map[string]string{"error": err.Error()})
 	case errors.Is(err, devices.ErrConflict):
@@ -213,7 +213,7 @@ func (handler deviceHandler) writeError(w http.ResponseWriter, err error) {
 		if handler.logger != nil {
 			handler.logger.Error("device request failed", "error", err)
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 	}
 }
 
@@ -234,5 +234,5 @@ func pairingBearer(r *http.Request) (string, bool) {
 
 func unauthorizedPairing(w http.ResponseWriter) {
 	w.Header().Set("WWW-Authenticate", `Bearer realm="cairnops-device-pairing"`)
-	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "pairing authentication required"})
+	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "pairing authentication required", "code": "pairing_authentication_required"})
 }

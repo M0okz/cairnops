@@ -40,7 +40,7 @@ type Connectors interface {
 func (handler connectorHandler) approveProxmoxCertificate(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("connectorID")
 	if !validUUID(id) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID", "code": "invalid_connector_id"})
 		return
 	}
 	var input struct {
@@ -65,7 +65,7 @@ type connectorHandler struct {
 func (handler connectorHandler) previewExisting(w http.ResponseWriter, r *http.Request) {
 	connectorID := r.PathValue("connectorID")
 	if !validUUID(connectorID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID", "code": "invalid_connector_id"})
 		return
 	}
 	preview, err := handler.connectors.PreviewExisting(r.Context(), connectorID)
@@ -228,7 +228,7 @@ func (handler connectorHandler) resume(w http.ResponseWriter, r *http.Request) {
 func (handler connectorHandler) transition(w http.ResponseWriter, r *http.Request, apply func(context.Context, string) (connectors.Connector, error)) {
 	connectorID := r.PathValue("connectorID")
 	if !validUUID(connectorID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID", "code": "invalid_connector_id"})
 		return
 	}
 	connector, err := apply(r.Context(), connectorID)
@@ -242,7 +242,7 @@ func (handler connectorHandler) transition(w http.ResponseWriter, r *http.Reques
 func (handler connectorHandler) remove(w http.ResponseWriter, r *http.Request) {
 	connectorID := r.PathValue("connectorID")
 	if !validUUID(connectorID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID", "code": "invalid_connector_id"})
 		return
 	}
 	removal, err := handler.connectors.Delete(r.Context(), connectorID)
@@ -291,24 +291,24 @@ func (handler connectorHandler) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, connectors.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), connectors.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, connectors.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "connector not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "connector not found", "code": "connector_not_found"})
 	case errors.Is(err, connectors.ErrEndpointConflict):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "Cette adresse est déjà utilisée par un autre Connecteur du même type."})
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "Cette adresse est déjà utilisée par un autre Connecteur du même type.", "code": "connector_address_in_use"})
 	case errors.Is(err, connectors.ErrConnectionBusy):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "Une synchronisation est en cours. Réessayez l’enregistrement dans quelques secondes.", "code": "connector_sync_in_progress"})
 	case errors.Is(err, connectors.ErrConnectionChanged):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "La connexion a changé. Testez à nouveau vos réglages avant de les enregistrer."})
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "La connexion a changé. Testez à nouveau vos réglages avant de les enregistrer.", "code": "connector_connection_changed"})
 	case errors.Is(err, connectors.ErrStructureBusy):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "a target reconciliation involving this connector is in progress"})
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "a target reconciliation involving this connector is in progress", "code": "a_target_reconciliation_involving_this_connector_is_in_progress"})
 	case errors.Is(err, connectors.ErrPreviewExpired):
-		writeJSON(w, http.StatusGone, map[string]string{"error": "connector preview expired; run the verification again"})
+		writeJSON(w, http.StatusGone, map[string]string{"error": "connector preview expired; run the verification again", "code": "connector_preview_expired_run_the_verification_again"})
 	case errors.Is(err, connectors.ErrConnection):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": strings.TrimPrefix(err.Error(), connectors.ErrConnection.Error()+": ")})
 	default:
 		if handler.logger != nil {
 			handler.logger.Error("connector request failed", "error", err)
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 	}
 }
 
@@ -331,7 +331,7 @@ func (handler connectorHandler) proxmoxCertificate(w http.ResponseWriter, r *htt
 func (handler connectorHandler) removeProxmox(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("connectorID")
 	if !validUUID(id) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID", "code": "invalid_connector_id"})
 		return
 	}
 	var input proxmox.Credentials
@@ -350,7 +350,7 @@ func (handler connectorHandler) removeProxmox(w http.ResponseWriter, r *http.Req
 func (handler connectorHandler) testConnection(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("connectorID")
 	if !validUUID(id) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID", "code": "invalid_connector_id"})
 		return
 	}
 	var input connectors.ConnectionInput
@@ -369,7 +369,7 @@ func (handler connectorHandler) testConnection(w http.ResponseWriter, r *http.Re
 func (handler connectorHandler) saveConnection(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("connectorID")
 	if !validUUID(id) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID", "code": "invalid_connector_id"})
 		return
 	}
 	var input connectors.ConnectionSaveInput

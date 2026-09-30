@@ -9,8 +9,7 @@
   import { page } from '$app/state';
   import ConnectorConfigurator from '$lib/components/ConnectorConfigurator.svelte';
   import Topbar from '$lib/components/Topbar.svelte';
-  import ZabbixConnector from '$lib/components/ZabbixConnector.svelte';
-  import UptimeKumaConnector from '$lib/components/UptimeKumaConnector.svelte';
+  import GuidedMetricsConnector from '$lib/components/GuidedMetricsConnector.svelte';
   import PatchMonConnector from '$lib/components/PatchMonConnector.svelte';
   import ArgusConnector from '$lib/components/ArgusConnector.svelte';
   import ProxmoxConnector from '$lib/components/ProxmoxConnector.svelte';
@@ -80,10 +79,8 @@
   </div>
 {:else if managedConnector && managedConnector.kind !== 'generic_webhook'}
   <ConnectorConfigurator connector={managedConnector} onclose={leave} onsuccess={async () => { await Promise.all([session.loadConnectors(), session.loadTargets()]); }} />
-{:else if kind === 'zabbix'}
-  <ZabbixConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
-{:else if kind === 'uptime-kuma'}
-  <UptimeKumaConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
+{:else if kind === 'zabbix' || kind === 'uptime-kuma'}
+  <GuidedMetricsConnector kind={kind === 'zabbix' ? 'zabbix' : 'uptime_kuma'} onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else if kind === 'patchmon'}
   <PatchMonConnector onclose={leave} onsuccess={imported} connectorId={managedConnector?.id} initialName={managedConnector?.name} initialAddress={managedConnector?.endpoint} />
 {:else if kind === 'proxmox'}

@@ -156,7 +156,7 @@ func (s *ProxmoxSynchronizer) syncOne(parent context.Context, connector RuntimeC
 		s.logger.Warn("record Proxmox VE integration observations", "connector_id", connector.ID, "error", err)
 	}
 	if unknown > 0 {
-		fail(fmt.Errorf("Proxmox VE: %d imported resources are missing or have an unknown status", unknown))
+		fail(fmt.Errorf("proxmox VE: %d imported resources are missing or have an unknown status", unknown))
 		return
 	}
 	if err := s.store.CompleteConnectorSync(ctx, connector.ID, s.owner, observedAt); err != nil {

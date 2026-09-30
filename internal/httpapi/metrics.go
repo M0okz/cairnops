@@ -37,7 +37,7 @@ func (handler metricsHandler) list(w http.ResponseWriter, r *http.Request) {
 	measured, err := handler.metrics.List(r.Context())
 	if err != nil {
 		handler.logger.Error("read target measures", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"window": domain.WindowDay, "targets": measured})
@@ -47,17 +47,17 @@ func (handler metricsHandler) list(w http.ResponseWriter, r *http.Request) {
 func (handler metricsHandler) target(w http.ResponseWriter, r *http.Request) {
 	targetID := r.PathValue("targetID")
 	if !validUUID(targetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	detail, err := handler.metrics.Target(r.Context(), targetID)
 	if errors.Is(err, metrics.ErrNotFound) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found", "code": "not_found"})
 		return
 	}
 	if err != nil {
 		handler.logger.Error("read target measures", "target_id", targetID, "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 		return
 	}
 	writeJSON(w, http.StatusOK, targetDetailResponse{

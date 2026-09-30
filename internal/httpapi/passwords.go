@@ -66,7 +66,7 @@ func (handler identityHandler) setUserPassword(w http.ResponseWriter, r *http.Re
 	principal, err := handler.identity.SetPassword(r.Context(), r.PathValue("userID"), input.NewPassword)
 	if err != nil {
 		if errors.Is(err, identitymodel.ErrNotFound) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found", "code": "user_not_found"})
 			return
 		}
 		handler.writeError(w, err)

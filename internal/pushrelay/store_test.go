@@ -95,7 +95,10 @@ func TestRateLimiterResetsAfterItsWindow(t *testing.T) {
 	now := time.Date(2026, 8, 22, 10, 0, 0, 0, time.UTC)
 	limiter := NewRateLimiter(2, time.Minute)
 	limiter.now = func() time.Time { return now }
-	if !limiter.Allow("recipient") || !limiter.Allow("recipient") || limiter.Allow("recipient") {
+	first := limiter.Allow("recipient")
+	second := limiter.Allow("recipient")
+	third := limiter.Allow("recipient")
+	if !first || !second || third {
 		t.Fatal("rate limiter did not enforce its window")
 	}
 	now = now.Add(time.Minute)

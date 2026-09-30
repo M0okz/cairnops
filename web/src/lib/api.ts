@@ -1,4 +1,4 @@
-import { t } from './i18n.svelte';
+import { i18n, t, type MessageKey } from './i18n.svelte';
 
 export type Role = 'administrator' | 'operator' | 'observer';
 
@@ -949,8 +949,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     let code: string | undefined;
     try {
       const payload: { error?: string; code?: string } = await response.json();
-      if (payload.error) message = payload.error;
       code = payload.code;
+      const key = code ? `api.error.${code}` as MessageKey : undefined;
+      if (key && key in i18n.dictionary) message = t(key);
     } catch {
       // The status remains the useful fallback when a proxy returns a non-JSON error.
     }

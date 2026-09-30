@@ -31,7 +31,7 @@ func (handler maintenanceHandler) list(w http.ResponseWriter, r *http.Request) {
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 200"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 200", "code": "limit_must_be_between_1_and_200"})
 			return
 		}
 		limit = parsed
@@ -66,7 +66,7 @@ func (handler maintenanceHandler) create(w http.ResponseWriter, r *http.Request)
 func (handler maintenanceHandler) cancel(w http.ResponseWriter, r *http.Request) {
 	maintenanceID := r.PathValue("maintenanceID")
 	if !validUUID(maintenanceID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid maintenance ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid maintenance ID", "code": "invalid_maintenance_id"})
 		return
 	}
 	principal, ok := r.Context().Value(principalContextKey{}).(identitymodel.Principal)
@@ -87,14 +87,14 @@ func (handler maintenanceHandler) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, maintenance.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), maintenance.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, maintenance.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "maintenance not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "maintenance not found", "code": "maintenance_not_found"})
 	case errors.Is(err, maintenance.ErrConflict):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": strings.TrimPrefix(err.Error(), maintenance.ErrConflict.Error()+": ")})
 	default:
 		if handler.logger != nil {
 			handler.logger.Error("maintenance request failed", "error", err)
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 	}
 }
 
@@ -109,7 +109,7 @@ func (handler maintenanceHandler) cancelSeries(w http.ResponseWriter, r *http.Re
 func (handler maintenanceHandler) change(w http.ResponseWriter, r *http.Request, series bool) {
 	id := r.PathValue("maintenanceID")
 	if !validUUID(id) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid maintenance ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid maintenance ID", "code": "invalid_maintenance_id"})
 		return
 	}
 	principal, ok := r.Context().Value(principalContextKey{}).(identitymodel.Principal)

@@ -23,7 +23,7 @@ func newSPAHandler(directory string) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed", "code": "method_not_allowed"})
 			return
 		}
 
@@ -40,7 +40,7 @@ func newSPAHandler(directory string) http.Handler {
 			return
 		}
 		if filepath.Ext(requested) != "" {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found", "code": "not_found"})
 			return
 		}
 		serveIndex(w, index, indexErr)
@@ -49,13 +49,13 @@ func newSPAHandler(directory string) http.Handler {
 
 func serveIndex(w http.ResponseWriter, index []byte, indexErr error) {
 	if indexErr != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "web application unavailable"})
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "web application unavailable", "code": "web_application_unavailable"})
 		return
 	}
 
 	nonceBytes := make([]byte, 18)
 	if _, err := rand.Read(nonceBytes); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "generate content security nonce"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "generate content security nonce", "code": "generate_content_security_nonce"})
 		return
 	}
 	nonce := base64.RawURLEncoding.EncodeToString(nonceBytes)

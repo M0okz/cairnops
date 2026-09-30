@@ -33,14 +33,14 @@ func (handler incidentHandler) list(w http.ResponseWriter, r *http.Request) {
 	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
 		parsed, err := strconv.Atoi(rawLimit)
 		if err != nil || parsed < 1 || parsed > 500 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 500"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 500", "code": "limit_must_be_between_1_and_500"})
 			return
 		}
 		limit = parsed
 	}
 	targetID := strings.TrimSpace(r.URL.Query().Get("target_id"))
 	if targetID != "" && !validUUID(targetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	query := r.URL.Query()
@@ -48,7 +48,7 @@ func (handler incidentHandler) list(w http.ResponseWriter, r *http.Request) {
 		query.Has("nature_key") || query.Has("severity") || query.Has("q")
 	if paged {
 		if query.Get("page") != "" && query.Get("page") != "true" || query.Get("status") != "resolved" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "pagination requires status=resolved and page=true when specified"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "pagination requires status=resolved and page=true when specified", "code": "pagination_requires_status_resolved_and_page_true_when_specified"})
 			return
 		}
 		options := incidents.ResolvedPageOptions{
@@ -95,7 +95,7 @@ func (handler incidentHandler) history(w http.ResponseWriter, r *http.Request) {
 	if rawDays := strings.TrimSpace(r.URL.Query().Get("days")); rawDays != "" {
 		parsed, err := strconv.Atoi(rawDays)
 		if err != nil || parsed < 1 || parsed > 90 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "days must be between 1 and 90"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "days must be between 1 and 90", "code": "days_must_be_between_1_and_90"})
 			return
 		}
 		days = parsed
@@ -111,7 +111,7 @@ func (handler incidentHandler) history(w http.ResponseWriter, r *http.Request) {
 func (handler incidentHandler) get(w http.ResponseWriter, r *http.Request) {
 	incidentID := r.PathValue("incidentID")
 	if !validUUID(incidentID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid incident ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid incident ID", "code": "invalid_incident_id"})
 		return
 	}
 	incident, err := handler.incidents.Get(r.Context(), incidentID)
@@ -125,7 +125,7 @@ func (handler incidentHandler) get(w http.ResponseWriter, r *http.Request) {
 func (handler incidentHandler) acknowledge(w http.ResponseWriter, r *http.Request) {
 	incidentID := r.PathValue("incidentID")
 	if !validUUID(incidentID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid incident ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid incident ID", "code": "invalid_incident_id"})
 		return
 	}
 	principal, ok := r.Context().Value(principalContextKey{}).(identitymodel.Principal)
@@ -148,7 +148,7 @@ type invalidateEvidenceInput struct {
 func (handler incidentHandler) invalidateEvidence(w http.ResponseWriter, r *http.Request) {
 	incidentID, evidenceID := r.PathValue("incidentID"), r.PathValue("evidenceID")
 	if !validUUID(incidentID) || !validUUID(evidenceID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid incident or evidence ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid incident or evidence ID", "code": "invalid_incident_or_evidence_id"})
 		return
 	}
 	var input invalidateEvidenceInput
@@ -175,13 +175,13 @@ func (handler incidentHandler) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, incidents.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), incidents.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, incidents.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "incident not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "incident not found", "code": "incident_not_found"})
 	case errors.Is(err, incidents.ErrConflict):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": strings.TrimPrefix(err.Error(), incidents.ErrConflict.Error()+": ")})
 	default:
 		if handler.logger != nil {
 			handler.logger.Error("incident request failed", "error", err)
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 	}
 }

@@ -94,17 +94,17 @@ func (handler webhookHandler) writeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, connectors.ErrWebhookUnauthorized):
 		noStore(w)
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "webhook authentication failed"})
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "webhook authentication failed", "code": "webhook_authentication_failed"})
 	case errors.Is(err, connectors.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), connectors.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, connectors.ErrWebhookNotFound):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook resource not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "webhook resource not found", "code": "webhook_resource_not_found"})
 	case errors.Is(err, connectors.ErrWebhookConflict):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "webhook identity is already bound to another target"})
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "webhook identity is already bound to another target", "code": "webhook_identity_is_already_bound_to_another_target"})
 	default:
 		if handler.logger != nil {
 			handler.logger.Error("webhook request failed", "error", err)
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 	}
 }

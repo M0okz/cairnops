@@ -770,7 +770,7 @@ components:
           nullable: true
           description: >-
             Part des Observations attendues qui ont effectivement conclu. Une
-            Observation Inconnue, une sonde suspendue ou un worker absent la
+            Observation Inconnue, un Contrôle suspendu ou un worker absent la
             font baisser.
         average_latency_milliseconds:
           type: integer
@@ -2011,15 +2011,16 @@ components:
       description: >-
         Enveloppe commune à toute réponse 4xx et 5xx. « error » est une phrase
         destinée à l'utilisateur ; « code » est un identifiant stable que le
-        client peut traduire et sur lequel il peut décider, sans lire le texte.
-      required: [error]
+        client traduit dans la langue choisie et sur lequel il peut décider,
+        sans lire le texte. Les erreurs dynamiques utilisent un code de catégorie ;
+        « error » reste présent pour les clients qui affichent le détail brut.
+      required: [error, code]
       properties:
         error: { type: string }
         code:
           type: string
           description: >-
-            Identifiant stable de la condition, présent lorsque le client doit
-            pouvoir la reconnaître sans interpréter la phrase.
+            Identifiant stable de la condition ou catégorie d'une erreur dynamique.
 paths:
   /api/v1/software-updates:
     get:
@@ -3009,7 +3010,7 @@ paths:
                     Sans préfixe, HTTPS est testé sans identifiants, puis HTTP uniquement
                     si la connexion est refusée ou si le serveur répond en HTTP au test TLS.
                     Les erreurs de certificat restent bloquantes. Une redirection de connexion
-                    pendant la sonde confirme le protocole sans être suivie ; les identifiants
+                    pendant le test confirme le protocole sans être suivie ; les identifiants
                     sont ensuite envoyés uniquement à l’adresse initiale. Les redirections
                     des requêtes authentifiées restent refusées.
                   example: argus.example.net
@@ -4541,7 +4542,7 @@ paths:
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       description: >-
         Modifie un Contrôle natif. Un champ absent reste inchangé, ce qui permet
-        de suspendre une sonde sans réémettre sa configuration. Une Source
+        de suspendre un Contrôle sans réémettre sa configuration. Une Source
         apportée par une Intégration est refusée : elle appartient au produit
         distant.
       parameters:

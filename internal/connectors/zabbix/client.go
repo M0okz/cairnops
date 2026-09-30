@@ -186,7 +186,7 @@ func (client *Client) PrepareBootstrap(ctx context.Context, address, username, p
 // confirms the preview.
 func (client *Client) Provision(ctx context.Context, session BootstrapSession) (ManagedCredential, error) {
 	if strings.TrimSpace(session.Endpoint) == "" || strings.TrimSpace(session.Token) == "" || strings.TrimSpace(session.UserID) == "" {
-		return ManagedCredential{}, fmt.Errorf("Zabbix bootstrap session is incomplete")
+		return ManagedCredential{}, fmt.Errorf("zabbix bootstrap session is incomplete")
 	}
 	var nonce [6]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
@@ -956,7 +956,7 @@ func (client *Client) call(ctx context.Context, endpoint, token, method string, 
 		if len(message) > 180 {
 			message = message[:180]
 		}
-		return fmt.Errorf("Zabbix API error %d: %s", envelope.Error.Code, message)
+		return fmt.Errorf("zabbix API error %d: %s", envelope.Error.Code, message)
 	}
 	if len(envelope.Result) == 0 {
 		return fmt.Errorf("remote server returned no result")

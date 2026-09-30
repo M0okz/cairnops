@@ -82,7 +82,7 @@ func (client *Client) Provision(ctx context.Context, address string, installer C
 		return result, err
 	}
 	if token.Value == "" || token.FullID != userID+"!observer" {
-		return result, fmt.Errorf("Proxmox VE returned an invalid managed token")
+		return result, fmt.Errorf("proxmox VE returned an invalid managed token")
 	}
 	delete(acl, "users")
 	acl.Set("tokens", token.FullID)
@@ -120,7 +120,7 @@ func (client *Client) RemoveManaged(ctx context.Context, address string, install
 			continue
 		}
 		if user.Comment != "CairnOps managed read-only integration" {
-			return fmt.Errorf("Proxmox VE account ownership changed; remote cleanup requires review")
+			return fmt.Errorf("proxmox VE account ownership changed; remote cleanup requires review")
 		}
 		return client.request(ctx, endpoint, http.MethodDelete, "/access/users/"+url.PathEscape(userID), installer, nil, nil)
 	}

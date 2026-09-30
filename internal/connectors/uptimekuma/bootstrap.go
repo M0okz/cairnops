@@ -72,7 +72,7 @@ func (client *Client) PrepareBootstrap(ctx context.Context, address, username, p
 		return Inspection{}, BootstrapSession{}, err
 	}
 	if !supportedBootstrapVersion(version) {
-		return Inspection{}, BootstrapSession{}, fmt.Errorf("Uptime Kuma %s is not supported for automatic API-key setup", version)
+		return Inspection{}, BootstrapSession{}, fmt.Errorf("uptime Kuma %s is not supported for automatic API-key setup", version)
 	}
 	return inspection, BootstrapSession{Endpoint: endpoint, Token: login.Token, Version: version}, nil
 }
@@ -81,7 +81,7 @@ func (client *Client) Provision(ctx context.Context, session BootstrapSession) (
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	if !supportedBootstrapVersion(session.Version) || strings.TrimSpace(session.Token) == "" {
-		return ManagedCredential{}, fmt.Errorf("Uptime Kuma bootstrap session is incomplete or unsupported")
+		return ManagedCredential{}, fmt.Errorf("uptime Kuma bootstrap session is incomplete or unsupported")
 	}
 	socket, err := client.openSocket(ctx, session.Endpoint)
 	if err != nil {
@@ -139,7 +139,7 @@ func (client *Client) Revoke(ctx context.Context, session BootstrapSession, cred
 	}
 	keyID, err := strconv.Atoi(strings.TrimSpace(credentialID))
 	if err != nil {
-		return fmt.Errorf("Uptime Kuma API key identity is invalid")
+		return fmt.Errorf("uptime Kuma API key identity is invalid")
 	}
 	if err := socket.emitAck(ctx, "deleteAPIKey", keyID, &deleted); err != nil {
 		return fmt.Errorf("delete Uptime Kuma API key: %w", err)

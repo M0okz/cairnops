@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -26,6 +27,32 @@ func TestLiveness(t *testing.T) {
 	}
 	if response.Header().Get("Content-Security-Policy") == "" {
 		t.Fatal("expected security headers")
+	}
+}
+
+func TestErrorResponseKeepsDetailAndAddsStableCode(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		status int
+		input  map[string]string
+		code   string
+	}{
+		{http.StatusBadRequest, map[string]string{"error": "field x is invalid"}, "invalid_request"},
+		{http.StatusConflict, map[string]string{"error": "state changed"}, "request_conflict"},
+		{http.StatusConflict, map[string]string{"error": "syncing", "code": "connector_sync_in_progress"}, "connector_sync_in_progress"},
+	} {
+		response := httptest.NewRecorder()
+		writeJSON(response, test.status, test.input)
+		var body map[string]string
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body["error"] != test.input["error"] || body["code"] != test.code {
+			t.Fatalf("unexpected error response: %#v", body)
+		}
+		if test.input["code"] == "" && len(test.input) != 1 {
+			t.Fatalf("writeJSON mutated the original response: %#v", test.input)
+		}
 	}
 }
 
