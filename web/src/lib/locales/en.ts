@@ -791,6 +791,7 @@ export const en: Record<MessageKey, string> = {
   'target.anomalyLoading': 'Evaluating observations…',
   'target.anomalyUnavailable': 'Anomaly evaluation is temporarily unavailable.',
   'target.anomalyTraining': 'Not enough healthy observations to establish a profile yet.',
+  'target.anomalyNoNativeCheck': 'This Resource has no native Check whose latency CairnOps can learn.',
   'target.noLatencyAnomalies': 'No candidates detected with the available profiles.',
   'target.anomalyComparison': '{observed} observed · usual {median} · threshold {threshold}',
   'target.anomalyTruncated': 'Only the 5,000 most recent observations were evaluated.',

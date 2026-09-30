@@ -689,7 +689,9 @@
         </header>
         <div class="card-body">
           <p class="explain">{t('target.anomalyReviewExplanation')}</p>
-          {#if latencyEvaluationLoading}
+          {#if target.sources.length === 0}
+            <p class="faint">{t('target.anomalyNoNativeCheck')}</p>
+          {:else if latencyEvaluationLoading}
             <p class="faint">{t('target.anomalyLoading')}</p>
           {:else if latencyEvaluationError || !latencyEvaluation?.available}
             <p class="faint">{t('target.anomalyUnavailable')}</p>

@@ -790,6 +790,7 @@ export const fr = {
   'target.anomalyLoading': 'Évaluation des observations en cours…',
   'target.anomalyUnavailable': 'L’évaluation des anomalies est momentanément indisponible.',
   'target.anomalyTraining': 'Pas encore assez d’observations saines pour établir un profil.',
+  'target.anomalyNoNativeCheck': 'Cette Ressource n’a aucun Contrôle natif dont CairnOps puisse apprendre la latence.',
   'target.noLatencyAnomalies': 'Aucune candidate détectée avec les profils disponibles.',
   'target.anomalyComparison': '{observed} observées · habituel {median} · seuil {threshold}',
   'target.anomalyTruncated': 'Seules les 5 000 observations les plus récentes ont été évaluées.',
