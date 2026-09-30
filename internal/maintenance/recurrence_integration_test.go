@@ -22,8 +22,17 @@ func TestRecurringMaintenanceExtensionAndCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := maintenance.NewService(maintenance.NewPostgresStore(pool))
+	// This test exercises extension and cancellation in a non-UTC zone. Use a
+	// zone without daylight-saving gaps, and express Until in that zone: it is
+	// an inclusive local date, not the UTC date of the starting instant.
+	zone, err := time.LoadLocation("Indian/Reunion")
+	if err != nil {
+		t.Fatal(err)
+	}
 	start := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
-	rule := &maintenance.Recurrence{Frequency: "weekly", Timezone: "Europe/Paris", Until: start.AddDate(0, 0, 21).Format("2006-01-02")}
+	localStart := start.In(zone)
+	until := time.Date(localStart.Year(), localStart.Month(), localStart.Day(), 12, 0, 0, 0, zone).AddDate(0, 0, 21)
+	rule := &maintenance.Recurrence{Frequency: "weekly", Timezone: zone.String(), Until: until.Format("2006-01-02")}
 	created, err := service.Create(ctx, actor, maintenance.CreateInput{Name: "Weekly patch", Reason: "Scheduled patch installation", TargetIDs: []string{target}, StartsAt: start, EndsAt: start.Add(time.Hour), Recurrence: rule})
 	if err != nil {
 		t.Fatal(err)
