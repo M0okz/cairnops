@@ -288,6 +288,10 @@ _Éviter_ : Temps observé, moyenne des Sources
 Latence habituelle d'une Source de Contrôle natif, heure par heure, apprise sur ses seules Observations saines d'une fenêtre glissante. Il porte sa fenêtre, son nombre d'Observations et sa date de calcul, se relit tel quel, et ne conclut rien par lui-même : il décrit une habitude et n'établit ni Atteinte, ni Gravité, ni notification. Une heure trop peu observée n'en fournit aucune, plutôt qu'une habitude inventée.
 _Éviter_ : Seuil de latence, score d'anomalie, latence de référence, modèle de latence
 
+**Candidate d'anomalie de latence** :
+Observation saine récente dont la latence dépasse le seuil explicable du Profil appris avant elle. Elle invite à examiner une réponse lente et ne modifie ni la conclusion du Contrôle, ni l'État de santé, ni un Incident.
+_Éviter_ : Preuve d'Incident, panne confirmée, score de confiance
+
 **Temps observé** :
 Part de la période demandée pour laquelle CairnOps possède assez de preuves valides pour conclure sur la disponibilité d’une Ressource, exprimée en pourcentage. Cette valeur accompagne toujours le pourcentage de Disponibilité, calculé uniquement sur le temps observable.
 _Éviter_ : Couverture, Disponibilité, durée depuis l’ajout de la Ressource

@@ -9,6 +9,11 @@ const (
 	// faudrait conserver pour lui.
 	LatencyProfileWindow = 28 * 24 * time.Hour
 
+	// LatencyEvaluationWindow sépare les Observations évaluées de celles qui
+	// apprennent le Profil. Une hausse récente ne doit pas normaliser son
+	// propre seuil pendant l'évaluation.
+	LatencyEvaluationWindow = 24 * time.Hour
+
 	// MinimumLatencySamples est le nombre d'Observations saines en dessous
 	// duquel un seau ne fournit aucun seuil. Quelques Observations décrivent la
 	// dernière heure, pas une habitude.
@@ -22,6 +27,53 @@ const (
 	LatencyDeviationFactor = 2
 	MinimumLatencyMargin   = 50 * time.Millisecond
 )
+
+// LatencyObservation est une mesure saine récente à évaluer hors entraînement.
+type LatencyObservation struct {
+	ID         string
+	SourceID   string
+	ObservedAt time.Time
+	Latency    time.Duration
+}
+
+// LatencyAnomaly est une Observation saine exceptionnellement lente au regard
+// du Profil appris avant sa fenêtre. Elle n'est ni une Observation défavorable
+// ni une Preuve d'Incident.
+type LatencyAnomaly struct {
+	Observation LatencyObservation
+	Median      time.Duration
+	Threshold   time.Duration
+	Hour        int
+	Samples     int
+}
+
+// DetectLatencyAnomalies évalue les mesures avec un Profil antérieur. Une
+// Source sans seau suffisant ne produit pas de candidat.
+func DetectLatencyAnomalies(observations []LatencyObservation, profiles map[string]LatencyProfile) []LatencyAnomaly {
+	anomalies := make([]LatencyAnomaly, 0)
+	for _, observation := range observations {
+		profile, found := profiles[observation.SourceID]
+		if !found || observation.ObservedAt.Before(profile.WindowEnd) {
+			continue
+		}
+		bucket, found := profile.BucketAt(observation.ObservedAt)
+		if !found {
+			continue
+		}
+		threshold, _ := bucket.Threshold()
+		if observation.Latency <= threshold {
+			continue
+		}
+		anomalies = append(anomalies, LatencyAnomaly{
+			Observation: observation,
+			Median:      bucket.Median,
+			Threshold:   threshold,
+			Hour:        bucket.Hour,
+			Samples:     bucket.Samples,
+		})
+	}
+	return anomalies
+}
 
 // AllHours désigne le seau qui réunit toutes les heures de la fenêtre. Il sert
 // de repli aux Sources dont la cadence ne remplit pas chaque heure.

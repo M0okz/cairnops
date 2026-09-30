@@ -22,6 +22,78 @@ type fakeLatencyProfiles struct {
 	err      error
 }
 
+type fakeLatencyObservations struct {
+	observations []domain.LatencyObservation
+	truncated    bool
+	err          error
+}
+
+func (fake fakeLatencyObservations) RecentHealthyObservations(context.Context, string, time.Time, int) ([]domain.LatencyObservation, bool, error) {
+	return fake.observations, fake.truncated, fake.err
+}
+
+func TestTargetLatencyEvaluationExposesHeldOutCandidates(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	profiles := fakeLatencyProfiles{profiles: map[string]domain.LatencyProfile{
+		profiledSourceID: {
+			SourceID:  profiledSourceID,
+			WindowEnd: now.Add(-domain.LatencyEvaluationWindow),
+			Buckets:   []domain.LatencyBucket{{Hour: domain.AllHours, Samples: 80, Median: 100 * time.Millisecond, P99: 150 * time.Millisecond}},
+		},
+	}}
+	observations := fakeLatencyObservations{observations: []domain.LatencyObservation{{
+		ID: "42", SourceID: profiledSourceID, ObservedAt: now.Add(-time.Hour), Latency: 420 * time.Millisecond,
+	}}}
+	code, body := readTargetLatencyEvaluation(t, ServerOptions{
+		Identity: &fakeIdentity{}, Metrics: fakeMetrics{detail: profiledDetail()},
+		LatencyProfiles: profiles, LatencyObservations: observations,
+	})
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", code, body)
+	}
+	var payload latencyEvaluationView
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if !payload.Available || len(payload.Candidates) != 1 {
+		t.Fatalf("expected one evaluation candidate: %s", body)
+	}
+	candidate := payload.Candidates[0]
+	if candidate.ObservationID != "42" || candidate.LatencyMilliseconds != 420 || candidate.ThresholdMilliseconds != 200 {
+		t.Fatalf("unexpected candidate: %#v", candidate)
+	}
+}
+
+func TestTargetLatencyEvaluationDoesNotReportNoCandidatesWhenProfileFails(t *testing.T) {
+	t.Parallel()
+	code, body := readTargetLatencyEvaluation(t, ServerOptions{
+		Identity: &fakeIdentity{}, Metrics: fakeMetrics{detail: profiledDetail()},
+		LatencyProfiles:     fakeLatencyProfiles{err: fmt.Errorf("database unavailable")},
+		LatencyObservations: fakeLatencyObservations{},
+	})
+	if code != http.StatusOK {
+		t.Fatalf("expected evaluation response, got %d: %s", code, body)
+	}
+	var payload latencyEvaluationView
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Available {
+		t.Fatalf("an unavailable profile must not look like a clean evaluation: %s", body)
+	}
+}
+
+func readTargetLatencyEvaluation(t *testing.T, options ServerOptions) (int, string) {
+	t.Helper()
+	server := NewServer(options)
+	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/targets/%s/latency-evaluation", profiledTargetID), nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+	return response.Code, response.Body.String()
+}
+
 func (fake fakeLatencyProfiles) Profiles(context.Context, string) (map[string]domain.LatencyProfile, error) {
 	return fake.profiles, fake.err
 }

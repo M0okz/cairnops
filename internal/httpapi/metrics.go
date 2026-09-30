@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/M0okz/cairnops/internal/domain"
 	"github.com/M0okz/cairnops/internal/metrics"
@@ -16,9 +17,10 @@ type Metrics interface {
 }
 
 type metricsHandler struct {
-	metrics         Metrics
-	latencyProfiles LatencyProfiles
-	logger          *slog.Logger
+	metrics             Metrics
+	latencyProfiles     LatencyProfiles
+	latencyObservations LatencyObservations
+	logger              *slog.Logger
 }
 
 // targetDetailResponse ajoute aux mesures d'une Cible les Profils de latence de
@@ -60,27 +62,100 @@ func (handler metricsHandler) target(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		return
 	}
+	profiles := handler.readLatencyProfiles(r.Context(), targetID)
 	writeJSON(w, http.StatusOK, targetDetailResponse{
 		TargetDetail:    detail,
-		LatencyProfiles: handler.readLatencyProfiles(r.Context(), targetID),
+		LatencyProfiles: profiles.views,
 	})
+}
+
+// evaluation calcule les candidates uniquement à la demande de l'onglet
+// Contrôles. Les mesures générales se rechargent plus souvent que cette lecture
+// bornée des Observations brutes.
+func (handler metricsHandler) evaluation(w http.ResponseWriter, r *http.Request) {
+	targetID := r.PathValue("targetID")
+	if !validUUID(targetID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		return
+	}
+	if _, err := handler.metrics.Target(r.Context(), targetID); errors.Is(err, metrics.ErrNotFound) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	} else if err != nil {
+		handler.logger.Error("read target for latency evaluation", "target_id", targetID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+	profiles := handler.readLatencyProfiles(r.Context(), targetID)
+	writeJSON(w, http.StatusOK, handler.readLatencyEvaluation(r.Context(), targetID, profiles))
+}
+
+type loadedLatencyProfiles struct {
+	views     map[string]latencyProfileView
+	models    map[string]domain.LatencyProfile
+	available bool
 }
 
 // readLatencyProfiles joint les Profils de latence aux mesures. Leur lecture ne
 // peut pas faire échouer la réponse : un Profil est une habitude apprise, pas
 // une mesure, et le détail d'une Cible doit rester consultable sans lui.
-func (handler metricsHandler) readLatencyProfiles(ctx context.Context, targetID string) map[string]latencyProfileView {
-	views := map[string]latencyProfileView{}
+func (handler metricsHandler) readLatencyProfiles(ctx context.Context, targetID string) loadedLatencyProfiles {
+	loaded := loadedLatencyProfiles{views: map[string]latencyProfileView{}, models: map[string]domain.LatencyProfile{}}
 	if handler.latencyProfiles == nil {
-		return views
+		return loaded
 	}
 	profiles, err := handler.latencyProfiles.Profiles(ctx, targetID)
 	if err != nil {
 		handler.logger.Error("read target latency profiles", "target_id", targetID, "error", err)
-		return views
+		return loaded
 	}
 	for sourceID, profile := range profiles {
-		views[sourceID] = newLatencyProfileView(profile)
+		loaded.views[sourceID] = newLatencyProfileView(profile)
 	}
-	return views
+	loaded.models = profiles
+	loaded.available = true
+	return loaded
+}
+
+func (handler metricsHandler) readLatencyEvaluation(ctx context.Context, targetID string, loaded loadedLatencyProfiles) latencyEvaluationView {
+	now := time.Now().UTC()
+	view := latencyEvaluationView{WindowStart: now.Add(-domain.LatencyEvaluationWindow), WindowEnd: now, Candidates: []latencyAnomalyView{}}
+	models := make(map[string]domain.LatencyProfile, len(loaded.models))
+	for sourceID, profile := range loaded.models {
+		// Un Profil produit avant cette version pouvait inclure les mesures
+		// évaluées. Attendre son prochain recalcul avant de le consulter.
+		if profile.WindowEnd.After(view.WindowStart.Add(time.Hour)) {
+			continue
+		}
+		models[sourceID] = profile
+		for _, bucket := range profile.Buckets {
+			if _, established := bucket.Threshold(); established {
+				view.TrainedSources++
+				break
+			}
+		}
+	}
+	if handler.latencyObservations == nil || !loaded.available {
+		return view
+	}
+	if view.TrainedSources == 0 {
+		view.Available = true
+		return view
+	}
+	const maximumObservations = 5000
+	observations, truncated, err := handler.latencyObservations.RecentHealthyObservations(ctx, targetID, view.WindowStart, maximumObservations)
+	if err != nil {
+		handler.logger.Error("read latency evaluation", "target_id", targetID, "error", err)
+		return view
+	}
+	view.Available = true
+	view.Truncated = truncated
+	view.ScannedObservations = len(observations)
+	for _, anomaly := range domain.DetectLatencyAnomalies(observations, models) {
+		if len(view.Candidates) == 20 {
+			break
+		}
+		view.Candidates = append(view.Candidates, newLatencyAnomalyView(anomaly))
+	}
+	return view
 }

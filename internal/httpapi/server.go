@@ -17,30 +17,31 @@ type Pinger interface {
 }
 
 type ServerOptions struct {
-	SoftwareUpdates SoftwareUpdates
-	Address         string
-	WebDir          string
-	PublicURL       string
-	Pinger          Pinger
-	Logger          *slog.Logger
-	Service         string
-	BootstrapToken  string
-	Identity        Identity
-	OIDC            OIDC
-	ControlPlane    ControlPlane
-	Metrics         Metrics
-	LatencyProfiles LatencyProfiles
-	Indicators      Indicators
-	Connectors      Connectors
-	Webhooks        Webhooks
-	Incidents       Incidents
-	Maintenances    Maintenances
-	Notifications   Notifications
-	Devices         DeviceManager
-	Events          EventStream
-	SystemHealth    SystemHealth
-	Reconciliations reconciliation.Service
-	ResourceHealth  ResourceHealth
+	SoftwareUpdates     SoftwareUpdates
+	Address             string
+	WebDir              string
+	PublicURL           string
+	Pinger              Pinger
+	Logger              *slog.Logger
+	Service             string
+	BootstrapToken      string
+	Identity            Identity
+	OIDC                OIDC
+	ControlPlane        ControlPlane
+	Metrics             Metrics
+	LatencyProfiles     LatencyProfiles
+	LatencyObservations LatencyObservations
+	Indicators          Indicators
+	Connectors          Connectors
+	Webhooks            Webhooks
+	Incidents           Incidents
+	Maintenances        Maintenances
+	Notifications       Notifications
+	Devices             DeviceManager
+	Events              EventStream
+	SystemHealth        SystemHealth
+	Reconciliations     reconciliation.Service
+	ResourceHealth      ResourceHealth
 }
 
 func NewServer(options ServerOptions) *http.Server {
@@ -136,9 +137,10 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.HandleFunc("POST /api/v1/heartbeat/{token}", handler.receiveHeartbeat)
 	}
 	if options.Metrics != nil && options.Identity != nil {
-		handler := metricsHandler{metrics: options.Metrics, latencyProfiles: options.LatencyProfiles, logger: logger}
+		handler := metricsHandler{metrics: options.Metrics, latencyProfiles: options.LatencyProfiles, latencyObservations: options.LatencyObservations, logger: logger}
 		mux.Handle("GET /api/v1/metrics/targets", identityHTTP.requireSession(http.HandlerFunc(handler.list)))
 		mux.Handle("GET /api/v1/targets/{targetID}/metrics", identityHTTP.requireSession(http.HandlerFunc(handler.target)))
+		mux.Handle("GET /api/v1/targets/{targetID}/latency-evaluation", identityHTTP.requireSession(http.HandlerFunc(handler.evaluation)))
 	}
 	if options.Indicators != nil && options.Identity != nil {
 		handler := indicatorHandler{indicators: options.Indicators, logger: logger}

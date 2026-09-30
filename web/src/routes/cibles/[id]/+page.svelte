@@ -40,7 +40,7 @@
     windowLabel
   } from '$lib/format';
   import { i18n, plural, t } from '$lib/i18n.svelte';
-  import { api, type IncidentEvidence, type MeasureWindow, type ReconciliationSourceSummary, type TargetReconciliationActivity } from '$lib/api';
+  import { api, type IncidentEvidence, type LatencyEvaluation, type MeasureWindow, type ReconciliationSourceSummary, type TargetReconciliationActivity } from '$lib/api';
 
   type Tab = 'updates' | 'view' | 'sources' | 'checks' | 'log' | 'settings';
 
@@ -56,6 +56,9 @@
   let sourceForMove = $state<ReconciliationSourceSummary | null>(null);
   let targetActivity = $state<TargetReconciliationActivity[]>([]);
   let resolutionCheckedFor = $state('');
+  let latencyEvaluation = $state<LatencyEvaluation | null>(null);
+  let latencyEvaluationLoading = $state(false);
+  let latencyEvaluationError = $state(false);
 
   $effect(() => {
     const timer = setInterval(() => (now = new Date()), 15_000);
@@ -93,6 +96,26 @@
         .then((response) => (targetActivity = response.activity))
         .catch(() => (targetActivity = []));
     }
+  });
+
+  $effect(() => {
+    const targetId = page.params.id;
+    if (tab !== 'sources' || !targetId) return;
+    let cancelled = false;
+    latencyEvaluation = null;
+    latencyEvaluationLoading = true;
+    latencyEvaluationError = false;
+    void api<LatencyEvaluation>(`/api/v1/targets/${targetId}/latency-evaluation`)
+      .then((result) => {
+        if (!cancelled) latencyEvaluation = result;
+      })
+      .catch(() => {
+        if (!cancelled) latencyEvaluationError = true;
+      })
+      .finally(() => {
+        if (!cancelled) latencyEvaluationLoading = false;
+      });
+    return () => { cancelled = true; };
   });
 
   $effect(() => {
@@ -659,6 +682,42 @@
     {:else if tab === 'updates'}
       <SoftwareUpdates targetID={target.id}/>
     {:else if tab === 'sources'}
+      <section class="card anomaly-review" aria-labelledby="anomaly-review-title">
+        <header>
+          <h2 id="anomaly-review-title">{t('target.anomalyReview')}</h2>
+          <span class="note">{t('target.anomalyReviewWindow')}</span>
+        </header>
+        <div class="card-body">
+          <p class="explain">{t('target.anomalyReviewExplanation')}</p>
+          {#if latencyEvaluationLoading}
+            <p class="faint">{t('target.anomalyLoading')}</p>
+          {:else if latencyEvaluationError || !latencyEvaluation?.available}
+            <p class="faint">{t('target.anomalyUnavailable')}</p>
+          {:else if latencyEvaluation.trained_sources === 0}
+            <p class="faint">{t('target.anomalyTraining')}</p>
+          {:else if latencyEvaluation.candidates.length === 0}
+            <p class="faint">{t('target.noLatencyAnomalies')}</p>
+          {:else}
+            <ul class="anomaly-list">
+              {#each latencyEvaluation.candidates as candidate (candidate.observation_id)}
+                <li>
+                  <strong>{target.sources.find((source) => source.id === candidate.source_id)?.name ?? candidate.source_id}</strong>
+                  <span class="num">{stamp(candidate.observed_at)}</span>
+                  <span>{t('target.anomalyComparison', {
+                    observed: latency(candidate.latency_milliseconds),
+                    median: latency(candidate.median_milliseconds),
+                    threshold: latency(candidate.threshold_milliseconds)
+                  })}</span>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          {#if latencyEvaluation?.truncated}
+            <p class="faint">{t('target.anomalyTruncated')}</p>
+          {/if}
+        </div>
+      </section>
+
       <!-- La fenêtre choisie ne gouverne que cette lecture par Source : c'est
            ici qu'on compare une sonde à l'autre sur la même durée. -->
       <div class="measure-head">
@@ -1418,6 +1477,27 @@
     border-top: 1px solid var(--line);
     color: var(--faint);
     font-size: 0.75rem;
+  }
+
+  .anomaly-review {
+    margin-bottom: var(--s5);
+  }
+
+  .anomaly-list {
+    display: grid;
+    gap: var(--s2);
+    margin: var(--s3) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .anomaly-list li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s1) var(--s3);
+    padding-top: var(--s2);
+    border-top: 1px solid var(--line);
+    font-size: var(--text-sm);
   }
 
   .narrow {

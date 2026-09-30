@@ -79,9 +79,9 @@ func seedIntegrationSource(t *testing.T, ctx context.Context, pool *pgxpool.Pool
 	return sourceID
 }
 
-// insertObservations pose des Observations dans l'heure indiquée, comptée en
-// heures révolues avant l'heure en cours, et rend l'heure UTC qu'elles
-// occupent.
+// insertObservations pose des Observations d'entraînement au moins deux jours
+// avant l'heure en cours. hoursAgo conserve le choix de l'heure UTC, tandis
+// que la dernière journée reste réservée à l'évaluation.
 //
 // C'est PostgreSQL qui la calcule et la rend : un test ne doit pas déduire
 // d'une horloge Go le seau qu'une horloge PostgreSQL a choisi.
@@ -94,7 +94,7 @@ func insertObservations(
 		INSERT INTO cairnops_observations (source_id, target_id, observed_at, outcome, latency_milliseconds)
 		SELECT $1::uuid, $2::uuid,
 		       date_trunc('hour', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
-		         - make_interval(hours => $3) + make_interval(secs => step),
+		         - make_interval(hours => $3 + 48) + make_interval(secs => step),
 		       $4, $5
 		FROM generate_series(0, $6 - 1) AS step
 		RETURNING extract(hour FROM observed_at AT TIME ZONE 'UTC')::integer

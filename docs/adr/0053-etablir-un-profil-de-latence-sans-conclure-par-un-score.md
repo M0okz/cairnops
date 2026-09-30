@@ -90,3 +90,23 @@ au-delà du seuil — plutôt que sur une conclusion tirée d'une seule Observat
 Cette étape reste à décider séparément, activable par Source et inactive par
 défaut : elle change ce que CairnOps affirme, alors que le Profil ne fait que
 décrire ce qu'il a vu.
+
+## Évaluation des anomalies de latence
+
+L'étape suivante utilise le Profil comme modèle non supervisé et explicable.
+Chaque calcul apprend les quantiles sur les 28 jours précédant la dernière
+journée ; les Observations saines de cette dernière journée restent hors de
+l'apprentissage. Une Observation dont la latence dépasse le seuil du seau de
+son heure devient une **candidate à examiner**. Le seuil conserve la marge
+proportionnelle et absolue définie ci-dessus. Aucun score opaque n'est créé.
+
+La fiche de la Ressource montre les vingt candidates les plus récentes avec
+leur mesure, leur médiane habituelle et leur seuil. La lecture des Observations
+est bornée à 5 000 par fiche et signale si elle a été tronquée. Un Profil absent
+ou insuffisant ne produit aucune candidate ; une erreur de lecture est affichée
+comme une évaluation indisponible, jamais comme une absence d'anomalie.
+
+Cette évaluation reste informative. Elle ne change pas le verdict du Contrôle,
+l'État de santé, les Incidents ou les notifications. Elle permet de comparer
+les candidates à l'expérience de l'Opérateur avant de décider séparément si une
+séquence de réponses lentes doit devenir une Atteinte.

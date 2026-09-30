@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/M0okz/cairnops/internal/domain"
@@ -19,6 +20,48 @@ type Store struct {
 
 func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
+}
+
+// RecentHealthyObservations lit une fenêtre bornée pour évaluer le Profil sans
+// modifier les verdicts du Contrôle. Le booléen signale une lecture tronquée.
+func (store *Store) RecentHealthyObservations(ctx context.Context, targetID string, since time.Time, limit int) ([]domain.LatencyObservation, bool, error) {
+	rows, err := store.pool.Query(ctx, `
+		SELECT observation.id, observation.source_id::text, observation.observed_at,
+		       observation.latency_milliseconds
+		FROM cairnops_observations observation
+		JOIN cairnops_signal_sources source ON source.id = observation.source_id
+		WHERE observation.target_id = $1::uuid
+		  AND observation.observed_at >= $2
+		  AND observation.outcome = 'healthy'
+		  AND source.origin = 'native'
+		  AND source.kind IN ('http', 'tcp', 'dns', 'icmp')
+		ORDER BY observation.observed_at DESC, observation.id DESC
+		LIMIT $3
+	`, targetID, since.UTC(), limit+1)
+	if err != nil {
+		return nil, false, fmt.Errorf("read recent latency observations: %w", err)
+	}
+	defer rows.Close()
+	observations := make([]domain.LatencyObservation, 0)
+	for rows.Next() {
+		var id int64
+		var milliseconds int64
+		var observation domain.LatencyObservation
+		if err := rows.Scan(&id, &observation.SourceID, &observation.ObservedAt, &milliseconds); err != nil {
+			return nil, false, fmt.Errorf("scan recent latency observation: %w", err)
+		}
+		observation.ID = strconv.FormatInt(id, 10)
+		observation.Latency = time.Duration(milliseconds) * time.Millisecond
+		observations = append(observations, observation)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, fmt.Errorf("read recent latency observations: %w", err)
+	}
+	truncated := len(observations) > limit
+	if truncated {
+		observations = observations[:limit]
+	}
+	return observations, truncated, nil
 }
 
 // DueSources rend les Sources dont le Profil est absent ou a vieilli, les plus
@@ -66,7 +109,7 @@ func (store *Store) DueSources(ctx context.Context, staleBefore time.Time, limit
 // a quitté doit disparaître, sans quoi le Profil décrirait indéfiniment une
 // heure qu'il n'observe plus.
 func (store *Store) Rebuild(ctx context.Context, sourceID string, now time.Time) (bool, error) {
-	windowEnd := now.UTC()
+	windowEnd := now.UTC().Add(-domain.LatencyEvaluationWindow)
 	windowStart := windowEnd.Add(-domain.LatencyProfileWindow)
 
 	tx, err := store.pool.Begin(ctx)

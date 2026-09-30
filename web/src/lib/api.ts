@@ -217,6 +217,27 @@ export type LatencyProfile = {
   hours: LatencyProfileHour[];
 };
 
+export type LatencyAnomaly = {
+  observation_id: string;
+  source_id: string;
+  observed_at: string;
+  latency_milliseconds: number;
+  median_milliseconds: number;
+  threshold_milliseconds: number;
+  profile_hour: number;
+  profile_samples: number;
+};
+
+export type LatencyEvaluation = {
+  window_start: string;
+  window_end: string;
+  trained_sources: number;
+  scanned_observations: number;
+  truncated: boolean;
+  available: boolean;
+  candidates: LatencyAnomaly[];
+};
+
 export type TargetMeasureDetail = {
   target_id: string;
   generated_at: string;
