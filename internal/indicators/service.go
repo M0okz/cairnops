@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
@@ -252,11 +251,4 @@ func selectionScale(metadata map[string]any) float64 {
 		return 1
 	}
 	return value
-}
-
-func externalSuffix(externalID string) string {
-	if index := strings.LastIndex(externalID, ":"); index >= 0 {
-		return externalID[index+1:]
-	}
-	return externalID
 }

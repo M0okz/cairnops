@@ -14,25 +14,25 @@ V1.
 
 CairnOps possède une **fondation exécutable** : serveur et worker Go, migrations
 PostgreSQL, ordonnanceur à baux, contrôles HTTP, TCP, DNS, ICMP et Heartbeat,
-premier démarrage sécurisé, configuration des Cibles, signalement WebSocket
+premier démarrage sécurisé, configuration des Ressources, signalement WebSocket
 versionné, Santé CairnOps, interface SvelteKit statique et déploiement Docker
 Compose. Le premier parcours de Connecteur Zabbix vérifie désormais l'API et le
-transport, présente les hôtes découverts puis importe explicitement les Cibles
+transport, présente les hôtes découverts puis importe explicitement les Ressources
 sans doublon exact. Le serveur interroge ensuite Zabbix en continu, projette ses
 problèmes dans des Incidents CairnOps, les résout au rétablissement et propage
 les acquittements vers Zabbix sans perdre l'action locale en cas d'indisponibilité.
 Uptime Kuma suit le même parcours d'aperçu et d'import via son endpoint métriques
 officiel et une clé API dédiée ; ses états DOWN ouvrent des Incidents, résolus au
 retour UP. Le webhook générique génère son propre secret et retient toute identité
-inconnue en quarantaine jusqu'à sa liaison explicite à une Cible. Le cycle Incident
+inconnue en quarantaine jusqu'à sa liaison explicite à une Ressource. Le cycle Incident
 conserve maintenant les preuves invalidées avec leur motif ; les fenêtres de
 maintenance neutralisent la projection sans suspendre la collecte. Mattermost est
 relié par un webhook HTTPS scellé et une boîte d'envoi durable qui respecte
 Gravité, Acquittement et Résolution. Les Contrôles natifs alimentent désormais le
-même cycle Incident : chaque Source possède sa Politique de déclenchement, ouvre
+même cycle Incident : chaque Contrôle possède sa Politique de déclenchement, ouvre
 un Incident après assez d'Observations défavorables consécutives et le résout
 après confirmation du rétablissement, sans qu'une Observation Inconnue ne conclue
-quoi que ce soit. Disponibilité, Couverture et latence se mesurent sur 24 heures
+quoi que ce soit. Disponibilité, Temps observé et latence se mesurent sur 24 heures
 dans les listes, puis sur 7 et 30 jours dans le détail, à partir d'agrégats
 horaires consolidés par le worker. Une instance ne vit plus avec le seul compte
 né de sa mise en service : un Administrateur ouvre des comptes Opérateur et
@@ -57,7 +57,7 @@ et leurs contrats. Le code du compagnon iOS est maintenu séparément et n’est
 inclus dans cette distribution.
 
 Le Connecteur **Proxmox VE** découvre les nœuds, VM, conteneurs et stockages,
-les rapproche explicitement des Cibles et apporte CPU, mémoire et occupation
+les rapproche explicitement des Ressources et apporte CPU, mémoire et occupation
 du stockage comme Indicateurs contextuels. Les nœuds hors ligne alertent ; un
 arrêt de VM n’alerte que si « Signaler un arrêt » a été activé pour cette VM.
 Les Incidents empruntent le même regroupement et les mêmes notifications que
@@ -93,7 +93,7 @@ Le périmètre complet et ses limites sont décrits dans
 | Licence | GNU AGPL v3.0 |
 
 Le serveur reste la source de vérité. Les interfaces projettent le même état et
-ne concluent jamais qu'une cible va bien faute de preuve récente.
+ne concluent jamais qu'une Ressource va bien faute de preuve récente.
 
 ## Lire le projet
 
@@ -160,7 +160,7 @@ Endpoints utiles :
 - `POST /api/v1/connectors/{connectorID}/quarantine/{quarantineID}/approve` : liaison et rejeu explicites ;
 - `GET /api/v1/incidents` : projection partagée des Incidents actifs ou résolus ;
 - `GET /api/v1/incidents/{incidentID}` : preuves et Journal d'activité d'un Incident ;
-- `POST /api/v1/incidents/{incidentID}/acknowledgement` : acquittement local puis propagation vers la Source ;
+- `POST /api/v1/incidents/{incidentID}/acknowledgement` : acquittement local puis propagation vers le Contrôle ;
 - `GET /api/v1/version` : informations du build.
 
 Le worker reçoit uniquement la capacité Linux `NET_RAW`, nécessaire aux sondes
@@ -218,7 +218,7 @@ un numéro de version monotone, puis l'interface recharge la projection REST
 concernée. Après une coupure, le client reprend à sa dernière version connue ;
 un premier chargement démarre au curseur courant sans rejouer tout l'historique.
 
-La création d'une Source Heartbeat renvoie son secret et son chemin une seule
+La création d'un Contrôle Heartbeat renvoie son secret et son chemin une seule
 fois. CairnOps n'en conserve qu'une empreinte SHA-256 et masque ce chemin dans
 ses journaux HTTP. Les jetons de Connecteur sont scellés par une clé maîtresse
 AES-256-GCM créée automatiquement dans le volume `cairnops-secrets` ; cette clé
@@ -240,37 +240,37 @@ scellé ; une identité inconnue reçoit une réponse `202 quarantined` mais ne 
 affecter l'état opérationnel. Après autorisation, `firing` ouvre ou actualise le
 signal identifié par `event_key` et seule une entrée `resolved` explicite le ferme.
 
-Chaque Source de signal native porte sa Politique de déclenchement : trois
+Chaque Contrôle natif porte sa Politique de déclenchement : trois
 Observations défavorables consécutives ouvrent un Incident et deux Observations
 saines consécutives le résolvent par défaut, avec une Gravité `major`. Ces trois
-valeurs se règlent à la création de la Source, entre 1 et 10 pour les seuils. Une
+valeurs se règlent à la création du Contrôle, entre 1 et 10 pour les seuils. Une
 Observation Inconnue laisse les compteurs intacts : elle ne déclenche pas et ne
 constitue jamais un rétablissement. Les preuves natives rejoignent la Nature
-`availability`, de sorte que plusieurs Sources d'une même Cible alimentent un
+`availability`, de sorte que plusieurs Contrôles d'une même Ressource alimentent un
 Incident unique, invalidable et notifié comme les preuves d'une Intégration.
 
-Une Cible se corrige et se retire sans perdre son passé. Renommer ne change ni
+Une Ressource se corrige et se retire sans perdre son passé. Renommer ne change ni
 son identité ni son historique ; archiver la sort du service en résolvant ses
 Incidents actifs, en arrêtant ses Contrôles et en refusant tout signal qui
 voudrait la rouvrir — y compris celui d'une Intégration encore active — jusqu'à
 sa restauration. Un Contrôle natif se modifie entièrement, configuration
-comprise : corriger une URL n'oblige ni à recréer la Source ni à perdre ses
+comprise : corriger une URL n'oblige ni à recréer le Contrôle ni à perdre ses
 Observations. Le suspendre l'arrête sans rien perdre ; le retirer emporte ses
-Observations. Une Source apportée par une Intégration ne se règle pas ici : elle
+Observations. Un Contrôle apporté par une Intégration ne se règle pas ici : il
 appartient au produit distant.
 
-Une Cible importée depuis un Connecteur se mesure comme les autres : chaque
-liaison porte une Source de signal, et chaque cycle de synchronisation y
+Une Ressource importée depuis un Connecteur se mesure comme les autres : chaque
+liaison porte un Contrôle, et chaque cycle de synchronisation y
 enregistre une Observation — indisponible, disponible avec son temps de réponse,
 ou neutre pour les états PENDING et MAINTENANCE d'Uptime Kuma. Ces Observations
 alimentent la mesure et elle seule : l'Incident d'une Intégration reste décidé
 par le rapprochement de ses propres signaux.
 
 Trois mesures répondent à trois questions distinctes. La Disponibilité est la
-part des Observations concluantes qui ont conclu à la disponibilité. La
-Couverture est la part des Observations attendues qui ont effectivement conclu :
-une Observation Inconnue, une sonde suspendue ou un worker absent la font
-baisser, de sorte qu'une Disponibilité de 100 % adossée à une Couverture de 4 %
+part des Observations concluantes qui ont conclu à la disponibilité. Le
+Temps observé est la part des Observations attendues qui ont effectivement conclu :
+une Observation Inconnue, un Contrôle suspendu ou un worker absent la font
+baisser, de sorte qu'une Disponibilité de 100 % adossée à un Temps observé de 4 %
 se voit plutôt qu'elle ne rassure. La latence est la moyenne exacte et le
 maximum des Observations saines ; aucun percentile n'est annoncé, faute de
 pouvoir l'agréger sans approximation. Le worker consolide chaque heure révolue,

@@ -2,6 +2,8 @@
 
 CairnOps doit inspirer confiance avant de chercher à impressionner. Son interface est fonctionnelle, précise et soigneusement finie ; le mouvement agrémente la navigation et confirme les actions sans détourner l'attention de l'état opérationnel.
 
+> **Vocabulaire.** Ce document conserve les intitulés d'origine des chantiers de design : Cible, Source, Couverture, Santé. La [clarification du vocabulaire](clarification-du-vocabulaire.md) les remplace partout dans l'interface par Ressource, Contrôle, Temps observé, État de CairnOps et Doublons possibles. C'est cette clarification et [CONTEXT.md](../CONTEXT.md) qui arbitrent ce qu'un écran affiche ; les pages qui suivent décrivent la composition, pas les mots.
+
 L’identité retenue est **Convergence · Titane**, décrite dans [le guide de marque](brand/BRAND-GUIDE.md). Elle remplace les pistes cuivre et Framboise et le cairn en pierres empilées. La **composition A** de `web/design-prototype` et son échelle de lecture ont été retenues pour l’application : synthèse, analyse et incidents côte à côte, puis Cibles. Les autres compositions restent des explorations dans l’atelier. Les jetons de `web/src/styles/app.css` portent la traduction commune aux écrans et au prototype.
 
 ## Identité
@@ -146,7 +148,7 @@ Une Divergence de Sources ne crée pas un cinquième État de santé. Une pastil
 
 ## Ressources et problèmes explicites
 
-La [clarification du vocabulaire](clarification-du-vocabulaire.md) remplace les intitulés historiques de ce document : Ressources, Contrôles, Doublons possibles, État de CairnOps et Temps observé. La liste regroupe les ressources par catégorie avec compteurs ; les mesures affichées dépendent de l’objet suivi. Le problème précis reste visible sur mobile, avec sa gravité et son origine. Les problèmes supplémentaires sont accessibles depuis « +N autres problèmes » au survol, au clavier et au toucher ; les mises à jour sont affichées séparément. Les infobulles restent dans les limites de l’écran et se ferment avec Échap.
+Comme annoncé en tête de document, la [clarification du vocabulaire](clarification-du-vocabulaire.md) arbitre les intitulés. La liste regroupe les ressources par catégorie avec compteurs ; les mesures affichées dépendent de l’objet suivi. Le problème précis reste visible sur mobile, avec sa gravité et son origine. Les problèmes supplémentaires sont accessibles depuis « +N autres problèmes » au survol, au clavier et au toucher ; les mises à jour sont affichées séparément. Les infobulles restent dans les limites de l’écran et se ferment avec Échap.
 
 La Vue d'ensemble classe les types présents selon la situation à examiner, en comptant chaque Ressource une seule fois. Les types concrets, notamment Machines virtuelles, Conteneurs, Hôtes de virtualisation et Stockage lorsqu'un inventaire les identifie, affichent les effectifs par État de santé et la part disponible ; chaque ligne ouvre la liste sur son type. Si aucune VM n'est identifiée, une ligne à zéro rend ce classement à compléter visible. Autre infrastructure conserve les ressources dont seul le périmètre général est établi. Tâches planifiées et Logiciels suivis montrent leur nombre et leurs problèmes ou mises à jour à examiner, sans leur attribuer artificiellement une disponibilité.
 

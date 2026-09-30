@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -766,13 +765,4 @@ func (store *Store) series(ctx context.Context, indicatorID, window string, from
 		return nil, fmt.Errorf("iterate indicator series: %w", err)
 	}
 	return points, nil
-}
-
-func sortedRuntimeIDs(indicators []RuntimeIndicator) []string {
-	ids := make([]string, 0, len(indicators))
-	for _, indicator := range indicators {
-		ids = append(ids, indicator.ID)
-	}
-	sort.Strings(ids)
-	return ids
 }

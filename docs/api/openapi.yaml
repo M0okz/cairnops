@@ -2,7 +2,21 @@ openapi: 3.1.0
 info:
   title: CairnOps API
   version: 0.1.0-connected
-  description: API CairnOps pour la supervision native et les Connecteurs guidés.
+  description: >-
+    API CairnOps pour la supervision native et les Connecteurs guidés.
+
+
+    Toute réponse 4xx et 5xx porte l'enveloppe `Error` : `error` est une phrase
+    destinée à l'utilisateur, `code` un identifiant stable présent lorsque le
+    client doit reconnaître la condition sans interpréter la phrase. Les
+    réponses d'erreur ne répètent pas ce schéma une à une ; leur `description`
+    dit ce que la condition signifie, l'enveloppe est celle-ci partout.
+
+
+    Les routes décrites ici sont exactement celles que le serveur sert :
+    `TestOpenAPIDescribesExactlyTheRegisteredRoutes` compare ce document à la
+    table du multiplexeur, chemins et noms de paramètres compris, et échoue
+    dans les deux sens.
 servers:
   - url: /
 components:
@@ -1905,11 +1919,30 @@ components:
         entity_type: { type: string, enum: [target, source, component, connector, incident, maintenance, notification, device, indicator, reconciliation] }
         entity_id: { type: string }
         occurred_at: { type: string, format: date-time }
+    BuildInfo:
+      type: object
+      description: >-
+        Identité de la construction servie. « dev » et « unknown » signalent un
+        binaire construit hors de la chaîne de publication.
+      required: [version, commit, build_date]
+      properties:
+        version: { type: string, description: 'Version sémantique publiée, ou « dev » hors publication.' }
+        commit: { type: string, description: 'SHA du commit construit, ou « unknown » hors publication.' }
+        build_date: { type: string, description: 'Instant RFC 3339 de la construction, ou « unknown » hors publication.' }
     Error:
       type: object
+      description: >-
+        Enveloppe commune à toute réponse 4xx et 5xx. « error » est une phrase
+        destinée à l'utilisateur ; « code » est un identifiant stable que le
+        client peut traduire et sur lequel il peut décider, sans lire le texte.
       required: [error]
       properties:
         error: { type: string }
+        code:
+          type: string
+          description: >-
+            Identifiant stable de la condition, présent lorsque le client doit
+            pouvoir la reconnaître sans interpréter la phrase.
 paths:
   /api/v1/software-updates:
     get:
@@ -2086,6 +2119,19 @@ paths:
         '401': { description: Session requise }
         '403': { description: Administrateur requis }
         '500': { description: Erreur interne }
+  /api/v1/version:
+    get:
+      operationId: getBuildInfo
+      description: >-
+        Version, commit et date de construction de l'image qui sert cette
+        instance. Sans session : c'est la preuve qu'un déploiement attendu est
+        bien celui qui répond, lisible avant toute authentification.
+      responses:
+        '200':
+          description: Identité de la construction servie
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BuildInfo' }
   /api/v1/health/live:
     get:
       operationId: getLiveness
