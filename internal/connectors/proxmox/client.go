@@ -171,7 +171,7 @@ func NewClientWithHTTP(client *http.Client) *Client {
 func NormalizeEndpoint(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || len(raw) > 2048 || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return "", fmt.Errorf("Proxmox VE requires an HTTPS address without credentials, query or fragment")
+		return "", fmt.Errorf("proxmox VE requires an HTTPS address without credentials, query or fragment")
 	}
 	if u.Port() != "" {
 		port, err := strconv.Atoi(u.Port())
@@ -250,15 +250,15 @@ func (client *Client) transport(c Credentials) (*http.Client, func(), error) {
 	t := base.Clone()
 	t.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: true, VerifyConnection: func(state tls.ConnectionState) error {
 		if len(state.PeerCertificates) == 0 {
-			return fmt.Errorf("Proxmox VE did not present a certificate")
+			return fmt.Errorf("proxmox VE did not present a certificate")
 		}
 		cert := state.PeerCertificates[0]
 		if fingerprint(cert) != strings.ToLower(c.Fingerprint) {
-			return fmt.Errorf("Proxmox VE certificate changed; approve its new fingerprint")
+			return fmt.Errorf("proxmox VE certificate changed; approve its new fingerprint")
 		}
 		now := time.Now()
 		if now.Before(cert.NotBefore) || !now.Before(cert.NotAfter) {
-			return fmt.Errorf("Proxmox VE certificate expired or not yet valid")
+			return fmt.Errorf("proxmox VE certificate expired or not yet valid")
 		}
 		return nil
 	}}
@@ -290,7 +290,7 @@ func (client *Client) request(ctx context.Context, endpoint, method, path string
 	}
 	response, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("Proxmox VE request failed: %w", err)
+		return fmt.Errorf("proxmox VE request failed: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -301,7 +301,7 @@ func (client *Client) request(ctx context.Context, endpoint, method, path string
 		return fmt.Errorf("read Proxmox VE response: %w", err)
 	}
 	if len(raw) > maximumResponse {
-		return fmt.Errorf("Proxmox VE response exceeds the size limit")
+		return fmt.Errorf("proxmox VE response exceeds the size limit")
 	}
 	var envelope struct {
 		Data json.RawMessage `json:"data"`
@@ -310,13 +310,13 @@ func (client *Client) request(ctx context.Context, endpoint, method, path string
 		return fmt.Errorf("invalid Proxmox VE JSON response")
 	}
 	if len(envelope.Data) == 0 {
-		return fmt.Errorf("Proxmox VE response has no data field")
+		return fmt.Errorf("proxmox VE response has no data field")
 	}
 	if target == nil {
 		return nil
 	}
 	if string(envelope.Data) == "null" {
-		return fmt.Errorf("Proxmox VE returned incomplete data")
+		return fmt.Errorf("proxmox VE returned incomplete data")
 	}
 	if err := json.Unmarshal(envelope.Data, target); err != nil {
 		return fmt.Errorf("invalid Proxmox VE data")
@@ -337,7 +337,7 @@ func (client *Client) Inspect(ctx context.Context, address string, c Credentials
 	}
 	major, err := strconv.Atoi(strings.Split(version.Version, ".")[0])
 	if err != nil || major < 8 || major > 9 {
-		return Inspection{}, fmt.Errorf("Proxmox VE %s is unsupported; supported API versions are 8 and 9", version.Version)
+		return Inspection{}, fmt.Errorf("proxmox VE %s is unsupported; supported API versions are 8 and 9", version.Version)
 	}
 	resources, err := client.Resources(ctx, endpoint, c)
 	if err != nil {
@@ -359,7 +359,7 @@ func (client *Client) Resources(ctx context.Context, address string, c Credentia
 	}
 	for _, privilege := range []string{"Sys.Audit", "VM.Audit", "Datastore.Audit"} {
 		if permissions["/"][privilege] != 1 {
-			return nil, fmt.Errorf("Proxmox VE requires propagated %s at / for the user and token (PVEAuditor)", privilege)
+			return nil, fmt.Errorf("proxmox VE requires propagated %s at / for the user and token (PVEAuditor)", privilege)
 		}
 	}
 	var raw []Resource
@@ -404,12 +404,12 @@ func (client *Client) Resources(ctx context.Context, address string, c Credentia
 			}
 		}
 		if len(r.Name) > 160 {
-			return nil, fmt.Errorf("Proxmox VE resource name exceeds 160 characters")
+			return nil, fmt.Errorf("proxmox VE resource name exceeds 160 characters")
 		}
 		result = append(result, r)
 	}
 	if len(result) == 0 {
-		return nil, errors.New("Proxmox VE inventory is empty; check token permissions")
+		return nil, errors.New("proxmox VE inventory is empty; check token permissions")
 	}
 	nodes := map[string]string{}
 	for _, resource := range result {

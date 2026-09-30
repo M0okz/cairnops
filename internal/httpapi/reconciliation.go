@@ -37,7 +37,7 @@ func (handler reconciliationHandler) previewTargets(w http.ResponseWriter, r *ht
 		return
 	}
 	if !validUUID(input.PrimaryTargetID) || !validUUID(input.SecondaryTargetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	preview, err := handler.service.PreviewTargets(r.Context(), input.PrimaryTargetID, input.SecondaryTargetID)
@@ -60,7 +60,7 @@ func (handler reconciliationHandler) previewSource(w http.ResponseWriter, r *htt
 		return
 	}
 	if !validUUID(input.SourceID) || !validUUID(input.DestinationTargetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid Source or Target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid Source or Target ID", "code": "invalid_source_or_target_id"})
 		return
 	}
 	preview, err := handler.service.PreviewSourceMove(r.Context(), input.SourceID, input.DestinationTargetID)
@@ -76,7 +76,7 @@ func (handler reconciliationHandler) operations(w http.ResponseWriter, r *http.R
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil || parsed < 1 || parsed > 100 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 100"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit must be between 1 and 100", "code": "limit_must_be_between_1_and_100"})
 			return
 		}
 		limit = parsed
@@ -103,7 +103,7 @@ func (handler reconciliationHandler) enqueue(w http.ResponseWriter, r *http.Requ
 	if !validUUID(input.PrimaryTargetID) || !validUUID(input.SecondaryTargetID) ||
 		(input.SourceID != "" && !validUUID(input.SourceID)) ||
 		(input.SuggestionID != "" && !validUUID(input.SuggestionID)) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid reconciliation identifier"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid reconciliation identifier", "code": "invalid_reconciliation_identifier"})
 		return
 	}
 	operation, err := handler.service.Enqueue(r.Context(), principal.ID, input)
@@ -121,7 +121,7 @@ func (handler reconciliationHandler) reject(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if !validUUID(r.PathValue("suggestionID")) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid suggestion ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid suggestion ID", "code": "invalid_suggestion_id"})
 		return
 	}
 	var input reconciliation.RejectInput
@@ -144,7 +144,7 @@ func (handler reconciliationHandler) snooze(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if !validUUID(r.PathValue("suggestionID")) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid suggestion ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid suggestion ID", "code": "invalid_suggestion_id"})
 		return
 	}
 	var input reconciliation.SnoozeInput
@@ -163,7 +163,7 @@ func (handler reconciliationHandler) snooze(w http.ResponseWriter, r *http.Reque
 func (handler reconciliationHandler) targetActivity(w http.ResponseWriter, r *http.Request) {
 	targetID := r.PathValue("targetID")
 	if !validUUID(targetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	items, err := handler.service.ListTargetActivity(r.Context(), targetID, 100)
@@ -177,7 +177,7 @@ func (handler reconciliationHandler) targetActivity(w http.ResponseWriter, r *ht
 func (handler reconciliationHandler) resolveTarget(w http.ResponseWriter, r *http.Request) {
 	targetID := r.PathValue("targetID")
 	if !validUUID(targetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	resolvedID, err := handler.service.ResolveTarget(r.Context(), targetID)
@@ -193,13 +193,13 @@ func (handler reconciliationHandler) writeError(w http.ResponseWriter, err error
 	case errors.Is(err, reconciliation.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), reconciliation.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, reconciliation.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found", "code": "not_found"})
 	case errors.Is(err, reconciliation.ErrConflict):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": strings.TrimPrefix(err.Error(), reconciliation.ErrConflict.Error()+": ")})
 	default:
 		if handler.logger != nil {
 			handler.logger.Error("target reconciliation request failed", "error", err)
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 	}
 }

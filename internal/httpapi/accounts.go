@@ -90,7 +90,7 @@ func (handler identityHandler) setAccountActivation(w http.ResponseWriter, r *ht
 func (handler identityHandler) writeAccountError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, identitymodel.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found", "code": "user_not_found"})
 	case errors.Is(err, identitymodel.ErrConflict):
 		writeJSON(w, http.StatusConflict, map[string]string{
 			"error": strings.TrimPrefix(err.Error(), identitymodel.ErrConflict.Error()+": "),

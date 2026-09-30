@@ -22,7 +22,7 @@ type softwareHandler struct{ service SoftwareUpdates }
 func (h softwareHandler) list(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("target_id")
 	if id != "" && !validUUID(id) {
-		writeJSON(w, 400, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, 400, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	data, err := h.service.List(r.Context(), id)
@@ -35,7 +35,7 @@ func (h softwareHandler) list(w http.ResponseWriter, r *http.Request) {
 func (h softwareHandler) get(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("serviceID")
 	if !validUUID(id) {
-		writeJSON(w, 400, map[string]string{"error": "invalid service ID"})
+		writeJSON(w, 400, map[string]string{"error": "invalid service ID", "code": "invalid_service_id"})
 		return
 	}
 	data, err := h.service.Get(r.Context(), id)
@@ -48,12 +48,12 @@ func (h softwareHandler) get(w http.ResponseWriter, r *http.Request) {
 func (h softwareHandler) confirm(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("serviceID")
 	if !validUUID(id) {
-		writeJSON(w, 400, map[string]string{"error": "invalid service ID"})
+		writeJSON(w, 400, map[string]string{"error": "invalid service ID", "code": "invalid_service_id"})
 		return
 	}
 	var input softwareupdates.Source
 	if err := decodeJSON(w, r, 16384, &input, false); err != nil {
-		writeJSON(w, 400, map[string]string{"error": "invalid source"})
+		writeJSON(w, 400, map[string]string{"error": "invalid source", "code": "invalid_source"})
 		return
 	}
 	actor, ok := r.Context().Value(principalContextKey{}).(identity.Principal)
@@ -86,7 +86,7 @@ func (h softwareHandler) usage(w http.ResponseWriter, r *http.Request) {
 func (h softwareHandler) saveConfig(w http.ResponseWriter, r *http.Request) {
 	var c softwareupdates.AIConfig
 	if err := decodeJSON(w, r, 16384, &c, false); err != nil {
-		writeJSON(w, 400, map[string]string{"error": "invalid configuration"})
+		writeJSON(w, 400, map[string]string{"error": "invalid configuration", "code": "invalid_configuration"})
 		return
 	}
 	if err := h.service.SaveConfig(r.Context(), c); err != nil {

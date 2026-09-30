@@ -160,7 +160,7 @@ func (collector *Collector) collect(ctx context.Context, connector RuntimeConnec
 		}
 	case "proxmox":
 		if collector.proxmox == nil {
-			return fmt.Errorf("Proxmox VE client is unavailable")
+			return fmt.Errorf("proxmox VE client is unavailable")
 		}
 		var credentials proxmox.Credentials
 		if err := json.Unmarshal(credential, &credentials); err != nil {

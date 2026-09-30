@@ -174,7 +174,7 @@ func (store *PostgresStore) RefreshProxmox(ctx context.Context, connector Runtim
 	var lockedID string
 	err = tx.QueryRow(ctx, `SELECT id::text FROM cairnops_connectors WHERE id = $1::uuid AND lease_owner = $2 AND lease_until > now() AND status <> 'disabled' FOR UPDATE`, connector.ID, owner).Scan(&lockedID)
 	if err != nil {
-		return nil, fmt.Errorf("Proxmox VE lease expired or connector suspended: %w", err)
+		return nil, fmt.Errorf("proxmox VE lease expired or connector suspended: %w", err)
 	}
 	for _, resource := range resources {
 		var known bool

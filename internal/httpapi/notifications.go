@@ -119,6 +119,6 @@ func (handler notificationHandler) writeError(w http.ResponseWriter, err error) 
 		if handler.logger != nil {
 			handler.logger.Error("notification request failed", "error", err)
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 	}
 }

@@ -243,7 +243,7 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("/", newSPAHandler(options.WebDir))
 	} else {
 		mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found", "code": "not_found"})
 		})
 	}
 
@@ -279,9 +279,44 @@ func readinessHandler(pinger Pinger, service string) http.HandlerFunc {
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
+	if status >= http.StatusBadRequest {
+		if response, ok := value.(map[string]string); ok && response["error"] != "" && response["code"] == "" {
+			// Domain errors can carry details that have no stable translation key.
+			// Give the client a localized category without changing the legacy text.
+			copy := make(map[string]string, len(response)+1)
+			for key, item := range response {
+				copy[key] = item
+			}
+			copy["code"] = fallbackErrorCode(status)
+			value = copy
+		}
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(value); err != nil && !errors.Is(err, context.Canceled) {
 		slog.Default().Error("encode HTTP response", "error", err)
+	}
+}
+
+func fallbackErrorCode(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "invalid_request"
+	case http.StatusUnauthorized:
+		return "authentication_failed"
+	case http.StatusForbidden:
+		return "access_denied"
+	case http.StatusNotFound:
+		return "resource_not_found"
+	case http.StatusConflict:
+		return "request_conflict"
+	case http.StatusGone:
+		return "resource_expired"
+	case http.StatusUnprocessableEntity:
+		return "connection_failed"
+	case http.StatusServiceUnavailable:
+		return "service_unavailable"
+	default:
+		return "server_error"
 	}
 }

@@ -6,9 +6,9 @@
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
   import { onMount } from 'svelte';
-  import { api, type UptimeKumaImportResult, type UptimeKumaMonitorPreview, type UptimeKumaPreview } from '$lib/api';
+  import { api, type ConnectorImportResult, type ZabbixPreview, type UptimeKumaPreview } from '$lib/api';
   import { clock } from '$lib/format';
-  import { plural, t } from '$lib/i18n.svelte';
+  import { plural, t, type MessageKey } from '$lib/i18n.svelte';
   import {
     prepareTargetAssignments,
     reconciliationCounts,
@@ -16,29 +16,44 @@
   } from '$lib/reconciliation';
 
   let {
+    kind,
     onclose,
     onsuccess,
     connectorId = '',
     initialName = '',
     initialAddress = ''
   }: {
+    kind: 'zabbix' | 'uptime_kuma';
     onclose: () => void;
-    onsuccess: (result: UptimeKumaImportResult) => Promise<void> | void;
+    onsuccess: (result: ConnectorImportResult) => Promise<void> | void;
     connectorId?: string;
     initialName?: string;
     initialAddress?: string;
   } = $props();
 
   let addressInput = $state<HTMLInputElement>();
-  let name = $state('Uptime Kuma');
+  let name = $state('');
   let address = $state('');
-  let apiKey = $state('');
+  let accessToken = $state('');
+  let secondFactor = $state('');
   let username = $state('');
   let password = $state('');
-  let secondFactor = $state('');
   let manualAccess = $state(false);
-  let preview = $state<UptimeKumaPreview | null>(null);
-  let imported = $state<UptimeKumaImportResult | null>(null);
+  type WizardItem = {
+    external_id: string;
+    name: string;
+    subtitle: string;
+    candidate_targets?: ZabbixPreview['hosts'][number]['candidate_targets'];
+    already_imported_to?: ZabbixPreview['hosts'][number]['already_imported_to'];
+    suggested_target?: ZabbixPreview['hosts'][number]['suggested_target'];
+  };
+  type WizardPreview = Omit<ZabbixPreview, 'hosts' | 'kind' | 'version'> & { version?: string; items: WizardItem[] };
+  let preview = $state<WizardPreview | null>(null);
+  const product = $derived(kind === 'zabbix' ? 'zabbix' : 'kuma');
+  const apiKind = $derived(kind === 'zabbix' ? 'zabbix' : 'uptime-kuma');
+  function productText(key: string) { return t(`${product}.${key}` as MessageKey); }
+  function productPlural(key: string, count: number) { return plural(`${product}.${key}`, count); }
+  let imported = $state<ConnectorImportResult | null>(null);
   let selected = $state<string[]>([]);
   let targetAssignments = $state<Record<string, string>>({});
   let query = $state('');
@@ -50,24 +65,44 @@
   $effect(() => {
     if (initialized) return;
     initialized = true;
-    if (initialName) name = initialName;
+    name = initialName || (kind === 'zabbix' ? 'Zabbix' : 'Uptime Kuma');
     if (initialAddress) address = initialAddress;
   });
 
   onMount(() => connectorId ? void inspectExisting() : addressInput?.focus());
 
-  function adoptPreview(value: UptimeKumaPreview) {
-    preview = value;
-    selected = value.monitors.filter((monitor) => !monitor.already_imported_to).map((monitor) => monitor.external_id);
-    targetAssignments = prepareTargetAssignments(value.monitors);
+  function adoptPreview(value: ZabbixPreview | UptimeKumaPreview) {
+    const items: WizardItem[] = value.kind === 'zabbix'
+      ? value.hosts.map((host) => ({
+          external_id: host.external_id, name: host.name,
+          subtitle: host.interfaces.find((item) => item.main)?.address ?? host.interfaces[0]?.address ?? productText('noInterface'),
+          candidate_targets: host.candidate_targets, already_imported_to: host.already_imported_to,
+          suggested_target: host.suggested_target
+        }))
+      : value.monitors.map((monitor) => ({
+          external_id: monitor.external_id, name: monitor.name,
+          subtitle: monitor.address || statusLabel(monitor.status),
+          candidate_targets: monitor.candidate_targets, already_imported_to: monitor.already_imported_to,
+          suggested_target: monitor.suggested_target
+        }));
+    preview = { ...value, version: value.kind === 'zabbix' ? value.version : undefined, items };
+    selected = items.filter((item) => !item.already_imported_to).map((item) => item.external_id);
+    targetAssignments = prepareTargetAssignments(items);
+  }
+
+  function statusLabel(status: number) {
+    if (status === 0) return 'DOWN';
+    if (status === 1) return 'UP';
+    if (status === 2) return 'EN ATTENTE';
+    return 'MAINTENANCE';
   }
 
   async function inspectExisting() {
     busy = true; error = '';
     try {
-      adoptPreview(await api<UptimeKumaPreview>(`/api/v1/connectors/${connectorId}/preview`, { method: 'POST' }));
+      adoptPreview(await api<ZabbixPreview | UptimeKumaPreview>(`/api/v1/connectors/${connectorId}/preview`, { method: 'POST' }));
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : t('kuma.verifyFailed');
+      error = cause instanceof Error ? cause.message : productText('verifyFailed');
     } finally { busy = false; }
   }
 
@@ -81,26 +116,28 @@
     return 1;
   }
 
-  function filteredMonitors() {
+  function filteredItems() {
     const needle = query.trim().toLocaleLowerCase('fr');
-    if (!needle || !preview) return preview?.monitors ?? [];
-    return preview.monitors.filter((monitor) => [monitor.name, monitor.type, monitor.address ?? ''].some((value) => value.toLocaleLowerCase('fr').includes(needle)));
+    if (!needle || !preview) return preview?.items ?? [];
+    return preview.items.filter((item) =>
+      [item.name, item.subtitle].some((value) => value.toLocaleLowerCase('fr').includes(needle))
+    );
   }
 
-  function importableMonitors() {
-    return preview?.monitors.filter((monitor) => !monitor.already_imported_to) ?? [];
+  function importableItems() {
+    return preview?.items.filter((item) => !item.already_imported_to) ?? [];
   }
 
-  function visibleImportableMonitors() {
-    return filteredMonitors().filter((monitor) => !monitor.already_imported_to);
+  function visibleImportableItems() {
+    return filteredItems().filter((item) => !item.already_imported_to);
   }
 
-  function toggleMonitor(id: string) {
+  function toggleItem(id: string) {
     selected = selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id];
   }
 
   function toggleAllVisible() {
-    const visible = visibleImportableMonitors().map((monitor) => monitor.external_id);
+    const visible = visibleImportableItems().map((item) => item.external_id);
     const allSelected = visible.length > 0 && visible.every((id) => selected.includes(id));
     selected = allSelected ? selected.filter((id) => !visible.includes(id)) : [...new Set([...selected, ...visible])];
   }
@@ -109,35 +146,28 @@
     targetAssignments = { ...targetAssignments, [externalID]: targetID };
   }
 
-  function statusLabel(status: number) {
-    if (status === 0) return 'DOWN';
-    if (status === 1) return 'UP';
-    if (status === 2) return 'EN ATTENTE';
-    return 'MAINTENANCE';
-  }
-
   async function inspect(event: SubmitEvent) {
     event.preventDefault();
     busy = true;
     error = '';
     try {
-      adoptPreview(await api<UptimeKumaPreview>('/api/v1/connectors/uptime-kuma/preview', {
+      adoptPreview(await api<ZabbixPreview | UptimeKumaPreview>(`/api/v1/connectors/${apiKind}/preview`, {
         method: 'POST',
         body: JSON.stringify(manualAccess
-          ? { name, address, api_key: apiKey }
-          : { name, address, username, password, second_factor: secondFactor })
+          ? kind === 'zabbix' ? { name, address, api_token: accessToken } : { name, address, api_key: accessToken }
+          : kind === 'zabbix' ? { name, address, username, password } : { name, address, username, password, second_factor: secondFactor })
       }));
-      apiKey = '';
-      password = '';
+      accessToken = '';
       secondFactor = '';
+      password = '';
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : t('kuma.verifyFailed');
+      error = cause instanceof Error ? cause.message : productText('verifyFailed');
     } finally {
       busy = false;
     }
   }
 
-  async function importMonitors() {
+  async function importItems() {
     if (!preview || selected.length === 0) return;
     if (reconciliation.review > 0) {
       error = plural('wizard.resolveBeforeImport', reconciliation.review);
@@ -146,17 +176,17 @@
     busy = true;
     error = '';
     try {
-      imported = await api<UptimeKumaImportResult>('/api/v1/connectors/uptime-kuma/import', {
+      imported = await api<ConnectorImportResult>(`/api/v1/connectors/${apiKind}/import`, {
         method: 'POST',
         body: JSON.stringify({
           receipt: preview.receipt,
-          monitor_ids: selected,
+          ...(kind === 'zabbix' ? { host_ids: selected } : { monitor_ids: selected }),
           target_assignments: resolvedTargetAssignments(selected, targetAssignments)
         })
       });
       await onsuccess(imported);
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : t('kuma.importFailed');
+      error = cause instanceof Error ? cause.message : productText('importFailed');
     } finally {
       busy = false;
     }
@@ -179,9 +209,9 @@
     <header>
       <div>
         <h2 id="connector-title">
-          {imported ? t('wizard.linked') : preview ? t('wizard.chooseWhatEnters') : t('kuma.connect')}
+          {imported ? t('wizard.linked') : preview ? t('wizard.chooseWhatEnters') : productText('connect')}
         </h2>
-        <p>{t('zabbix.lead')}</p>
+        <p>{productText('lead')}</p>
       </div>
       <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
         <Icon name="close" size={14} />
@@ -200,7 +230,7 @@
         <i class="mark">{stage() > 1 ? '✓' : '2'}</i>
         <span class="label">
           <strong>{t('wizard.authorisation')}</strong>
-          <small class="faint">{stage() > 1 ? t('wizard.readAccess') : t('kuma.apiKey')}</small>
+          <small class="faint">{stage() > 1 ? t('wizard.readAccess') : productText(kind === 'zabbix' ? 'apiToken' : 'apiKey')}</small>
         </span>
       </li>
       <li class:done={stage() > 2} class:on={stage() === 2}>
@@ -221,7 +251,7 @@
               {plural('wizard.linkedTargets', imported.targets.length)}
             </strong>
             <p class="muted">
-              {t('kuma.keySealed')}
+              {productText(kind === 'zabbix' ? 'tokenSealed' : 'keySealed')}
             </p>
           </div>
         </div>
@@ -249,7 +279,7 @@
         <div class="checks">
           <div class="check">
             <span class="faint">Version du serveur</span>
-            <strong>Uptime Kuma</strong>
+            <strong>{kind === 'zabbix' ? `Zabbix ${preview.version}` : 'Uptime Kuma'}</strong>
             <small class={preview.compatibility === 'supported' ? 'ok' : 'warn'}>{preview.compatibility_label}</small>
           </div>
           <div class="check">
@@ -261,63 +291,63 @@
           </div>
           <div class="check">
             <span class="faint">{t('wizard.scope')}</span>
-            <strong>{plural('kuma.monitorsVisible', preview.monitors.length)}</strong>
+            <strong>{productPlural(kind === 'zabbix' ? 'hostsVisible' : 'monitorsVisible', preview.items.length)}</strong>
             <small class="faint">{t('wizard.readOnlyPreview')}</small>
           </div>
           <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
         </div>
 
-        <ConnectorAccessPlan access={preview.access} product="uptime_kuma" />
+        <ConnectorAccessPlan access={preview.access} product={kind} />
         <ReconciliationSummary counts={reconciliation} />
         <ConnectorDiscoveryNotice />
 
         <div class="listbar">
           <div class="field search">
-            <label class="sr-only" for="monitor-filter">Filtrer les moniteurs</label>
-            <input id="monitor-filter" bind:value={query} placeholder="Filtrer par nom ou adresse" />
+            <label class="sr-only" for="item-filter">{kind === 'zabbix' ? productText('filterHosts') : 'Filtrer les moniteurs'}</label>
+            <input id="item-filter" bind:value={query} placeholder="Filtrer par nom ou adresse" />
           </div>
-          <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleImportableMonitors().length === 0}>
-            {visibleImportableMonitors().length === 0
+          <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleImportableItems().length === 0}>
+            {visibleImportableItems().length === 0
               ? t('wizard.nothingToSelect')
-              : visibleImportableMonitors().every((monitor) => selected.includes(monitor.external_id))
+              : visibleImportableItems().every((item) => selected.includes(item.external_id))
                 ? 'Tout retirer'
                 : t('wizard.selectAll')}
           </button>
           <span class="faint num">
-            {selected.length} / {importableMonitors().length} importables ·
+            {selected.length} / {importableItems().length} importables ·
             {t('wizard.validUntil', { time: clock(preview.expires_at) })}
           </span>
         </div>
 
         <ul class="rack">
-          {#each filteredMonitors() as monitor (monitor.external_id)}
-            {@const locked = Boolean(monitor.already_imported_to)}
-            <li class:picked={selected.includes(monitor.external_id)} class:locked>
-              <Checkbox variant="row" checked={selected.includes(monitor.external_id)}
-                onCheckedChange={() => toggleMonitor(monitor.external_id)} disabled={locked}>
+          {#each filteredItems() as item (item.external_id)}
+            {@const locked = Boolean(item.already_imported_to)}
+            <li class:picked={selected.includes(item.external_id)} class:locked>
+              <Checkbox variant="row" checked={selected.includes(item.external_id)}
+                onCheckedChange={() => toggleItem(item.external_id)} disabled={locked}>
                 <span class="rack-name">
-                  <strong>{monitor.name}</strong>
-                  <small class="faint mono">{monitor.address || statusLabel(monitor.status)}</small>
+                  <strong>{item.name}</strong>
+                  <small class="faint mono">{item.subtitle}</small>
                 </span>
               </Checkbox>
               <div class="rack-decision">
                 {#if locked}
                   <span class="pill">{t('wizard.alreadyBound')}</span>
-                  <small class="faint">{monitor.already_imported_to?.name}</small>
+                  <small class="faint">{item.already_imported_to?.name}</small>
                 {:else}
                   <TargetDecision
-                    name={monitor.name}
-                    value={targetAssignments[monitor.external_id] ?? ''}
-                    candidates={monitor.candidate_targets}
+                    name={item.name}
+                    value={targetAssignments[item.external_id] ?? ''}
+                    candidates={item.candidate_targets}
                     availableTargets={preview.available_targets}
-                    disabled={!selected.includes(monitor.external_id)}
-                    onselect={(targetID) => assignTarget(monitor.external_id, targetID)}
+                    disabled={!selected.includes(item.external_id)}
+                    onselect={(targetID) => assignTarget(item.external_id, targetID)}
                   />
                 {/if}
               </div>
             </li>
           {:else}
-            <li class="none faint">{t('kuma.noMonitorMatches')}</li>
+            <li class="none faint">{productText(kind === 'zabbix' ? 'noHostMatches' : 'noMonitorMatches')}</li>
           {/each}
         </ul>
 
@@ -326,14 +356,14 @@
 
       <footer>
         <span class="faint note">{t('wizard.matchesNote')}</span>
-        <button class="btn primary" type="button" onclick={importMonitors} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
+        <button class="btn primary" type="button" onclick={importItems} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
           {busy
             ? t('wizard.importing')
             : selected.length === 0
-              ? t('kuma.noMonitorChosen')
+              ? productText(kind === 'zabbix' ? 'noHostChosen' : 'noMonitorChosen')
               : reconciliation.review > 0
                 ? plural('wizard.confirmChoices', reconciliation.review)
-                : plural('kuma.importMonitors', selected.length)}
+                : productPlural(kind === 'zabbix' ? 'importHosts' : 'importMonitors', selected.length)}
         </button>
       </footer>
     {:else}
@@ -341,38 +371,39 @@
         <div class="modal-body">
           <section>
             <h3>{t('wizard.connection')}</h3>
-            <p class="faint lead">{t('kuma.addressHint')}</p>
+            <p class="faint lead">{productText('addressHint')}</p>
             <div class="grid">
               <div class="field">
                 <label for="connector-name">{t('wizard.nameInCairnOps')}</label>
-                <input id="connector-name" bind:value={name} required maxlength="160" placeholder="Uptime Kuma" />
+                <input id="connector-name" bind:value={name} required maxlength="160" placeholder={kind === 'zabbix' ? 'Zabbix production' : 'Uptime Kuma'} />
               </div>
               <div class="field">
-                <label for="kuma-address">{t('kuma.instanceAddress')}</label>
-                <input id="kuma-address" bind:this={addressInput} bind:value={address} required
-                  inputmode="url" placeholder="https://kuma.example.net" />
+                <label for="connector-address">{productText(kind === 'zabbix' ? 'frontendAddress' : 'instanceAddress')}</label>
+                <input id="connector-address" bind:this={addressInput} bind:value={address} required
+                  inputmode="url" placeholder={kind === 'zabbix' ? 'https://zabbix.example.net' : 'https://kuma.example.net'} />
               </div>
             </div>
           </section>
 
           <section>
             <h3>{t('wizard.authorisation')}</h3>
-            <p class="faint lead">{t('kuma.setupHint')}</p>
+            <p class="faint lead">{productText('setupHint')}</p>
             {#if manualAccess}
               <div class="field">
-                <label for="kuma-key">{t('kuma.apiKey')}</label>
-                <input id="kuma-key" type="password" bind:value={apiKey} required maxlength="4096"
+                <label for="connector-token">{productText(kind === 'zabbix' ? 'apiToken' : 'apiKey')}</label>
+                <input id="connector-token" type="password" bind:value={accessToken} required maxlength="4096"
                   autocomplete="off" spellcheck="false" placeholder="••••••••••••••••••••••••" />
+                {#if kind === 'zabbix'}<small>{productText('tokenSmall')}</small>{/if}
               </div>
             {:else}
               <div class="grid">
-                <div class="field"><label for="kuma-user">{t('wizard.installerAccount')}</label><input id="kuma-user" bind:value={username} required maxlength="4096" autocomplete="username" /></div>
-                <div class="field"><label for="kuma-password">{t('wizard.temporaryPassword')}</label><input id="kuma-password" type="password" bind:value={password} required maxlength="4096" autocomplete="current-password" /></div>
-                <div class="field"><label for="kuma-2fa">{t('wizard.secondFactor')}</label><input id="kuma-2fa" bind:value={secondFactor} maxlength="32" inputmode="numeric" autocomplete="one-time-code" /></div>
+                <div class="field"><label for="connector-user">{t('wizard.installerAccount')}</label><input id="connector-user" bind:value={username} required maxlength="4096" autocomplete="username" /></div>
+                <div class="field"><label for="connector-password">{t('wizard.temporaryPassword')}</label><input id="connector-password" type="password" bind:value={password} required maxlength="4096" autocomplete="current-password" /></div>
+                {#if kind === 'uptime_kuma'}<div class="field"><label for="connector-2fa">{t('wizard.secondFactor')}</label><input id="connector-2fa" bind:value={secondFactor} maxlength="32" inputmode="numeric" autocomplete="one-time-code" /></div>{/if}
               </div>
             {/if}
             <button class="mode" type="button" onclick={() => manualAccess = !manualAccess}>
-              {t(manualAccess ? 'kuma.useManagedAccess' : 'kuma.useExistingKey')}
+              {productText(manualAccess ? 'useManagedAccess' : kind === 'zabbix' ? 'useExistingToken' : 'useExistingKey')}
             </button>
           </section>
 
@@ -380,8 +411,8 @@
             <h3>{t('wizard.checksTitle')}</h3>
             <ol class="steps">
               <li><strong>{t('wizard.tlsIdentity')}</strong><small class="faint">{t('wizard.tlsIdentityNote')}</small></li>
-              <li><strong>{t('kuma.metricsEndpoint')}</strong><small class="faint">{t('kuma.metricsEndpointNote')}</small></li>
-              <li><strong>{t('kuma.keyScope')}</strong><small class="faint">{t('kuma.keyScopeNote')}</small></li>
+              <li><strong>{kind === 'zabbix' ? t('wizard.apiCompatibility') : productText('metricsEndpoint')}</strong><small class="faint">{kind === 'zabbix' ? t('wizard.apiCompatibilityNote') : productText('metricsEndpointNote')}</small></li>
+              <li><strong>{kind === 'zabbix' ? t('wizard.tokenScope') : productText('keyScope')}</strong><small class="faint">{kind === 'zabbix' ? t('wizard.tokenScopeNote') : productText('keyScopeNote')}</small></li>
               <li><strong>{t('wizard.exactDuplicates')}</strong><small class="faint">{t('wizard.exactDuplicatesNote')}</small></li>
             </ol>
           </section>
@@ -390,7 +421,7 @@
         </div>
 
         <footer>
-          <span class="faint note">{t('kuma.noChangeNote')}</span>
+          <span class="faint note">{productText('noChangeNote')}</span>
           <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
           <button class="btn primary" type="submit" disabled={busy}>
             {busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}

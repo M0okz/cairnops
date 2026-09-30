@@ -173,11 +173,11 @@ func (handler oidcHandler) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, oidcauth.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), oidcauth.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, oidcauth.ErrNotConfigured):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "OIDC is not configured"})
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "OIDC is not configured", "code": "oidc_is_not_configured"})
 	case errors.Is(err, oidcauth.ErrConflict):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": strings.TrimPrefix(err.Error(), oidcauth.ErrConflict.Error()+": ")})
 	case errors.Is(err, oidcauth.ErrInvalidFlow), errors.Is(err, oidcauth.ErrNotAuthorized):
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "OIDC access refused"})
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "OIDC access refused", "code": "oidc_access_refused"})
 	default:
 		handler.identity.internalError(w, "OIDC request failed", err)
 	}

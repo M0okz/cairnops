@@ -32,7 +32,7 @@ type indicatorHandler struct {
 func (handler indicatorHandler) configuration(w http.ResponseWriter, r *http.Request) {
 	connectorID := r.PathValue("connectorID")
 	if !validUUID(connectorID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID", "code": "invalid_connector_id"})
 		return
 	}
 	configuration, err := handler.indicators.Configuration(r.Context(), connectorID)
@@ -46,7 +46,7 @@ func (handler indicatorHandler) configuration(w http.ResponseWriter, r *http.Req
 func (handler indicatorHandler) preview(w http.ResponseWriter, r *http.Request) {
 	connectorID := r.PathValue("connectorID")
 	if !validUUID(connectorID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID", "code": "invalid_connector_id"})
 		return
 	}
 	configuration, err := handler.indicators.Preview(r.Context(), connectorID)
@@ -60,7 +60,7 @@ func (handler indicatorHandler) preview(w http.ResponseWriter, r *http.Request) 
 func (handler indicatorHandler) apply(w http.ResponseWriter, r *http.Request) {
 	connectorID := r.PathValue("connectorID")
 	if !validUUID(connectorID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid connector ID", "code": "invalid_connector_id"})
 		return
 	}
 	principal, ok := r.Context().Value(principalContextKey{}).(identity.Principal)
@@ -117,7 +117,7 @@ func (handler indicatorHandler) target(w http.ResponseWriter, r *http.Request) {
 	}
 	targetID := r.PathValue("targetID")
 	if !validUUID(targetID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid target ID", "code": "invalid_target_id"})
 		return
 	}
 	window := r.URL.Query().Get("window")
@@ -140,7 +140,7 @@ func (handler indicatorHandler) incident(w http.ResponseWriter, r *http.Request)
 	}
 	incidentID := r.PathValue("incidentID")
 	if !validUUID(incidentID) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid incident ID"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid incident ID", "code": "invalid_incident_id"})
 		return
 	}
 	projection, err := handler.indicators.Incident(r.Context(), principal.ID, incidentID)
@@ -187,11 +187,11 @@ func (handler indicatorHandler) setPins(w http.ResponseWriter, r *http.Request) 
 func (handler indicatorHandler) writeError(w http.ResponseWriter, operation string, err error) {
 	switch {
 	case errors.Is(err, indicators.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found", "code": "not_found"})
 	case errors.Is(err, indicators.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 	default:
 		handler.logger.Error(operation, "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 	}
 }

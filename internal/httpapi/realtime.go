@@ -50,7 +50,7 @@ func (handler realtimeHandler) stream(w http.ResponseWriter, r *http.Request) {
 		cancel()
 		if err != nil {
 			handler.logger.Error("read event cursor", "error", err)
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "event stream unavailable"})
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "event stream unavailable", "code": "event_stream_unavailable"})
 			return
 		}
 	}

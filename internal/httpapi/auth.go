@@ -35,5 +35,5 @@ func (auth authenticator) require(next http.Handler) http.Handler {
 
 func unauthorized(w http.ResponseWriter) {
 	w.Header().Set("WWW-Authenticate", `Bearer realm="cairnops-bootstrap"`)
-	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required", "code": "authentication_required"})
 }

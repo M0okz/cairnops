@@ -107,7 +107,7 @@ func (service *Service) Preview(ctx context.Context, connectorID string) (Config
 		}
 	case "proxmox":
 		if service.proxmox == nil {
-			return Configuration{}, fmt.Errorf("Proxmox VE client is unavailable")
+			return Configuration{}, fmt.Errorf("proxmox VE client is unavailable")
 		}
 		var credentials proxmox.Credentials
 		if err := json.Unmarshal(credential, &credentials); err != nil {

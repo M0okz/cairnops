@@ -4,7 +4,7 @@ CairnOps doit inspirer confiance avant de chercher à impressionner. Son interfa
 
 > **Vocabulaire.** Ce document conserve les intitulés d'origine des chantiers de design : Cible, Source, Couverture, Santé. La [clarification du vocabulaire](clarification-du-vocabulaire.md) les remplace partout dans l'interface par Ressource, Contrôle, Temps observé, État de CairnOps et Doublons possibles. C'est cette clarification et [CONTEXT.md](../CONTEXT.md) qui arbitrent ce qu'un écran affiche ; les pages qui suivent décrivent la composition, pas les mots.
 
-L’identité retenue est **Convergence · Titane**, décrite dans [le guide de marque](brand/BRAND-GUIDE.md). Elle remplace les pistes cuivre et Framboise et le cairn en pierres empilées. La **composition A** de `web/design-prototype` et son échelle de lecture ont été retenues pour l’application : synthèse, analyse et incidents côte à côte, puis Cibles. Les autres compositions restent des explorations dans l’atelier. Les jetons de `web/src/styles/app.css` portent la traduction commune aux écrans et au prototype.
+L’identité retenue est **Convergence · Titane**, décrite dans [le guide de marque](brand/BRAND-GUIDE.md). Elle remplace les pistes cuivre et Framboise et le cairn en pierres empilées. La composition retenue et son échelle de lecture structurent l’application : synthèse, analyse et incidents côte à côte, puis Ressources. Les jetons de `web/src/styles/app.css` portent cette échelle commune aux écrans.
 
 ## Identité
 

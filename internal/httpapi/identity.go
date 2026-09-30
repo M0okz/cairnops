@@ -237,7 +237,7 @@ func (handler identityHandler) requireLocalAdministrator(next http.Handler) http
 			return
 		}
 		if principal.Role != "administrator" || principal.AuthorizationRegime != "local" {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "local administrator required"})
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "local administrator required", "code": "local_administrator_required"})
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -259,7 +259,7 @@ func (handler identityHandler) requireAnyRole(roles []string, next http.Handler)
 			}
 		}
 		if !allowed {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "insufficient permissions"})
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "insufficient permissions", "code": "insufficient_permissions"})
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -270,7 +270,7 @@ func (handler identityHandler) requireSameOrigin(next http.Handler) http.Handler
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := strings.TrimSuffix(r.Header.Get("Origin"), "/")
 		if origin != "" && !strings.EqualFold(origin, handler.security.origin) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin not allowed"})
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin not allowed", "code": "origin_not_allowed"})
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -290,11 +290,11 @@ func (handler identityHandler) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, identitymodel.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": strings.TrimPrefix(err.Error(), identitymodel.ErrInvalidInput.Error()+": ")})
 	case errors.Is(err, identitymodel.ErrAlreadyInitialized):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "installation already initialized"})
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "installation already initialized", "code": "installation_already_initialized"})
 	case errors.Is(err, identitymodel.ErrNotInitialized):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "installation not initialized"})
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "installation not initialized", "code": "installation_not_initialized"})
 	case errors.Is(err, identitymodel.ErrInvalidCredentials):
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials", "code": "invalid_credentials"})
 	default:
 		handler.internalError(w, "identity request failed", err)
 	}
@@ -304,12 +304,12 @@ func (handler identityHandler) internalError(w http.ResponseWriter, message stri
 	if handler.logger != nil {
 		handler.logger.Error(message, "error", err)
 	}
-	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error", "code": "internal_server_error"})
 }
 
 func unauthorizedSession(w http.ResponseWriter) {
 	noStore(w)
-	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required", "code": "authentication_required"})
 }
 
 func noStore(w http.ResponseWriter) {

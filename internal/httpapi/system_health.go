@@ -25,7 +25,7 @@ func (handler systemHealthHandler) snapshot(w http.ResponseWriter, r *http.Reque
 	snapshot, err := handler.health.Snapshot(ctx)
 	if err != nil {
 		handler.logger.Error("read system health", "error", err)
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "system health unavailable"})
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "system health unavailable", "code": "system_health_unavailable"})
 		return
 	}
 	writeJSON(w, http.StatusOK, snapshot)
