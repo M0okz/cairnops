@@ -21,6 +21,7 @@ import (
 	"github.com/M0okz/cairnops/internal/httpapi"
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/indicators"
+	"github.com/M0okz/cairnops/internal/latency"
 	"github.com/M0okz/cairnops/internal/notifications"
 	"github.com/M0okz/cairnops/internal/push"
 	"github.com/M0okz/cairnops/internal/reconciliation"
@@ -117,6 +118,7 @@ func run(logger *slog.Logger) error {
 		).WithSupervisedRunners(
 			connectorSync, uptimeKumaSync, patchMonSync, argusSync, proxmoxSync,
 			indicatorCollector, incidentRuntime, softwareupdates.NewWorker(softwareStore, logger),
+			latency.NewBuilder(pool, logger),
 		)
 		errCh <- runtime.Run(ctx)
 	}()

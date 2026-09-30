@@ -25,6 +25,7 @@ import (
 	"github.com/M0okz/cairnops/internal/identity"
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/indicators"
+	"github.com/M0okz/cairnops/internal/latency"
 	"github.com/M0okz/cairnops/internal/maintenance"
 	"github.com/M0okz/cairnops/internal/metrics"
 	"github.com/M0okz/cairnops/internal/migrations"
@@ -114,6 +115,7 @@ func run(logger *slog.Logger) error {
 		ControlPlane:    controlplane.NewStore(pool),
 		ResourceHealth:  health.NewStore(pool),
 		Metrics:         metrics.NewStore(pool),
+		LatencyProfiles: latency.NewStore(pool),
 		Indicators:      indicatorService,
 		Connectors:      connectorService,
 		Webhooks:        webhookService,

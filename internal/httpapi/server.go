@@ -29,6 +29,7 @@ type ServerOptions struct {
 	OIDC            OIDC
 	ControlPlane    ControlPlane
 	Metrics         Metrics
+	LatencyProfiles LatencyProfiles
 	Indicators      Indicators
 	Connectors      Connectors
 	Webhooks        Webhooks
@@ -135,7 +136,7 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.HandleFunc("POST /api/v1/heartbeat/{token}", handler.receiveHeartbeat)
 	}
 	if options.Metrics != nil && options.Identity != nil {
-		handler := metricsHandler{metrics: options.Metrics, logger: logger}
+		handler := metricsHandler{metrics: options.Metrics, latencyProfiles: options.LatencyProfiles, logger: logger}
 		mux.Handle("GET /api/v1/metrics/targets", identityHTTP.requireSession(http.HandlerFunc(handler.list)))
 		mux.Handle("GET /api/v1/targets/{targetID}/metrics", identityHTTP.requireSession(http.HandlerFunc(handler.target)))
 	}
