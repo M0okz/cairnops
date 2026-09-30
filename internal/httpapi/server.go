@@ -39,6 +39,7 @@ type ServerOptions struct {
 	Events          EventStream
 	SystemHealth    SystemHealth
 	Reconciliations reconciliation.Service
+	ResourceHealth  ResourceHealth
 }
 
 func NewServer(options ServerOptions) *http.Server {
@@ -121,7 +122,7 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("PUT /api/v1/software-update-settings", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(h.saveConfig)))))
 	}
 	if options.ControlPlane != nil && options.Identity != nil {
-		handler := controlPlaneHandler{controlPlane: options.ControlPlane, logger: logger}
+		handler := controlPlaneHandler{controlPlane: options.ControlPlane, health: options.ResourceHealth, logger: logger}
 		mux.Handle("GET /api/v1/targets", identityHTTP.requireSession(http.HandlerFunc(handler.listTargets)))
 		mux.Handle("POST /api/v1/targets", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(handler.createTarget))))
 		mux.Handle("PATCH /api/v1/targets/{targetID}", identityHTTP.requireSameOrigin(identityHTTP.requireSession(identityHTTP.requireRole("administrator", http.HandlerFunc(handler.updateTarget)))))

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/M0okz/cairnops/internal/controlplane"
+	"github.com/M0okz/cairnops/internal/health"
 )
 
 type fakeControlPlane struct {
@@ -248,5 +250,84 @@ func TestValidUUID(t *testing.T) {
 	}
 	if validUUID("../../etc/passwd") {
 		t.Fatal("expected malformed UUID to be rejected")
+	}
+}
+
+type fakeResourceHealth struct {
+	states map[string]health.State
+	err    error
+}
+
+func (fake fakeResourceHealth) States(context.Context) (map[string]health.State, error) {
+	return fake.states, fake.err
+}
+
+// L'État de santé doit traverser l'API : c'est le serveur qui conclut, et le
+// client ne doit trouver aucune raison de recalculer.
+func TestListedResourcesCarryTheHealthStateConcludedByTheServer(t *testing.T) {
+	t.Parallel()
+
+	const targetID = "d4e45e1c-4d14-4fb8-8ddc-8c04ea259214"
+	server := NewServer(ServerOptions{
+		BootstrapToken: "bootstrap-token-with-at-least-32-characters",
+		Identity:       &fakeIdentity{},
+		ControlPlane:   &fakeControlPlane{target: controlplane.Target{ID: targetID, Name: "Nextcloud"}},
+		ResourceHealth: fakeResourceHealth{states: map[string]health.State{targetID: health.Degraded}},
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/targets", nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("attendu 200, obtenu %d", response.Code)
+	}
+	var payload struct {
+		Targets []struct {
+			ID                string  `json:"id"`
+			HealthState       string  `json:"health_state"`
+			HealthEvaluatedAt *string `json:"health_evaluated_at"`
+		} `json:"targets"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Targets) != 1 {
+		t.Fatalf("une Ressource attendue, %d servies", len(payload.Targets))
+	}
+	if payload.Targets[0].HealthState != string(health.Degraded) {
+		t.Errorf("health_state = %q, attendu %q", payload.Targets[0].HealthState, health.Degraded)
+	}
+	if payload.Targets[0].HealthEvaluatedAt == nil {
+		t.Error("health_evaluated_at manque : un client hors ligne ne saurait pas ce que vaut cet État")
+	}
+}
+
+// Une projection en panne ne doit pas faire passer une Ressource pour
+// disponible, ni priver l'opérateur de sa liste.
+func TestAFailingHealthProjectionNeitherHidesResourcesNorInventsAvailability(t *testing.T) {
+	t.Parallel()
+
+	const targetID = "d4e45e1c-4d14-4fb8-8ddc-8c04ea259214"
+	server := NewServer(ServerOptions{
+		BootstrapToken: "bootstrap-token-with-at-least-32-characters",
+		Identity:       &fakeIdentity{},
+		ControlPlane:   &fakeControlPlane{target: controlplane.Target{ID: targetID, Name: "Nextcloud"}},
+		ResourceHealth: fakeResourceHealth{err: errors.New("base injoignable")},
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/targets", nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("attendu 200, obtenu %d", response.Code)
+	}
+	body, _ := io.ReadAll(response.Body)
+	if bytes.Contains(body, []byte(`"health_state":"available"`)) {
+		t.Error("une projection en panne ne doit jamais conclure à la disponibilité")
+	}
+	if !bytes.Contains(body, []byte(targetID)) {
+		t.Error("la Ressource doit rester servie malgré l'échec de la projection")
 	}
 }

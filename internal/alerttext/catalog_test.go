@@ -61,3 +61,65 @@ func TestEveryCatalogMeaningHasDistinctBilingualTitles(t *testing.T) {
 		}
 	}
 }
+
+// Le classement doit rester exhaustif : une Nature ajoutée au catalogue sans
+// décision explicite ferait silencieusement basculer une Ressource du côté
+// « Disponible », ou l'inverse. Ce test force la décision.
+func TestEveryRecognizedKindDeclaresWhetherItImpairsFunctioning(t *testing.T) {
+	expected := map[Kind]bool{
+		BackupFailure:          true,
+		BackupFreshness:        true,
+		DiskLatency:            true,
+		DiskSpace:              true,
+		DiskInodes:             true,
+		CPUUsage:               true,
+		SystemLoad:             true,
+		MemoryUsage:            true,
+		MemoryAvailable:        true,
+		SwapSpace:              true,
+		CertificateInvalid:     true,
+		Unavailable:            false,
+		CertificateExpiry:      false,
+		RebootRequired:         false,
+		PackageCountChanged:    false,
+		SecurityUpdates:        false,
+		SoftwareUpdate:         false,
+		SoftwareSecurityUpdate: false,
+	}
+	for kind := range titles {
+		want, declared := expected[kind]
+		if !declared {
+			t.Errorf("la Nature %q est reconnue mais ce test ne dit pas si elle altère le fonctionnement", kind)
+			continue
+		}
+		if got := kind.ImpairsFunctioning(); got != want {
+			t.Errorf("%q : altère le fonctionnement = %v, attendu %v", kind, got, want)
+		}
+	}
+	for kind := range expected {
+		if _, ok := titles[kind]; !ok {
+			t.Errorf("la Nature %q n'est plus au catalogue : retirer sa décision", kind)
+		}
+	}
+}
+
+// Une mise à jour disponible ne dégrade jamais un service qui fonctionne :
+// CONTEXT.md le dit du service comme de la mise à jour de sécurité.
+func TestAvailableUpdatesNeverImpairFunctioning(t *testing.T) {
+	for _, kind := range []Kind{SoftwareUpdate, SoftwareSecurityUpdate, SecurityUpdates} {
+		if kind.ImpairsFunctioning() {
+			t.Errorf("%q ne doit pas altérer le fonctionnement", kind)
+		}
+	}
+}
+
+// Une Nature locale de Connecteur n'est pas reconnue : elle reste un « Problème
+// signalé » et ne peut pas établir une dégradation.
+func TestUnknownKindDoesNotImpairFunctioning(t *testing.T) {
+	if Kind("un.truc.inconnu").ImpairsFunctioning() {
+		t.Error("une Nature inconnue ne doit pas établir une altération")
+	}
+	if Kind("").ImpairsFunctioning() {
+		t.Error("une Nature vide ne doit pas établir une altération")
+	}
+}

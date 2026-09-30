@@ -250,7 +250,7 @@
   .results-context { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2); color: var(--muted); font-size: var(--text-xs); margin: var(--s4) 0 var(--s3); }
   .category-tab:focus-visible, .filter-chip:focus-visible { outline: var(--s1) solid var(--ink); outline-offset: calc(-1 * var(--s1)); }
 
-  .cols { --cols: minmax(0, 24rem) minmax(6rem, 0.65fr) minmax(0, 1.3fr) minmax(0, 1fr); overflow: visible; }
+  .cols { --cols: minmax(0, 24rem) minmax(min-content, 0.65fr) minmax(0, 1.3fr) minmax(0, 1fr); overflow: visible; }
   .trow { align-items: start; padding-block: var(--s4); }
   .resource-link { color: var(--ink); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
   .resource-link:hover { text-decoration: underline; }
@@ -260,7 +260,15 @@
   .cell-name small { display: block; color: var(--muted); font-size: var(--text-xs); margin-top: var(--s1); white-space: normal; }
   .description { overflow-wrap: anywhere; }
   .resource-state, .problems, .resource-details { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); min-width: 0; }
-  .pill { white-space: normal; }
+  /* « Fonctionnement dégradé » porte un mot de 14 caractères, plus large que la
+   * colonne ne l'était. Plutôt qu'une largeur minimale en rem — un nombre qui
+   * ne suivrait ni la langue, ni l'échelle de lecture du bureau — la colonne
+   * demande min-content : elle ne descend jamais sous son mot le plus long.
+   * La rupture de mot ne reste qu'un dernier recours, pour qu'un libellé
+   * pathologique ne puisse jamais chevaucher la colonne voisine. Elle dit
+   * break-word et non anywhere : anywhere ramènerait la largeur min-content à
+   * un seul caractère et annulerait la protection que la colonne demande. */
+  .pill { white-space: normal; overflow-wrap: break-word; }
   .problems { font-size: var(--text-sm); overflow-wrap: anywhere; }
   .resource-details, .resource-state small { font-size: var(--text-xs); }
   .resource-details > span { width: 100%; display: flex; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; color: var(--muted); }
@@ -270,10 +278,10 @@
   .problem-list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s3); }
   .problem-list li { display: grid; gap: var(--s1); }
   .problem-list small { color: var(--muted); }
-  @media (max-width: 80rem) { .cols { --cols: minmax(0, 1fr) minmax(6rem, .6fr) minmax(0, 1fr) minmax(0, 1fr); } }
+  @media (max-width: 80rem) { .cols { --cols: minmax(0, 1fr) minmax(min-content, .6fr) minmax(0, 1fr) minmax(0, 1fr); } }
   @media (max-width: 58rem) {
     .thead { display: none; }
-    .trow { grid-template-columns: minmax(0, 1fr) minmax(0, .65fr); gap: var(--s4); }
+    .trow { grid-template-columns: minmax(0, 1fr) minmax(min-content, .65fr); gap: var(--s4); }
     .problems { grid-column: 1 / -1; }
     .resource-details { grid-column: 1 / -1; width: 100%; }
     .target-filter { width: 100%; }

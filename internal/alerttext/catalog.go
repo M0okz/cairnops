@@ -143,6 +143,43 @@ func (kind Kind) versioned() bool {
 	return kind == SoftwareUpdate || kind == SoftwareSecurityUpdate
 }
 
+// impairing énumère les conditions reconnues qui altèrent le fonctionnement
+// observé d'une Ressource, au sens de « Fonctionnement dégradé » : une latence
+// élevée, une capacité épuisée, une saturation, une exécution attendue qui
+// échoue, un certificat déjà invalide.
+//
+// En sont volontairement absentes les conditions qui décrivent une posture à
+// traiter sans altérer le fonctionnement du moment : une expiration de
+// certificat encore à venir, un redémarrage en attente, un inventaire de
+// paquets qui bouge, et toute mise à jour disponible — CONTEXT.md est explicite
+// sur ce dernier point, « un service dont le fonctionnement normal est établi
+// reste Disponible lorsqu'une mise à jour est disponible ».
+//
+// Unavailable n'y figure pas non plus : une indisponibilité n'est pas une
+// altération, c'est l'état Indisponible lui-même.
+var impairing = map[Kind]struct{}{
+	BackupFailure:      {},
+	BackupFreshness:    {},
+	DiskLatency:        {},
+	DiskSpace:          {},
+	DiskInodes:         {},
+	CPUUsage:           {},
+	SystemLoad:         {},
+	MemoryUsage:        {},
+	MemoryAvailable:    {},
+	SwapSpace:          {},
+	CertificateInvalid: {},
+}
+
+// ImpairsFunctioning dit si cette condition reconnue établit à elle seule une
+// altération du fonctionnement. Une Nature inconnue répond false : elle reste un
+// « Problème signalé », qui n'établit ni indisponibilité ni dégradation. Une
+// gravité, elle, n'entre jamais dans cette réponse.
+func (kind Kind) ImpairsFunctioning() bool {
+	_, ok := impairing[kind]
+	return ok
+}
+
 // Common returns only a shared title meaning. Parameters belong to individual
 // evidence and must never be copied from an arbitrary member of an incident.
 // A missing or divergent member prevents a common presentation.

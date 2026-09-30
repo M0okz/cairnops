@@ -128,11 +128,19 @@ export type Observation = {
 
 export type ResourceCategory = 'service' | 'application' | 'virtual_machine' | 'container' | 'virtualization_host' | 'storage' | 'host' | 'network' | 'infrastructure' | 'scheduled_task' | 'software' | 'unclassified';
 
+/* L'État de santé conclu par le serveur. Le client l'affiche, il ne le
+ * recalcule pas : CONTEXT.md fait de l'État partagé la référence, et trois
+ * clients qui réimplémenteraient la même arithmétique de fraîcheur
+ * finiraient par se contredire sur la même Ressource. */
+export type ResourceHealthState = 'unavailable' | 'degraded' | 'maintenance' | 'available' | 'unknown';
+
 export type Target = {
   last_success_at?: string;
   category?: ResourceCategory;
   suggested_category?: ResourceCategory;
   category_manual?: boolean;
+  health_state?: ResourceHealthState;
+  health_evaluated_at?: string;
   id: string;
   name: string;
   description: string;

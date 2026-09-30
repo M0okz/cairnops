@@ -1,4 +1,5 @@
-import type { Incident, IncidentEvidence, IncidentImpact, Maintenance, ResourceCategory, Target, TargetMeasures } from './api.ts';
+import type { Incident, IncidentEvidence, IncidentImpact, Maintenance, ResourceCategory, ResourceHealthState, Target, TargetMeasures } from './api.ts';
+import type { TargetState } from './format.ts';
 
 export const resourceCategories: ResourceCategory[] = ['virtual_machine', 'container', 'virtualization_host', 'storage', 'network', 'host', 'service', 'application', 'scheduled_task', 'software', 'infrastructure', 'unclassified'];
 export function resourceCategoryFromParam(value: string | null): ResourceCategory | 'all' {
@@ -42,15 +43,29 @@ export function resourceUnderMaintenance(targetID: string, incidents: Incident[]
     impact.target_id === targetID && impact.maintenance_active &&
     Date.parse(impact.maintenance_ends_at ?? '') >= now));
 }
-export function resourceState(target: Target, incidents: Incident[], measured?: TargetMeasures, now = Date.now(), maintenances?: Maintenance[], maintenancesComplete = maintenances !== undefined): 'ok' | 'down' | 'degraded' | 'unknown' | 'maintenance' {
+/* La conclusion vient du serveur ; il ne reste ici qu'une traduction vers le
+ * vocabulaire d'affichage des écrans. La règle elle-même — fraîcheur des
+ * preuves, cadence des Contrôles, ce qui altère le fonctionnement — vit dans
+ * internal/health et nulle part ailleurs.
+ *
+ * Un État absent se lit « inconnu ». Jamais « disponible » : une projection
+ * muette ne prouve pas qu'une Ressource va bien. */
+const displayStates: Record<ResourceHealthState, TargetState> = {
+  unavailable: 'down',
+  degraded: 'degraded',
+  maintenance: 'maintenance',
+  available: 'ok',
+  unknown: 'unknown'
+};
+
+export function resourceState(target: Pick<Target, 'id' | 'health_state'>, incidents: Incident[], now = Date.now(), maintenances?: Maintenance[], maintenancesComplete = maintenances !== undefined): TargetState {
+  // La maintenance se compose ici, pas au serveur. Une fenêtre porte ses
+  // dates : le client sait donc que l'horloge vient d'en franchir le terme,
+  // sans attendre un nouvel instantané. C'est ce qui permet à un Incident
+  // encore actif de « redevenir immédiatement visible », comme l'exige
+  // CONTEXT.md. La conclusion sur les preuves, elle, vient du serveur.
   if (resourceUnderMaintenance(target.id, incidents, now, maintenances, maintenancesComplete)) return 'maintenance';
-  const own = resourceProblems(target.id, incidents);
-  // Severity never establishes availability. Only the canonical availability
-  // condition can do so; stale/non-availability observations cannot prove UP.
-  if (own.some(({incident, impact}) => incident.nature_key === 'availability' && impact.evidence.some((e) => e.active && !e.invalidated_at && fresh(e.last_seen_at, now)))) return 'down';
-  const available = measured?.sources.some((source) => source.enabled !== false && source.measures_availability && source.latest_outcome === 'healthy' && fresh(source.latest_observed_at, now, source.interval_seconds ?? target.sources.find((s) => s.id === source.source_id)?.interval_seconds));
-  const nativeAvailable = target.sources.some((source) => source.enabled && source.latest_outcome === 'healthy' && fresh(source.last_observed_at, now, source.interval_seconds));
-  return available || nativeAvailable ? 'ok' : 'unknown';
+  return displayStates[target.health_state ?? 'unknown'] ?? 'unknown';
 }
 export function resourceDivergence(targetId: string, incidents: Incident[], now = Date.now()): boolean {
   // Proofs within one incident share the same semantic nature. Two unrelated

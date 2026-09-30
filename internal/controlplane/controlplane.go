@@ -14,6 +14,7 @@ import (
 
 	"github.com/M0okz/cairnops/internal/checks"
 	"github.com/M0okz/cairnops/internal/domain"
+	"github.com/M0okz/cairnops/internal/health"
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,10 +32,19 @@ var (
 )
 
 type Target struct {
-	LastSuccessAt       *time.Time `json:"last_success_at,omitempty"`
-	Category            Category   `json:"category"`
-	SuggestedCategory   Category   `json:"suggested_category"`
-	CategoryManual      bool       `json:"category_manual"`
+	LastSuccessAt     *time.Time `json:"last_success_at,omitempty"`
+	Category          Category   `json:"category"`
+	SuggestedCategory Category   `json:"suggested_category"`
+	CategoryManual    bool       `json:"category_manual"`
+	// HealthState est l'État de santé conclu par le serveur. Le paquet health
+	// en détient la règle et cette projection le renseigne : aucun client ne
+	// recalcule cette conclusion, sans quoi le Web, iOS et Android
+	// divergeraient sur la même Ressource. Il reste vide lorsque la lecture
+	// s'adresse à une Ressource hors supervision active.
+	HealthState health.State `json:"health_state,omitempty"`
+	// HealthEvaluatedAt date cette conclusion, pour qu'un client hors ligne
+	// sache ce que vaut encore ce qu'il affiche.
+	HealthEvaluatedAt   *time.Time `json:"health_evaluated_at,omitempty"`
 	ID                  string     `json:"id"`
 	Name                string     `json:"name"`
 	Description         string     `json:"description"`

@@ -1,4 +1,5 @@
 import { resourceState, resourceDivergence, resourceUnderMaintenance } from './resources';
+import type { TargetState } from './format';
 /* État opérationnel partagé.
  *
  * Le passage à huit écrans routés sort cet état de la page unique : le shell et
@@ -169,8 +170,12 @@ class Session {
 
   /** L'État de santé d'une Cible, déduit des Incidents qui la concernent.
    *  Une Divergence de Sources ne crée pas un cinquième État. */
-  targetState(target: Target): 'down' | 'degraded' | 'maintenance' | 'unknown' | 'ok' {
-    return resourceState(target, this.incidents, this.measures[target.id], this.evaluatedAt, this.maintenances, this.maintenancesComplete);
+  /* L'État de santé vient du serveur, qui en est la référence. Ce qui
+   * arrivait ici en faits bruts — preuves, cadences, fenêtres — se concluait
+   * autrefois dans le navigateur ; la règle vit désormais dans
+   * internal/health, et les trois interfaces lisent la même conclusion. */
+  targetState(target: Target): TargetState {
+    return resourceState(target, this.incidents, this.evaluatedAt, this.maintenances, this.maintenancesComplete);
   }
 
   hasDivergence(target: Target): boolean {

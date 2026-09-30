@@ -689,6 +689,14 @@ components:
       properties:
         category: { $ref: '#/components/schemas/ResourceCategory' }
         suggested_category: { $ref: '#/components/schemas/ResourceCategory' }
+        health_state: { $ref: '#/components/schemas/ResourceHealthState' }
+        health_evaluated_at:
+          type: string
+          format: date-time
+          description: >-
+            Instant où le serveur a conclu cet État de santé. Un client hors
+            ligne s'en sert pour dire ce que vaut encore ce qu'il affiche ;
+            il ne recalcule jamais la conclusion elle-même.
         last_success_at: { type: string, format: date-time, description: Dernière observation saine conservée pour un contrôle heartbeat de la ressource. }
         category_manual: { type: boolean, description: Catégorie choisie manuellement et conservée lors des synchronisations. }
         id: { type: string, format: uuid }
@@ -703,6 +711,37 @@ components:
         sources:
           type: array
           items: { $ref: '#/components/schemas/Source' }
+    ResourceHealthState:
+      type: string
+      enum: [unavailable, degraded, maintenance, available, unknown]
+      description: >-
+        État de santé conclu par le serveur, jamais par un client : CONTEXT.md
+        fait de l'État partagé la référence, et trois clients qui
+        réimplémenteraient la même arithmétique de fraîcheur divergeraient.
+
+
+        `unavailable` — une preuve valide et récente établit une indisponibilité
+        active, quelle que soit la gravité attribuée au problème.
+
+
+        `degraded` — une altération du fonctionnement est établie par des
+        observations dont la description précise permet de comprendre le
+        problème. Une gravité seule n'y suffit pas, et une mise à jour
+        disponible — de sécurité comprise — n'altère jamais le fonctionnement
+        d'un service qui fonctionne.
+
+
+        `maintenance` — une Fenêtre de maintenance couvre la Ressource : son
+        impact opérationnel est neutralisé sans altérer ses preuves.
+
+
+        `available` — un Contrôle de disponibilité actif apporte un résultat
+        récent favorable, sans preuve active récente d'indisponibilité. Des
+        problèmes portant sur d'autres aspects peuvent coexister.
+
+
+        `unknown` — aucune preuve valide n'est assez récente pour conclure. Une
+        absence d'Observation n'est jamais un rétablissement.
     Measure:
       type: object
       description: >-

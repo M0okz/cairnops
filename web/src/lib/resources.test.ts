@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Target, TargetMeasures, Incident, IncidentEvidence, Maintenance } from './api.ts';
+import type { Target, Incident, IncidentEvidence, Maintenance } from './api.ts';
 // @ts-ignore -- Node executes tests directly with its TypeScript loader.
 import { resourceCategoryFromParam, resourceState, resourceProblems, resourceDivergence, resourceUnderMaintenance, problemText } from './resources.ts';
 
@@ -12,15 +12,32 @@ test('accepts only known category links', () => {
 });
 const now = Date.parse('2026-09-22T12:00:00Z');
 const date = new Date(now).toISOString();
-const target: Target = { id: 'r', name: 'Home Assistant', description: '', created_at: date, external_source_count: 2, aliases: [], sources: [] };
+const target: Target = { id: 'r', name: 'Home Assistant', description: '', created_at: date, external_source_count: 2, aliases: [], sources: [], health_state: 'available' };
+// La conclusion sur les preuves vient du serveur : ces fabriques posent l'État
+// qu'il a servi. La règle elle-même est éprouvée dans internal/health.
+const served = (state: Target['health_state']): Target => ({ ...target, health_state: state });
 const evidence = (active = true): IncidentEvidence => ({id: 'e', impact_id: 'p', target_id: 'r', origin: 'zabbix', last_seen_at: date, name: 'Version installée non relevée', active, severity: 'critical', opened_at: date, upstream_acknowledged: false, acknowledgement_sync_status: 'not_applicable', ...(!active ? {resolved_at: date} : {})});
 const incident = (nature: string, proofs = [evidence()]): Incident => ({id: nature, nature_key: nature, nature_label: nature, nature_scope: 'canonical', nature_namespace: '', nature_fingerprint: nature, propagation_eligible: false, status: 'active', propagation_status: 'closed', severity: 'critical', opened_at: date, last_impact_at: date, propagation_window_seconds: 0, propagation_ends_at: date, acknowledgement_sync_status: 'not_applicable', extended: false, active_impact_count: 1, impact_count: 1, affected_target_count: 1, max_affected_targets: 1, revision: 1, impacts: [{id: nature, target_id: 'r', target_name: 'Home Assistant', status: 'active', source_severity: 'critical', effective_severity: 'critical', opened_at: date, maintenance_active: false, evidence: proofs, created_at: date, updated_at: date}], activity: [], created_at: date, updated_at: date});
-const measures: TargetMeasures = {target_id: 'r', measures: [], trend: [], latency_trend: [], sources: [{source_id: 's', name: 'HTTP', kind: 'uptime_kuma', origin: 'integration', measures_availability: true, latest_outcome: 'healthy', latest_observed_at: date, measures: []}]};
+
+test('the state served by the server is displayed, never recomputed', () => {
+ assert.equal(resourceState(served('available'), [], now), 'ok');
+ assert.equal(resourceState(served('unavailable'), [], now), 'down');
+ assert.equal(resourceState(served('degraded'), [], now), 'degraded');
+ assert.equal(resourceState(served('unknown'), [], now), 'unknown');
+});
+
+test('a missing or unrecognized state reads as unknown, never as available', () => {
+ assert.equal(resourceState({ id: 'r' }, [], now), 'unknown');
+ // Un serveur plus récent pourrait servir un État que ce client ne connaît
+ // pas. Il ne doit jamais passer pour « tout va bien ».
+ assert.equal(resourceState({ id: 'r', health_state: 'inédit' as never }, [], now), 'unknown');
+});
 
 test('a critical version alert does not make an accessible service unavailable', () => {
- assert.equal(resourceState(target, [incident('version-query')], measures, now), 'ok');
- assert.equal(resourceState(target, [incident('software-update-available')], measures, now), 'ok');
- assert.equal(resourceState(target, [incident('availability')], measures, now), 'down');
+ // Le serveur conclut « disponible » malgré l'alerte de version : le client
+ // n'a rien à réinterpréter, et surtout rien à dégrader de son côté.
+ assert.equal(resourceState(served('available'), [incident('software-update-available')], now), 'ok');
+ assert.equal(resourceState(served('unavailable'), [incident('availability')], now), 'down');
 });
 
 test('incident maintenance fallback expires and never masks an actionable incident indefinitely', () => {
@@ -28,18 +45,15 @@ test('incident maintenance fallback expires and never masks an actionable incide
  item.impacts[0].maintenance_active = true;
  item.impacts[0].maintenance_ends_at = new Date(now + 60_000).toISOString();
  assert.equal(resourceUnderMaintenance(target.id, [item], now), true);
- assert.equal(resourceState(target, [item], measures, now), 'maintenance');
+ assert.equal(resourceState(served('unavailable'), [item], now), 'maintenance');
  assert.equal(resourceUnderMaintenance(target.id, [item], now + 120_000), false);
- assert.equal(resourceState(target, [item], measures, now + 120_000), 'down');
+ // La fenêtre expirée, l'Incident redevient immédiatement visible : le client
+ // n'attend pas un nouvel instantané du serveur pour cesser de le neutraliser.
+ assert.equal(resourceState(served('unavailable'), [item], now + 120_000), 'down');
  // A successfully read empty list overrides an old, cancelled projection.
  assert.equal(resourceUnderMaintenance(target.id, [item], now, []), false);
 });
-test('missing, stale and non-availability measurements cannot prove availability', () => {
- assert.equal(resourceState(target, [], undefined, now), 'unknown');
- assert.equal(resourceState(target, [], measures, now + 3600_000), 'unknown');
- const posture = structuredClone(measures);posture.sources[0].measures_availability=false;
- assert.equal(resourceState(target, [], posture, now), 'unknown');
-});
+
 test('problems are scoped to active resource impacts and updates stay separate', () => {
  const update = incident('software-update-available');const resolved = incident('backup');resolved.impacts[0].status='resolved';
  const problems=resourceProblems('r',[update,resolved,incident('version-query')]);
@@ -54,23 +68,20 @@ test('contradictions require recent opposite proofs of the same condition', () =
  assert.equal(resourceDivergence('r',[incident('availability',[evidence(),ignored])],now),false);
 });
 
-test('a suspended availability check cannot establish an available resource', () => {
- const suspended=structuredClone(measures);suspended.sources[0].enabled=false;
- assert.equal(resourceState(target,[],suspended,now),'unknown');
-});
+
 
 test('a scheduled maintenance applies without an incident and expires by its dates', () => {
  const window: Maintenance = { id: 'm', name: 'Intervention', reason: 'Maintenance planifiée',
   state: 'upcoming', starts_at: date, ends_at: new Date(now + 1800_000).toISOString(),
   targets: [{ id: target.id, name: target.name }], created_at: date };
- assert.equal(resourceState(target, [], measures, now, [window]), 'maintenance');
- assert.equal(resourceState(target, [], measures, now - 1000, [window]), 'ok');
- assert.equal(resourceState(target, [], undefined, now + 1800_001, [window]), 'unknown');
- assert.equal(resourceState(target, [], measures, now, [{ ...window, cancelled_at: date }]), 'ok');
- assert.equal(resourceState(target, [], measures, now, [{ ...window, targets: [{ id: 'other', name: 'Other' }] }]), 'ok');
+ assert.equal(resourceState(target, [], now, [window]), 'maintenance');
+ assert.equal(resourceState(target, [], now - 1000, [window]), 'ok');
+ assert.equal(resourceState(served('unknown'), [], now + 1800_001, [window]), 'unknown');
+ assert.equal(resourceState(target, [], now, [{ ...window, cancelled_at: date }]), 'ok');
+ assert.equal(resourceState(target, [], now, [{ ...window, targets: [{ id: 'other', name: 'Other' }] }]), 'ok');
  const staleMaintenance = incident('availability');
  staleMaintenance.impacts[0].maintenance_active = true;
- assert.equal(resourceState(target, [staleMaintenance], undefined, now + 1800_001, [window]), 'unknown');
+ assert.equal(resourceState(served('unknown'), [staleMaintenance], now + 1800_001, [window]), 'unknown');
 });
 
 
@@ -81,7 +92,7 @@ test('a partial or cached maintenance list keeps known windows and a bounded fal
  const truncated = Array.from({ length: 200 }, (_, index) => ({ ...window, id: `window-${index}` }));
  // Reaching the transport limit must not discard a known active window,
  // including for a resource that has no incident to provide a fallback.
- assert.equal(resourceState(target, [], undefined, now, truncated, false), 'maintenance');
+ assert.equal(resourceState(target, [], now, truncated, false), 'maintenance');
  assert.equal(resourceUnderMaintenance(target.id, [], now, truncated, false), true);
  assert.equal(resourceUnderMaintenance(target.id, [], now + 1800_001, truncated, false), false);
  const missing = incident('availability');

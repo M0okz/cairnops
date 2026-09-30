@@ -20,6 +20,7 @@ import (
 	"github.com/M0okz/cairnops/internal/controlplane"
 	"github.com/M0okz/cairnops/internal/database"
 	"github.com/M0okz/cairnops/internal/devices"
+	"github.com/M0okz/cairnops/internal/health"
 	"github.com/M0okz/cairnops/internal/httpapi"
 	"github.com/M0okz/cairnops/internal/identity"
 	"github.com/M0okz/cairnops/internal/incidents"
@@ -111,6 +112,7 @@ func run(logger *slog.Logger) error {
 		Identity:        identityStore,
 		OIDC:            oidcService,
 		ControlPlane:    controlplane.NewStore(pool),
+		ResourceHealth:  health.NewStore(pool),
 		Metrics:         metrics.NewStore(pool),
 		Indicators:      indicatorService,
 		Connectors:      connectorService,

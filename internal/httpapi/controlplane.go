@@ -12,8 +12,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/M0okz/cairnops/internal/controlplane"
+	"github.com/M0okz/cairnops/internal/health"
 )
 
 const (
@@ -34,9 +36,44 @@ type ControlPlane interface {
 	ReceiveHeartbeat(context.Context, string, controlplane.HeartbeatPayload) (controlplane.Observation, error)
 }
 
+// ResourceHealth projette l'État de santé de chaque Ressource. La conclusion
+// appartient au serveur : le paquet health en détient la règle, cette interface
+// la remet à la réponse HTTP.
+type ResourceHealth interface {
+	States(context.Context) (map[string]health.State, error)
+}
+
 type controlPlaneHandler struct {
 	controlPlane ControlPlane
+	health       ResourceHealth
 	logger       *slog.Logger
+}
+
+// decorate attache son État de santé à chaque Ressource servie.
+//
+// Un échec de la projection n'empêche pas de répondre : la liste des Ressources
+// reste plus utile qu'une erreur, et un État absent se lit comme « inconnu »
+// plutôt que comme « disponible ». Le manquement est journalisé, jamais
+// silencieux.
+func (handler controlPlaneHandler) decorate(ctx context.Context, targets []controlplane.Target) []controlplane.Target {
+	if handler.health == nil {
+		return targets
+	}
+	states, err := handler.health.States(ctx)
+	if err != nil {
+		if handler.logger != nil {
+			handler.logger.Error("project resource health", "error", err)
+		}
+		return targets
+	}
+	evaluatedAt := time.Now().UTC()
+	for index := range targets {
+		if state, ok := states[targets[index].ID]; ok {
+			targets[index].HealthState = state
+			targets[index].HealthEvaluatedAt = &evaluatedAt
+		}
+	}
+	return targets
 }
 
 func (handler controlPlaneHandler) listTargets(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +82,7 @@ func (handler controlPlaneHandler) listTargets(w http.ResponseWriter, r *http.Re
 		handler.writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"targets": targets})
+	writeJSON(w, http.StatusOK, map[string]any{"targets": handler.decorate(r.Context(), targets)})
 }
 
 func (handler controlPlaneHandler) createTarget(w http.ResponseWriter, r *http.Request) {
