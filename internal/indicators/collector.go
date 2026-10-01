@@ -135,7 +135,9 @@ func (collector *Collector) collect(ctx context.Context, connector RuntimeConnec
 			monitor := monitorValue.(uptimekuma.Monitor)
 			switch indicator.SemanticKey {
 			case "response.time":
-				if monitor.ResponseMilliseconds != nil {
+				if monitor.Status != 1 {
+					missing[indicator.ID] = "Monitor Uptime Kuma non disponible · temps de réponse non évalué"
+				} else if monitor.ResponseMilliseconds != nil {
 					readings = append(readings, Reading{IndicatorID: indicator.ID, Value: float64(*monitor.ResponseMilliseconds), ObservedAt: now})
 				} else {
 					missing[indicator.ID] = "Temps de réponse non publié"

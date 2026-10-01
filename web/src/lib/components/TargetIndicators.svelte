@@ -5,6 +5,7 @@
   import { session } from '$lib/session.svelte';
   import { formatIndicator } from '$lib/indicator-format';
   import { indicatorTimeBounds, indicatorWindowPoints, type IndicatorPeriod } from '$lib/indicator-history';
+  import { evaluateKumaLatency } from '$lib/kuma-latency';
   import { severityTone, since, stamp } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
   import type { ContextIndicator, Incident } from '$lib/api';
@@ -17,8 +18,10 @@
   let failed = $state(false);
   let retry = $state(0);
   let pinning = $state(false);
+  let weeklyRequestedFor = $state('');
   const window = $derived(period === '7d' ? '7d' : '24h');
   const detail = $derived(session.indicatorDetails[`${targetId}:${window}`] ?? null);
+  const weeklyDetail = $derived(session.indicatorDetails[`${targetId}:7d`] ?? null);
   const timeBounds = $derived(indicatorTimeBounds(detail?.generated_at ?? '', period));
   const markerVisible = $derived(Boolean(incident && timeBounds && Date.parse(incident.opened_at) >= timeBounds[0] && Date.parse(incident.opened_at) <= timeBounds[1]));
   const marker = $derived(incident && markerVisible ? {
@@ -42,6 +45,15 @@
     return () => { disposed = true; };
   });
   $effect(() => { const timer = setInterval(() => (now = new Date()), 30_000); return () => clearInterval(timer); });
+
+  $effect(() => {
+    const target = targetId;
+    // The compact weekly series is the bounded training set, whatever chart is selected.
+    if (target && weeklyRequestedFor !== target) {
+      weeklyRequestedFor = target;
+      if (!session.indicatorDetails[`${target}:7d`]) void session.loadTargetIndicators(target, '7d');
+    }
+  });
 
   function connectorAddress(connectorId: string): string | null {
     const endpoint = session.connectors.find((connector) => connector.id === connectorId)?.endpoint;
@@ -80,6 +92,8 @@
       {#each detail.indicators as indicator (indicator.id)}
         {@const points = indicatorWindowPoints(detail.series?.[indicator.id] ?? [], timeBounds)}
         {@const hasMaximum = period === '7d' && points.some((point) => point.maximum !== undefined && Number.isFinite(point.maximum))}
+        {@const kumaResponse = indicator.semantic_key === 'response.time' && session.connectors.find((connector) => connector.id === indicator.connector_id)?.kind === 'uptime_kuma'}
+        {@const evaluation = kumaResponse ? evaluateKumaLatency(indicator, weeklyDetail?.series?.[indicator.id], now) : null}
         <article class="indicator-card card" aria-label={indicator.label}>
           <div class="indicator-title">
             <div><h3>{indicator.label}</h3>{#if indicator.dimension}<p>{indicator.dimension}</p>{/if}</div>
@@ -97,6 +111,24 @@
               <IndicatorHistoryChart {points} {timeBounds} {marker} unit={indicator.unit} label={indicator.label} hourly={period === '7d'} />
             {:else}<div class="series-message" role="status">{t('dashboard.noSeries')}</div>{/if}
           </div>
+          {#if evaluation}
+            <div class="latency-evaluation" role="status">
+              {#if evaluation.status === 'candidate'}
+                <strong>{t('target.indicators.anomalyCandidate')}</strong>
+                <span>{t('target.indicators.anomalyComparison', {
+                  observed: formatIndicator(evaluation.observed, 'milliseconds'),
+                  median: formatIndicator(evaluation.median, 'milliseconds'),
+                  threshold: formatIndicator(evaluation.threshold, 'milliseconds')
+                })}</span>
+              {:else if evaluation.status === 'usual'}
+                <span>{t('target.indicators.anomalyUsual', { hours: evaluation.hours })}</span>
+              {:else if evaluation.status === 'training'}
+                <span>{t('target.indicators.anomalyTraining')}</span>
+              {:else}
+                <span>{t('target.indicators.anomalyUnavailable')}</span>
+              {/if}
+            </div>
+          {/if}
           <footer class="indicator-meta">
             <span class:warn={Boolean(indicator.last_error)}>{indicator.last_error || (indicator.last_observed_at ? t('dashboard.freshness', { duration: since(indicator.last_observed_at, now) }) : t('overview.indicators.neverObserved'))}</span>
             {#if connectorAddress(indicator.connector_id)}<a href={connectorAddress(indicator.connector_id)!} target="_blank" rel="noreferrer">{t('target.indicators.openSource')} ↗</a>{/if}
@@ -134,6 +166,8 @@
   .latest-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s3); color: var(--faint); font-size: var(--text-xs); }
   .latest-value b { color: var(--ink); font: var(--weight-medium) var(--text-sm) var(--font-num); font-variant-numeric: tabular-nums; }
   .indicator-chart { padding: 0 var(--s4); }
+  .latency-evaluation { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); padding: var(--s4) var(--s5); color: var(--muted); font-size: var(--text-xs); line-height: 1.5; border-top: 1px solid var(--line); }
+  .latency-evaluation strong { color: var(--ink); font-weight: var(--weight-medium); }
   .indicator-meta { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: var(--s3) var(--s4); padding: var(--s4) var(--s5); color: var(--faint); font-size: var(--text-xs); }
   .indicator-meta span { min-width: 0; overflow-wrap: anywhere; }
   .indicator-meta a { color: var(--muted); white-space: nowrap; }

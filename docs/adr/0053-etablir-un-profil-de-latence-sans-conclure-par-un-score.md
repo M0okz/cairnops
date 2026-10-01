@@ -110,3 +110,23 @@ Cette évaluation reste informative. Elle ne change pas le verdict du Contrôle,
 l'État de santé, les Incidents ou les notifications. Elle permet de comparer
 les candidates à l'expérience de l'Opérateur avant de décider séparément si une
 séquence de réponses lentes doit devenir une Atteinte.
+
+## Extension au temps de réponse Uptime Kuma
+
+Le temps de réponse importé d'Uptime Kuma est un Indicateur contextuel, et non
+une Observation d'un Contrôle natif. Sa série détaillée ne dure que 24 heures ;
+les six jours précédents ne sont disponibles que sous forme d'une dernière
+valeur par heure. Sa carte établit donc un repère distinct sur au moins trente
+heures de ces valeurs, sans reprendre le Profil natif de 28 jours. La dernière
+valeur, tenue hors apprentissage avec toute la journée récente, est comparée
+au plus grand du 99e centile, du double de la médiane et de la médiane plus
+50 ms. Le collecteur ne retient cette mesure que lorsque le monitor annonce
+un état disponible. Une mesure périmée, absente ou nulle ne reçoit aucune
+conclusion.
+
+Ce calcul de présentation utilise la projection hebdomadaire déjà servie à la
+fiche de la Ressource. Il n'ajoute ni rétention, ni collecte, ni appel à Uptime
+Kuma. Il montre une candidate à examiner avec ses valeurs explicatives ; il ne
+change pas l'Indicateur contextuel en Source de signal et ne crée aucun
+Incident ou notification. Le repère plus court et échantillonné à l'heure ne
+prétend pas à la même précision que le Profil des Contrôles natifs.
