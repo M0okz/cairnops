@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ContextIndicator, IndicatorPoint } from './api.ts';
 // @ts-ignore -- Node executes tests directly with its TypeScript loader.
-import { evaluateKumaLatency } from './kuma-latency.ts';
+import { evaluateKumaLatency, learnedLatencyKinds } from './kuma-latency.ts';
 
 const now = new Date('2026-10-01T12:00:00Z');
 const indicator = { last_value: 350, last_observed_at: '2026-10-01T11:59:00Z' } as ContextIndicator;
@@ -28,4 +28,8 @@ test('never treats stale, missing or non-positive readings as ordinary', () => {
   assert.equal(evaluateKumaLatency({ ...indicator, last_observed_at: '2026-10-01T11:40:00Z' }, history, now).status, 'unavailable');
   assert.equal(evaluateKumaLatency({ ...indicator, last_value: 0 }, history, now).status, 'unavailable');
   assert.equal(evaluateKumaLatency(indicator, undefined, now).status, 'unavailable');
+});
+
+test('only connectors that learn a latency pattern announce it', () => {
+  assert.deepEqual(learnedLatencyKinds, ['uptime_kuma']);
 });

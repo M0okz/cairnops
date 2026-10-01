@@ -38,6 +38,8 @@ export const fr = {
   "connection.savedRefresh": "Connexion enregistrée. Actualisez la page pour recharger la liste.",
 
   "connectors.discoveryHint": "Les nouveaux éléments sont ajoutés automatiquement. Les correspondances avec une Ressource existante restent à confirmer.",
+  "connectors.learnedPattern": "Habitude apprise",
+  "connectors.learnedPatternTitle": "Le temps de réponse est comparé à son habitude des six derniers jours, apprise sur les mesures du Connecteur. Repère informatif : il n’ouvre aucun Incident et n’envoie aucune notification.",
   "updates.title": "Mises à jour",
   "updates.intro": "Comprendre les changements entre la version installée et la cible Argus.",
   "updates.installed": "Installée",

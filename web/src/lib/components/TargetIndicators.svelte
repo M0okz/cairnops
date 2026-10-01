@@ -5,7 +5,7 @@
   import { session } from '$lib/session.svelte';
   import { formatIndicator } from '$lib/indicator-format';
   import { indicatorTimeBounds, indicatorWindowPoints, type IndicatorPeriod } from '$lib/indicator-history';
-  import { evaluateKumaLatency } from '$lib/kuma-latency';
+  import { evaluateKumaLatency, learnedLatencyKinds } from '$lib/kuma-latency';
   import { severityTone, since, stamp } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
   import type { ContextIndicator, Incident } from '$lib/api';
@@ -92,7 +92,7 @@
       {#each detail.indicators as indicator (indicator.id)}
         {@const points = indicatorWindowPoints(detail.series?.[indicator.id] ?? [], timeBounds)}
         {@const hasMaximum = period === '7d' && points.some((point) => point.maximum !== undefined && Number.isFinite(point.maximum))}
-        {@const kumaResponse = indicator.semantic_key === 'response.time' && session.connectors.find((connector) => connector.id === indicator.connector_id)?.kind === 'uptime_kuma'}
+        {@const kumaResponse = indicator.semantic_key === 'response.time' && learnedLatencyKinds.includes(session.connectors.find((connector) => connector.id === indicator.connector_id)?.kind ?? '')}
         {@const evaluation = kumaResponse ? evaluateKumaLatency(indicator, weeklyDetail?.series?.[indicator.id], now) : null}
         <article class="indicator-card card" aria-label={indicator.label}>
           <div class="indicator-title">

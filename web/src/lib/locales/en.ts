@@ -39,6 +39,8 @@ export const en: Record<MessageKey, string> = {
   "connection.savedRefresh": "Connection saved. Refresh the page to reload the list.",
 
   "connectors.discoveryHint": "New items are added automatically. Matches with an existing Resource still require confirmation.",
+  "connectors.learnedPattern": "Learned pattern",
+  "connectors.learnedPatternTitle": "Response time is compared with its usual pattern over the last six days, learned from the Connector’s measurements. Informative only: it opens no Incident and sends no notification.",
   "updates.title": "Software updates",
   "updates.intro": "Understand changes between the installed version and the Argus target.",
   "updates.installed": "Installed",

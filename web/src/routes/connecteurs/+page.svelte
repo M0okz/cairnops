@@ -17,6 +17,7 @@
   import { goto } from '$app/navigation';
   import { session } from '$lib/session.svelte';
   import { since } from '$lib/format';
+  import { learnedLatencyKinds } from '$lib/kuma-latency';
   import { plural, t } from '$lib/i18n.svelte';
   /* Le sas porte le même nom que son atelier : on renomme le type, pas le
    composant, pour que la fiche garde le vocabulaire du domaine. */
@@ -212,6 +213,13 @@
           {/if}
 
           <div class="acts">
+            <!-- L'habitude apprise se signale sur la fiche : l'Opérateur sait d'où
+                 vient le repère qu'il lira sur les Ressources. -->
+            {#if learnedLatencyKinds.includes(connector.kind)}
+              <span class="pill learned" title={t('connectors.learnedPatternTitle')}>
+                <Icon name="learned" size={13} />{t('connectors.learnedPattern')}
+              </span>
+            {/if}
             {#if connector.compatibility === 'warning'}
               <span class="pill warn">{t('connectors.compatibilityToCheck')}</span>
             {:else if connector.remote_version}
@@ -516,6 +524,13 @@
     margin-top: auto;
     padding-top: var(--s4);
     flex-wrap: wrap;
+  }
+
+  .learned {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s2);
+    font-family: inherit;
   }
 
   /* Les actions de gouvernance se tiennent à droite, séparées des états qu'elles

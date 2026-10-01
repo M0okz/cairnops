@@ -32,6 +32,7 @@ export const cairnopsIconPaths = {
   "state-healthy": "<rect x=\"3.5\" y=\"3.5\" width=\"17\" height=\"17\" rx=\"6.5\"/><path d=\"m7.5 12 3.2 3.2 5.8-6.4\"/>",
   "state-degraded": "<rect x=\"3.5\" y=\"3.5\" width=\"17\" height=\"17\" rx=\"6.5\"/><path d=\"M12 7.5v5.5\"/><circle cx=\"12\" cy=\"16.6\" r=\".85\" fill=\"currentColor\" stroke=\"none\"/>",
   "state-unavailable": "<rect x=\"3.5\" y=\"3.5\" width=\"17\" height=\"17\" rx=\"6.5\"/><path d=\"M7.75 12h8.5\"/>",
+  "learned": "<path d=\"M3 17.5c2 0 2.6-4 4.5-4s2.5 4 4.5 4 2.6-4 4.5-4c1.2 0 1.9 1.4 2.5 2.6\"/><circle cx=\"18.5\" cy=\"6\" r=\"2.25\"/>",
   "state-unknown": "<rect x=\"3.5\" y=\"3.5\" width=\"17\" height=\"17\" rx=\"6.5\"/><path d=\"M9.5 9.25c0-1.4 1-2.25 2.5-2.25s2.5.8 2.5 2.1c0 2-2.5 2.1-2.5 4\"/><circle cx=\"12\" cy=\"16.6\" r=\".85\" fill=\"currentColor\" stroke=\"none\"/>"
 } as const;
 export type CairnOpsIconName = keyof typeof cairnopsIconPaths;

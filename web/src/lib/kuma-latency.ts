@@ -4,6 +4,9 @@ const hour = 3_600_000;
 const day = 24 * hour;
 const minimumHours = 30;
 
+/** Connecteurs dont le temps de réponse est comparé à une habitude apprise. */
+export const learnedLatencyKinds: readonly string[] = ['uptime_kuma'];
+
 export type KumaLatencyEvaluation =
   | { status: 'unavailable' | 'training' }
   | { status: 'usual' | 'candidate'; observed: number; median: number; threshold: number; hours: number };
