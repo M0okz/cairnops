@@ -30,7 +30,7 @@ export function activityDays<T extends Pick<TimelineEntry, 'occurred_at'>>(
 
 export function activityMarker(kind: string): { icon: CairnOpsIconName; restored: boolean } {
   const icons: Record<string, CairnOpsIconName> = {
-    opened: 'incidents', impact_joined: 'plus', impact_reopened: 'worker',
+    opened: 'incidents', resumed: 'incidents', impact_joined: 'plus', impact_reopened: 'worker',
     impact_resolved: 'state-healthy', resolved: 'state-healthy', evidence_resolved: 'health',
     evidence_added: 'signal', evidence_updated: 'signal', invalidated: 'close',
     propagation_closed: 'lock', extended: 'signal', severity_changed: 'incidents',

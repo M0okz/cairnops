@@ -19,8 +19,11 @@ type Context struct {
 	TargetNames []string `json:"target_names,omitempty"`
 	// PreviousSeverity n'est renseignée que pour une hausse de Gravité notifiée.
 	PreviousSeverity string `json:"previous_severity,omitempty"`
-	// DurationSeconds mesure l'Incident résolu, de son ouverture à sa Résolution.
+	// DurationSeconds mesure le dernier retour résolu, de son ouverture ou de
+	// sa Reprise jusqu'à sa Résolution.
 	DurationSeconds int64 `json:"duration_seconds,omitempty"`
+	// Resumptions compte les Reprises de l'Incident (ADR 0054).
+	Resumptions int `json:"resumptions,omitempty"`
 }
 
 // RenderNotification compose le gabarit compact partagé par le Push, la boîte
@@ -66,9 +69,19 @@ func RenderNotification(s Situation, locale string) Text {
 		severityRank(s.Context.PreviousSeverity) < severityRank(s.Severity) {
 		details = append(details, pick(english, "Auparavant : ", "Previously: ")+previous)
 	}
+	if !s.Resolved && s.Context.Resumptions > 0 {
+		back := pick(english, "De nouveau en cours", "Back again")
+		if s.Context.Resumptions > 1 {
+			back += " · " + resumptionCount(s.Context.Resumptions, english)
+		}
+		details = append(details, back)
+	}
 	if s.Resolved && s.Context.DurationSeconds > 0 {
 		details = append(details, pick(english, "Rétabli après ", "Recovered after ")+
 			formatDuration(time.Duration(s.Context.DurationSeconds)*time.Second, english))
+	}
+	if s.Resolved && s.Context.Resumptions > 0 {
+		details = append(details, resumptionCount(s.Context.Resumptions, english))
 	}
 	if count > 1 {
 		if names := targetNames(s.Context.TargetNames, count); names != "" {
@@ -129,6 +142,13 @@ func notificationSubject(s Situation, count int, english bool) string {
 		return pick(english, "1 Ressource", "1 resource")
 	}
 	return fmt.Sprintf(pick(english, "%d Ressources", "%d resources"), count)
+}
+
+func resumptionCount(count int, english bool) string {
+	if count == 1 {
+		return pick(english, "1 reprise", "1 relapse")
+	}
+	return fmt.Sprintf(pick(english, "%d reprises", "%d relapses"), count)
 }
 
 func shortSeverity(severity string, english bool) (string, bool) {

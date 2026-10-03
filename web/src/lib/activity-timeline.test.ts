@@ -37,3 +37,8 @@ test('a stored propagation event uses the current clear label without changing o
   assert.equal(activityMessage({ kind: 'opened', message: 'Incident ouvert' }, translate), 'Incident ouvert');
   assert.equal(activityMessage({ kind: 'opened', message: ' ' }, translate), 'Événement enregistré');
 });
+
+test('a resumed Incident is marked as a return, not a recovery', () => {
+  assert.equal(activityMarker('resumed').icon, 'incidents');
+  assert.equal(activityMarker('resumed').restored, false);
+});

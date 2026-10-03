@@ -548,7 +548,7 @@ components:
         Sa summary utilise le gabarit compact partagé avec le Push et Mattermost :
         « Ressource · gravité » (ou nombre de Ressources) en title ; en body, le
         problème puis, après un saut de ligne facultatif, le contexte figé lors
-        de la livraison (hausse de gravité, durée, Ressources et détail). Les
+        de la livraison (hausse de gravité, Reprise, durée, Ressources et détail). Les
         entrées antérieures n'ont pas ce contexte.
         Le libellé source complet reste disponible dans nature_label.
         incident_status et acknowledged_at décrivent l'état actuel de
@@ -1400,7 +1400,7 @@ components:
         Cycle commun d'une même Nature. Il agrège plusieurs Atteintes par
         Cible pendant sa fenêtre de propagation, sans déclarer de cause.
       type: object
-      required: [id, nature_key, nature_label, nature_scope, nature_namespace, nature_fingerprint, propagation_eligible, status, propagation_status, severity, opened_at, last_impact_at, propagation_window_seconds, propagation_ends_at, acknowledgement_sync_status, extended, active_impact_count, impact_count, affected_target_count, max_affected_targets, revision, impacts, activity, created_at, updated_at, summary]
+      required: [id, nature_key, nature_label, nature_scope, nature_namespace, nature_fingerprint, propagation_eligible, status, propagation_status, severity, opened_at, last_impact_at, propagation_window_seconds, propagation_ends_at, acknowledgement_sync_status, extended, active_impact_count, impact_count, affected_target_count, max_affected_targets, revision, resumption_count, impacts, activity, created_at, updated_at, summary]
       properties:
         summary: { $ref: '#/components/schemas/IncidentSummary' }
         presentation: { $ref: '#/components/schemas/AlertPresentation' }
@@ -1431,6 +1431,17 @@ components:
         affected_target_count: { type: integer, minimum: 0 }
         max_affected_targets: { type: integer, minimum: 0 }
         revision: { type: integer, minimum: 1 }
+        resumption_count:
+          type: integer
+          minimum: 0
+          description: >-
+            Nombre de Reprises (ADR 0054) : retours de la même Nature sur la
+            même Ressource moins de six heures après une Résolution, qui
+            réactivent cet Incident au lieu d'en ouvrir un nouveau.
+        resumed_at:
+          type: string
+          format: date-time
+          description: Constat de la dernière Reprise, d'où part la durée du retour en cours.
         impacts:
           type: array
           items: { $ref: '#/components/schemas/IncidentImpact' }

@@ -55,6 +55,12 @@ func TestNotificationContextLineStatesOnlyDeliveredFacts(t *testing.T) {
 			"Indisponibilité\nPropagation étendue · Vikunja Todo, Outline, Gitea +2", "Unavailability\nExtended propagation · Vikunja Todo, Outline, Gitea +2"},
 		{"resolution duration", Situation{Resolved: true, MaxAffected: 1, TotalTargets: 1, TargetName: "Vikunja Todo", Severity: "critical", Context: Context{DurationSeconds: 7500, PreviousSeverity: "warning"}},
 			"Indisponibilité\nRétabli après 2 h 05", "Unavailability\nRecovered after 2 h 05"},
+		{"first resumption", Situation{AffectedTargets: 1, TargetName: "trust-zabbix-01", Severity: "major", Context: Context{Resumptions: 1}},
+			"Indisponibilité\nDe nouveau en cours", "Unavailability\nBack again"},
+		{"repeated resumptions", Situation{AffectedTargets: 1, TargetName: "trust-zabbix-01", Severity: "major", Context: Context{Resumptions: 3}},
+			"Indisponibilité\nDe nouveau en cours · 3 reprises", "Unavailability\nBack again · 3 relapses"},
+		{"resolution after one resumption", Situation{Resolved: true, MaxAffected: 1, TotalTargets: 1, TargetName: "trust-zabbix-01", Severity: "major", Context: Context{DurationSeconds: 300, Resumptions: 1}},
+			"Indisponibilité\nRétabli après 5 min · 1 reprise", "Unavailability\nRecovered after 5 min · 1 relapse"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.s

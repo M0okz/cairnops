@@ -158,7 +158,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		       greatest(incident.max_affected_targets, 1),
 		       incident.propagation_status, incident.extended,
 		       CASE WHEN incident.severity = 'critical' THEN now()
-		            ELSE incident.created_at + $1 * interval '1 second' END
+		            ELSE coalesce(incident.resumed_at, incident.created_at) + $1 * interval '1 second' END
 		FROM cairnops_incidents incident
 		JOIN cairnops_notification_channels channel
 		  ON channel.enabled AND channel.status <> 'disabled'
@@ -184,12 +184,66 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		return fmt.Errorf("schedule incident openings: %w", err)
 	}
 
+	// La première Reprise annoncée est un Fait opérationnel (ADR 0054). Elle
+	// suit le trajet d'une ouverture — sas, annulation, routage par Gravité —
+	// mais n'existe que là où l'ouverture a été livrée : sinon c'est
+	// l'ouverture, réarmée ci-dessus, qui informe. Une Reprise annulée avant
+	// son échéance est réarmée par la suivante ; une Reprise livrée ne l'est
+	// plus jamais.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO cairnops_notification_outbox (
+			incident_id, incident_revision, channel_id, event_kind, event_key,
+			presentation, target_name, nature_label, alert_kind, severity, opened_at,
+			impact_count, affected_target_count, max_affected_targets,
+			propagation_status, extended, next_attempt_at
+		)
+		SELECT incident.id, incident.revision, channel.id, 'firing', 'resumed', 'alert',
+		       opening.target_name, incident.nature_label, incident.alert_kind,
+		       incident.severity, incident.resumed_at,
+		       incident.impact_count, incident.affected_target_count,
+		       greatest(incident.max_affected_targets, 1),
+		       incident.propagation_status, incident.extended,
+		       CASE WHEN incident.severity = 'critical' THEN now()
+		            ELSE incident.resumed_at + $1 * interval '1 second' END
+		FROM cairnops_incidents incident
+		JOIN cairnops_notification_outbox opening
+		  ON opening.incident_id = incident.id AND opening.event_key = 'firing'
+		 AND opening.status = 'delivered'
+		JOIN cairnops_notification_channels channel
+		  ON channel.id = opening.channel_id
+		 AND channel.enabled AND channel.status <> 'disabled'
+		 AND incident.severity = ANY(channel.severities)
+		WHERE incident.status = 'active' AND incident.acknowledged_at IS NULL
+		  AND incident.resumption_count > 0 AND incident.resumed_at IS NOT NULL
+		  AND incident.active_impact_count > 0
+		  AND EXISTS (
+		      SELECT 1 FROM cairnops_incident_impacts impact
+		      WHERE impact.incident_id = incident.id AND impact.status = 'active'
+		        AND NOT EXISTS (
+		            SELECT 1 FROM cairnops_maintenance_targets membership
+		            JOIN cairnops_maintenances maintenance ON maintenance.id = membership.maintenance_id
+		            WHERE membership.target_id = impact.target_id
+		              AND maintenance.cancelled_at IS NULL
+		              AND now() BETWEEN maintenance.starts_at AND maintenance.ends_at
+		        )
+		  )
+		ON CONFLICT (incident_id, channel_id, event_key) DO UPDATE
+		SET status = 'pending', incident_revision = EXCLUDED.incident_revision,
+		    opened_at = EXCLUDED.opened_at, next_attempt_at = EXCLUDED.next_attempt_at,
+		    last_error = '', lease_owner = NULL, lease_until = NULL, updated_at = now()
+		WHERE cairnops_notification_outbox.status = 'cancelled'
+	`, store.stabilityDelaySeconds()); err != nil {
+		return fmt.Errorf("schedule incident resumptions: %w", err)
+	}
+
 	if _, err := tx.Exec(ctx, `
 		UPDATE cairnops_notification_outbox delivery
 		SET incident_revision = incident.revision,
 		    next_attempt_at = CASE WHEN delivery.status = 'failed' THEN delivery.next_attempt_at
 		        WHEN incident.severity = 'critical' THEN now()
-		        ELSE incident.created_at + $1 * interval '1 second' END,
+		        ELSE coalesce(incident.resumed_at, incident.created_at) + $1 * interval '1 second' END,
+		    opened_at = CASE WHEN delivery.event_key = 'resumed'
+		        THEN coalesce(incident.resumed_at, delivery.opened_at) ELSE delivery.opened_at END,
 		    target_name = CASE WHEN incident.affected_target_count > 1
 		        THEN incident.affected_target_count::text || ' Cibles affectées'
 		        ELSE coalesce((
@@ -205,7 +259,7 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		    propagation_status = incident.propagation_status,
 		    extended = incident.extended, updated_at = now()
 		FROM cairnops_incidents incident
-		WHERE delivery.incident_id = incident.id AND delivery.event_key = 'firing'
+		WHERE delivery.incident_id = incident.id AND delivery.event_key IN ('firing', 'resumed')
 		  AND delivery.status IN ('pending', 'failed')
 		  AND (delivery.lease_until IS NULL OR delivery.lease_until < now())
 	`, store.stabilityDelaySeconds()); err != nil {
@@ -324,7 +378,8 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 			propagation_status, extended
 		)
 		SELECT incident.id, incident.revision, opening.channel_id,
-		       'resolved', 'resolved', 'alert',
+		       'resolved', CASE WHEN incident.resumption_count = 0 THEN 'resolved'
+		           ELSE 'resolved:' || incident.resumption_count::text END, 'alert',
 		       CASE WHEN incident.max_affected_targets = 1 THEN coalesce((
 		           SELECT target.name FROM cairnops_incident_impacts impact
 		           JOIN cairnops_targets target ON target.id = impact.target_id
@@ -344,6 +399,15 @@ func (store *PostgresStore) Schedule(ctx context.Context) error {
 		  ON channel.id = opening.channel_id AND channel.kind = 'mattermost'
 		 AND channel.enabled AND channel.status <> 'disabled'
 		WHERE incident.status = 'resolved' AND incident.resolved_at IS NOT NULL
+		  -- Pas de fin sans début : le récapitulatif clôt la dernière alerte
+		  -- livrée sur ce Canal, jamais un cycle resté silencieux.
+		  AND coalesce((
+		      SELECT previous.event_kind FROM cairnops_notification_outbox previous
+		      WHERE previous.incident_id = incident.id
+		        AND previous.channel_id = opening.channel_id
+		        AND previous.status = 'delivered' AND previous.presentation = 'alert'
+		      ORDER BY previous.delivered_at DESC NULLS LAST, previous.id DESC LIMIT 1
+		  ), 'resolved') <> 'resolved'
 		ON CONFLICT DO NOTHING
 	`); err != nil {
 		return fmt.Errorf("schedule incident resolutions: %w", err)
@@ -404,7 +468,10 @@ func (store *PostgresStore) Claim(ctx context.Context, workerID string) (Deliver
 		                AND cairnops_severity_rank(claimed.severity) > cairnops_severity_rank(previous_alert.severity)
 		               THEN previous_alert.severity END,
 		           'duration_seconds', CASE WHEN claimed.resolved_at IS NOT NULL
-		               THEN greatest(floor(extract(epoch FROM claimed.resolved_at - claimed.opened_at)), 0)::bigint END
+		               THEN greatest(floor(extract(epoch FROM claimed.resolved_at - CASE
+		                   WHEN incident.resumed_at IS NOT NULL AND incident.resumed_at <= claimed.resolved_at
+		                   THEN incident.resumed_at ELSE claimed.opened_at END)), 0)::bigint END,
+		           'resumptions', nullif(incident.resumption_count, 0)
 		       ))
 		FROM claimed JOIN cairnops_notification_channels channel ON channel.id = claimed.channel_id
 		JOIN cairnops_incidents incident ON incident.id = claimed.incident_id
@@ -542,7 +609,10 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 				affected_target_count = EXCLUDED.affected_target_count,
 				max_affected_targets = EXCLUDED.max_affected_targets,
 				propagation_status = EXCLUDED.propagation_status,
-				extended = EXCLUDED.extended, context = EXCLUDED.context
+				extended = EXCLUDED.extended, context = EXCLUDED.context,
+				-- Une ouverture déjà déposée revient par une Reprise : elle
+				-- interrompt de nouveau et doit se relire.
+				read_at = NULL, dismissed_at = NULL
 		`, delivery.IncidentID, delivery.IncidentRevision, delivery.TargetName,
 			delivery.NatureLabel, string(delivery.Severity), delivery.OpenedAt,
 			delivery.ImpactCount, delivery.AffectedTargets, delivery.MaxAffected,
@@ -621,18 +691,24 @@ func (store *PostgresStore) Deliver(ctx context.Context, delivery Delivery) (int
 		}
 
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO cairnops_push_outbox (device_id, inbox_id, revision, presentation, next_attempt_at, attempts)
+			INSERT INTO cairnops_push_outbox (device_id, inbox_id, revision, presentation, event_kind, next_attempt_at, attempts)
 			SELECT device.id, inbox.id, $2,
-			       -- La Résolution remplace l'ouverture affichée sur l'appareil qui
-			       -- l'a reçue. Elle n'est donc visible que là : un appareil qui
-			       -- n'a jamais montré l'ouverture n'apprend pas une fin sans début.
+			       -- La Résolution remplace l'alerte affichée sur l'appareil qui
+			       -- l'a reçue. Elle n'est donc visible que si la dernière alerte
+			       -- livrée annonçait un problème en cours : un appareil n'apprend
+			       -- pas une fin sans début, ni deux fois la même fin lorsque
+			       -- l'Incident reprend sans interrompre (ADR 0054). Un envoi
+			       -- antérieur à cette règle ne retenait pas ce qu'il annonçait :
+			       -- il compte pour une ouverture.
 			       CASE WHEN inbox.event_kind = 'resolved' THEN
-			                CASE WHEN EXISTS (
-			                    SELECT 1 FROM cairnops_push_outbox opened
+			                CASE WHEN coalesce((
+			                    SELECT coalesce(opened.event_kind, 'firing') FROM cairnops_push_outbox opened
 			                    WHERE opened.device_id = device.id AND opened.inbox_id = inbox.id
 			                      AND opened.status = 'delivered' AND opened.presentation = 'alert'
-			                ) THEN 'alert' ELSE 'silent' END
+			                    ORDER BY opened.revision DESC, opened.id DESC LIMIT 1
+			                ), 'resolved') <> 'resolved' THEN 'alert' ELSE 'silent' END
 			            WHEN $3 = 'alert' OR pending.alert THEN 'alert' ELSE 'silent' END,
+			       inbox.event_kind,
 			       coalesce(pending.next_attempt_at, now()), coalesce(pending.attempts, 0)
 			FROM cairnops_notification_inbox inbox
 			JOIN cairnops_devices device ON device.user_id = inbox.user_id

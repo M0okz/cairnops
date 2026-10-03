@@ -28,7 +28,8 @@ const incidentProjectionSQL = `
 		       incident.acknowledgement_sync_error, incident.extended,
 		       incident.active_impact_count, incident.impact_count,
 		       incident.affected_target_count, incident.max_affected_targets,
-		       incident.revision, incident.created_at, incident.updated_at, incident.alert_kind
+		       incident.revision, incident.created_at, incident.updated_at, incident.alert_kind,
+		       incident.resumption_count, incident.resumed_at
 		FROM cairnops_incidents incident
 		LEFT JOIN cairnops_users account ON account.id = incident.acknowledged_by
 `
@@ -550,6 +551,7 @@ func scanIncident(row scanner) (Incident, error) {
 		&item.Extended, &item.ActiveImpactCount, &item.ImpactCount,
 		&item.AffectedTargetCount, &item.MaxAffectedTargets, &item.Revision,
 		&item.CreatedAt, &item.UpdatedAt, &item.AlertKind,
+		&item.ResumptionCount, &item.ResumedAt,
 	)
 	item.Impacts = []Impact{}
 	item.Activity = []Activity{}

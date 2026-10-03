@@ -165,7 +165,7 @@ Qualification explicable de la conclusion d'une Synthèse opérationnelle : Sign
 _Éviter_ : Probabilité, score de confiance, Gravité
 
 **Fait opérationnel** :
-Changement établi de la situation susceptible de modifier la priorité ou l'action d'un Opérateur, notamment une ouverture, une aggravation, une extension significative ou une Résolution. Il justifie une nouvelle notification interruptive ; les autres changements actualisent seulement la Synthèse opérationnelle.
+Changement établi de la situation susceptible de modifier la priorité ou l'action d'un Opérateur, notamment une ouverture, une aggravation, une extension significative, une première Reprise ou une Résolution. Il justifie une nouvelle notification interruptive ; les autres changements actualisent seulement la Synthèse opérationnelle.
 _Éviter_ : Observation, événement externe, Rappel
 
 **Politique de notification** :
@@ -271,6 +271,10 @@ _Éviter_ : Suspension, suppression
 **Résolution** :
 Fin d'un Incident après fermeture de sa Propagation lorsque plus aucune Preuve valide de ses Atteintes ne demeure active. Un passage provisoire à zéro Atteinte active pendant la Propagation ne le résout pas, et un utilisateur ne peut pas prononcer une Résolution contre des Preuves encore actives.
 _Éviter_ : Acquittement, fermeture manuelle
+
+**Reprise** :
+Retour d'une Atteinte de même Nature sur la même Ressource moins de six heures après la Résolution de son Incident, lorsque celui-ci ne portait que cette Atteinte. L'Incident résolu redevient actif au lieu d'en ouvrir un nouveau : il conserve son ouverture, son historique et son Acquittement, et compte ses Reprises. Seule la première Reprise constitue un Fait opérationnel ; les suivantes actualisent la Synthèse opérationnelle, sauf hausse de Gravité encore jamais notifiée.
+_Éviter_ : Réouverture manuelle, nouvel Incident, Rappel, flapping
 
 **Journal d'activité** :
 Chronologie immuable des événements et décisions qui modifient le traitement d'un Incident, avec leur date, auteur ou origine et valeurs avant/après. Il explique notamment l'ouverture, la Résolution, les Acquittements, synchronisations, requalifications, Invalidations et maintenances, sans constituer un fil de commentaires.

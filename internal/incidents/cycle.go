@@ -617,6 +617,14 @@ func ensureImpact(ctx context.Context, tx pgx.Tx, fact EvidenceFact, observedAt 
 		}
 	}
 
+	incidentID, impactID, err = resumeRecentIncident(ctx, tx, fact, observedAt)
+	if err != nil {
+		return "", "", false, false, err
+	}
+	if incidentID != "" {
+		return incidentID, impactID, false, false, nil
+	}
+
 	propagationStatus := "open"
 	var closedAt any
 	if !fact.Nature.Eligible {
@@ -654,6 +662,71 @@ func ensureImpact(ctx context.Context, tx pgx.Tx, fact EvidenceFact, observedAt 
 		return "", "", false, false, fmt.Errorf("insert first target impact: %w", err)
 	}
 	return incidentID, impactID, true, true, nil
+}
+
+// ResumptionWindow borne la Reprise d'un Incident résolu (ADR 0054). Comme le
+// sas de l'ADR 0040, c'est un socle V1 fixe et explicable.
+const ResumptionWindow = 6 * time.Hour
+
+// resumeRecentIncident reprend l'Incident résolu depuis moins de six heures
+// dont l'unique Atteinte portait la même Nature sur la même Ressource. Il
+// redevient actif à la recomposition qui suit : seule son Atteinte est
+// rouverte ici. La Propagation reste fermée, et un Incident plus récent sur
+// cette Ressource et cette Nature empêche de remonter à un cycle antérieur.
+func resumeRecentIncident(ctx context.Context, tx pgx.Tx, fact EvidenceFact, observedAt time.Time) (string, string, error) {
+	var incidentID, impactID string
+	var resolvedAt time.Time
+	err := tx.QueryRow(ctx, `
+		SELECT incident.id::text, impact.id::text, incident.resolved_at
+		FROM cairnops_incidents incident
+		JOIN cairnops_incident_impacts impact ON impact.incident_id = incident.id
+		WHERE impact.target_id = $1::uuid AND incident.nature_key = $2
+		  AND incident.status = 'resolved' AND incident.impact_count = 1
+		  AND incident.resolved_at >= $3::timestamptz - make_interval(secs => $4)
+		  AND incident.resolved_at <= $5
+		  AND NOT EXISTS (
+		      SELECT 1 FROM cairnops_incident_impacts later_impact
+		      JOIN cairnops_incidents later ON later.id = later_impact.incident_id
+		      WHERE later_impact.target_id = $1::uuid AND later.nature_key = $2
+		        AND later.opened_at > incident.opened_at
+		  )
+		ORDER BY incident.resolved_at DESC LIMIT 1
+		FOR UPDATE OF incident, impact
+	`, fact.TargetID, fact.Nature.Key, fact.OpenedAt, ResumptionWindow.Seconds(), observedAt,
+	).Scan(&incidentID, &impactID, &resolvedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("find recently resolved incident: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE cairnops_incident_impacts
+		SET status = 'active', resolved_at = NULL,
+		    source_severity = $2, effective_severity = $2, updated_at = now()
+		WHERE id = $1::uuid
+	`, impactID, fact.Severity); err != nil {
+		return "", "", fmt.Errorf("resume target impact: %w", err)
+	}
+	// La Reprise est datée de son constat par CairnOps, comme le sas de
+	// l'ADR 0040 : un retour découvert tardivement attend encore sa stabilité.
+	var count int
+	if err := tx.QueryRow(ctx, `
+		UPDATE cairnops_incidents
+		SET resumption_count = resumption_count + 1, resumed_at = $2,
+		    revision = revision + 1, updated_at = now()
+		WHERE id = $1::uuid
+		RETURNING resumption_count
+	`, incidentID, observedAt).Scan(&count); err != nil {
+		return "", "", fmt.Errorf("resume incident: %w", err)
+	}
+	if err := appendActivity(ctx, tx, incidentID, impactID, "",
+		"resumed", fact.Origin, "", "Incident repris",
+		map[string]any{"resumption_count": count, "previous_resolved_at": resolvedAt.UTC()}); err != nil {
+		return "", "", err
+	}
+	return incidentID, impactID, nil
 }
 
 func extendPropagation(ctx context.Context, tx pgx.Tx, incidentID string, observedAt time.Time, window int) error {

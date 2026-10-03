@@ -115,6 +115,8 @@ type Incident struct {
 	AffectedTargetCount       int                 `json:"affected_target_count"`
 	MaxAffectedTargets        int                 `json:"max_affected_targets"`
 	Revision                  int                 `json:"revision"`
+	ResumptionCount           int                 `json:"resumption_count"`
+	ResumedAt                 *time.Time          `json:"resumed_at,omitempty"`
 	Summary                   synthesis.Localized `json:"summary"`
 	Impacts                   []Impact            `json:"impacts"`
 	Activity                  []Activity          `json:"activity"`
