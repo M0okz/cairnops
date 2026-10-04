@@ -40,6 +40,9 @@ export function natureLabel(nature: { nature_key: string; nature_label: string; 
   if (nature.nature_key === 'software-security-update-available') {
     return t('nature.securityUpdateAvailable');
   }
+  if (nature.nature_key === 'software-major-update-available') {
+    return t('nature.majorUpdateAvailable');
+  }
   return nature.nature_label;
 }
 

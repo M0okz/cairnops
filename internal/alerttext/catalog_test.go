@@ -85,6 +85,7 @@ func TestEveryRecognizedKindDeclaresWhetherItImpairsFunctioning(t *testing.T) {
 		SecurityUpdates:        false,
 		SoftwareUpdate:         false,
 		SoftwareSecurityUpdate: false,
+		SoftwareMajorUpdate:    false,
 	}
 	for kind := range titles {
 		want, declared := expected[kind]

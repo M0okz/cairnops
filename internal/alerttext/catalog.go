@@ -31,6 +31,9 @@ const (
 	// citent un correctif de sécurité. SoftwareUpdate reste lisible pour
 	// l'historique des preuves ouvertes avant cette distinction.
 	SoftwareSecurityUpdate Kind = "software.security_update_available"
+	// SoftwareMajorUpdate désigne une mise à jour majeure dont les notes
+	// officielles ne citent aucun correctif de sécurité.
+	SoftwareMajorUpdate Kind = "software.major_update_available"
 )
 
 // Fact is presentation-only enrichment supplied by a trusted connector adapter.
@@ -73,6 +76,7 @@ var titles = map[Kind][2]string{
 	RebootRequired:         {"Redémarrage requis", "Restart required"},
 	SoftwareUpdate:         {"Mise à jour logicielle disponible", "Software update available"},
 	SoftwareSecurityUpdate: {"Mise à jour de sécurité disponible", "Security update available"},
+	SoftwareMajorUpdate:    {"Mise à jour majeure disponible", "Major update available"},
 }
 
 func Title(kind Kind, locale string) (string, bool) {
@@ -140,7 +144,7 @@ func Localize(f Fact) Localized {
 }
 
 func (kind Kind) versioned() bool {
-	return kind == SoftwareUpdate || kind == SoftwareSecurityUpdate
+	return kind == SoftwareUpdate || kind == SoftwareSecurityUpdate || kind == SoftwareMajorUpdate
 }
 
 // impairing énumère les conditions reconnues qui altèrent le fonctionnement

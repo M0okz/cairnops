@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
@@ -464,12 +465,60 @@ type ArgusReleaseSecurity interface {
 	SecurityAssessments(context.Context, []string) (map[string]softwareupdates.SecurityAssessment, error)
 }
 
-// Une mise à jour disponible reste une information de suivi des versions. Seule
-// une mise à jour dont les notes citent un correctif de sécurité ouvre une preuve.
+// Une mise à jour disponible reste une information de suivi des versions. Elle
+// n'ouvre une preuve que si ses notes citent un correctif de sécurité ou si elle
+// est majeure ; argusUpdateFinding en fixe la Gravité.
 const (
 	argusSecurityNatureKey   = "software-security-update-available"
 	argusSecurityNatureLabel = "Mise à jour de sécurité disponible"
+	argusMajorNatureKey      = "software-major-update-available"
+	argusMajorNatureLabel    = "Mise à jour majeure disponible"
 )
+
+// argusFinding est la preuve qu'une mise à jour justifie, avec sa Gravité.
+type argusFinding struct {
+	natureKey, natureLabel string
+	alert                  alerttext.Kind
+	severity               incidents.Severity
+	outcome, reason        string
+	message                string
+}
+
+// argusUpdateFinding applique la matrice de Gravité des mises à jour :
+//
+//	                Sans sécurité                         Sécurité
+//	Correctif       aucune preuve                         Majeur
+//	Mineure         aucune preuve                         Majeur
+//	Majeure         Information, Avertissement si Impact  Majeur
+//
+// Un Impact conditionnel de mise à jour documenté rend une mise à jour majeure
+// plus délicate à appliquer, sans établir de faille. Une mise à jour majeure
+// reste une dette de version : elle ne dégrade pas le fonctionnement observé.
+func argusUpdateFinding(level versions.Level, security softwareupdates.SecurityAssessment) (argusFinding, bool) {
+	switch {
+	case security.Status == softwareupdates.SecurityFixes:
+		return argusFinding{
+			natureKey: argusSecurityNatureKey, natureLabel: argusSecurityNatureLabel,
+			alert: alerttext.SoftwareSecurityUpdate, severity: incidents.SeverityMajor,
+			outcome: "unhealthy", reason: "argus_security_update_available",
+			message: "correctifs de sécurité",
+		}, true
+	case level == versions.Major:
+		finding := argusFinding{
+			natureKey: argusMajorNatureKey, natureLabel: argusMajorNatureLabel,
+			alert: alerttext.SoftwareMajorUpdate, severity: incidents.SeverityInformation,
+			outcome: "healthy", reason: "argus_major_update_available",
+			message: "mise à jour majeure",
+		}
+		if security.Impacts {
+			finding.severity = incidents.SeverityWarning
+			finding.message = "mise à jour majeure avec impacts à vérifier"
+		}
+		return finding, true
+	default:
+		return argusFinding{}, false
+	}
+}
 
 type ArgusSynchronizer struct {
 	store        RuntimeStore
@@ -639,7 +688,7 @@ func (synchronizer *ArgusSynchronizer) syncOne(ctx context.Context, connector Ru
 			message = fmt.Sprintf("Version %s disponible, %s déployée", discoveredService.LatestVersion, discoveredService.DeployedVersion)
 		}
 		if update {
-			updates = append(updates, argusUpdate{binding: binding, service: discoveredService, details: details, observation: len(observations)})
+			updates = append(updates, argusUpdate{binding: binding, service: discoveredService, level: assessment.Level, details: details, observation: len(observations)})
 		} else {
 			observedBindings = append(observedBindings, binding.ID)
 		}
@@ -659,24 +708,26 @@ func (synchronizer *ArgusSynchronizer) syncOne(ctx context.Context, connector Ru
 		return
 	}
 	for _, update := range updates {
-		status := security[update.binding.ID]
-		update.details["security"] = string(status)
-		if status == softwareupdates.SecurityPending {
+		assessment := security[update.binding.ID]
+		update.details["security"] = string(assessment.Status)
+		update.details["impacts"] = assessment.Impacts
+		if assessment.Status == softwareupdates.SecurityPending {
 			// Analyse en cours : ni ouverture ni résolution, afin qu'une nouvelle
-			// version ne résolve pas puis ne rouvre pas une preuve de sécurité.
+			// version ne résolve pas puis ne rouvre pas une preuve déjà justifiée.
 			continue
 		}
 		observedBindings = append(observedBindings, update.binding.ID)
-		if status != softwareupdates.SecurityFixes {
+		finding, opens := argusUpdateFinding(update.level, assessment)
+		if !opens {
 			continue
 		}
 		observation := &observations[update.observation]
-		observation.Outcome, observation.Reason = "unhealthy", "argus_security_update_available"
-		observation.Message += " · correctifs de sécurité"
+		observation.Outcome, observation.Reason = finding.outcome, finding.reason
+		observation.Message += " · " + finding.message
 		signals = append(signals, incidents.ArgusSignal{
 			TargetID: update.binding.TargetID, BindingID: update.binding.ID, ExternalService: update.service.ID,
-			NatureKey: argusSecurityNatureKey, NatureLabel: argusSecurityNatureLabel,
-			Name: update.service.Name + " · " + observation.Message, Severity: incidents.SeverityMajor,
+			NatureKey: finding.natureKey, NatureLabel: finding.natureLabel, Alert: finding.alert,
+			Name: update.service.Name + " · " + observation.Message, Severity: finding.severity,
 			DeployedVersion: update.service.DeployedVersion, LatestVersion: update.service.LatestVersion,
 			Details: update.details,
 		})
@@ -709,15 +760,16 @@ func (synchronizer *ArgusSynchronizer) syncOne(ctx context.Context, connector Ru
 type argusUpdate struct {
 	binding     RuntimeBinding
 	service     argus.Service
+	level       versions.Level
 	details     map[string]any
 	observation int
 }
 
 // releaseSecurity qualifie chaque mise à jour. Une analyse qui ne porte pas sur
 // les versions observées reste en attente ; un service sans suivi des notes
-// n'établit aucun correctif de sécurité.
-func (synchronizer *ArgusSynchronizer) releaseSecurity(ctx context.Context, updates []argusUpdate) (map[string]softwareupdates.SecurityStatus, error) {
-	result := make(map[string]softwareupdates.SecurityStatus, len(updates))
+// n'établit ni correctif de sécurité ni impact.
+func (synchronizer *ArgusSynchronizer) releaseSecurity(ctx context.Context, updates []argusUpdate) (map[string]softwareupdates.SecurityAssessment, error) {
+	result := make(map[string]softwareupdates.SecurityAssessment, len(updates))
 	if len(updates) == 0 {
 		return result, nil
 	}
@@ -736,11 +788,11 @@ func (synchronizer *ArgusSynchronizer) releaseSecurity(ctx context.Context, upda
 		assessment, found := assessments[update.binding.ID]
 		switch {
 		case !found:
-			result[update.binding.ID] = softwareupdates.SecurityNotEstablished
+			result[update.binding.ID] = softwareupdates.SecurityAssessment{Status: softwareupdates.SecurityNotEstablished}
 		case assessment.Installed != update.service.DeployedVersion || assessment.Target != update.service.LatestVersion:
-			result[update.binding.ID] = softwareupdates.SecurityPending
+			result[update.binding.ID] = softwareupdates.SecurityAssessment{Status: softwareupdates.SecurityPending}
 		default:
-			result[update.binding.ID] = assessment.Status
+			result[update.binding.ID] = assessment
 		}
 	}
 	return result, nil

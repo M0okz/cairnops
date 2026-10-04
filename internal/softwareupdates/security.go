@@ -27,10 +27,13 @@ type SecurityAssessment struct {
 	Installed string
 	Target    string
 	Status    SecurityStatus
+	// Impacts indique que l'analyse prête cite au moins un Impact conditionnel
+	// de mise à jour, quel que soit son statut de sécurité.
+	Impacts bool
 }
 
 // SecurityAssessments lit, pour chaque service Argus demandé, le statut de
-// sécurité de sa comparaison courante. Un service absent n'est pas renvoyé.
+// sécurité de sa comparaison courante et la présence d'impacts documentés. Un service absent n'est pas renvoyé.
 func (s *Store) SecurityAssessments(ctx context.Context, bindingIDs []string) (map[string]SecurityAssessment, error) {
 	result := make(map[string]SecurityAssessment, len(bindingIDs))
 	if len(bindingIDs) == 0 {
@@ -39,7 +42,10 @@ func (s *Store) SecurityAssessments(ctx context.Context, bindingIDs []string) (m
 	rows, err := s.pool.Query(ctx, `SELECT s.binding_id::text, s.installed_version, s.target_version, s.state,
  s.state = 'ready' AND EXISTS(SELECT 1 FROM cairnops_software_analyses a
    CROSS JOIN LATERAL jsonb_array_elements(coalesce(a.result->'overview','[]'::jsonb) || coalesce(a.result->'details','[]'::jsonb)) point
-   WHERE a.binding_id=s.binding_id AND a.revision=s.revision AND a.content_hash=s.content_hash AND point->>'category'='security')
+   WHERE a.binding_id=s.binding_id AND a.revision=s.revision AND a.content_hash=s.content_hash AND point->>'category'='security'),
+ s.state = 'ready' AND EXISTS(SELECT 1 FROM cairnops_software_analyses a
+   CROSS JOIN LATERAL jsonb_array_elements(coalesce(a.result->'overview','[]'::jsonb) || coalesce(a.result->'details','[]'::jsonb)) point
+   WHERE a.binding_id=s.binding_id AND a.revision=s.revision AND a.content_hash=s.content_hash AND point->>'category'='impact')
  FROM cairnops_software_services s WHERE s.binding_id::text = ANY($1::text[])`, bindingIDs)
 	if err != nil {
 		return nil, fmt.Errorf("read software security assessments: %w", err)
@@ -49,7 +55,7 @@ func (s *Store) SecurityAssessments(ctx context.Context, bindingIDs []string) (m
 		var id, state string
 		var assessment SecurityAssessment
 		var fixes bool
-		if err := rows.Scan(&id, &assessment.Installed, &assessment.Target, &state, &fixes); err != nil {
+		if err := rows.Scan(&id, &assessment.Installed, &assessment.Target, &state, &fixes, &assessment.Impacts); err != nil {
 			return nil, fmt.Errorf("scan software security assessment: %w", err)
 		}
 		assessment.Status = securityStatus(state, fixes)

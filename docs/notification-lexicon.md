@@ -26,6 +26,7 @@ ni de la Nature, ni du regroupement, ni des seuils, ni de la Gravité, ni des en
 | `system.reboot_required` | Redémarrage requis | Restart required |
 | `software.update_available` | Mise à jour logicielle disponible | Software update available |
 | `software.security_update_available` | Mise à jour de sécurité disponible | Security update available |
+| `software.major_update_available` | Mise à jour majeure disponible | Major update available |
 | `backup.failure` | Échec de sauvegarde | Backup failure |
 | `backup.freshness` | Sauvegarde trop ancienne | Outdated backup |
 

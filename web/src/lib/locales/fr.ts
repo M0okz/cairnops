@@ -1620,6 +1620,7 @@ export const fr = {
   'argus.openInstance': 'Ouvrir Argus',
   'nature.softwareUpdateAvailable': 'Mise à jour logicielle disponible',
   'nature.securityUpdateAvailable': 'Mise à jour de sécurité disponible',
+  'nature.majorUpdateAvailable': 'Mise à jour majeure disponible',
   /* ── Écran Connecteurs ───────────────────────────────────────────────── */
   'connectors.contract.zabbix':
     'Lecture des hôtes et déclencheurs, plus synchronisation limitée de l’Acquittement. Aucune autre écriture.',

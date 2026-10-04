@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/M0okz/cairnops/internal/alerttext"
 	"github.com/M0okz/cairnops/internal/connectors/argus"
 	"github.com/M0okz/cairnops/internal/connectors/patchmon"
 	"github.com/M0okz/cairnops/internal/connectors/uptimekuma"
@@ -15,6 +16,7 @@ import (
 	"github.com/M0okz/cairnops/internal/incidents"
 	"github.com/M0okz/cairnops/internal/secretbox"
 	"github.com/M0okz/cairnops/internal/softwareupdates"
+	"github.com/M0okz/cairnops/internal/versions"
 )
 
 type runtimeStore struct {
@@ -269,9 +271,46 @@ func TestArgusSynchronizerSignalsOnlyOrderedUpdates(t *testing.T) {
 	}
 }
 
-// Une mise à jour disponible n'est pas un problème : seule une faille corrigée,
-// établie par l'analyse des notes de la comparaison observée, ouvre une preuve.
-func TestArgusSynchronizerOpensIncidentsOnlyForSecurityFixes(t *testing.T) {
+// La matrice de Gravité des mises à jour : la sécurité l'emporte sur le niveau,
+// une mise à jour majeure reste une dette de version, et seul un Impact
+// conditionnel documenté la rend plus délicate.
+func TestArgusUpdateFindingAppliesTheSeverityMatrix(t *testing.T) {
+	t.Parallel()
+	security := softwareupdates.SecurityAssessment{Status: softwareupdates.SecurityFixes}
+	plain := softwareupdates.SecurityAssessment{Status: softwareupdates.SecurityNotEstablished}
+	withImpacts := func(assessment softwareupdates.SecurityAssessment) softwareupdates.SecurityAssessment {
+		assessment.Impacts = true
+		return assessment
+	}
+	for _, test := range []struct {
+		level    versions.Level
+		security softwareupdates.SecurityAssessment
+		opens    bool
+		nature   string
+		severity incidents.Severity
+	}{
+		{versions.Patch, plain, false, "", ""},
+		{versions.Minor, plain, false, "", ""},
+		{versions.Patch, withImpacts(plain), false, "", ""},
+		{versions.Minor, withImpacts(plain), false, "", ""},
+		{versions.Major, plain, true, "software-major-update-available", incidents.SeverityInformation},
+		{versions.Major, withImpacts(plain), true, "software-major-update-available", incidents.SeverityWarning},
+		{versions.Patch, security, true, "software-security-update-available", incidents.SeverityMajor},
+		{versions.Minor, security, true, "software-security-update-available", incidents.SeverityMajor},
+		{versions.Major, security, true, "software-security-update-available", incidents.SeverityMajor},
+		{versions.Major, withImpacts(security), true, "software-security-update-available", incidents.SeverityMajor},
+	} {
+		finding, opens := argusUpdateFinding(test.level, test.security)
+		if opens != test.opens || finding.natureKey != test.nature || finding.severity != test.severity {
+			t.Errorf("%s, sécurité %s, impacts %v : obtenu %v %q %q, attendu %v %q %q", test.level, test.security.Status, test.security.Impacts,
+				opens, finding.natureKey, finding.severity, test.opens, test.nature, test.severity)
+		}
+	}
+}
+
+// Une mise à jour disponible n'est pas un problème : seule une faille corrigée
+// ou un changement majeur, établis sur la comparaison observée, ouvrent une preuve.
+func TestArgusSynchronizerOpensIncidentsOnlyForSecurityFixesAndMajorUpdates(t *testing.T) {
 	t.Parallel()
 	box, _ := secretbox.New(bytes.Repeat([]byte{0x4d}, 32))
 	credential, _ := json.Marshal(argus.Credentials{})
@@ -282,6 +321,8 @@ func TestArgusSynchronizerOpensIncidentsOnlyForSecurityFixes(t *testing.T) {
 		{ID: "analysing", DeployedVersion: "3.0.0", LatestVersion: "3.1.0"},
 		{ID: "stale", DeployedVersion: "4.0.0", LatestVersion: "4.2.0"},
 		{ID: "untracked", DeployedVersion: "5.0.0", LatestVersion: "5.1.0"},
+		{ID: "major", DeployedVersion: "6.0.0", LatestVersion: "7.0.0"},
+		{ID: "breaking", DeployedVersion: "8.0.0", LatestVersion: "9.0.0"},
 	}
 	bindings := make([]RuntimeBinding, 0, len(services))
 	for index := range services {
@@ -298,23 +339,34 @@ func TestArgusSynchronizerOpensIncidentsOnlyForSecurityFixes(t *testing.T) {
 		"binding-secure":    {Installed: "2.0.0", Target: "2.0.1", Status: softwareupdates.SecurityFixes},
 		"binding-analysing": {Installed: "3.0.0", Target: "3.1.0", Status: softwareupdates.SecurityPending},
 		// Verdict d'une comparaison précédente : il ne vaut pas pour 4.2.0.
-		"binding-stale": {Installed: "4.0.0", Target: "4.1.0", Status: softwareupdates.SecurityFixes},
+		"binding-stale":    {Installed: "4.0.0", Target: "4.1.0", Status: softwareupdates.SecurityFixes},
+		"binding-major":    {Installed: "6.0.0", Target: "7.0.0", Status: softwareupdates.SecurityNotEstablished},
+		"binding-breaking": {Installed: "8.0.0", Target: "9.0.0", Status: softwareupdates.SecurityNotEstablished, Impacts: true},
 	}, box, "server-one", nil)
 	if err := synchronizer.tick(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(reconciler.argusInput.Signals) != 1 {
-		t.Fatalf("only the security fix may open an incident: %#v", reconciler.argusInput.Signals)
+	signals := map[string]incidents.ArgusSignal{}
+	for _, signal := range reconciler.argusInput.Signals {
+		signals[signal.BindingID] = signal
 	}
-	signal := reconciler.argusInput.Signals[0]
-	if signal.BindingID != "binding-secure" || signal.NatureKey != "software-security-update-available" || signal.NatureLabel != "Mise à jour de sécurité disponible" || signal.Severity != incidents.SeverityMajor {
+	if len(signals) != 3 {
+		t.Fatalf("only the security fix and the major updates may open an incident: %#v", reconciler.argusInput.Signals)
+	}
+	if signal := signals["binding-secure"]; signal.NatureKey != "software-security-update-available" || signal.NatureLabel != "Mise à jour de sécurité disponible" || signal.Alert != alerttext.SoftwareSecurityUpdate || signal.Severity != incidents.SeverityMajor {
 		t.Fatalf("unexpected security update signal: %#v", signal)
+	}
+	if signal := signals["binding-major"]; signal.NatureKey != "software-major-update-available" || signal.NatureLabel != "Mise à jour majeure disponible" || signal.Alert != alerttext.SoftwareMajorUpdate || signal.Severity != incidents.SeverityInformation {
+		t.Fatalf("unexpected major update signal: %#v", signal)
+	}
+	if signal := signals["binding-breaking"]; signal.NatureKey != "software-major-update-available" || signal.Severity != incidents.SeverityWarning || signal.Details["impacts"] != true {
+		t.Fatalf("a documented impact must raise a major update to a warning: %#v", signal)
 	}
 	observed := map[string]bool{}
 	for _, binding := range reconciler.argusInput.ObservedBindings {
 		observed[binding] = true
 	}
-	for binding, want := range map[string]bool{"binding-plain": true, "binding-secure": true, "binding-analysing": false, "binding-stale": false, "binding-untracked": true} {
+	for binding, want := range map[string]bool{"binding-plain": true, "binding-secure": true, "binding-analysing": false, "binding-stale": false, "binding-untracked": true, "binding-major": true, "binding-breaking": true} {
 		if observed[binding] != want {
 			t.Errorf("%s observed = %v, want %v: an analysis in progress must neither open nor resolve", binding, observed[binding], want)
 		}
@@ -328,6 +380,9 @@ func TestArgusSynchronizerOpensIncidentsOnlyForSecurityFixes(t *testing.T) {
 	}
 	if got := outcomes["binding-secure"]; got.Outcome != "unhealthy" || got.Reason != "argus_security_update_available" {
 		t.Errorf("a security fix must be reported as needing attention: %#v", got)
+	}
+	if got := outcomes["binding-major"]; got.Outcome != "healthy" || got.Reason != "argus_major_update_available" {
+		t.Errorf("a major update is version debt, not a failure: %#v", got)
 	}
 	if !store.completed || store.failed != "" {
 		t.Fatalf("security qualification does not degrade the connector: %#v", store)

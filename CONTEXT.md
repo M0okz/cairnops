@@ -341,9 +341,13 @@ Contexte d'un Incident survenu pendant une Fenêtre de maintenance, indiquant qu
 _Éviter_ : Résolu, ignoré
 
 **Mise à jour disponible** :
-Indication qu’une version logicielle proposée pour une Ressource est plus récente que sa version installée et au moins aussi stable qu’elle. Une préversion proposée à une installation stable, une cible antérieure à l’installation ou des versions impossibles à ordonner ne constituent pas une mise à jour disponible et restent à vérifier. Cette indication reste distincte de son état de fonctionnement : un service dont le fonctionnement normal est établi reste Disponible lorsqu’une mise à jour est disponible. Elle n’ouvre pas d’Incident, sauf Mise à jour de sécurité disponible.
+Indication qu’une version logicielle proposée pour une Ressource est plus récente que sa version installée et au moins aussi stable qu’elle. Une préversion proposée à une installation stable, une cible antérieure à l’installation ou des versions impossibles à ordonner ne constituent pas une mise à jour disponible et restent à vérifier. Cette indication reste distincte de son état de fonctionnement : un service dont le fonctionnement normal est établi reste Disponible lorsqu’une mise à jour est disponible. Elle n’ouvre pas d’Incident, sauf Mise à jour de sécurité disponible ou Mise à jour majeure disponible.
 _Éviter_ : Version différente, fonctionnement dégradé, indisponibilité
 
 **Mise à jour de sécurité disponible** :
-Mise à jour disponible dont les notes officielles de la comparaison observée citent la correction d’une faille de sécurité. Elle ouvre un Incident tant qu’elle n’est pas appliquée ou ignorée dans Argus.
+Mise à jour disponible dont les notes officielles de la comparaison observée citent la correction d’une faille de sécurité. Elle ouvre un Incident de Gravité Majeur, quelle que soit l’ampleur du changement de version, tant qu’elle n’est pas appliquée ou ignorée dans Argus.
 _Éviter_ : Mise à jour recommandée, mise à jour majeure
+
+**Mise à jour majeure disponible** :
+Mise à jour disponible qui change la première composante de la version installée et dont les notes officielles ne citent aucune faille corrigée. Elle constitue une dette de version : elle ouvre un Incident de Gravité Information, ou Avertissement lorsque les notes documentent un Impact conditionnel de mise à jour, sans altérer l’état de fonctionnement de la Ressource. Une mise à jour mineure ou corrective sans faille corrigée n’ouvre pas d’Incident, même accompagnée d’un impact.
+_Éviter_ : Mise à jour de sécurité, changement cassant confirmé, fonctionnement dégradé

@@ -1609,6 +1609,7 @@ export const en: Record<MessageKey, string> = {
   'argus.openInstance': 'Open Argus',
   'nature.softwareUpdateAvailable': 'Software update available',
   'nature.securityUpdateAvailable': 'Security update available',
+  'nature.majorUpdateAvailable': 'Major update available',
   /* ── Connectors screen ───────────────────────────────────────────────── */
   'connectors.contract.zabbix':
     'Reads hosts and triggers, plus limited Acknowledgement synchronisation. No other write.',

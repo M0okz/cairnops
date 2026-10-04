@@ -213,6 +213,8 @@ type ArgusSignal struct {
 	ExternalService string
 	NatureKey       string
 	NatureLabel     string
+	// Alert est la condition reconnue : mise à jour de sécurité ou majeure.
+	Alert           alerttext.Kind
 	Name            string
 	Severity        Severity
 	DeployedVersion string

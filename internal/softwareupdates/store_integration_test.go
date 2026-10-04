@@ -276,7 +276,7 @@ func TestSecurityAssessmentFollowsTheCurrentComparison(t *testing.T) {
 	w := NewWorker(s, slog.Default())
 	w.client = &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
 		if r.Method == "POST" {
-			return response(`{"choices":[{"finish_reason":"stop","message":{"content":"{\"overview\":[{\"category\":\"security\",\"text\":\"Correction d'une injection SQL\",\"evidence_id\":\"e1\"}],\"details\":[]}"}}]}`), nil
+			return response(`{"choices":[{"finish_reason":"stop","message":{"content":"{\"overview\":[{\"category\":\"security\",\"text\":\"Correction d'une injection SQL\",\"evidence_id\":\"e1\"},{\"category\":\"impact\",\"text\":\"Vérifier les requêtes SQL personnalisées\",\"evidence_id\":\"e1\"}],\"details\":[]}"}}]}`), nil
 		}
 		if strings.HasSuffix(r.URL.Path, "/tags") {
 			return response(`[]`), nil
@@ -286,8 +286,8 @@ func TestSecurityAssessmentFollowsTheCurrentComparison(t *testing.T) {
 	if err := w.tick(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if got := assessment(); got.Status != SecurityFixes {
-		t.Fatalf("a cited security point must establish a security fix: %+v", got)
+	if got := assessment(); got.Status != SecurityFixes || !got.Impacts {
+		t.Fatalf("a cited security point and impact must both be established: %+v", got)
 	}
 	// Une nouvelle cible invalide le verdict jusqu'à l'analyse de sa comparaison.
 	if _, err := s.pool.Exec(ctx, `UPDATE cairnops_connector_bindings SET metadata=metadata||'{"latest_version":"2.10.0"}' WHERE id=$1::uuid`, id); err != nil {
@@ -303,7 +303,7 @@ func TestSecurityAssessmentFollowsTheCurrentComparison(t *testing.T) {
 	if err := w.tick(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if got := assessment(); got.Status != SecurityNotEstablished {
-		t.Fatalf("an up-to-date service has no pending security fix: %+v", got)
+	if got := assessment(); got.Status != SecurityNotEstablished || got.Impacts {
+		t.Fatalf("an up-to-date service has no pending security fix nor impact: %+v", got)
 	}
 }
