@@ -18,6 +18,7 @@
   import SoftwareAISettings from '$lib/components/SoftwareAISettings.svelte';
   import OIDCSettings from '$lib/components/OIDCSettings.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import { Tabs } from 'bits-ui';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Account, type Role } from '$lib/api';
   import { i18n, locales, plural, t } from '$lib/i18n.svelte';
@@ -55,23 +56,6 @@
   function selectTab(tab: SettingsTab) {
     activeSection = tab;
     if (location.hash) history.replaceState(history.state, '', location.pathname + location.search);
-  }
-
-  function handleTabKeydown(event: KeyboardEvent) {
-    const focusedTab = (event.target as HTMLElement).closest<HTMLButtonElement>('[role="tab"]');
-    if (!focusedTab) return;
-    const current = focusedTab.dataset.tab as SettingsTab;
-    const index = availableTabs.indexOf(current);
-    let next = index;
-    if (event.key === 'ArrowRight') next = (index + 1) % availableTabs.length;
-    else if (event.key === 'ArrowLeft') next = (index - 1 + availableTabs.length) % availableTabs.length;
-    else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = availableTabs.length - 1;
-    else return;
-    event.preventDefault();
-    const tab = availableTabs[next];
-    selectTab(tab);
-    document.getElementById(`settings-tab-${tab}`)?.focus();
   }
 
   function exportConfiguration() {
@@ -342,18 +326,25 @@
       <p>{t('settings.lead')}</p>
     </div>
   </div>
-  <div class="settings-tabs" role="tablist" aria-label={t('settings.sections')} tabindex="-1" onkeydown={handleTabKeydown}>
-    <button id="settings-tab-general" data-tab="general" role="tab" type="button" aria-selected={activeSection === 'general'} aria-controls="settings-panel-general" tabindex={activeSection === 'general' ? 0 : -1} class:active={activeSection === 'general'} onclick={() => selectTab('general')}><Icon name="settings" size={14} />{t('settings.general')}</button>
-    <button id="settings-tab-connectors" data-tab="connectors" role="tab" type="button" aria-selected={activeSection === 'connectors'} aria-controls="settings-panel-connectors" tabindex={activeSection === 'connectors' ? 0 : -1} class:active={activeSection === 'connectors'} onclick={() => selectTab('connectors')}><Icon name="connectors" size={14} />{t('nav.connectors')}</button>
-    <button id="settings-tab-account" data-tab="account" role="tab" type="button" aria-selected={activeSection === 'account'} aria-controls="settings-panel-account" tabindex={activeSection === 'account' ? 0 : -1} class:active={activeSection === 'account'} onclick={() => selectTab('account')}><Icon name="user" size={14} />{t('settings.yourAccount')}</button>
-    <button id="settings-tab-devices" data-tab="devices" role="tab" type="button" aria-selected={activeSection === 'devices'} aria-controls="settings-panel-devices" tabindex={activeSection === 'devices' ? 0 : -1} class:active={activeSection === 'devices'} onclick={() => selectTab('devices')}><Icon name="devices" size={14} />{t('devices.title')}</button>
-    {#if isAdministrator}
-      <button id="settings-tab-ai" data-tab="ai" role="tab" type="button" aria-selected={activeSection === 'ai'} aria-controls="settings-panel-ai" tabindex={activeSection === 'ai' ? 0 : -1} class:active={activeSection === 'ai'} onclick={() => selectTab('ai')}><Icon name="activity" size={14} />{t('settings.aiTab')}</button>
-      <button id="settings-tab-advanced" data-tab="advanced" role="tab" type="button" aria-selected={activeSection === 'advanced'} aria-controls="settings-panel-advanced" tabindex={activeSection === 'advanced' ? 0 : -1} class:active={activeSection === 'advanced'} onclick={() => selectTab('advanced')}><Icon name="health" size={14} />{t('settings.advanced')}</button>
-    {/if}
-  </div>
+  <Tabs.Root bind:value={() => activeSection, (tab) => selectTab(tab as SettingsTab)}>
+  <Tabs.List>
+    {#snippet child({ props })}
+      <div {...props} class="settings-tabs" aria-label={t('settings.sections')}>
+        <Tabs.Trigger value="general">{#snippet child({ props })}<button {...props} type="button"><Icon name="settings" size={14} />{t('settings.general')}</button>{/snippet}</Tabs.Trigger>
+        <Tabs.Trigger value="connectors">{#snippet child({ props })}<button {...props} type="button"><Icon name="connectors" size={14} />{t('nav.connectors')}</button>{/snippet}</Tabs.Trigger>
+        <Tabs.Trigger value="account">{#snippet child({ props })}<button {...props} type="button"><Icon name="user" size={14} />{t('settings.yourAccount')}</button>{/snippet}</Tabs.Trigger>
+        <Tabs.Trigger value="devices">{#snippet child({ props })}<button {...props} type="button"><Icon name="devices" size={14} />{t('devices.title')}</button>{/snippet}</Tabs.Trigger>
+        {#if isAdministrator}
+          <Tabs.Trigger value="ai">{#snippet child({ props })}<button {...props} type="button"><Icon name="activity" size={14} />{t('settings.aiTab')}</button>{/snippet}</Tabs.Trigger>
+          <Tabs.Trigger value="advanced">{#snippet child({ props })}<button {...props} type="button"><Icon name="health" size={14} />{t('settings.advanced')}</button>{/snippet}</Tabs.Trigger>
+        {/if}
+      </div>
+    {/snippet}
+  </Tabs.List>
 
-  <div id="settings-panel-general" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-general" tabindex="0" hidden={activeSection !== 'general'}>
+  <Tabs.Content value="general">
+    {#snippet child({ props })}
+      <div {...props} class="settings-layout">
   <section id="general" class="card general-card" aria-labelledby="general-title">
     <header class="settings-card-head">
       <span class="settings-icon"><Icon name="settings" size={18} /></span>
@@ -436,9 +427,13 @@
     <div class="aside-block"><span class="settings-icon"><Icon name="book" size={16} /></span><div><strong>{t('settings.help')}</strong><p>{t('settings.helpHint')}</p><a class="btn sm" href="https://github.com/M0okz/cairnops#readme" target="_blank" rel="noopener noreferrer">{t('settings.documentation')} ↗</a></div></div>
     <div class="aside-block"><span class="settings-icon"><Icon name="changelog" size={16} /></span><div><strong>{t('settings.export')}</strong><button class="btn sm" type="button" onclick={exportConfiguration}>{t('settings.exportJSON')}</button></div></div>
   </aside>
-  </div>
+      </div>
+    {/snippet}
+  </Tabs.Content>
 
-  <div id="settings-panel-connectors" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-connectors" tabindex="0" hidden={activeSection !== 'connectors'}>
+  <Tabs.Content value="connectors">
+    {#snippet child({ props })}
+      <div {...props} class="settings-layout">
   <section id="connectors" class="card status-card" aria-labelledby="connectors-title">
     <header class="settings-card-head"><span class="settings-icon"><Icon name="connectors" size={18} /></span><span><h2 id="connectors-title">{t('settings.statusConnectors')}</h2><small>{t('settings.statusConnectorsHint')}</small></span></header>
     <div class="status-grid">
@@ -448,9 +443,13 @@
       <a class="btn sm" href="/connecteurs">{t('settings.manageConnectors')} →</a>
     </div>
   </section>
-  </div>
+      </div>
+    {/snippet}
+  </Tabs.Content>
 
-  <div id="settings-panel-account" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-account" tabindex="0" hidden={activeSection !== 'account'}>
+  <Tabs.Content value="account">
+    {#snippet child({ props })}
+      <div {...props} class="settings-layout">
   <section id="account" class="card account-card" aria-labelledby="account-title">
     <header class="settings-card-head"><span class="settings-icon"><Icon name="user" size={18} /></span><span><h2 id="account-title">{t('settings.yourAccount')}</h2><small>{t('settings.accountHint')}</small></span></header>
     <div class="row">
@@ -517,18 +516,30 @@
       </div>
     {/if}
   </section>
-  </div>
+      </div>
+    {/snippet}
+  </Tabs.Content>
 
-  <div id="settings-panel-devices" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-devices" tabindex="0" hidden={activeSection !== 'devices'}>
+  <Tabs.Content value="devices">
+    {#snippet child({ props })}
+      <div {...props} class="settings-layout">
   <div id="devices" class="settings-section"><DeviceManagement /></div>
-  </div>
+      </div>
+    {/snippet}
+  </Tabs.Content>
 
   {#if isAdministrator}
-    <div id="settings-panel-ai" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-ai" tabindex="0" hidden={activeSection !== 'ai'}>
+    <Tabs.Content value="ai">
+      {#snippet child({ props })}
+        <div {...props} class="settings-layout">
       <div id="ai" class="settings-section"><SoftwareAISettings /></div>
-    </div>
+        </div>
+      {/snippet}
+    </Tabs.Content>
 
-    <div id="settings-panel-advanced" class="settings-layout" role="tabpanel" aria-labelledby="settings-tab-advanced" tabindex="0" hidden={activeSection !== 'advanced'}>
+    <Tabs.Content value="advanced">
+      {#snippet child({ props })}
+        <div {...props} class="settings-layout">
     {#if isLocalAdministrator}
       <div id="advanced" class="settings-section"><OIDCSettings /></div>
     {/if}
@@ -645,8 +656,11 @@
       </div>
     </div>
     </section>
-    </div>
+        </div>
+      {/snippet}
+    </Tabs.Content>
   {/if}
+  </Tabs.Root>
 </div>
 
 {#if creating}
@@ -712,7 +726,7 @@
   .settings-tabs::-webkit-scrollbar { display: none; }
   .settings-tabs button { display: inline-flex; align-items: center; gap: var(--s2); flex: none; min-height: 2.75rem; padding: 0 var(--s3); border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--faint); font-size: var(--text-sm); font-weight: 500; white-space: nowrap; }
   .settings-tabs button:hover, .settings-tabs button:focus-visible { color: var(--ink); }
-  .settings-tabs button.active { border-bottom-color: var(--ink); color: var(--ink); }
+  .settings-tabs button[data-state='active'] { border-bottom-color: var(--ink); color: var(--ink); }
   .settings-layout { display: grid; grid-template-columns: minmax(0, 1fr) 18rem; align-items: start; gap: var(--s4); }
   .settings-layout[hidden] { display: none; }
   .settings-layout > :not(.general-card):not(.settings-aside) { grid-column: 1 / -1; }

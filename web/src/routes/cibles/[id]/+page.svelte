@@ -14,6 +14,7 @@
   import Odometer from '$lib/components/Odometer.svelte';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import { Tabs } from 'bits-ui';
   import MaintenanceWorkshop from '$lib/components/MaintenanceWorkshop.svelte';
   import TargetIndicators from '$lib/components/TargetIndicators.svelte';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
@@ -393,24 +394,29 @@
       </div>
     </div>
 
-    <div class="tabs" role="tablist">
-      {#each [
-        ['view', t('target.tab.view')],
-        ['sources', t('targets.column.sources')],
-        ['checks', t('target.tab.checks')],
-        ['log', t('target.tab.log')],
-        ['updates', t('updates.title')],
-        ['settings', t('nav.settings')]
-      ] as [value, label] (value)}
-        <button
-          role="tab"
-          type="button"
-          aria-selected={tab === value}
-          onclick={() => (tab = value as Tab)}
-        >{label}</button>
-      {/each}
-    </div>
+    <Tabs.Root bind:value={() => tab, (value) => (tab = value as Tab)}>
+    <Tabs.List>
+      {#snippet child({ props })}
+        <div {...props} class="tabs">
+          {#each [
+            ['view', t('target.tab.view')],
+            ['sources', t('targets.column.sources')],
+            ['checks', t('target.tab.checks')],
+            ['log', t('target.tab.log')],
+            ['updates', t('updates.title')],
+            ['settings', t('nav.settings')]
+          ] as [value, label] (value)}
+            <Tabs.Trigger {value}>
+              {#snippet child({ props })}<button {...props} type="button">{label}</button>{/snippet}
+            </Tabs.Trigger>
+          {/each}
+        </div>
+      {/snippet}
+    </Tabs.List>
 
+    <Tabs.Content value={tab}>
+      {#snippet child({ props })}
+      <div {...props} class="tab-panel">
     {#if tab === 'view'}
       {#if lead}
         <div class="banner {severityTone(leadImpact?.effective_severity ?? lead.severity)}">
@@ -944,6 +950,10 @@
         </div>
       </div>
     {/if}
+      </div>
+      {/snippet}
+    </Tabs.Content>
+    </Tabs.Root>
   </div>
 {/if}
 
@@ -1070,6 +1080,8 @@
     flex-wrap: wrap;
   }
 
+  .tab-panel:focus-visible { outline: 2px solid var(--accent); outline-offset: var(--s2); border-radius: var(--r-m); }
+
   .tabs {
     display: flex;
     gap: var(--s5);
@@ -1097,7 +1109,7 @@
     color: var(--ink);
   }
 
-  .tabs button[aria-selected='true'] {
+  .tabs button[data-state='active'] {
     border-bottom-color: var(--accent);
     color: var(--ink);
   }
