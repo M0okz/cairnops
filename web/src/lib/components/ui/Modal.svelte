@@ -37,17 +37,18 @@
    *
    * Le parent garde la main sur l'ouverture : il monte la modale, et `onclose`
    * lui demande de la retirer. `dismissible` à faux suspend Échap et le clic
-   * sur le voile, le temps qu'une écriture en cours se termine. `side` ancre
-   * la boîte à droite, pour les volets de détail. */
+   * sur le voile, le temps qu'une écriture en cours se termine. `placement`
+   * cale la boîte en haut (une recherche dont la hauteur varie à chaque
+   * frappe) ou à droite (les volets de détail). */
 
   let {
-    side = false,
+    placement = 'center',
     dismissible = true,
     onclose,
     onInteractOutside,
     children
   }: {
-    side?: boolean;
+    placement?: 'center' | 'top' | 'side';
     dismissible?: boolean;
     onclose: () => void;
     /** Appelé avant la fermeture par un clic hors de la boîte ; `preventDefault` la retient. */
@@ -80,7 +81,7 @@
       <!-- Bits laisse ces deux réglages dans les attributs : ils n'ont rien à
            faire dans le DOM. -->
       {@const { escapeKeydownBehavior: _escape, interactOutsideBehavior: _outside, ...dialog } = props}
-      <div class="scrim" class:side>
+      <div class="scrim" class:top={placement === 'top'} class:side={placement === 'side'}>
         {@render children(dialog)}
       </div>
     {/snippet}

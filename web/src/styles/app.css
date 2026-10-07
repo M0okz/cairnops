@@ -1226,9 +1226,18 @@ a.trow:hover .caret {
 
 /* La Palette se cale haut plutôt qu'au centre : sa hauteur change à chaque
  * frappe, et un panneau centré ferait sauter le champ sous les doigts. */
-.palette-scrim {
+.scrim.top {
   place-items: safe start center;
   padding-top: 12vh;
+}
+
+/* La racine du Command relaie la colonne de la Palette jusqu'à ses résultats,
+ * seuls à défiler. */
+.palette-command {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .palette {
@@ -1520,7 +1529,7 @@ a.trow:hover .caret {
     width: 100%;
   }
 
-  .palette-scrim {
+  .scrim.top {
     padding-top: var(--s5);
   }
 }

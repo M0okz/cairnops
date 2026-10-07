@@ -12,7 +12,9 @@
    * autre composant. */
 
   import { goto } from '$app/navigation';
+  import { Command } from 'bits-ui';
   import Icon, { type IconName } from './Icon.svelte';
+  import Modal from './ui/Modal.svelte';
   import { incidentHref } from '$lib/incident-detail';
   import { palette } from '$lib/palette.svelte';
   import { session } from '$lib/session.svelte';
@@ -46,9 +48,6 @@
   ]);
 
   let raw = $state('');
-  let cursor = $state(0);
-  let field = $state<HTMLInputElement | null>(null);
-  let list = $state<HTMLDivElement | null>(null);
 
   /* On compare sans accents ni casse : « sante » doit trouver « Santé », et
    * personne ne tape les diacritiques dans un champ de recherche. */
@@ -217,35 +216,10 @@
     return [targets, incidents, maintenances, connectors, places].filter((group) => group.hits.length > 0);
   });
 
-  /* La liste aplatie est ce que parcourent les flèches ; les familles ne sont
-   * qu'une mise en forme. */
-  const flat = $derived(groups.flatMap((group) => group.hits));
-
+  /* Chaque ouverture repart d'un champ vide. */
   $effect(() => {
-    /* Toute nouvelle frappe ramène la sélection en tête : la meilleure
-     * réponse est toujours celle du haut. */
-    void query;
-    cursor = 0;
+    if (palette.open) raw = '';
   });
-
-  $effect(() => {
-    if (cursor > flat.length - 1) cursor = Math.max(0, flat.length - 1);
-  });
-
-  $effect(() => {
-    if (!palette.open) return;
-    raw = '';
-    cursor = 0;
-    field?.focus();
-  });
-
-  function move(step: number) {
-    if (flat.length === 0) return;
-    cursor = (cursor + step + flat.length) % flat.length;
-    list
-      ?.querySelector(`[data-index="${cursor}"]`)
-      ?.scrollIntoView({ block: 'nearest' });
-  }
 
   function choose(hit: Hit | undefined) {
     if (!hit) return;
@@ -259,101 +233,68 @@
       palette.toggle();
     }
   }
-
-  function steer(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      palette.hide();
-    } else if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      move(1);
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      move(-1);
-    } else if (event.key === 'Enter') {
-      event.preventDefault();
-      choose(flat[cursor]);
-    }
-  }
 </script>
 
 <svelte:window onkeydown={shortcut} />
 
 {#if palette.open}
-  <!-- Le fond ferme la Palette au clic ; le clavier a déjà Échap, ce fond n'a
-       donc pas à être atteignable au clavier. -->
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="scrim palette-scrim" onclick={() => palette.hide()}>
-    <div
-      class="palette"
-      role="dialog"
-      tabindex="-1"
-      aria-modal="true"
-      aria-label={t('palette.title')}
-      onclick={(event) => event.stopPropagation()}
-    >
-      <div class="palette-field">
-        <Icon name="search" />
-        <input
-          bind:this={field}
-          bind:value={raw}
-          type="text"
-          role="combobox"
-          aria-expanded="true"
-          aria-controls="palette-results"
-          aria-activedescendant={flat[cursor] ? `palette-hit-${cursor}` : undefined}
-          aria-label={t('palette.fieldLabel')}
-          placeholder={t('palette.placeholder')}
-          autocomplete="off"
-          spellcheck="false"
-          onkeydown={steer}
-        />
-        <kbd>{t('key.escape')}</kbd>
-      </div>
-
-      <div class="palette-results" id="palette-results" role="listbox" bind:this={list}>
-        {#each groups as group (group.key)}
-          <div class="palette-group">
-            <p class="palette-group-head">
-              <Icon name={group.icon} size={12} />
-              {group.label}
-            </p>
-            {#each group.hits as hit (hit.key)}
-              {@const index = flat.indexOf(hit)}
-              <button
-                class="palette-hit"
-                type="button"
-                role="option"
-                id="palette-hit-{index}"
-                data-index={index}
-                aria-selected={index === cursor}
-                onmouseenter={() => (cursor = index)}
-                onclick={() => choose(hit)}
-              >
-                <span class="palette-hit-text">
-                  <strong>{hit.label}</strong>
-                  {#if hit.detail}<small>{hit.detail}</small>{/if}
-                </span>
-                {#if hit.badge}
-                  <span class="pill {hit.tone ?? ''}">{hit.badge}</span>
-                {/if}
-              </button>
-            {/each}
+  <!-- Le Command de Bits UI porte le combobox, la navigation aux flèches et
+       l'option active ; le classement reste celui de la Palette, d'où
+       shouldFilter à faux. La meilleure réponse est sélectionnée à chaque
+       frappe. -->
+  <Modal placement="top" onclose={() => palette.hide()}>
+    {#snippet children(dialog)}
+      <div {...dialog} class="palette" aria-label={t('palette.title')}>
+        <Command.Root class="palette-command" shouldFilter={false} loop label={t('palette.title')}>
+          <div class="palette-field">
+            <Icon name="search" />
+            <Command.Input
+              bind:value={raw}
+              aria-label={t('palette.fieldLabel')}
+              placeholder={t('palette.placeholder')}
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <kbd>{t('key.escape')}</kbd>
           </div>
-        {:else}
-          <div class="palette-empty">
-            <strong>{t('palette.empty', { query: raw.trim() })}</strong>
-            {t('palette.emptyHint')}
-          </div>
-        {/each}
-      </div>
 
-      <footer class="palette-foot">
-        <span><kbd>↑</kbd><kbd>↓</kbd> {t('palette.browse')}</span>
-        <span><kbd>↵</kbd> {t('palette.select')}</span>
-        <span><kbd>{t('key.escape')}</kbd> {t('common.close')}</span>
-      </footer>
-    </div>
-  </div>
+          <Command.List class="palette-results">
+            <Command.Viewport>
+              {#each groups as group (group.key)}
+                <Command.Group class="palette-group" value={group.key}>
+                  <Command.GroupHeading class="palette-group-head">
+                    <Icon name={group.icon} size={12} />
+                    {group.label}
+                  </Command.GroupHeading>
+                  <Command.GroupItems>
+                    {#each group.hits as hit (hit.key)}
+                      <Command.Item class="palette-hit" value={hit.key} onSelect={() => choose(hit)}>
+                        <span class="palette-hit-text">
+                          <strong>{hit.label}</strong>
+                          {#if hit.detail}<small>{hit.detail}</small>{/if}
+                        </span>
+                        {#if hit.badge}
+                          <span class="pill {hit.tone ?? ''}">{hit.badge}</span>
+                        {/if}
+                      </Command.Item>
+                    {/each}
+                  </Command.GroupItems>
+                </Command.Group>
+              {/each}
+              <Command.Empty class="palette-empty">
+                <strong>{t('palette.empty', { query: raw.trim() })}</strong>
+                {t('palette.emptyHint')}
+              </Command.Empty>
+            </Command.Viewport>
+          </Command.List>
+        </Command.Root>
+
+        <footer class="palette-foot">
+          <span><kbd>↑</kbd><kbd>↓</kbd> {t('palette.browse')}</span>
+          <span><kbd>↵</kbd> {t('palette.select')}</span>
+          <span><kbd>{t('key.escape')}</kbd> {t('common.close')}</span>
+        </footer>
+      </div>
+    {/snippet}
+  </Modal>
 {/if}

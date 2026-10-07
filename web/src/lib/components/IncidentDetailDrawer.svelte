@@ -409,7 +409,7 @@
 {/snippet}
 
 <Modal
-  side
+  placement="side"
   onclose={requestDismiss}
   onInteractOutside={(event) => { if (invalidationFor) event.preventDefault(); }}
 >

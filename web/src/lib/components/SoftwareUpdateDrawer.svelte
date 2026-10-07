@@ -9,7 +9,7 @@
   let { service, onclose }: { service: SoftwareService; onclose: () => void } = $props();
 </script>
 
-<Modal side {onclose}>
+<Modal placement="side" {onclose}>
   {#snippet children(dialog)}
     <div {...dialog} class="software-drawer" aria-labelledby="software-drawer-title">
       <header class="drawer-head">
