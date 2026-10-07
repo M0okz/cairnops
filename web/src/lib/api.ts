@@ -139,6 +139,8 @@ export type Target = {
   category?: ResourceCategory;
   suggested_category?: ResourceCategory;
   category_manual?: boolean;
+  /** Ressource hôte attestée par un inventaire ; absente faute de preuve. */
+  host?: { id: string; name: string };
   health_state?: ResourceHealthState;
   health_evaluated_at?: string;
   id: string;

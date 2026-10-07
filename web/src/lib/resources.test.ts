@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Target, Incident, IncidentEvidence, Maintenance } from './api.ts';
 // @ts-ignore -- Node executes tests directly with its TypeScript loader.
-import { resourceCategoryFromParam, resourceState, resourceProblems, resourceDivergence, resourceUnderMaintenance, problemText } from './resources.ts';
+import { groupResources, inResourceView, resourceViewFromParam, resourceFamily, resourceCategoryFromParam, resourceState, resourceProblems, resourceDivergence, resourceUnderMaintenance, problemText } from './resources.ts';
 
 test('accepts only known category links', () => {
  assert.equal(resourceCategoryFromParam('infrastructure'), 'infrastructure');
@@ -103,4 +103,37 @@ test('a partial or cached maintenance list keeps known windows and a bounded fal
  assert.equal(resourceUnderMaintenance('outside-page', [missing], now + 60_001, truncated, false), false);
  // A successful complete empty list still establishes an early cancellation.
  assert.equal(resourceUnderMaintenance('outside-page', [missing], now, [], true), false);
+});
+
+test('ranges categories into families and keeps versions apart', () => {
+ assert.equal(resourceFamily('virtual_machine'), 'infrastructure');
+ assert.equal(resourceFamily('application'), 'services');
+ assert.equal(resourceFamily('software'), undefined);
+ assert.equal(inResourceView('unclassified', 'all'), true);
+ assert.equal(inResourceView('software', 'all'), false);
+ assert.equal(inResourceView('software', 'software'), true);
+ assert.equal(inResourceView('storage', 'services'), false);
+ assert.equal(resourceViewFromParam('services'), 'services');
+ assert.equal(resourceViewFromParam('toString'), 'all');
+ assert.equal(resourceViewFromParam(null), 'all');
+});
+
+const resource = (id: string, rank: number, extra: Partial<Target> = {}) => ({ target: { ...target, id, name: id, ...extra }, rank });
+const pve = { id: 'pve-01', name: 'pve-01' };
+
+test('groups resources under the Ressource hôte that carries them', () => {
+ const rows = [resource('nextcloud', 4, { host: pve, category: 'virtual_machine' }), resource('argus', 2, { category: 'service' }), resource('pve-01', 0, { category: 'virtualization_host' }), resource('jellyfin', 0, { host: { id: 'pve-02', name: 'pve-02' } })];
+ const groups = groupResources(rows, 'host', (row) => row.rank);
+ assert.deepEqual(groups.map((group) => group.key), ['pve-01', 'pve-02', '']);
+ assert.equal(groups[0].head?.target.id, 'pve-01');
+ assert.deepEqual(groups[0].rows.map((row) => row.target.id), ['nextcloud']);
+ // L'hôte filtré hors de la liste garde son nom d'en-tête.
+ assert.equal(groups[1].head, undefined);
+ assert.equal(groups[1].host?.name, 'pve-02');
+ assert.deepEqual(groups[2].rows.map((row) => row.target.id), ['argus']);
+});
+
+test('groups resources by category in navigation order', () => {
+ const rows = [resource('argus', 2, { category: 'service' }), resource('nextcloud', 4, { category: 'virtual_machine' }), resource('mystere', 0)];
+ assert.deepEqual(groupResources(rows, 'category', (row) => row.rank).map((group) => group.key), ['virtual_machine', 'service', 'unclassified']);
 });

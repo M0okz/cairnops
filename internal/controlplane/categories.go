@@ -120,6 +120,9 @@ func suggestCategory(signals []categorySignal) Category {
 
 // One bulk read keeps category projection independent of fleet size. Manual
 // choices are stored separately and never overwritten by connector discovery.
+// The same read establishes the Hôte, which only an inventory can attest: a
+// Proxmox guest or storage names the node that carries it. A name match or a
+// shared address never makes one Ressource the Hôte of another.
 func (store *Store) classifyTargets(ctx context.Context, targets []Target) error {
 	rows, err := store.pool.Query(ctx, `
  SELECT target.id::text, target.category,
@@ -132,7 +135,16 @@ func (store *Store) classifyTargets(ctx context.Context, targets []Target) error
  SELECT source.kind, source.config AS metadata FROM cairnops_signal_sources source WHERE source.target_id = target.id AND source.origin = 'native'
  UNION ALL
  SELECT connector.kind, binding.metadata FROM cairnops_connector_bindings binding JOIN cairnops_connectors connector ON connector.id = binding.connector_id WHERE binding.target_id = target.id
- ) signal), '[]'::jsonb)
+ ) signal), '[]'::jsonb),
+ coalesce((SELECT jsonb_agg(DISTINCT jsonb_build_object('id', host_target.id::text, 'name', host_target.name))
+ FROM cairnops_connector_bindings guest
+ JOIN cairnops_connectors connector ON connector.id = guest.connector_id AND connector.kind = 'proxmox'
+ JOIN cairnops_connector_bindings host ON host.connector_id = guest.connector_id AND host.integration_enabled
+ AND host.external_id = 'node/' || (guest.metadata->>'node')
+ JOIN cairnops_targets host_target ON host_target.id = host.target_id AND host_target.archived_at IS NULL AND host_target.id <> target.id
+ WHERE guest.target_id = target.id AND guest.integration_enabled
+ AND guest.metadata->>'resource_type' IN ('qemu', 'lxc', 'storage')
+ AND coalesce(guest.metadata->>'missing', 'false') <> 'true'), '[]'::jsonb)
  FROM cairnops_targets target WHERE target.archived_at IS NULL AND target.id = ANY($1::uuid[])`, resourceIDs(targets))
 	if err != nil {
 		return fmt.Errorf("read resource categories: %w", err)
@@ -146,12 +158,16 @@ func (store *Store) classifyTargets(ctx context.Context, targets []Target) error
 		var id string
 		var manual *Category
 		var lastSuccess *time.Time
-		var raw []byte
-		if err := rows.Scan(&id, &manual, &lastSuccess, &raw); err != nil {
+		var raw, rawHosts []byte
+		if err := rows.Scan(&id, &manual, &lastSuccess, &raw, &rawHosts); err != nil {
 			return err
 		}
 		var signals []categorySignal
 		if err := json.Unmarshal(raw, &signals); err != nil {
+			return err
+		}
+		var hosts []TargetHost
+		if err := json.Unmarshal(rawHosts, &hosts); err != nil {
 			return err
 		}
 		if i, ok := indexes[id]; ok {
@@ -159,6 +175,11 @@ func (store *Store) classifyTargets(ctx context.Context, targets []Target) error
 			targets[i].SuggestedCategory = suggestCategory(signals)
 			targets[i].Category = targets[i].SuggestedCategory
 			targets[i].CategoryManual = manual != nil
+			// Two inventories that disagree prove no Hôte at all.
+			targets[i].Host = nil
+			if len(hosts) == 1 {
+				targets[i].Host = &hosts[0]
+			}
 			if manual != nil {
 				targets[i].Category = *manual
 			}

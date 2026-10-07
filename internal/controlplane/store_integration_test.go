@@ -582,3 +582,57 @@ func TestPostgresResourceCategoryPreservesManualChoice(t *testing.T) {
 		t.Fatalf("invalid category accepted: %v", err)
 	}
 }
+
+func TestPostgresResourceHostComesFromProxmoxInventory(t *testing.T) {
+	pool := openTestPool(t)
+	ctx := context.Background()
+	store := NewStore(pool)
+	create := func(name string) string {
+		target, err := store.CreateTarget(ctx, CreateTargetInput{Name: name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return target.ID
+	}
+	node, guest, storage, missing, lookalike := create("pve-01"), create("nextcloud"), create("local-zfs"), create("ancienne-vm"), create("pve-01 web")
+	var connectorID string
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO cairnops_connectors (kind, name, endpoint, credential_sealed, status, compatibility, encrypted_transport, sync_interval_seconds)
+		VALUES ('proxmox', 'Proxmox', 'https://pve.example.net:8006', 'sealed-credential-with-sufficient-length', 'connected', 'supported', true, 60)
+		RETURNING id::text
+	`).Scan(&connectorID); err != nil {
+		t.Fatal(err)
+	}
+	bind := func(targetID, externalID, metadata string) {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO cairnops_connector_bindings (connector_id, target_id, external_id, external_name, metadata)
+			VALUES ($1::uuid, $2::uuid, $3, $3, $4::jsonb)
+		`, connectorID, targetID, externalID, metadata); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bind(node, "node/pve-01", `{"resource_type":"node","node":"pve-01"}`)
+	bind(guest, "qemu/110", `{"resource_type":"qemu","node":"pve-01","host_external_id":"node/pve-01"}`)
+	bind(storage, "storage/pve-01/local-zfs", `{"resource_type":"storage","node":"pve-01"}`)
+	bind(missing, "qemu/111", `{"resource_type":"qemu","node":"pve-01","missing":true}`)
+
+	targets, err := store.ListTargets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hosts := map[string]*TargetHost{}
+	for _, target := range targets {
+		hosts[target.ID] = target.Host
+	}
+	for _, id := range []string{guest, storage} {
+		if hosts[id] == nil || hosts[id].ID != node || hosts[id].Name != "pve-01" {
+			t.Fatalf("expected pve-01 as Hôte of %s: %+v", id, hosts[id])
+		}
+	}
+	// A node carries itself; a vanished guest and a mere name match prove nothing.
+	for _, id := range []string{node, missing, lookalike} {
+		if hosts[id] != nil {
+			t.Fatalf("unexpected Hôte for %s: %+v", id, hosts[id])
+		}
+	}
+}

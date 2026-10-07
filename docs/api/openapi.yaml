@@ -699,6 +699,17 @@ components:
             il ne recalcule jamais la conclusion elle-même.
         last_success_at: { type: string, format: date-time, description: Dernière observation saine conservée pour un contrôle heartbeat de la ressource. }
         category_manual: { type: boolean, description: Catégorie choisie manuellement et conservée lors des synchronisations. }
+        host:
+          type: object
+          required: [id, name]
+          description: >-
+            Ressource hôte attestée par un inventaire, comme le nœud Proxmox VE
+            d'une machine virtuelle, d'un conteneur ou d'un stockage. Absente
+            lorsqu'aucun inventaire ne l'établit ou que deux inventaires se
+            contredisent. Elle situe la Ressource ; ce n'est pas une Dépendance.
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
         id: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 160 }
         description: { type: string, maxLength: 2000 }

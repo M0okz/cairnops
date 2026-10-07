@@ -5,6 +5,68 @@ export const resourceCategories: ResourceCategory[] = ['virtual_machine', 'conta
 export function resourceCategoryFromParam(value: string | null): ResourceCategory | 'all' {
   return resourceCategories.find((category) => category === value) ?? 'all';
 }
+/* La navigation range les catégories en familles. Les Logiciels suivis
+ * relèvent du suivi des versions et les Ressources à classer d'un classement à
+ * compléter : chacun garde un accès dédié, hors des familles. */
+export type ResourceFamily = 'infrastructure' | 'services' | 'tasks';
+export const resourceFamilies: Record<ResourceFamily, ResourceCategory[]> = {
+  infrastructure: ['virtualization_host', 'host', 'virtual_machine', 'container', 'storage', 'network', 'infrastructure'],
+  services: ['service', 'application'],
+  tasks: ['scheduled_task']
+};
+export type ResourceView = 'all' | ResourceFamily | 'software' | 'unclassified';
+export function resourceFamily(category: ResourceCategory): ResourceFamily | undefined {
+  return (Object.keys(resourceFamilies) as ResourceFamily[]).find((family) => resourceFamilies[family].includes(category));
+}
+export function resourceViewFromParam(value: string | null): ResourceView {
+  return value === 'software' || value === 'unclassified' || (value !== null && Object.hasOwn(resourceFamilies, value)) ? value as ResourceView : 'all';
+}
+/** Une vue « Toutes » couvre ce qui se supervise ; le suivi des versions a sa vue. */
+export function inResourceView(category: ResourceCategory, view: ResourceView): boolean {
+  if (view === 'all') return category !== 'software';
+  if (view === 'software' || view === 'unclassified') return category === view;
+  return resourceFamily(category) === view;
+}
+
+export type ResourceGrouping = 'host' | 'category';
+export type ResourceGroup<T> = {
+  key: string;
+  /** Nom de la Ressource hôte, ou catégorie du groupe. */
+  host?: { id: string; name: string };
+  category?: ResourceCategory;
+  /** La Ressource hôte elle-même, lorsqu'elle figure parmi les lignes. */
+  head?: T;
+  rows: T[];
+};
+/* Regroupe des lignes déjà triées sans changer leur ordre interne. Une
+ * Ressource qui en porte d'autres devient l'en-tête de son groupe ; celles que
+ * rien ne situe se rassemblent en dernier, sous une clé vide. */
+export function groupResources<T extends { target: Pick<Target, 'id' | 'name' | 'category' | 'host'> }>(rows: T[], grouping: ResourceGrouping, rank: (row: T) => number): ResourceGroup<T>[] {
+  const groups = new Map<string, ResourceGroup<T>>();
+  const group = (key: string, init: () => Omit<ResourceGroup<T>, 'key' | 'rows'>) => {
+    let found = groups.get(key);
+    if (!found) groups.set(key, found = { key, rows: [], ...init() });
+    return found;
+  };
+  if (grouping === 'category') {
+    for (const row of rows) {
+      const category = row.target.category ?? 'unclassified';
+      group(category, () => ({ category })).rows.push(row);
+    }
+    const order = resourceCategories;
+    return [...groups.values()].sort((a, b) => order.indexOf(a.category!) - order.indexOf(b.category!));
+  }
+  const carriers = new Set(rows.flatMap((row) => row.target.host ? [row.target.host.id] : []));
+  for (const row of rows) {
+    if (carriers.has(row.target.id)) group(row.target.id, () => ({ host: { id: row.target.id, name: row.target.name } })).head = row;
+    else if (row.target.host) group(row.target.host.id, () => ({ host: row.target.host })).rows.push(row);
+    else group('', () => ({})).rows.push(row);
+  }
+  const worst = (item: ResourceGroup<T>) => Math.max(0, ...[item.head, ...item.rows].filter((row): row is T => row !== undefined).map(rank));
+  return [...groups.values()].sort((a, b) =>
+    Number(a.key === '') - Number(b.key === '') || worst(b) - worst(a) || (a.host?.name ?? '').localeCompare(b.host?.name ?? ''));
+}
+
 const weights = { critical: 4, major: 3, warning: 2, information: 1 };
 // Nature des anciennes preuves Argus ouvertes pour toute mise à jour. Elles ne
 // sont plus produites, mais une preuve restée active ne doit pas passer pour un

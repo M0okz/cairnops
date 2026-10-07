@@ -36,6 +36,9 @@ type Target struct {
 	Category          Category   `json:"category"`
 	SuggestedCategory Category   `json:"suggested_category"`
 	CategoryManual    bool       `json:"category_manual"`
+	// Host est l'Hôte attesté par un inventaire. Il sert à situer la
+	// Ressource, jamais à expliquer un Incident : ce n'est pas une Dépendance.
+	Host *TargetHost `json:"host,omitempty"`
 	// HealthState est l'État de santé conclu par le serveur. Le paquet health
 	// en détient la règle et cette projection le renseigne : aucun client ne
 	// recalcule cette conclusion, sans quoi le Web, iOS et Android
@@ -52,6 +55,11 @@ type Target struct {
 	ExternalSourceCount int        `json:"external_source_count"`
 	Aliases             []string   `json:"aliases"`
 	Sources             []Source   `json:"sources"`
+}
+
+type TargetHost struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type Source struct {

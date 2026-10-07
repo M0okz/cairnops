@@ -96,6 +96,10 @@ _Éviter_ : Connecteur, gravité, état de fonctionnement
 Situation d’une Ressource dont les informations disponibles ne permettent pas encore de proposer une catégorie suffisamment claire. Elle indique un classement à compléter, sans qualifier le fonctionnement de la Ressource.
 _Éviter_ : Catégorie métier, état inconnu, problème détecté
 
+**Ressource hôte** :
+Ressource qui en porte une autre selon un inventaire, comme le nœud Proxmox VE d'une machine virtuelle, d'un conteneur ou d'un stockage. Elle situe la Ressource sans constituer une Dépendance et n'explique aucun Incident. Une ressemblance de nom ou d'adresse ne l'établit jamais.
+_Éviter_ : Parent, Dépendance, catégorie Hôte
+
 **Service** :
 Ressource qui fournit une fonction utilisable, telle que Home Assistant ou Nextcloud, dont on suit notamment l’accès, les temps de réponse et les problèmes constatés.
 _Éviter_ : Logiciel suivi uniquement pour ses versions, serveur hôte
