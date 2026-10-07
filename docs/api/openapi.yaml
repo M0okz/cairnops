@@ -1329,6 +1329,22 @@ components:
       properties:
         fr: { $ref: '#/components/schemas/AlertPresentationText' }
         en: { $ref: '#/components/schemas/AlertPresentationText' }
+    AlertFact:
+      description: >-
+        Fait reconnu par le serveur, publié seulement lorsque son sens est
+        établi. Permet au client de composer le Constat selon la nature du
+        problème. Un champ absent signifie une donnée indisponible, jamais une
+        valeur nulle supposée.
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [backup.failure, backup.freshness, availability.unavailable, disk.latency.high, disk.space.low, disk.inodes.low, cpu.usage.high, system.load.high, memory.usage.high, memory.available.low, swap.space.low, packages.count.changed, certificate.expiring, certificate.invalid, software.security_updates, system.reboot_required, software.update_available, software.security_update_available, software.major_update_available]
+        resource: { type: string, maxLength: 160, description: Disque, volume ou certificat concerné. }
+        count: { type: integer, minimum: 0, description: Nombre de correctifs de sécurité, seulement pour software.security_updates. }
+        current_version: { type: string, maxLength: 160 }
+        available_version: { type: string, maxLength: 160 }
     AlertPresentationText:
       type: object
       required: [title]
@@ -1351,6 +1367,7 @@ components:
         external_object_id: { type: string }
         name: { type: string, description: Message original du connecteur conservé sans traduction. }
         presentation: { $ref: '#/components/schemas/AlertPresentation' }
+        fact: { $ref: '#/components/schemas/AlertFact' }
         active: { type: boolean }
         severity: { type: string, enum: [information, warning, major, critical] }
         opened_at: { type: string, format: date-time }

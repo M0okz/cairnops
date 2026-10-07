@@ -36,6 +36,16 @@ func refreshIncidentPresentation(ctx context.Context, tx pgx.Tx, incidentID stri
 	return err
 }
 
+// recognizedFact ne publie que les faits dont le sens est établi, bornés comme
+// leur présentation. Un fait inconnu laisse le client sur le message original.
+func recognizedFact(fact alerttext.Fact) *alerttext.Fact {
+	normalized := fact.Normalize()
+	if normalized.Kind == "" {
+		return nil
+	}
+	return &normalized
+}
+
 func patchMonPresentation(signal PatchMonSignal) alerttext.Fact {
 	switch signal.ConditionKey {
 	case "security_updates":

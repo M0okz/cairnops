@@ -92,6 +92,17 @@ Le détail explique à la demande pourquoi les Atteintes partagent l'Incident, d
 
 Depuis la liste ou la Vue d’ensemble, le détail s’ouvre à droite dans un volet de 52 rem au maximum, sur toute la hauteur disponible. La liste reste visible derrière un voile discret. Sur mobile, le volet remplit l’écran. Son en-tête et ses actions restent visibles ; seule la zone de contenu défile. Dates, preuves et chronologie se replient selon la largeur du volet.
 
+Le volet se lit de haut en bas sans reconstruction mentale. L’en-tête nomme la Ressource, puis le problème, puis une seule phrase d’état : Gravité, depuis quand, Acquittement et Sources. Les horodatages exacts restent au survol et dans le Journal.
+
+Vient ensuite le **Constat**, composé selon le fait reconnu par le serveur (`fact` de la Preuve) et jamais selon un gabarit commun :
+
+- une mise à jour montre la version déployée et la version disponible, sans bloc de métriques ;
+- des correctifs de sécurité montrent leur nombre ;
+- une condition mesurable (CPU, charge, mémoire, volume, disponibilité, certificat) montre d’abord la courbe de l’Indicateur qui la mesure, autour de l’ouverture. Pour un volume nommé, c’est sa propre courbe. Aucune courbe d’un autre sens ne la remplace : si aucun Indicateur collecté ne mesure la condition, le Constat le dit ;
+- sinon, le message original de la Source, avec son origine, porte le Constat.
+
+Mettre en avant la mesure de la condition elle-même n’affirme aucune cause ; le repère temporel le rappelle. Un Incident touchant une seule Ressource n’affiche ni Atteinte ni compteur « 1/1 ». La liste des Ressources touchées n’apparaît qu’à partir de deux. Le reste sert à vérifier, pas à comprendre. Il se replie, avec un aperçu dans son intitulé : autres Indicateurs à l’ouverture, détails des Sources (message original, dates, acquittement amont s’il s’applique, identifiants, Invalidation) et Journal.
+
 L’ouverture et la fermeture utilisent des transitions courtes et interruptibles ; la réduction des animations les supprime. Le dialogue natif conserve l’arrière-plan inerte, le focus dans le volet et le retour au déclencheur. Échap ferme d’abord une infobulle ou un formulaire d’Invalidation actif, puis le volet. Le lien direct d’un Incident et les actions métier restent identiques.
 
 ## Chronologie d'Incident

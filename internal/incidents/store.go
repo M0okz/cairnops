@@ -244,6 +244,7 @@ func (store *PostgresStore) loadChildren(ctx context.Context, incidents []Incide
 			return fmt.Errorf("scan incident evidence: %w", err)
 		}
 		evidence.Presentation = alerttext.Localize(evidence.Alert)
+		evidence.Fact = recognizedFact(evidence.Alert)
 		evidence.ImpactID = impactID
 		if impact := impacts[impactID]; impact != nil {
 			impact.Evidence = append(impact.Evidence, evidence)

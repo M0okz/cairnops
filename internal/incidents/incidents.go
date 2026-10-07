@@ -31,6 +31,7 @@ const (
 
 type Evidence struct {
 	Alert                     alerttext.Fact      `json:"-"`
+	Fact                      *alerttext.Fact     `json:"fact,omitempty"`
 	Presentation              alerttext.Localized `json:"presentation"`
 	ID                        string              `json:"id"`
 	ImpactID                  string              `json:"impact_id"`

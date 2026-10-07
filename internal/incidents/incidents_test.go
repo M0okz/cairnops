@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/M0okz/cairnops/internal/alerttext"
 )
 
 type serviceStore struct {
@@ -99,5 +101,21 @@ func TestAcknowledgementRemainsLocalWhenExternalSyncFails(t *testing.T) {
 	}
 	if result := store.completeResults[0]; result.EvidenceID != "evidence" || result.Error != "permission refusée" {
 		t.Fatalf("unexpected synchronization result: %#v", result)
+	}
+}
+
+func TestEvidencePublishesOnlyRecognizedFacts(t *testing.T) {
+	if fact := recognizedFact(alerttext.Fact{Kind: "vendor.custom", Resource: "sda"}); fact != nil {
+		t.Fatalf("unknown fact published: %+v", fact)
+	}
+	fact := recognizedFact(alerttext.Fact{
+		Kind: alerttext.SoftwareMajorUpdate, CurrentVersion: "34.0.4", AvailableVersion: "35.0.1",
+	})
+	if fact == nil || fact.Kind != alerttext.SoftwareMajorUpdate || fact.CurrentVersion != "34.0.4" || fact.AvailableVersion != "35.0.1" {
+		t.Fatalf("versioned fact = %+v", fact)
+	}
+	disk := recognizedFact(alerttext.Fact{Kind: alerttext.DiskLatency, Resource: "sda", CurrentVersion: "1"})
+	if disk == nil || disk.Resource != "sda" || disk.CurrentVersion != "" {
+		t.Fatalf("disk fact = %+v", disk)
 	}
 }

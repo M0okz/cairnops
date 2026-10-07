@@ -1,4 +1,13 @@
-import type { ContextIndicator, Incident, IncidentIndicators, IndicatorPoint } from './api';
+import type {
+  AlertFact,
+  AlertFactKind,
+  ContextIndicator,
+  Incident,
+  IncidentEvidence,
+  IncidentIndicators,
+  IndicatorPoint,
+  IndicatorSemanticKey
+} from './api';
 
 export type IncidentIndicatorRow = {
   key: string;
@@ -76,4 +85,108 @@ export function incidentIndicatorRows(detail: IncidentIndicators): {
     }));
 
   return { captured, additional };
+}
+
+/**
+ * La Preuve qui porte le Constat : une Preuve encore active et non écartée
+ * d'abord, puis la plus ancienne non écartée, enfin la première connue.
+ */
+export function primaryEvidence(incident: Incident): IncidentEvidence | null {
+  const evidence = incident.impacts.flatMap((impact) => impact.evidence);
+  return (
+    evidence.find((item) => item.active && !item.invalidated_at) ??
+    evidence.find((item) => !item.invalidated_at) ??
+    evidence[0] ??
+    null
+  );
+}
+
+/** Forme du Constat : ce que le fait reconnu permet d'afficher en premier. */
+export type FindingShape =
+  | { kind: 'versions'; fact: AlertFact; current: string; available: string }
+  | { kind: 'count'; fact: AlertFact; count: number }
+  | { kind: 'resource'; fact: AlertFact; resource: string; noun: 'disk' | 'volume' | 'certificate' }
+  | { kind: 'plain'; fact: AlertFact }
+  | { kind: 'original' };
+
+const versionedKinds = new Set<AlertFactKind>([
+  'software.update_available',
+  'software.security_update_available',
+  'software.major_update_available'
+]);
+
+export function findingShape(fact: AlertFact | undefined): FindingShape {
+  if (!fact) return { kind: 'original' };
+  if (versionedKinds.has(fact.kind) && fact.current_version && fact.available_version) {
+    return { kind: 'versions', fact, current: fact.current_version, available: fact.available_version };
+  }
+  if (fact.kind === 'software.security_updates' && typeof fact.count === 'number') {
+    return { kind: 'count', fact, count: fact.count };
+  }
+  if (fact.resource) {
+    const noun = fact.kind === 'disk.latency.high'
+      ? 'disk'
+      : fact.kind.startsWith('certificate.')
+        ? 'certificate'
+        : 'volume';
+    return { kind: 'resource', fact, resource: fact.resource, noun };
+  }
+  return { kind: 'plain', fact };
+}
+
+/**
+ * Indicateurs qui mesurent la condition elle-même. Ils montrent le problème,
+ * pas sa cause : les autres Indicateurs restent disponibles à part.
+ */
+const measuredBy: Partial<Record<AlertFactKind, IndicatorSemanticKey[]>> = {
+  'availability.unavailable': ['response.time'],
+  'disk.space.low': ['filesystem.utilization'],
+  'cpu.usage.high': ['cpu.utilization'],
+  'system.load.high': ['cpu.utilization'],
+  'memory.usage.high': ['memory.utilization'],
+  'memory.available.low': ['memory.utilization'],
+  'certificate.expiring': ['certificate.days_remaining'],
+  'certificate.invalid': ['certificate.valid'],
+  'software.security_updates': ['security_updates.count'],
+  'system.reboot_required': ['reboot.required']
+};
+
+const measuredConditions = new Set<AlertFactKind>([
+  'availability.unavailable',
+  'disk.latency.high',
+  'disk.space.low',
+  'disk.inodes.low',
+  'cpu.usage.high',
+  'system.load.high',
+  'memory.usage.high',
+  'memory.available.low',
+  'swap.space.low'
+]);
+
+/** Conditions qu'une courbe devrait montrer, même lorsqu'aucune n'est collectée. */
+export function measurable(fact: AlertFact | undefined): boolean {
+  return Boolean(fact && measuredConditions.has(fact.kind));
+}
+
+function rowSemanticKey(row: IncidentIndicatorRow): string | undefined {
+  return row.snapshot?.semantic_key ?? row.indicator?.semantic_key;
+}
+
+/**
+ * Sépare les courbes du Constat des autres. Pour un volume nommé, seule sa
+ * courbe est retenue lorsqu'elle existe, sinon toutes celles de même sens.
+ */
+export function splitIndicatorRows(
+  rows: { captured: IncidentIndicatorRow[]; additional: IncidentIndicatorRow[] },
+  fact: AlertFact | undefined
+): { relevant: IncidentIndicatorRow[]; others: IncidentIndicatorRow[] } {
+  const all = [...rows.captured, ...rows.additional];
+  const keys = fact ? measuredBy[fact.kind] ?? [] : [];
+  let relevant = all.filter((row) => keys.includes(rowSemanticKey(row) as IndicatorSemanticKey));
+  if (fact?.resource) {
+    const exact = relevant.filter((row) => row.indicator?.dimension === fact.resource);
+    if (exact.length > 0) relevant = exact;
+  }
+  const chosen = new Set(relevant.map((row) => row.key));
+  return { relevant, others: all.filter((row) => !chosen.has(row.key)) };
 }

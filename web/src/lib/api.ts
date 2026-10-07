@@ -771,8 +771,39 @@ export type IncidentSummary = Record<'fr' | 'en', { title: string; body: string 
 
 export type AlertPresentation = Record<'fr' | 'en', { title: string; description?: string }>;
 
+export type AlertFactKind =
+  | 'backup.failure'
+  | 'backup.freshness'
+  | 'availability.unavailable'
+  | 'disk.latency.high'
+  | 'disk.space.low'
+  | 'disk.inodes.low'
+  | 'cpu.usage.high'
+  | 'system.load.high'
+  | 'memory.usage.high'
+  | 'memory.available.low'
+  | 'swap.space.low'
+  | 'packages.count.changed'
+  | 'certificate.expiring'
+  | 'certificate.invalid'
+  | 'software.security_updates'
+  | 'system.reboot_required'
+  | 'software.update_available'
+  | 'software.security_update_available'
+  | 'software.major_update_available';
+
+/** Fait reconnu par le serveur ; un champ absent est une donnée indisponible. */
+export type AlertFact = {
+  kind: AlertFactKind;
+  resource?: string;
+  count?: number;
+  current_version?: string;
+  available_version?: string;
+};
+
 export type IncidentEvidence = {
   presentation?: AlertPresentation;
+  fact?: AlertFact;
   id: string;
   impact_id: string;
   target_id: string;

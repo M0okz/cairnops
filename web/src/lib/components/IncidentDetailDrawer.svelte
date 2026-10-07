@@ -15,7 +15,15 @@
     stamp
   } from '$lib/format';
   import { formatIndicator } from '$lib/indicator-format';
-  import { incidentActivity, incidentIndicatorRows } from '$lib/incident-detail';
+  import {
+    findingShape,
+    incidentActivity,
+    incidentIndicatorRows,
+    measurable,
+    primaryEvidence,
+    splitIndicatorRows,
+    type IncidentIndicatorRow
+  } from '$lib/incident-detail';
   import { i18n, plural, t } from '$lib/i18n.svelte';
   import { messageFrom, session } from '$lib/session.svelte';
 
@@ -28,6 +36,16 @@
     seed?: Incident | null;
     ondismiss: () => void;
   } = $props();
+
+  const origins: Record<IncidentEvidence['origin'], string> = {
+    native: 'CairnOps',
+    zabbix: 'Zabbix',
+    uptime_kuma: 'Uptime Kuma',
+    patchmon: 'PatchMon',
+    argus: 'Argus',
+    proxmox: 'Proxmox VE',
+    webhook: 'Webhook'
+  };
 
   let dialog = $state<HTMLDialogElement | null>(null);
   let closeButton = $state<HTMLButtonElement | null>(null);
@@ -64,6 +82,29 @@
   const projected = $derived(session.incidents.find((item) => item.id === incidentId) ?? null);
   const evidence = $derived(incident?.impacts.flatMap((impact) => impact.evidence) ?? []);
   const maintainedImpacts = $derived(incident?.impacts.filter((impact) => impact.maintenance_active) ?? []);
+  const primary = $derived(incident ? primaryEvidence(incident) : null);
+  const primaryText = $derived(primary?.presentation?.[i18n.locale] ?? null);
+  const shape = $derived(findingShape(primary?.fact));
+  const indicatorSplit = $derived(splitIndicatorRows(metricRows, primary?.fact));
+  const otherPreview = $derived.by(() => {
+    const captured = indicatorSplit.others.filter((row) => row.snapshot);
+    if (captured.length === 0) return String(indicatorSplit.others.length);
+    return captured
+      .slice(0, 3)
+      .map((row) => `${row.label} ${formatIndicator(row.snapshot!.value, row.unit)}`)
+      .join(' · ');
+  });
+  const sourceNames = $derived(
+    [...new Set(evidence.map((signal) => signal.connector_name ?? origins[signal.origin]))].join(', ')
+  );
+  const hasNotes = $derived(Boolean(
+    incident && (
+      incident.impact_count > 1 ||
+      incident.acknowledgement_sync_status === 'pending' ||
+      incident.acknowledgement_sync_status === 'failed' ||
+      maintainedImpacts[0]?.maintenance_ends_at
+    )
+  ));
   const firstImpact = $derived(incident?.impacts[0] ?? null);
   const incidentTitle = $derived(incident
     ? incident.affected_target_count > 1
@@ -79,20 +120,6 @@
         }
       : null
   );
-
-  const origins: Record<IncidentEvidence['origin'], string> = {
-    native: 'CairnOps',
-    zabbix: 'Zabbix',
-    uptime_kuma: 'Uptime Kuma',
-    patchmon: 'PatchMon',
-    argus: 'Argus',
-    proxmox: 'Proxmox VE',
-    webhook: 'Webhook'
-  };
-
-  function activeEvidenceCount(impact: Incident['impacts'][number]): number {
-    return impact.evidence.filter((item) => item.active && !item.invalidated_at).length;
-  }
 
   async function loadIncident(showLoading = true) {
     const version = ++requestVersion;
@@ -261,6 +288,150 @@
     : `${t('incidents.detail.title')} — ${session.instanceLabel}`}</title>
 </svelte:head>
 
+{#snippet metricCard(row: IncidentIndicatorRow, named = true)}
+  <article class="metric-card" class:secondary={!row.snapshot}>
+    <div class="metric-title">
+      <span>
+        <strong>{row.label}</strong>
+        {#if named && row.indicator?.dimension}<small>{row.indicator.dimension}</small>{/if}
+      </span>
+      {#if row.snapshot}
+        <b class="num">{formatIndicator(row.snapshot.value, row.unit)}</b>
+      {:else}
+        <small>{t('incidents.detail.noSnapshot')}</small>
+      {/if}
+    </div>
+    {#if row.snapshot}
+      <small class="snapshot-time">
+        {t('incidents.detail.snapshotAt', { date: stamp(row.snapshot.observed_at) })}
+      </small>
+    {/if}
+    {#if row.points.length > 0}
+      <IndicatorHistoryChart
+        compact
+        points={row.points}
+        unit={row.unit}
+        label={t('incidents.detail.chartLabel', { label: row.label })}
+        timeBounds={metricTimeBounds}
+        {marker}
+      />
+    {:else}
+      <div class="curve-empty">{t('incidents.detail.curveExpired')}</div>
+    {/if}
+  </article>
+{/snippet}
+
+{#snippet sourceRow(signal: IncidentEvidence)}
+  {@const invalidated = Boolean(signal.invalidated_at)}
+  {@const presented = signal.presentation?.[i18n.locale]}
+  <article class="source-row" class:invalidated>
+    <div class="source-identity">
+      <i
+        class="dot {invalidated ? 'idle' : signal.active ? severityTone(signal.severity) : 'ok'}"
+        aria-hidden="true"
+      ></i>
+      <span>
+        <strong>{signal.connector_name ?? origins[signal.origin]}</strong>
+        {#if presented?.title}<small>{presented.title}</small>{/if}
+      </span>
+    </div>
+    <span class="pill {invalidated ? '' : signal.active ? severityTone(signal.severity) : 'ok'}">
+      {invalidated
+        ? t('target.verdict.invalidated')
+        : signal.active
+          ? t('target.failing')
+          : t('target.verdict.recovered')}
+    </span>
+    <div class="source-original">
+      <span>{t('incidents.detail.originalMessage')}</span>
+      <p>{signal.name}</p>
+    </div>
+    <dl class="source-dates">
+      <div>
+        <dt>{t('incidents.detail.sourceOpened')}</dt>
+        <dd class="num">{stamp(signal.opened_at)}</dd>
+      </div>
+      <div>
+        <dt>{t('incidents.detail.sourceRecovered')}</dt>
+        <dd class="num">{signal.resolved_at ? stamp(signal.resolved_at) : t('common.none')}</dd>
+      </div>
+      {#if signal.acknowledgement_sync_status !== 'not_applicable'}
+        <div>
+          <dt>{t('incidents.detail.upstreamAck')}</dt>
+          <dd
+            class:crit={signal.acknowledgement_sync_status === 'failed'}
+            title={signal.acknowledgement_sync_error}
+          >
+            {t(`incidents.detail.ackSync.${signal.acknowledgement_sync_status}`)}
+          </dd>
+        </div>
+      {/if}
+    </dl>
+
+    {#if invalidated}
+      <p class="invalidation-copy">
+        <strong>{signal.invalidation_reason ?? t('target.noReason')}</strong>
+        <span>
+          {t('incidents.detail.invalidatedBy', {
+            who: signal.invalidated_by ?? t('target.anOperator'),
+            date: signal.invalidated_at ? stamp(signal.invalidated_at) : t('common.none')
+          })}
+        </span>
+      </p>
+    {:else if incident?.status === 'active' && signal.active && session.user?.role !== 'observer'}
+      <button
+        class="btn sm source-action"
+        type="button"
+        onclick={(event) => beginInvalidation(signal, event.currentTarget)}
+      >{t('target.invalidate')}</button>
+    {/if}
+
+    {#if signal.external_event_id || signal.external_object_id}
+      <details class="source-ids">
+        <summary>{t('incidents.detail.externalIdentifiers')}</summary>
+        {#if signal.external_event_id}
+          <code>{signal.external_event_id}</code>
+        {/if}
+        {#if signal.external_object_id}
+          <code>{signal.external_object_id}</code>
+        {/if}
+      </details>
+    {/if}
+
+    {#if invalidationFor?.id === signal.id}
+      <form class="invalidation-form" onsubmit={confirmInvalidation} novalidate>
+        <div class="field">
+          <label for="incident-invalidation-reason-{signal.id}">{t('target.reason')}</label>
+          <textarea
+            bind:this={reasonField}
+            id="incident-invalidation-reason-{signal.id}"
+            bind:value={invalidationReason}
+            rows="3"
+            required
+            minlength="8"
+            maxlength="500"
+            aria-invalid={invalidationError ? 'true' : undefined}
+            aria-describedby="incident-invalidation-hint-{signal.id}{invalidationError ? ` incident-invalidation-error-${signal.id}` : ''}"
+            placeholder={t('target.reasonPlaceholder')}
+          ></textarea>
+          <small id="incident-invalidation-hint-{signal.id}">{t('target.reasonHint')}</small>
+          {#if invalidationError}
+            <small id="incident-invalidation-error-{signal.id}" class="field-error" role="alert">
+              {invalidationError}
+            </small>
+          {/if}
+        </div>
+        <div class="form-actions">
+          <button class="btn" type="button" onclick={cancelInvalidation}>{t('common.cancel')}</button>
+          <button class="btn danger" type="submit" disabled={invalidating}>
+            {invalidating ? t('common.saving') : t('target.invalidateConfirm')}
+          </button>
+        </div>
+      </form>
+    {/if}
+  </article>
+{/snippet}
+
 <dialog
   bind:this={dialog}
   class="incident-drawer"
@@ -278,26 +449,34 @@
 >
   <header class="drawer-head">
     <div class="title-copy">
-      <span class="eyebrow">{t('incidents.detail.title')}</span>
-      <h2 id={titleID}>{incident?.summary?.[i18n.locale].title ?? incidentTitle}</h2>
-      <p id={descriptionID}>{incident?.summary?.[i18n.locale].body ?? (incident ? natureLabel(incident) : t('incidents.detail.loading'))}</p>
+      <span class="eyebrow">{incidentTitle}</span>
+      <h2 id={titleID}>{incident?.summary?.[i18n.locale].title ?? (incident ? natureLabel(incident) : t('incidents.detail.title'))}</h2>
+      {#if incident}
+        <p id={descriptionID} class="head-meta">
+          <span class="pill {severityTone(incident.severity)}">{severityLabel(incident.severity)}</span>
+          {#if incident.status === 'resolved'}
+            <span class="pill ok">{t('incidents.detail.resolvedStatus')}</span>
+          {/if}
+          {#if maintainedImpacts.length > 0}
+            <span class="pill info">{t('state.maintenance')}</span>
+          {/if}
+          <!-- Le séparateur reste collé au mot qui le précède : une ligne ne commence jamais par « · ». -->
+          <span class="head-facts">
+            <span title={stamp(incident.opened_at)}>{incident.resolved_at
+              ? t('incidents.detail.resolvedAfter', { duration: since(incident.opened_at, new Date(incident.resolved_at)) })
+              : t('incidents.detail.openedAgo', { duration: since(incident.opened_at, now) })}</span>{'\u00a0·'}
+            <span
+              class:crit={!incident.acknowledged_at && incident.status === 'active'}
+              title={incident.acknowledged_at ? stamp(incident.acknowledged_at) : undefined}
+            >{incident.acknowledged_at
+              ? t('incidents.detail.acknowledgedBy', { who: incident.acknowledged_by ?? t('target.anOperator') })
+              : t('incident.unacknowledged')}</span>{#if sourceNames}{'\u00a0·'} <span>{sourceNames}</span>{/if}
+          </span>
+        </p>
+      {:else}
+        <p id={descriptionID}>{t('incidents.detail.loading')}</p>
+      {/if}
     </div>
-    {#if incident}
-      <div class="head-status">
-        <span class="pill {incident.status === 'resolved' ? 'ok' : severityTone(incident.severity)}">
-          <i class="dot {incident.status === 'resolved' ? 'ok' : severityTone(incident.severity)}" aria-hidden="true"></i>
-          {incident.status === 'resolved'
-            ? t('incidents.detail.resolvedStatus')
-            : t('incidents.detail.activeStatus')}
-        </span>
-        <span class="pill {severityTone(incident.severity)}">
-          {severityLabel(incident.severity)}
-        </span>
-        {#if maintainedImpacts.length > 0}
-          <span class="pill info">{t('state.maintenance')}</span>
-        {/if}
-      </div>
-    {/if}
     <button
       bind:this={closeButton}
       class="close"
@@ -318,44 +497,8 @@
         <button class="btn" type="button" onclick={() => loadIncident()}>{t('common.retry')}</button>
       </div>
     {:else if incident}
-      <section class="summary" aria-labelledby="incident-summary-title">
-        <h3 id="incident-summary-title" class="visually-hidden">{t('incidents.detail.summary')}</h3>
-        <div class="date-grid">
-          <div>
-            <span>{t('incidents.detail.openedAt')}</span>
-            <strong class="num">{stamp(incident.opened_at)}</strong>
-          </div>
-          <div>
-            <span>{t('incidents.detail.acknowledgedAt')}</span>
-            <strong class="num">
-              {incident.acknowledged_at ? stamp(incident.acknowledged_at) : t('incident.unacknowledged')}
-            </strong>
-            {#if incident.acknowledged_at}
-              <small>
-                {incident.acknowledged_by ?? t('target.anOperator')}
-                · {incident.acknowledgement_origin === 'connector'
-                  ? t('incidents.detail.connectorOrigin')
-                  : t('incidents.detail.userOrigin')}
-              </small>
-            {/if}
-          </div>
-          <div>
-            <span>{t('incidents.detail.resolvedAt')}</span>
-            <strong class="num">
-              {incident.resolved_at ? stamp(incident.resolved_at) : t('incidents.detail.ongoing')}
-            </strong>
-          </div>
-          <div>
-            <span>{t('incidents.column.duration')}</span>
-            <strong class="num">
-              {incident.resolved_at
-                ? since(incident.opened_at, new Date(incident.resolved_at))
-                : since(incident.opened_at, now)}
-            </strong>
-          </div>
-        </div>
-        <div class="summary-notes">
-          <span>{t('incidents.impactsActive', { active: incident.active_impact_count, total: incident.impact_count })}</span>
+      {#if hasNotes}
+        <div class="notes">
           {#if incident.impact_count > 1}
             <span class="propagation-state">
               {t(`incidents.propagation.${incident.propagation_status}`)}
@@ -377,270 +520,147 @@
             <span>{t('incidents.detail.maintenanceUntil', { date: stamp(maintainedImpacts[0].maintenance_ends_at) })}</span>
           {/if}
         </div>
-        {#if incident.impact_count > 1}
+      {/if}
+
+      <section class="finding" aria-labelledby="incident-finding-title">
+        <h3 id="incident-finding-title" class="finding-label">
+          {t('incidents.detail.finding')}
+          {#if shape.kind === 'resource'}
+            · {t(`incidents.detail.noun.${shape.noun}`)} <span class="num">{shape.resource}</span>
+          {/if}
+        </h3>
+
+        {#if shape.kind === 'versions'}
+          <div class="versions">
+            <div>
+              <span>{t('incidents.detail.deployedVersion')}</span>
+              <b class="num">{shape.current}</b>
+            </div>
+            <span class="version-arrow" aria-hidden="true">→</span>
+            <div>
+              <span>{t('incidents.detail.availableVersion')}</span>
+              <b class="num {severityTone(incident.severity)}">{shape.available}</b>
+            </div>
+          </div>
+        {:else if shape.kind === 'count'}
+          <p class="finding-value">
+            <b class="num">{shape.count}</b>
+            {plural('incidents.detail.securityUpdates', shape.count)}
+          </p>
+        {:else if primary}
+          {#if shape.kind === 'plain' && primaryText?.description}
+            <p class="finding-text">{primaryText.description}</p>
+          {/if}
+          <p class="finding-original">{primary.name}</p>
+          <small class="finding-source">
+            {t('incidents.detail.sourceMessage', { source: primary.connector_name ?? origins[primary.origin] })}
+          </small>
+        {/if}
+
+        {#if primary?.invalidated_at}
+          <p class="finding-invalidated">
+            {t('incidents.detail.invalidatedBy', {
+              who: primary.invalidated_by ?? t('target.anOperator'),
+              date: stamp(primary.invalidated_at)
+            })}
+          </p>
+        {/if}
+
+        {#if indicatorsError}
+          <div class="finding-state error-state" role="alert">
+            <span>{indicatorsError}</span>
+            <button class="btn sm" type="button" onclick={loadIndicators}>{t('common.retry')}</button>
+          </div>
+        {:else if indicatorsLoading && measurable(primary?.fact)}
+          <div class="finding-state" role="status">{t('incidents.detail.metricsLoading')}</div>
+        {:else if indicatorSplit.relevant.length > 0}
+          <div class="finding-metrics">
+            {#each indicatorSplit.relevant as row (row.key)}
+              {@render metricCard(row, false)}
+            {/each}
+          </div>
+          <p class="correlation-note">{t('incidents.detail.correlationNote')}</p>
+        {:else if indicators && measurable(primary?.fact)}
+          <p class="finding-state">{t('incidents.detail.unmeasured')}</p>
+        {/if}
+      </section>
+
+      {#if incident.impact_count > 1}
+        <section class="detail-section impacts" aria-labelledby="incident-impacts-title">
+          <div class="section-head">
+            <h3 id="incident-impacts-title">{t('incidents.detail.affectedResources')}</h3>
+            {#if diverges(incident)}<span class="pill warn">{t('targets.divergence')}</span>{/if}
+            <span class="section-count num">{incident.active_impact_count}/{incident.impact_count}</span>
+          </div>
+          {#each incident.impacts as impact (impact.id)}
+            <div class="impact-row">
+              <div>
+                <a href="/cibles/{impact.target_id}"><strong>{impact.target_name}</strong></a>
+                <small>
+                  {impact.resolved_at
+                    ? t('incidents.detail.resolvedAfter', { duration: since(impact.opened_at, new Date(impact.resolved_at)) })
+                    : t('incidents.detail.openedAgo', { duration: since(impact.opened_at, now) })}
+                </small>
+              </div>
+              <span class="pill {impact.status === 'resolved' ? 'ok' : severityTone(impact.effective_severity)}">
+                {impact.status === 'resolved' ? t('target.verdict.recovered') : severityLabel(impact.effective_severity)}
+              </span>
+            </div>
+          {/each}
           <p class="grouping-note">
             {t('incidents.detail.groupingExplanation', {
               nature: natureLabel(incident),
               seconds: incident.propagation_window_seconds
             })}
           </p>
-        {/if}
-      </section>
+        </section>
+      {/if}
 
-      <section class="detail-section metrics" aria-labelledby="incident-metrics-title">
-        <div class="section-head">
-          <div>
-            <h3 id="incident-metrics-title">{t('incidents.detail.metrics')}</h3>
-            <p>{t('incidents.detail.metricsNote')}</p>
-          </div>
-          <span class="pill info">± 2 h</span>
-        </div>
-
-        {#if indicatorsLoading}
-          <div class="section-state" role="status">{t('incidents.detail.metricsLoading')}</div>
-        {:else if indicatorsError}
-          <div class="section-state error-state" role="alert">
-            <span>{indicatorsError}</span>
-            <button class="btn sm" type="button" onclick={loadIndicators}>{t('common.retry')}</button>
-          </div>
-        {:else if indicators}
-          {#if metricRows.captured.length === 0}
-            <div class="section-state">
-              <strong>{t('incidents.detail.metricsEmpty')}</strong>
-              <span>{t('incidents.detail.metricsEmptyHint')}</span>
-            </div>
-          {:else}
+      <div class="folds">
+        {#if indicatorSplit.others.length > 0}
+          <details class="fold">
+            <summary>
+              <span>{t('incidents.detail.otherMetrics')}</span>
+              <small class="num">{otherPreview}</small>
+            </summary>
             <div class="metric-grid">
-              {#each metricRows.captured as row (row.key)}
-                <article class="metric-card">
-                  <div class="metric-title">
-                    <span>
-                      <strong>{row.label}</strong>
-                      {#if row.indicator?.dimension}<small>{row.indicator.dimension}</small>{/if}
-                    </span>
-                    <b class="num">{formatIndicator(row.snapshot?.value, row.unit)}</b>
-                  </div>
-                  <small class="snapshot-time">
-                    {t('incidents.detail.snapshotAt', { date: stamp(row.snapshot!.observed_at) })}
-                  </small>
-                  {#if row.points.length > 0}
-                    <IndicatorHistoryChart
-                      compact
-                      points={row.points}
-                      unit={row.unit}
-                      label={t('incidents.detail.chartLabel', { label: row.label })}
-                      timeBounds={metricTimeBounds}
-                      {marker}
-                    />
-                  {:else}
-                    <div class="curve-empty">{t('incidents.detail.curveExpired')}</div>
-                  {/if}
-                </article>
+              {#each indicatorSplit.others as row (row.key)}
+                {@render metricCard(row)}
               {/each}
             </div>
-          {/if}
-
-          {#if metricRows.additional.length > 0}
-            <details class="additional-metrics">
-              <summary>{plural('incidents.detail.moreMetrics', metricRows.additional.length)}</summary>
-              <div class="metric-grid">
-                {#each metricRows.additional as row (row.key)}
-                  <article class="metric-card secondary">
-                    <div class="metric-title">
-                      <span>
-                        <strong>{row.label}</strong>
-                        {#if row.indicator?.dimension}<small>{row.indicator.dimension}</small>{/if}
-                      </span>
-                      <small>{t('incidents.detail.noSnapshot')}</small>
-                    </div>
-                    {#if row.points.length > 0}
-                      <IndicatorHistoryChart
-                        compact
-                        points={row.points}
-                        unit={row.unit}
-                        label={t('incidents.detail.chartLabel', { label: row.label })}
-                        timeBounds={metricTimeBounds}
-                        {marker}
-                      />
-                    {:else}
-                      <div class="curve-empty">{t('incidents.detail.curveExpired')}</div>
-                    {/if}
-                  </article>
-                {/each}
-              </div>
-            </details>
-          {/if}
-
-          <p class="correlation-note">{t('incidents.detail.correlationNote')}</p>
+            <p class="correlation-note">{t('incidents.detail.correlationNote')}</p>
+          </details>
         {/if}
-      </section>
 
-      <section class="detail-section sources" aria-labelledby="incident-sources-title">
-        <div class="section-head">
-          <div>
-            <h3 id="incident-sources-title">{t('incidents.detail.impactsAndEvidence')}</h3>
-            <p>{t('incidents.detail.impactsAndEvidenceNote')}</p>
-          </div>
-          {#if diverges(incident)}<span class="pill warn">{t('targets.divergence')}</span>{/if}
-          <span class="section-count num">{evidence.length}</span>
-        </div>
-
-        <div class="impact-list">
+        <details class="fold" open={invalidationFor ? true : undefined}>
+          <summary>
+            <span>{plural('incidents.detail.sourceDetails', evidence.length)}</span>
+            <small class="num">{plural('incidents.detail.evidenceCount', evidence.length)}</small>
+          </summary>
           {#each incident.impacts as impact (impact.id)}
-            <section class="impact-group">
-              <header class="impact-head">
-                <div>
-                  <a href="/cibles/{impact.target_id}"><strong>{impact.target_name}</strong></a>
-                  <small>
-                    {t('incidents.detail.impactDates', {
-                      opened: stamp(impact.opened_at),
-                      resolved: impact.resolved_at ? stamp(impact.resolved_at) : t('incidents.detail.ongoing')
-                    })}
-                  </small>
-                </div>
-                <span class="pill {impact.status === 'resolved' ? 'ok' : severityTone(impact.effective_severity)}">
-                  {severityLabel(impact.effective_severity)}
-                </span>
-                <span class="impact-count num">
-                  {t('incidents.detail.evidenceRatio', {
-                    active: activeEvidenceCount(impact),
-                    total: impact.evidence.length
-                  })}
-                </span>
-              </header>
-
-              <div class="source-list">
-                {#each impact.evidence as signal (signal.id)}
-                  {@const invalidated = Boolean(signal.invalidated_at)}
-                  {@const presented = signal.presentation?.[i18n.locale]}
-                  <article class="source-row" class:invalidated>
-                    <div class="source-identity">
-                      <i
-                        class="dot {invalidated ? 'idle' : signal.active ? severityTone(signal.severity) : 'ok'}"
-                        aria-hidden="true"
-                      ></i>
-                      <span>
-                        <strong>{presented?.title || signal.name}</strong>
-                        {#if presented?.description}<small>{presented.description}</small>{/if}
-                        <small>{signal.connector_name ?? origins[signal.origin]}</small>
-                      </span>
-                    </div>
-                    <span class="pill {invalidated ? '' : signal.active ? severityTone(signal.severity) : 'ok'}">
-                      {invalidated
-                        ? t('target.verdict.invalidated')
-                        : signal.active
-                          ? t('target.failing')
-                          : t('target.verdict.recovered')}
-                    </span>
-                    {#if presented?.title && presented.title !== signal.name}
-                      <details class="source-ids source-original">
-                        <summary>{t('incidents.detail.originalMessage')}</summary>
-                        <p>{signal.name}</p>
-                      </details>
-                    {/if}
-                    <dl class="source-dates">
-                      <div>
-                        <dt>{t('incidents.detail.sourceOpened')}</dt>
-                        <dd class="num">{stamp(signal.opened_at)}</dd>
-                      </div>
-                      <div>
-                        <dt>{t('incidents.detail.sourceRecovered')}</dt>
-                        <dd class="num">{signal.resolved_at ? stamp(signal.resolved_at) : t('common.none')}</dd>
-                      </div>
-                      <div>
-                        <dt>{t('incidents.detail.upstreamAck')}</dt>
-                        <dd
-                          class:crit={signal.acknowledgement_sync_status === 'failed'}
-                          title={signal.acknowledgement_sync_error}
-                        >
-                          {t(`incidents.detail.ackSync.${signal.acknowledgement_sync_status}`)}
-                        </dd>
-                      </div>
-                    </dl>
-
-                    {#if invalidated}
-                      <p class="invalidation-copy">
-                        <strong>{signal.invalidation_reason ?? t('target.noReason')}</strong>
-                        <span>
-                          {t('incidents.detail.invalidatedBy', {
-                            who: signal.invalidated_by ?? t('target.anOperator'),
-                            date: signal.invalidated_at ? stamp(signal.invalidated_at) : t('common.none')
-                          })}
-                        </span>
-                      </p>
-                    {:else if incident.status === 'active' && signal.active && session.user?.role !== 'observer'}
-                      <button
-                        class="btn sm source-action"
-                        type="button"
-                        onclick={(event) => beginInvalidation(signal, event.currentTarget)}
-                      >{t('target.invalidate')}</button>
-                    {/if}
-
-                    {#if signal.external_event_id || signal.external_object_id}
-                      <details class="source-ids">
-                        <summary>{t('incidents.detail.externalIdentifiers')}</summary>
-                        {#if signal.external_event_id}
-                          <code>{signal.external_event_id}</code>
-                        {/if}
-                        {#if signal.external_object_id}
-                          <code>{signal.external_object_id}</code>
-                        {/if}
-                      </details>
-                    {/if}
-
-                    {#if invalidationFor?.id === signal.id}
-                      <form class="invalidation-form" onsubmit={confirmInvalidation} novalidate>
-                        <div class="field">
-                          <label for="incident-invalidation-reason-{signal.id}">{t('target.reason')}</label>
-                          <textarea
-                            bind:this={reasonField}
-                            id="incident-invalidation-reason-{signal.id}"
-                            bind:value={invalidationReason}
-                            rows="3"
-                            required
-                            minlength="8"
-                            maxlength="500"
-                            aria-invalid={invalidationError ? 'true' : undefined}
-                            aria-describedby="incident-invalidation-hint-{signal.id}{invalidationError ? ` incident-invalidation-error-${signal.id}` : ''}"
-                            placeholder={t('target.reasonPlaceholder')}
-                          ></textarea>
-                          <small id="incident-invalidation-hint-{signal.id}">{t('target.reasonHint')}</small>
-                          {#if invalidationError}
-                            <small id="incident-invalidation-error-{signal.id}" class="field-error" role="alert">
-                              {invalidationError}
-                            </small>
-                          {/if}
-                        </div>
-                        <div class="form-actions">
-                          <button class="btn" type="button" onclick={cancelInvalidation}>{t('common.cancel')}</button>
-                          <button class="btn danger" type="submit" disabled={invalidating}>
-                            {invalidating ? t('common.saving') : t('target.invalidateConfirm')}
-                          </button>
-                        </div>
-                      </form>
-                    {/if}
-                  </article>
-                {:else}
-                  <div class="section-state compact">{t('incidents.detail.sourcesEmpty')}</div>
-                {/each}
-              </div>
-            </section>
+            {#if incident.impact_count > 1}
+              <h4 class="source-group">{impact.target_name}</h4>
+            {/if}
+            {#each impact.evidence as signal (signal.id)}
+              {@render sourceRow(signal)}
+            {:else}
+              <div class="section-state compact">{t('incidents.detail.sourcesEmpty')}</div>
+            {/each}
           {:else}
-            <div class="section-state">{t('incidents.detail.sourcesEmpty')}</div>
+            <div class="section-state compact">{t('incidents.detail.sourcesEmpty')}</div>
           {/each}
-        </div>
-      </section>
+        </details>
 
-      <section class="detail-section activity" aria-labelledby="incident-activity-title">
-        <div class="section-head">
-          <div>
-            <h3 id="incident-activity-title">{t('target.activityLog')}</h3>
-            <p>{t('incidents.detail.activityNote')}</p>
+        <details class="fold">
+          <summary>
+            <span>{t('target.activityLog')}</span>
+            <small class="num">{activity.length}</small>
+          </summary>
+          <div class="fold-body">
+            <ActivityTimeline entries={activity} />
           </div>
-          <span class="section-count num">{activity.length}</span>
-        </div>
-        <ActivityTimeline entries={activity} />
-      </section>
+        </details>
+      </div>
     {/if}
   </div>
 
@@ -695,10 +715,10 @@
     background: var(--drawer-backdrop);
   }
 
+  /* En-tête : la Ressource, le problème, puis une phrase d'état. */
   .drawer-head {
     flex: none;
     display: flex;
-    flex-wrap: wrap;
     align-items: flex-start;
     gap: var(--s4);
     padding: var(--s4) var(--s5);
@@ -713,37 +733,29 @@
 
   .eyebrow {
     display: block;
-    margin-bottom: var(--s1);
-    color: var(--faint);
-    font-size: var(--chart-text-size);
-    font-weight: var(--weight-semibold);
-  }
-
-  .drawer-head h2 {
     overflow-wrap: anywhere;
-    font-size: var(--text-md);
-  }
-
-  .drawer-head p {
-    margin-top: var(--s1);
     color: var(--muted);
     font-size: var(--text-sm);
   }
 
-  .head-status {
-    order: 3;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: var(--s3);
-    flex-wrap: wrap;
+  .drawer-head h2 {
+    margin-top: var(--s1);
+    overflow-wrap: anywhere;
+    font-size: var(--text-lg);
   }
 
-  .head-status .pill:first-child {
-    display: inline-flex;
+  .head-meta {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--s2);
+    gap: var(--s2) var(--s3);
+    margin-top: var(--s3);
+    color: var(--muted);
+    font-size: var(--text-sm);
+  }
+
+  .head-facts {
+    min-width: 0;
   }
 
   .close {
@@ -768,6 +780,9 @@
     flex: 1;
     min-height: 0;
     container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s4);
     padding: var(--s5);
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -792,77 +807,22 @@
     min-height: 24rem;
   }
 
+  .section-state.compact {
+    min-height: 4rem;
+  }
+
   .error-state {
     color: var(--crit);
   }
 
-  .summary,
-  .detail-section {
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-l);
-    background: var(--surface);
-    overflow: hidden;
-  }
-
-  .summary,
-  .detail-section.activity {
-    overflow: visible;
-  }
-
-  .detail-section {
-    margin-top: var(--s5);
-  }
-
-  .date-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .date-grid > div {
-    min-width: 0;
-    padding: var(--s4) var(--s5);
-    border-inline-end: 1px solid var(--line-row);
-  }
-
-  .date-grid > div:nth-child(even) { border-inline-end: 0; }
-  .date-grid > div:nth-child(-n+2) { border-bottom: 1px solid var(--line-row); }
-
-  .date-grid span,
-  .date-grid strong,
-  .date-grid small {
-    display: block;
-  }
-
-  .date-grid span {
-    margin-bottom: var(--s2);
-    color: var(--faint);
-    font-size: var(--chart-text-size);
-  }
-
-  .date-grid strong {
-    color: var(--ink);
-    font-size: var(--text-sm);
-    font-weight: var(--weight-semibold);
-    white-space: normal;
-  }
-
-  .date-grid small {
-    margin-top: var(--s1);
-    color: var(--faint);
-    font-size: var(--chart-text-size);
-  }
-
-  .summary-notes {
+  .notes {
     position: relative;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--s4);
-    min-height: var(--ctl-h);
-    padding: var(--s3) var(--s5);
-    border-top: 1px solid var(--line-row);
+    gap: var(--s3) var(--s4);
     color: var(--faint);
     font-size: var(--chart-text-size);
-    flex-wrap: wrap;
   }
 
   .propagation-state {
@@ -877,18 +837,121 @@
 
   .propagation-state :global(.info-hint .tooltip) {
     top: 100%;
-    left: var(--s5);
-    width: min(19rem, calc(100% - 2 * var(--s5)));
+    left: 0;
+    width: min(19rem, 100%);
   }
 
-  .grouping-note {
-    padding: var(--s3) var(--s5);
-    border-top: 1px solid var(--line-row);
+  /* Constat : ce que le fait reconnu établit, avant tout le reste. */
+  .finding,
+  .detail-section,
+  .fold {
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-l);
+    background: var(--surface);
+  }
+
+  .finding {
+    padding: var(--s4) var(--s5);
+  }
+
+  .finding-label {
+    color: var(--faint);
+    font-size: var(--chart-text-size);
+    font-weight: var(--weight-medium);
+  }
+
+  .finding-label .num {
+    color: var(--ink);
+  }
+
+  .versions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--s3) var(--s5);
+    margin-top: var(--s3);
+  }
+
+  .versions span:not(.version-arrow),
+  .versions b {
+    display: block;
+  }
+
+  .versions span:not(.version-arrow) {
+    color: var(--faint);
+    font-size: var(--chart-text-size);
+  }
+
+  .versions b,
+  .finding-value b {
+    margin-top: var(--s1);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+
+  .version-arrow {
+    color: var(--faint);
+    font-size: var(--text-lg);
+  }
+
+  .finding-value {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s3);
+    margin-top: var(--s3);
     color: var(--muted);
-    font-size: var(--text-xs);
-    line-height: 1.5;
+    font-size: var(--text-sm);
   }
 
+  .finding-text,
+  .finding-original {
+    margin-top: var(--s3);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    font-size: var(--text-sm);
+  }
+
+  .finding-source,
+  .finding-invalidated {
+    display: block;
+    margin-top: var(--s2);
+    color: var(--faint);
+    font-size: var(--chart-text-size);
+  }
+
+  .finding-state {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s3);
+    margin-top: var(--s3);
+    color: var(--faint);
+    font-size: var(--chart-text-size);
+  }
+
+  .finding-state.error-state {
+    color: var(--crit);
+  }
+
+  .finding-metrics {
+    display: grid;
+    gap: var(--s4);
+    margin-top: var(--s3);
+  }
+
+  .finding-metrics .metric-card {
+    padding: 0;
+    border: 0;
+  }
+
+  .finding .correlation-note {
+    margin-top: var(--s3);
+    padding: 0;
+    border: 0;
+  }
+
+  /* Plusieurs Ressources : une ligne par Atteinte, sans imbriquer les Preuves. */
   .section-head {
     display: flex;
     align-items: center;
@@ -897,23 +960,101 @@
     border-bottom: 1px solid var(--line);
   }
 
-  .section-head > div {
+  .section-head h3 {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--text-sm);
+  }
+
+  .section-count {
+    color: var(--faint);
+  }
+
+  .impact-row {
+    display: flex;
+    align-items: center;
+    gap: var(--s4);
+    padding: var(--s3) var(--s5);
+    border-bottom: 1px solid var(--line-row);
+  }
+
+  .impact-row > div {
     min-width: 0;
     flex: 1;
   }
 
-  .section-head h3 {
-    font-size: var(--text-md);
+  .impact-row strong,
+  .impact-row small {
+    display: block;
+    overflow-wrap: anywhere;
   }
 
-  .section-head p {
+  .impact-row strong {
+    font-size: var(--text-sm);
+  }
+
+  .impact-row a:hover strong {
+    color: var(--accent);
+  }
+
+  .impact-row small {
     margin-top: var(--s1);
     color: var(--faint);
     font-size: var(--chart-text-size);
   }
 
-  .section-count {
+  .grouping-note {
+    padding: var(--s3) var(--s5);
+    color: var(--muted);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+  }
+
+  /* Replis : tout ce qui sert à vérifier, pas à comprendre. */
+  .folds {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+  }
+
+  .fold > summary {
+    min-height: var(--ctl-h-lg);
+    display: flex;
+    align-items: center;
+    gap: var(--s4);
+    padding: var(--s3) var(--s5);
+    cursor: pointer;
+    font-size: var(--text-sm);
+  }
+
+  .fold > summary > span {
+    flex: none;
+  }
+
+  .fold > summary > small {
+    min-width: 0;
+    margin-inline-start: auto;
+    overflow: hidden;
     color: var(--faint);
+    font-size: var(--chart-text-size);
+    text-align: end;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fold[open] > summary {
+    border-bottom: 1px solid var(--line-row);
+  }
+
+  .fold-body {
+    padding: var(--s4) var(--s5);
+  }
+
+  .source-group {
+    padding: var(--s3) var(--s5);
+    border-bottom: 1px solid var(--line-row);
+    background: var(--surface-2);
+    font-size: var(--text-sm);
   }
 
   .metric-grid {
@@ -927,11 +1068,11 @@
     border-bottom: 1px solid var(--line-row);
   }
 
-  .metric-card:nth-child(odd) {
+  .metric-grid .metric-card:nth-child(odd) {
     border-inline-end: 1px solid var(--line-row);
   }
 
-  .metric-card:last-child:nth-child(odd) {
+  .metric-grid .metric-card:last-child:nth-child(odd) {
     grid-column: 1 / -1;
     border-inline-end: 0;
   }
@@ -983,72 +1124,10 @@
     font-size: var(--chart-text-size);
   }
 
-  .additional-metrics {
-    border-top: 1px solid var(--line);
-  }
-
-  .additional-metrics summary,
-  .source-ids summary {
-    cursor: pointer;
-    color: var(--muted);
-    font-size: var(--text-sm);
-  }
-
-  .additional-metrics > summary {
-    min-height: var(--ctl-h-lg);
-    display: flex;
-    align-items: center;
-    padding: var(--s3) var(--s5);
-  }
-
-  .additional-metrics[open] > summary {
-    border-bottom: 1px solid var(--line-row);
-  }
-
   .correlation-note {
     padding: var(--s3) var(--s5);
-    border-top: 1px solid var(--line);
     color: var(--faint);
     font-size: var(--chart-text-size);
-  }
-
-  .impact-group + .impact-group {
-    border-top: 1px solid var(--line-strong);
-  }
-
-  .impact-head {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    align-items: center;
-    gap: var(--s4);
-    padding: var(--s3) var(--s5);
-    background: var(--surface-2);
-  }
-
-  .impact-head > div,
-  .impact-head strong,
-  .impact-head small {
-    display: block;
-    min-width: 0;
-  }
-
-  .impact-head strong {
-    font-size: var(--text-sm);
-  }
-
-  .impact-head a:hover strong {
-    color: var(--accent);
-  }
-
-  .impact-head small,
-  .impact-count {
-    margin-top: var(--s1);
-    color: var(--faint);
-    font-size: var(--chart-text-size);
-  }
-
-  .section-state.compact {
-    min-height: 4rem;
   }
 
   .source-row {
@@ -1093,17 +1172,34 @@
     font-size: var(--chart-text-size);
   }
 
-  .source-dates {
+  .source-original,
+  .source-dates,
+  .source-action,
+  .invalidation-copy,
+  .source-ids,
+  .invalidation-form {
     grid-column: 1 / -1;
+  }
+
+  .source-original span,
+  .source-dates dt {
+    color: var(--faint);
+    font-size: var(--chart-text-size);
+  }
+
+  .source-original p {
+    margin-top: var(--s1);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--muted);
+    font-size: var(--text-sm);
+  }
+
+  .source-dates {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--s4);
     margin: 0;
-  }
-
-  .source-dates dt {
-    color: var(--faint);
-    font-size: var(--chart-text-size);
   }
 
   .source-dates dd {
@@ -1112,12 +1208,10 @@
   }
 
   .source-action {
-    grid-column: 1 / -1;
     justify-self: start;
   }
 
   .invalidation-copy {
-    grid-column: 1 / -1;
     max-width: 100%;
     font-size: var(--chart-text-size);
   }
@@ -1132,14 +1226,8 @@
     color: var(--faint);
   }
 
-  .source-ids {
-    grid-column: 1 / -1;
-  }
-
-  .source-original p {
-    margin: var(--s2) 0 0;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+  .source-ids summary {
+    cursor: pointer;
     color: var(--muted);
     font-size: var(--text-sm);
   }
@@ -1153,7 +1241,6 @@
   }
 
   .invalidation-form {
-    grid-column: 1 / -1;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
@@ -1204,12 +1291,7 @@
   @media (max-width: 48rem) {
     .incident-drawer {
       width: 100vw;
-      max-width: none;
-      height: 100vh;
-      height: 100dvh;
-      max-height: none;
       border: 0;
-      border-radius: 0;
     }
 
     .drawer-head {
@@ -1221,82 +1303,36 @@
       height: 2.75rem;
     }
 
-    .head-status {
-      order: 3;
-      width: 100%;
-      justify-content: flex-start;
-    }
-
-    .drawer-head {
-      flex-wrap: wrap;
-    }
-
     .drawer-body {
       padding: var(--s4);
     }
-    .drawer-actions .note { flex-basis: 100%; }
 
+    .drawer-actions .note { flex-basis: 100%; }
   }
 
   @container (max-width: 32rem) {
-    .date-grid,
     .metric-grid,
     .source-dates {
       grid-template-columns: minmax(0, 1fr);
     }
 
-    .date-grid > div,
-    .metric-card:nth-child(odd) {
+    .metric-grid .metric-card:nth-child(odd) {
       border-inline-end: 0;
     }
 
-    .date-grid > div {
-      display: grid;
-      grid-template-columns: minmax(7rem, 0.8fr) minmax(0, 1fr);
-      gap: var(--s3);
-      border-bottom: 1px solid var(--line-row);
-    }
-
-    .date-grid > div:last-child {
-      border-bottom: 0;
-    }
-
-    .date-grid span {
-      margin: 0;
-    }
-
-    .date-grid small {
-      grid-column: 2;
-    }
-
-    .section-head {
-      align-items: flex-start;
-    }
-
-    .impact-head {
-      grid-template-columns: minmax(0, 1fr) auto;
-    }
-
-    .impact-count {
-      grid-column: 1 / -1;
-      margin-top: 0;
-    }
-
-    .source-row {
-      grid-template-columns: minmax(0, 1fr) auto;
-    }
-
-    .source-dates,
-    .source-action,
-    .invalidation-copy,
-    .source-ids,
-    .invalidation-form {
-      grid-column: 1 / -1;
+    .finding,
+    .fold > summary,
+    .fold-body,
+    .source-row,
+    .source-group,
+    .impact-row,
+    .section-head,
+    .grouping-note {
+      padding-inline: var(--s4);
     }
 
     .source-dates {
       gap: var(--s3);
-      padding-inline-start: 1.125rem;
     }
 
     .source-dates > div {
@@ -1340,7 +1376,7 @@
   }
 
   @media (hover: hover) {
-    .additional-metrics summary:hover,
+    .fold > summary:hover,
     .source-ids summary:hover {
       color: var(--ink);
     }
