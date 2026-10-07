@@ -8,6 +8,9 @@
   import ResourceTooltip from '$lib/components/ResourceTooltip.svelte';
   import { Input } from '$lib/components/ui/input/index.js';
   import { Popover } from 'bits-ui';
+  import Checkbox from '$lib/components/ui/Checkbox.svelte';
+  import RadioGroup from '$lib/components/ui/RadioGroup.svelte';
+  import RadioItem from '$lib/components/ui/RadioItem.svelte';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
   import ConnectorChooser from '$lib/components/ConnectorChooser.svelte';
   import { session } from '$lib/session.svelte';
@@ -105,18 +108,22 @@
       <Popover.Trigger class="resource-filter-trigger"><Icon name="settings" size={18} />{t('resources.filters')}{#if activeFilterCount}<span class="num">{activeFilterCount}</span>{/if}</Popover.Trigger>
       <Popover.Content class="resource-filter-panel" align="end" sideOffset={8} collisionPadding={16}>
         <h2>{t('resources.filters')}</h2>
-        <fieldset>
-          <legend>{t('targets.scope')}</legend>
-          {#each [
-            {value: 'all' as const, label: t('resources.anyState'), count: scoped.length},
-            {value: 'problems' as const, label: t('targets.scope.problems'), count: scoped.filter(row => row.problems.length > 0).length},
-            {value: 'maintenance' as const, label: t('nav.maintenance'), count: scoped.filter(row => row.state === 'maintenance').length},
-            {value: 'unknown' as const, label: t('state.unknown'), count: scoped.filter(row => row.state === 'unknown').length}
-          ] as item (item.value)}
-            <label class="filter-option"><input type="radio" name="resource-scope" bind:group={scope} value={item.value} />{item.label}<span class="num">{item.count}</span></label>
-          {/each}
-        </fieldset>
-        <label class="filter-option contradiction-option"><input type="checkbox" bind:checked={divergentOnly} />{t('targets.divergence')}</label>
+        <RadioGroup bind:value={() => scope, (value) => (scope = value as typeof scope)} label={t('targets.scope')}>
+          {#snippet child({ props })}
+            <div {...props} class="scope-group">
+              <span class="legend" aria-hidden="true">{t('targets.scope')}</span>
+              {#each [
+                {value: 'all' as const, label: t('resources.anyState'), count: scoped.length},
+                {value: 'problems' as const, label: t('targets.scope.problems'), count: scoped.filter(row => row.problems.length > 0).length},
+                {value: 'maintenance' as const, label: t('nav.maintenance'), count: scoped.filter(row => row.state === 'maintenance').length},
+                {value: 'unknown' as const, label: t('state.unknown'), count: scoped.filter(row => row.state === 'unknown').length}
+              ] as item (item.value)}
+                <RadioItem value={item.value} class="filter-option">{item.label}<span class="num">{item.count}</span></RadioItem>
+              {/each}
+            </div>
+          {/snippet}
+        </RadioGroup>
+        <Checkbox class="filter-option contradiction-option" bind:checked={divergentOnly}>{t('targets.divergence')}</Checkbox>
         <Popover.Close class="filter-done">{t('resources.done')}</Popover.Close>
       </Popover.Content>
     </Popover.Root>
@@ -235,12 +242,11 @@
   :global(.resource-filter-trigger:hover) { background: var(--surface-2); }
   :global(.resource-filter-panel) { z-index: 50; width: 20rem; max-width: calc(100vw - var(--s6)); padding: var(--s4); border: var(--line-width) solid var(--line-strong); border-radius: var(--r-l); background: var(--bg); color: var(--ink); font-size: var(--text-sm); box-shadow: 0 var(--s2) var(--s6) var(--line); }
   :global(.resource-filter-panel h2) { margin: 0 0 var(--s3); font-size: var(--text-sm); }
-  fieldset { border: 0; margin: 0; padding: 0; }
-  legend { color: var(--muted); font-size: var(--text-xs); margin-bottom: var(--s2); }
-  .filter-option { display: flex; align-items: center; gap: var(--s2); min-height: var(--choice-hit-area); cursor: pointer; }
-  .filter-option .num { margin-left: auto; color: var(--muted); }
-  .filter-option input { accent-color: var(--ink); }
-  .contradiction-option { border-top: var(--line-width) solid var(--line); margin-top: var(--s2); padding-top: var(--s2); }
+  .scope-group { display: grid; }
+  .legend { color: var(--muted); font-size: var(--text-xs); margin-bottom: var(--s2); }
+  :global(.resource-filter-panel .filter-option) { display: flex; width: 100%; align-items: center; gap: var(--s2); min-height: var(--choice-hit-area); cursor: pointer; }
+  :global(.resource-filter-panel .filter-option) .num { margin-left: auto; color: var(--muted); }
+  :global(.resource-filter-panel .contradiction-option) { border-top: var(--line-width) solid var(--line); margin-top: var(--s2); padding-top: var(--s2); }
   :global(.filter-done), .menu-action { width: 100%; min-height: var(--choice-hit-area); padding: var(--s2); color: var(--ink); background: var(--surface); border: 0; border-radius: var(--r-button); font: inherit; cursor: pointer; }
   .menu-action { text-align: left; background: transparent; }
   .menu-action:hover, :global(.filter-done:hover) { background: var(--surface-2); }

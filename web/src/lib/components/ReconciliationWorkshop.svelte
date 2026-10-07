@@ -7,6 +7,8 @@
   import { natureLabel } from '$lib/format';
   import Checkbox from './ui/Checkbox.svelte';
   import Modal from './ui/Modal.svelte';
+  import RadioGroup from './ui/RadioGroup.svelte';
+  import RadioItem from './ui/RadioItem.svelte';
   import Button from './ui/Button.svelte';
 
   let {
@@ -168,10 +170,11 @@
         {#if loading}
           <div class="working" role="status"><i></i><span><strong>{t('reconciliation.previewLoading')}</strong><small>{t('reconciliation.previewLoadingHint')}</small></span></div>
         {:else if preview}
-          <section class="comparison">
+          {@const shown = preview}
+          {#snippet comparisonCards(preview: ReconciliationPreview)}
             <article class:survivor={true}>
               <label>
-                {#if !source}<input type="radio" name="survivor" checked onchange={() => choosePreviewSide('primary')} />{/if}
+                {#if !source}<RadioItem value="primary" />{/if}
                 <span><strong>{preview.primary.name}</strong><small>{t('reconciliation.survivor')}</small></span>
               </label>
               <dl>
@@ -184,7 +187,7 @@
             <span class="direction">←</span>
             <article>
               <label>
-                {#if !source}<input type="radio" name="survivor" onchange={() => choosePreviewSide('secondary')} />{/if}
+                {#if !source}<RadioItem value="secondary" />{/if}
                 <span><strong>{preview.secondary.name}</strong><small>{source ? t('reconciliation.origin') : t('reconciliation.absorbed')}</small></span>
               </label>
               <dl>
@@ -194,7 +197,18 @@
                 <div><dt>{t('reconciliation.identity')}</dt><dd>{preview.secondary.human_managed ? t('reconciliation.managed') : t('reconciliation.discovered')}</dd></div>
               </dl>
             </article>
-          </section>
+          {/snippet}
+          <!-- La survivante est toujours présentée en premier : choisir l'autre
+               carte inverse l'aperçu, et le choix revient sur la première. -->
+          {#if source}
+            <section class="comparison">{@render comparisonCards(shown)}</section>
+          {:else}
+            <RadioGroup bind:value={() => 'primary', (side) => choosePreviewSide(side as 'primary' | 'secondary')} label={t('reconciliation.survivor')}>
+              {#snippet child({ props })}
+                <section {...props} class="comparison">{@render comparisonCards(shown)}</section>
+              {/snippet}
+            </RadioGroup>
+          {/if}
 
           {#if preview.warnings.length > 0}
             <div class="warnings">{#each preview.warnings as warning}<p><i></i>{warning}</p>{/each}</div>
@@ -263,7 +277,6 @@
   .conflicts strong { font-size: .6875rem; }
   .conflicts span { font-family: var(--font-num); padding: var(--s1) var(--s2); border-radius: var(--r-s); background: var(--surface-2); color: var(--muted); font-size: .625rem; }
   .archive-option { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s4); color: var(--muted); font-size: .6875rem; }
-  .comparison input { width: auto; height: auto; }
   .confirmation { margin-top: var(--s4); }
   .confirmation small { color: var(--crit); font-size: .625rem; }
   .error { margin-top: var(--s4); color: var(--crit); font-size: .6875rem; }

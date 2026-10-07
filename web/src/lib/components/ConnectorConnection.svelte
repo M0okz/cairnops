@@ -5,6 +5,7 @@
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import Modal from './ui/Modal.svelte';
+  import Checkbox from './ui/Checkbox.svelte';
   import Button from './ui/Button.svelte';
 
   let { connector, onclose, onsuccess }: { connector: Connector; onclose: () => void; onsuccess: () => Promise<void> | void } = $props();
@@ -113,7 +114,7 @@
                 {#if certificate}
                   <p>{certificate.subject}</p>
                   <p class="fingerprint">SHA-256 · {certificate.fingerprint}</p>
-                  <label class="approval"><input type="checkbox" bind:checked={approvedCertificate} />{t('connection.approveCertificate')}</label>
+                  <Checkbox bind:checked={approvedCertificate}>{t('connection.approveCertificate')}</Checkbox>
                 {/if}
               </section>
             {/if}
@@ -149,7 +150,5 @@
   .certificate { display: grid; gap: var(--s3); }
   .certificate :global(.btn) { justify-self: start; }
   .fingerprint, .test-result p { overflow-wrap: anywhere; }
-  .approval { display: flex; gap: var(--s2); align-items: center; }
-  .approval input { width: auto; }
   .test-result:not(:empty), .error { margin-top: var(--s4); }
 </style>
