@@ -4,6 +4,7 @@
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import Button from './ui/Button.svelte';
+  import Badge from './ui/Badge.svelte';
 
   let configurations = $state<OIDCConfigurationSet>({ active: null, draft: null });
   let label = $state('');
@@ -152,13 +153,13 @@
           <strong>{t('oidc.activeProvider', { provider: configurations.active.label })}</strong>
           <small>{configurations.active.issuer}</small>
         </span>
-        <span class="pill ok">{t('oidc.active')}</span>
+        <Badge tone="ok">{t('oidc.active')}</Badge>
       {:else}
         <span class="status-copy">
           <strong>{t('oidc.inactive')}</strong>
           <small>{t('oidc.inactiveHint')}</small>
         </span>
-        <span class="pill">{t('oidc.toConfigure')}</span>
+        <Badge>{t('oidc.toConfigure')}</Badge>
       {/if}
     </div>
 
@@ -499,7 +500,7 @@
       grid-template-columns: auto minmax(0, 1fr);
     }
 
-    .status-bar .pill {
+    .status-bar :global(.pill) {
       grid-column: 2;
       justify-self: start;
     }

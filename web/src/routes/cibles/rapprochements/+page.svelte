@@ -8,6 +8,7 @@
   import { plural, t, type MessageKey } from '$lib/i18n.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
 
   let review = $state<ReconciliationSuggestion | null>(null);
   let manualOpen = $state(false);
@@ -120,7 +121,7 @@
               <span><strong>{item.right.name}</strong><small>{plural('reconciliation.sourceCount', item.right.source_count)}</small></span>
             </div>
             <div class="decision">
-              <span class="pill {item.confidence === 'high' ? 'ok' : 'info'}">{item.confidence === 'high' ? t('reconciliation.confidenceHigh') : t('reconciliation.confidenceMedium')}</span>
+              <Badge tone={item.confidence === 'high' ? 'ok' : 'info'}>{item.confidence === 'high' ? t('reconciliation.confidenceHigh') : t('reconciliation.confidenceMedium')}</Badge>
               <strong>{item.kind === 'target_merge' ? t('reconciliation.targetMerge') : t('reconciliation.correctSource', { name: item.source?.name ?? '' })}</strong>
             </div>
             <div class="evidence">

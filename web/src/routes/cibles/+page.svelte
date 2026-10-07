@@ -13,6 +13,7 @@
   import RadioItem from '$lib/components/ui/RadioItem.svelte';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
   import ConnectorChooser from '$lib/components/ConnectorChooser.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
   import { session } from '$lib/session.svelte';
   import { inWindow, latency, ratio, severityLabel, severityTone, since, stateLabel, stateTones } from '$lib/format';
   import { i18n, plural, t } from '$lib/i18n.svelte';
@@ -150,9 +151,9 @@
           {#if row.target.description}<small class="description">{row.target.description}</small>{/if}
         </div></div>
         <div class="resource-state">
-          {#if resourceCategory === 'software'}<span class="pill info">{t('resources.versionTracking')}</span>
-          {:else if resourceCategory === 'scheduled_task'}<span class="pill {row.problems.length ? 'warn' : 'idle'}">{row.problems.length ? t('target.failing') : t('resources.taskTracking')}</span>
-          {:else}<span class="pill {stateTones[row.state]}">{stateLabel(row.state)}</span>{/if}
+          {#if resourceCategory === 'software'}<Badge tone="info">{t('resources.versionTracking')}</Badge>
+          {:else if resourceCategory === 'scheduled_task'}<Badge tone={row.problems.length ? 'warn' : 'idle'}>{row.problems.length ? t('target.failing') : t('resources.taskTracking')}</Badge>
+          {:else}<Badge tone={stateTones[row.state]}>{stateLabel(row.state)}</Badge>{/if}
           {#if row.divergent}<small class="warn">{t('targets.divergence')}</small>{/if}
         </div>
         <div class="problems">
@@ -274,7 +275,7 @@
    * pathologique ne puisse jamais chevaucher la colonne voisine. Elle dit
    * break-word et non anywhere : anywhere ramènerait la largeur min-content à
    * un seul caractère et annulerait la protection que la colonne demande. */
-  .pill { white-space: normal; overflow-wrap: break-word; }
+  .resource-state :global(.pill) { white-space: normal; overflow-wrap: break-word; }
   .problems { font-size: var(--text-sm); overflow-wrap: anywhere; }
   .resource-details, .resource-state small { font-size: var(--text-xs); }
   .resource-details > span { width: 100%; display: flex; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; color: var(--muted); }

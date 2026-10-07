@@ -15,6 +15,7 @@
   import { Command } from 'bits-ui';
   import Icon, { type IconName } from './Icon.svelte';
   import Modal from './ui/Modal.svelte';
+  import Badge from './ui/Badge.svelte';
   import { incidentHref } from '$lib/incident-detail';
   import { palette } from '$lib/palette.svelte';
   import { session } from '$lib/session.svelte';
@@ -274,7 +275,7 @@
                           {#if hit.detail}<small>{hit.detail}</small>{/if}
                         </span>
                         {#if hit.badge}
-                          <span class="pill {hit.tone ?? ''}">{hit.badge}</span>
+                          <Badge tone={hit.tone ?? ''}>{hit.badge}</Badge>
                         {/if}
                       </Command.Item>
                     {/each}

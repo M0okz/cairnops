@@ -20,6 +20,7 @@
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
   import ReconciliationWorkshop from '$lib/components/ReconciliationWorkshop.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
   import { reconciliationState } from '$lib/reconciliation.svelte';
   import { incidentHref } from '$lib/incident-detail';
   import { latencyHabit } from '$lib/latency-profile';
@@ -370,8 +371,8 @@
       <div>
         <h1>
           {target.name}
-          <span class="pill {stateTones[healthState]}">{stateLabel(healthState)}</span>
-          {#if divergent}<span class="pill warn" title={t('targets.divergenceHint')}>{t('targets.divergence')}</span>{/if}
+          <Badge tone={stateTones[healthState]}>{stateLabel(healthState)}</Badge>
+          {#if divergent}<Badge tone="warn" title={t('targets.divergenceHint')}>{t('targets.divergence')}</Badge>{/if}
         </h1>
         <p>
           {#if target.description}<span class="mono">{target.description}</span> · {/if}
@@ -480,7 +481,7 @@
           <div class="card cols-proof">
             <header>
               <h2>{t('target.proofs')}</h2>
-              {#if divergent}<span class="pill warn">{t('targets.divergence')}</span>{/if}
+              {#if divergent}<Badge tone="warn">{t('targets.divergence')}</Badge>{/if}
               <span class="note">{t('target.proofsNote')}</span>
             </header>
 
@@ -504,13 +505,13 @@
                   </span>
                 </span>
 
-                <span class="pill {dead ? '' : proof.signal.active ? severityTone(proof.signal.severity) : 'ok'}">
+                <Badge tone={dead ? '' : proof.signal.active ? severityTone(proof.signal.severity) : 'ok'}>
                   {dead
                     ? t('target.verdict.invalidated')
                     : proof.signal.active
                       ? t('target.failing')
                       : t('target.verdict.recovered')}
-                </span>
+                </Badge>
 
                 <span class="num hide-sm"><Odometer value={since(proof.signal.opened_at, now)} /></span>
 
@@ -768,7 +769,7 @@
               <span><strong>{source.name}</strong></span>
               {#if admin}<Button size="sm" class="source-move" disabled={structureBusy} onclick={() => (sourceForMove = { id: source.id, target_id: target.id, name: source.name, kind: source.kind, origin: 'native' })}>{t('target.attachSource')}</Button>{/if}
             </span>
-            <span class="pill">{kindLabels[source.kind] ?? source.kind}</span>
+            <Badge>{kindLabels[source.kind] ?? source.kind}</Badge>
             <span class="hide-sm">{outcomeLabels[source.latest_outcome ?? 'unknown']}</span>
             <span class="num hide-sm" class:dim={measured.availability === null}><Odometer value={ratio(measured.availability)} /></span>
             <span class="num hide-sm" class:dim={measured.coverage === null}><Odometer value={ratio(measured.coverage)} /></span>
@@ -810,7 +811,7 @@
               </span>
               {#if admin}<Button size="sm" class="source-move" disabled={structureBusy} onclick={() => (sourceForMove = { id: source.source_id, target_id: target.id, name: source.name, kind: source.kind, origin: 'integration' })}>{t('target.attachSource')}</Button>{/if}
             </span>
-            <span class="pill info">{kindLabels[source.kind] ?? source.kind}</span>
+            <Badge tone="info">{kindLabels[source.kind] ?? source.kind}</Badge>
             <span class="hide-sm">{outcomeLabels[source.latest_outcome ?? 'unknown']}</span>
             <span class="num hide-sm" class:dim={measured.availability === null}><Odometer value={ratio(measured.availability)} /></span>
             <span class="num hide-sm" class:dim={measured.coverage === null}><Odometer value={ratio(measured.coverage)} /></span>
@@ -850,7 +851,7 @@
             <span class="cell-name">
               <span><strong>{source.name}</strong><small class="nature">{kindLabels[source.kind] ?? source.kind}</small></span>
             </span>
-            <span class="pill {severityTone(source.severity)}">{severityLabel(source.severity)}</span>
+            <Badge tone={severityTone(source.severity)}>{severityLabel(source.severity)}</Badge>
             <span class="num hide-sm">{t('duration.seconds', { count: source.interval_seconds })}</span>
             <span class="num hide-sm">{source.timeout_milliseconds} ms</span>
             <span class="num hide-sm">{source.failure_threshold} / {source.recovery_threshold}</span>

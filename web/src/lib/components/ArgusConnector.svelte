@@ -11,6 +11,7 @@
   import Checkbox from './ui/Checkbox.svelte';
   import Modal from './ui/Modal.svelte';
   import Button from './ui/Button.svelte';
+  import Badge from './ui/Badge.svelte';
 
   let {
     onclose,
@@ -222,9 +223,9 @@
                 <div class="decision">
                   {#if service.version_url}<a class="version-link" href={service.version_url} target="_blank" rel="noreferrer">{t('argus.viewVersion')} <span aria-hidden="true">↗</span></a>{/if}
                   {#if service.already_imported_to}
-                    <span class="pill">{t('wizard.alreadyBound')}</span> <small class="faint">{service.already_imported_to.name}</small>
+                    <Badge>{t('wizard.alreadyBound')}</Badge> <small class="faint">{service.already_imported_to.name}</small>
                   {:else if !service.importable}
-                    <span class="pill idle">{stateLabel(service)}</span>
+                    <Badge tone="idle">{stateLabel(service)}</Badge>
                   {:else}
                     <TargetDecision compact name={service.name} value={targetAssignments[service.external_id] ?? ''} candidates={service.candidate_targets} availableTargets={preview.available_targets} disabled={!selected.includes(service.external_id)} onselect={(targetID) => assignTarget(service.external_id, targetID)} />
                   {/if}

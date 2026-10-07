@@ -19,6 +19,7 @@
   import OIDCSettings from '$lib/components/OIDCSettings.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
   import { Tabs } from 'bits-ui';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Account, type Role } from '$lib/api';
@@ -577,15 +578,15 @@
             <!-- Son propre rôle se lit, il ne se choisit pas : l'instance
                  refuserait le geste, autant ne pas l'offrir. -->
             {#if off}
-              <span class="pill">{t('settings.accessWithdrawn')}</span>
+              <Badge>{t('settings.accessWithdrawn')}</Badge>
             {:else if suspended}
-              <span class="pill warn">{t('settings.externalSuspended')}</span>
+              <Badge tone="warn">{t('settings.externalSuspended')}</Badge>
             {:else if user.authorization_regime === 'external'}
-              <span class="pill">{roleLabels[user.role]}</span>
+              <Badge>{roleLabels[user.role]}</Badge>
             {:else if !isLocalAdministrator}
-              <span class="pill">{roleLabels[user.role]}</span>
+              <Badge>{roleLabels[user.role]}</Badge>
             {:else if self}
-              <span class="pill">{roleLabels[user.role]}</span>
+              <Badge>{roleLabels[user.role]}</Badge>
             {:else}
               <label class="role">
                 <span class="visually-hidden">{t('settings.roleOf', { name: user.display_name })}</span>

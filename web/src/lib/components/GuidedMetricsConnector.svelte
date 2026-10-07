@@ -11,6 +11,7 @@
   import { plural, t, type MessageKey } from '$lib/i18n.svelte';
   import Modal from './ui/Modal.svelte';
   import Button from './ui/Button.svelte';
+  import Badge from './ui/Badge.svelte';
   import {
     prepareTargetAssignments,
     reconciliationCounts,
@@ -330,7 +331,7 @@
                 </Checkbox>
                 <div class="rack-decision">
                   {#if locked}
-                    <span class="pill">{t('wizard.alreadyBound')}</span>
+                    <Badge>{t('wizard.alreadyBound')}</Badge>
                     <small class="faint">{item.already_imported_to?.name}</small>
                   {:else}
                     <TargetDecision

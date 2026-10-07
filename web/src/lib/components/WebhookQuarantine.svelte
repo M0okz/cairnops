@@ -3,6 +3,7 @@
   import Icon from './Icon.svelte';
   import Modal from './ui/Modal.svelte';
   import Button from './ui/Button.svelte';
+  import Badge from './ui/Badge.svelte';
   import { onMount } from 'svelte';
   import { api, type Connector, type Target, type WebhookApproval, type WebhookQuarantine } from '$lib/api';
 
@@ -100,9 +101,9 @@
                       dernier {new Date(item.last_seen_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
                     </small>
                   </span>
-                  <span class="pill {item.status === 'firing' ? 'crit' : 'ok'}">
+                  <Badge tone={item.status === 'firing' ? 'crit' : 'ok'}>
                     {item.status === 'firing' ? t('quarantine.firing') : t('quarantine.resolved')}
-                  </span>
+                  </Badge>
                 </div>
 
                 <p class="summary">

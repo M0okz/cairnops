@@ -48,7 +48,7 @@ test("la colonne État ne descend jamais sous son libellé le plus long", () => 
   /* break-word et non anywhere : anywhere ramènerait la largeur min-content de
    * la pastille à un seul caractère, ce qui annulerait la protection que la
    * colonne vient de demander. Les deux correctifs se neutraliseraient. */
-  const pill = page.match(/\.pill\s*\{([^}]*)\}/)?.[1] ?? '';
+  const pill = page.match(/\.pill\)?\s*\{([^}]*)\}/)?.[1] ?? '';
   assert.match(pill, /overflow-wrap:\s*break-word/,
     'la pastille doit rompre un mot pathologique en dernier recours');
   assert.doesNotMatch(pill, /overflow-wrap:\s*anywhere/,

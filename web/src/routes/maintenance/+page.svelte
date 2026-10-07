@@ -8,8 +8,9 @@
   import Odometer from '$lib/components/Odometer.svelte';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
   import { session } from '$lib/session.svelte';
-  import { since, stamp, until } from '$lib/format';
+  import { since, stamp, until, type Tone } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
   import { api, type Maintenance } from '$lib/api';
 
@@ -40,7 +41,7 @@
 
   const shown = $derived(scope === 'planned' ? planned : past);
 
-  const windowStates = $derived<Record<Maintenance['state'], { label: string; tone: string }>>({
+  const windowStates = $derived<Record<Maintenance['state'], { label: string; tone: Tone }>>({
     active: { label: t('maintenance.state.active'), tone: 'info' },
     upcoming: { label: t('maintenance.state.planned'), tone: 'idle' },
     ended: { label: t('maintenance.state.ended'), tone: 'ok' },
@@ -157,7 +158,7 @@
           </span>
         </span>
 
-        <span class="pill {state.tone}">{state.label}</span>
+        <Badge tone={state.tone}>{state.label}</Badge>
 
         <span class="num hide-sm">{stamp(item.starts_at)} → {stamp(item.ends_at)}</span>
 

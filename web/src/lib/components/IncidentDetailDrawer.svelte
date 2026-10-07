@@ -7,6 +7,7 @@
   import ActivityTimeline from './ActivityTimeline.svelte';
   import IndicatorHistoryChart from './IndicatorHistoryChart.svelte';
   import Button from './ui/Button.svelte';
+  import Badge from './ui/Badge.svelte';
   import { APIError, api, type Incident, type IncidentEvidence, type IncidentIndicators } from '$lib/api';
   import {
     diverges,
@@ -311,13 +312,13 @@
         {#if presented?.title}<small>{presented.title}</small>{/if}
       </span>
     </div>
-    <span class="pill {invalidated ? '' : signal.active ? severityTone(signal.severity) : 'ok'}">
+    <Badge tone={invalidated ? '' : signal.active ? severityTone(signal.severity) : 'ok'}>
       {invalidated
         ? t('target.verdict.invalidated')
         : signal.active
           ? t('target.failing')
           : t('target.verdict.recovered')}
-    </span>
+    </Badge>
     <div class="source-original">
       <span>{t('incidents.detail.originalMessage')}</span>
       <p>{signal.name}</p>
@@ -430,12 +431,12 @@
           <h2 id={titleID}>{incident?.summary?.[i18n.locale].title ?? (incident ? natureLabel(incident) : t('incidents.detail.title'))}</h2>
           {#if incident}
             <p id={descriptionID} class="head-meta">
-              <span class="pill {severityTone(incident.severity)}">{severityLabel(incident.severity)}</span>
+              <Badge tone={severityTone(incident.severity)}>{severityLabel(incident.severity)}</Badge>
               {#if incident.status === 'resolved'}
-                <span class="pill ok">{t('incidents.detail.resolvedStatus')}</span>
+                <Badge tone="ok">{t('incidents.detail.resolvedStatus')}</Badge>
               {/if}
               {#if maintainedImpacts.length > 0}
-                <span class="pill info">{t('state.maintenance')}</span>
+                <Badge tone="info">{t('state.maintenance')}</Badge>
               {/if}
               <!-- Le séparateur reste collé au mot qui le précède : une ligne ne commence jamais par « · ». -->
               <span class="head-facts">
@@ -564,7 +565,7 @@
             <section class="detail-section impacts" aria-labelledby="incident-impacts-title">
               <div class="section-head">
                 <h3 id="incident-impacts-title">{t('incidents.detail.affectedResources')}</h3>
-                {#if diverges(incident)}<span class="pill warn">{t('targets.divergence')}</span>{/if}
+                {#if diverges(incident)}<Badge tone="warn">{t('targets.divergence')}</Badge>{/if}
                 <span class="section-count num">{incident.active_impact_count}/{incident.impact_count}</span>
               </div>
               {#each incident.impacts as impact (impact.id)}
@@ -577,9 +578,9 @@
                         : t('incidents.detail.openedAgo', { duration: since(impact.opened_at, now) })}
                     </small>
                   </div>
-                  <span class="pill {impact.status === 'resolved' ? 'ok' : severityTone(impact.effective_severity)}">
+                  <Badge tone={impact.status === 'resolved' ? 'ok' : severityTone(impact.effective_severity)}>
                     {impact.status === 'resolved' ? t('target.verdict.recovered') : severityLabel(impact.effective_severity)}
-                  </span>
+                  </Badge>
                 </div>
               {/each}
               <p class="grouping-note">

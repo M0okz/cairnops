@@ -9,6 +9,7 @@
   import ReconciliationSummary from './ReconciliationSummary.svelte';
   import Modal from './ui/Modal.svelte';
   import Button from './ui/Button.svelte';
+  import Badge from './ui/Badge.svelte';
 
   let { onclose, onsuccess, connectorId = '', initialName = '', initialAddress = '' }: {
     onclose: () => void;
@@ -133,7 +134,7 @@
                 </Checkbox>
                 <div class="decision">
                   {#if resource.already_imported_to}<span class="faint">{t('wizard.alreadyBound')} · {resource.already_imported_to.name}</span>
-                  {:else if !resource.importable}<span class="pill idle">{t('proxmox.template')}</span>
+                  {:else if !resource.importable}<Badge tone="idle">{t('proxmox.template')}</Badge>
                   {:else}<TargetDecision name={resource.name} value={assignments[resource.external_id] ?? ''} candidates={resource.candidate_targets} availableTargets={preview.available_targets} disabled={!picked || busy} onselect={(targetID) => { assignments = { ...assignments, [resource.external_id]: targetID }; }} />{/if}
                   {#if resource.importable && (resource.type === 'qemu' || resource.type === 'lxc')}
                     <Checkbox checked={expected.includes(resource.external_id)} disabled={!picked || busy} onCheckedChange={() => toggleExpected(resource.external_id)}>{t('proxmox.alertOnStop')}</Checkbox>

@@ -8,6 +8,7 @@
   import Odometer from '$lib/components/Odometer.svelte';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Incident, type IncidentSeverity, type ResolvedIncidentPage } from '$lib/api';
   import { incidentHref, visibleIncidentActivity } from '$lib/incident-detail';
@@ -306,9 +307,9 @@
           </span>
         </span>
 
-        <span class="pill {severityTone(incident.severity)}">
+        <Badge tone={severityTone(incident.severity)}>
           {severityLabel(incident.severity)}
-        </span>
+        </Badge>
 
         <span class="hide-sm ack-cell">
           {#if scope === 'resolved'}

@@ -4,6 +4,7 @@
   import DeviceRevocation from './DeviceRevocation.svelte';
   import Icon from './Icon.svelte';
   import Button from './ui/Button.svelte';
+  import Badge from './ui/Badge.svelte';
   import { api, type Device } from '$lib/api';
   import { since } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
@@ -106,9 +107,9 @@
         </span>
 
         {#if device.revoked_at}
-          <span class="pill crit">{t('devices.revoked')}</span>
+          <Badge tone="crit">{t('devices.revoked')}</Badge>
         {:else}
-          <span class="pill ok">{t('devices.active')}</span>
+          <Badge tone="ok">{t('devices.active')}</Badge>
         {/if}
 
         <span class="device-actions">
@@ -248,7 +249,7 @@
       grid-row: 2;
     }
 
-    .device-row > .pill {
+    .device-row > :global(.pill) {
       grid-column: 2;
       grid-row: 1;
     }

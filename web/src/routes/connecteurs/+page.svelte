@@ -15,9 +15,10 @@
   import MattermostConnector from '$lib/components/MattermostConnector.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
   import { goto } from '$app/navigation';
   import { session } from '$lib/session.svelte';
-  import { since } from '$lib/format';
+  import { since, type Tone } from '$lib/format';
   import { learnedLatencyKinds } from '$lib/kuma-latency';
   import { plural, t } from '$lib/i18n.svelte';
   /* Le sas porte le même nom que son atelier : on renomme le type, pas le
@@ -84,7 +85,7 @@
     argus: 'argus'
   };
 
-  const statusLabels = $derived<Record<Connector['status'], { label: string; tone: string }>>({
+  const statusLabels = $derived<Record<Connector['status'], { label: string; tone: Tone }>>({
     connected: { label: t('connector.status.connected'), tone: 'ok' },
     degraded: { label: t('connector.status.degraded'), tone: 'warn' },
     disabled: { label: t('target.suspended'), tone: 'idle' }
@@ -101,7 +102,7 @@
   /* Les voies de notification sont des Connecteurs comme les autres : elles
    * s'annoncent sur la même grille, avec le même contrat. Ce qui les distingue
    * est le sens du trafic, et il est écrit sur la fiche. */
-  const channelStatus = (channel: NotificationChannel) =>
+  const channelStatus = (channel: NotificationChannel): { label: string; tone: Tone } =>
     !channel.enabled
       ? { label: t('target.suspended'), tone: 'idle' }
       : channel.status === 'connected'
@@ -189,7 +190,7 @@
               <strong>{connector.name}</strong>
               <small class="faint">{connector.endpoint}</small>
             </span>
-            <span class="pill {status.tone}">{status.label}</span>
+            <Badge tone={status.tone}>{status.label}</Badge>
           </div>
 
           <div class="figures">
@@ -217,19 +218,19 @@
             <!-- L'habitude apprise se signale sur la fiche : l'Opérateur sait d'où
                  vient le repère qu'il lira sur les Ressources. -->
             {#if learnedLatencyKinds.includes(connector.kind)}
-              <span class="pill learned" title={t('connectors.learnedPatternTitle')}>
+              <Badge class="learned" title={t('connectors.learnedPatternTitle')}>
                 <Icon name="learned" size={13} />{t('connectors.learnedPattern')}
-              </span>
+              </Badge>
             {/if}
             {#if connector.compatibility === 'warning'}
-              <span class="pill warn">{t('connectors.compatibilityToCheck')}</span>
+              <Badge tone="warn">{t('connectors.compatibilityToCheck')}</Badge>
             {:else if connector.remote_version}
               <span class="faint num">v{connector.remote_version}</span>
             {/if}
             {#if !connector.encrypted_transport}
-              <span class="pill crit" title={t('connectors.plainTransportTitle')}>
+              <Badge tone="crit" title={t('connectors.plainTransportTitle')}>
                 {t('connectors.plainTransport')}
-              </span>
+              </Badge>
             {/if}
             {#if isAdministrator}
               <div class="connector-actions">
@@ -273,7 +274,7 @@
                 {channel.kind === 'in_app' ? t('notifications.inAppEndpoint') : channel.endpoint}
               </small>
             </span>
-            <span class="pill {status.tone}">{status.label}</span>
+            <Badge tone={status.tone}>{status.label}</Badge>
           </div>
 
           <div class="figures">
@@ -302,9 +303,9 @@
           <div class="acts">
             <span class="faint num">{channel.severities.join(', ') || t('connectors.noSeverity')}</span>
             {#if !channel.encrypted_transport}
-              <span class="pill crit" title={t('connectors.plainTransportTitle')}>
+              <Badge tone="crit" title={t('connectors.plainTransportTitle')}>
                 {t('connectors.plainTransport')}
-              </span>
+              </Badge>
             {/if}
           </div>
         </div>
@@ -526,7 +527,7 @@
     flex-wrap: wrap;
   }
 
-  .learned {
+  .acts :global(.learned) {
     display: inline-flex;
     align-items: center;
     gap: var(--s2);

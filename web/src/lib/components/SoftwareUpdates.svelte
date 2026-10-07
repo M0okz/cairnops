@@ -1,5 +1,6 @@
 <script lang="ts">
   import Button from './ui/Button.svelte';
+  import Badge from './ui/Badge.svelte';
   import { api } from "$lib/api";
   import { t, type MessageKey } from "$lib/i18n.svelte";
   import { messageFrom } from "$lib/session.svelte";
@@ -199,9 +200,9 @@
                       >
                       {#if level || service.security_mentioned || (service.approved && service.group === "apply")}
                         <span class="tags">
-                          {#if level}<span class="pill">{level}</span>{/if}
-                          {#if service.security_mentioned}<span class="pill" title={t("updates.securityHint")}>{t("updates.securityMentioned")}</span>{/if}
-                          {#if service.approved && service.group === "apply"}<span class="pill">{t("updates.approved")}</span>{/if}
+                          {#if level}<Badge>{level}</Badge>{/if}
+                          {#if service.security_mentioned}<Badge title={t("updates.securityHint")}>{t("updates.securityMentioned")}</Badge>{/if}
+                          {#if service.approved && service.group === "apply"}<Badge>{t("updates.approved")}</Badge>{/if}
                         </span>
                       {/if}
                     </div>

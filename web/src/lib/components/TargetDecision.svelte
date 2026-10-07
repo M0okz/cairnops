@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Badge from './ui/Badge.svelte';
   import type { MatchEvidence, TargetMatch, TargetReference } from '$lib/api';
   import { REVIEW_TARGET } from '$lib/reconciliation';
   import { plural, t } from '$lib/i18n.svelte';
@@ -69,22 +70,22 @@
 
   <div class="proof" aria-live="polite">
     {#if value === REVIEW_TARGET}
-      <span class="pill warn">{t('wizard.toReview')}</span>
+      <Badge tone="warn">{t('wizard.toReview')}</Badge>
       <small>{plural('wizard.possibleMatches', candidates.length)}</small>
     {:else if selectedMatch}
-      <span class:ok={selectedMatch.confidence === 'high'} class:info={selectedMatch.confidence === 'medium'} class:warn={selectedMatch.confidence === 'low'} class="pill">
+      <Badge tone={selectedMatch.confidence === 'high' ? 'ok' : selectedMatch.confidence === 'medium' ? 'info' : selectedMatch.confidence === 'low' ? 'warn' : ''}>
         {selectedMatch.confidence === 'high'
           ? t('wizard.highConfidence')
           : selectedMatch.confidence === 'medium'
             ? t('wizard.suggestion')
             : t('wizard.lowConfidence')}
-      </span>
+      </Badge>
       <small>{selectedMatch.evidence.map(evidenceLabel).join(' · ')}</small>
     {:else if value}
-      <span class="pill">{t('wizard.manual')}</span>
+      <Badge>{t('wizard.manual')}</Badge>
       <small>{t('wizard.manualChoice')}</small>
     {:else}
-      <span class="pill">{t('wizard.new')}</span>
+      <Badge>{t('wizard.new')}</Badge>
       <small>{t('wizard.newTarget')}</small>
     {/if}
   </div>
@@ -137,7 +138,7 @@
     min-width: 0;
   }
 
-  .proof .pill {
+  .proof :global(.pill) {
     flex: none;
     padding: 0.125rem 0.375rem;
     font-size: 0.5625rem;

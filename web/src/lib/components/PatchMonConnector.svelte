@@ -16,6 +16,7 @@
   import Checkbox from './ui/Checkbox.svelte';
   import Modal from './ui/Modal.svelte';
   import Button from './ui/Button.svelte';
+  import Badge from './ui/Badge.svelte';
 
   let {
     onclose,
@@ -236,7 +237,7 @@
                 </Checkbox>
                 <div>
                   {#if locked}
-                    <span class="pill">{t('wizard.alreadyBound')}</span> <small class="faint">{host.already_imported_to?.name}</small>
+                    <Badge>{t('wizard.alreadyBound')}</Badge> <small class="faint">{host.already_imported_to?.name}</small>
                   {:else}
                     <TargetDecision name={host.name} value={targetAssignments[host.external_id] ?? ''} candidates={host.candidate_targets} availableTargets={preview.available_targets} disabled={!selected.includes(host.external_id)} onselect={(targetID) => assignTarget(host.external_id, targetID)} />
                   {/if}

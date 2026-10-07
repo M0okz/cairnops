@@ -8,6 +8,7 @@
   import BrandMark, { type BrandName } from '$lib/components/BrandMark.svelte';
   import Bars from '$lib/components/Bars.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
   import { session } from '$lib/session.svelte';
   import { latency, percent, since, stamp } from '$lib/format';
   import { plural, t } from '$lib/i18n.svelte';
@@ -119,13 +120,13 @@
     <div>
       <h1>
         {t('health.title')}
-        <span class="pill {globalTone}">
+        <Badge tone={globalTone}>
           {session.system?.status === 'operational'
             ? t('health.stable')
             : session.system
               ? t('health.degraded')
               : t('state.unknown')}
-        </span>
+        </Badge>
       </h1>
       <p>{t('health.lead')}</p>
     </div>

@@ -14,6 +14,7 @@
   import { messageFrom } from '$lib/session.svelte';
   import Modal from './ui/Modal.svelte';
   import Button from './ui/Button.svelte';
+  import Badge from './ui/Badge.svelte';
 
   let {
     onclose,
@@ -214,7 +215,7 @@
               {#if pairing.status === 'awaiting_scan'}
                 <div class="qr-heading">
                   <h3 id="qr-heading">{t('devices.scanQRCode')}</h3>
-                  <span class="pill warn">{duration(remaining)}</span>
+                  <Badge tone="warn">{duration(remaining)}</Badge>
                 </div>
                 {#if qrDataURL}
                   <img class="qr-code" src={qrDataURL} width="512" height="512" alt={t('devices.qrAlt')} />
