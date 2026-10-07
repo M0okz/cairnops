@@ -9,6 +9,7 @@
    * il retire le bruit accumulé du volet sans perdre le routage d'une future
    * Résolution. */
 
+  import { Popover } from 'bits-ui';
   import Icon from './Icon.svelte';
   import { incidentHref } from '$lib/incident-detail';
   import { inboxEntryState, unreadEntryIds, type InboxEntryState } from '$lib/inbox';
@@ -18,38 +19,14 @@
   import { i18n, plural, t } from '$lib/i18n.svelte';
 
   let open = $state(false);
-  let anchor = $state<HTMLDivElement | null>(null);
-  let triggerElement = $state<HTMLButtonElement | null>(null);
   let clearing = $state(false);
   let status = $state('');
   let freshIds = $state<Set<number>>(new Set());
 
-  /* Le panneau se referme sur Échap et sur tout clic à l'extérieur, comme le
-   * menu du compte. */
-  $effect(() => {
-    if (!open) return;
-
-    const away = (event: MouseEvent) => {
-      if (anchor && !anchor.contains(event.target as Node)) open = false;
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      open = false;
-      requestAnimationFrame(() => triggerElement?.focus());
-    };
-
-    document.addEventListener('pointerdown', away);
-    document.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('pointerdown', away);
-      document.removeEventListener('keydown', escape);
-    };
-  });
-
-  function toggle() {
-    open = !open;
-    if (!open) return;
+  /* Ouvrir la boîte marque son contenu comme lu ; les entrées encore neuves à
+   * l'ouverture restent signalées jusqu'à la fermeture. */
+  function onOpenChange(next: boolean) {
+    if (!next) return;
     freshIds = unreadEntryIds(session.inbox);
     if (session.unread > 0) void session.markInboxRead();
   }
@@ -93,69 +70,78 @@
   }
 </script>
 
-<div class="inbox" bind:this={anchor}>
-  <button
-    class="trigger"
-    type="button"
-    aria-expanded={open}
-    aria-haspopup="dialog"
-    aria-label={session.unread > 0
-      ? plural('inbox.unreadLabel', session.unread)
-      : t('inbox.title')}
-    bind:this={triggerElement}
-    onclick={toggle}
-  >
-    <Icon name="bell" size={20} />
-    {#if session.unread > 0}<span class="count">{badge}</span>{/if}
-  </button>
-
-  {#if open}
-    <div class="panel" role="dialog" aria-modal="false" aria-label={t('inbox.title')}>
-      <header>
-        <span class="heading">
-          <strong>{t('inbox.title')}</strong>
-          <span class="faint">{t('inbox.note')}</span>
-        </span>
+<div class="inbox">
+  <Popover.Root bind:open {onOpenChange}>
+    <Popover.Trigger>
+      {#snippet child({ props })}
         <button
-          class="btn sm quiet clear"
+          {...props}
+          class="trigger"
           type="button"
-          disabled={clearing || (session.inbox.length === 0 && session.unread === 0)}
-          aria-busy={clearing}
-          onclick={clearInbox}
-        >{t('inbox.clear')}</button>
-      </header>
+          aria-label={session.unread > 0
+            ? plural('inbox.unreadLabel', session.unread)
+            : t('inbox.title')}
+        >
+          <Icon name="bell" size={20} />
+          {#if session.unread > 0}<span class="count">{badge}</span>{/if}
+        </button>
+      {/snippet}
+    </Popover.Trigger>
 
-      <div class="entries">
-        {#each session.inbox as entry (entry.id)}
-          {@const state = inboxEntryState(entry)}
-          {@const fresh = !entry.read_at || freshIds.has(entry.id)}
-          <a
-            class="entry"
-            class:fresh
-            href={entryHref(entry)}
-            onclick={() => (open = false)}
-          >
-            <i class="dot {entryTone(state, entry.severity)}"></i>
-            <span class="what">
-              {#if fresh}<span class="visually-hidden">{t('inbox.new')}</span>{/if}
-              <strong>{entry.summary?.[i18n.locale].title ?? entry.target_name}</strong>
-              {#each entryDetail(entry, state) as line, index (index)}
-                <small class="faint" title={line}>{line}</small>
-              {/each}
-            </span>
-            <span class="when num faint" title={stamp(entry.occurred_at)}>
-              {since(entry.occurred_at)}
-            </span>
-          </a>
-        {:else}
-          <div class="empty">
-            <strong>{t('inbox.empty')}</strong>
-            <span class="faint">{t('inbox.emptyHint')}</span>
+    <Popover.Content align="end" sideOffset={6} collisionPadding={12}>
+      {#snippet child({ wrapperProps, props, open: visible })}
+        {#if visible}
+          <div {...wrapperProps}>
+            <div {...props} class="panel" aria-label={t('inbox.title')}>
+              <header>
+                <span class="heading">
+                  <strong>{t('inbox.title')}</strong>
+                  <span class="faint">{t('inbox.note')}</span>
+                </span>
+                <button
+                  class="btn sm quiet clear"
+                  type="button"
+                  disabled={clearing || (session.inbox.length === 0 && session.unread === 0)}
+                  aria-busy={clearing}
+                  onclick={clearInbox}
+                >{t('inbox.clear')}</button>
+              </header>
+
+              <div class="entries">
+                {#each session.inbox as entry (entry.id)}
+                  {@const state = inboxEntryState(entry)}
+                  {@const fresh = !entry.read_at || freshIds.has(entry.id)}
+                  <a
+                    class="entry"
+                    class:fresh
+                    href={entryHref(entry)}
+                    onclick={() => (open = false)}
+                  >
+                    <i class="dot {entryTone(state, entry.severity)}"></i>
+                    <span class="what">
+                      {#if fresh}<span class="visually-hidden">{t('inbox.new')}</span>{/if}
+                      <strong>{entry.summary?.[i18n.locale].title ?? entry.target_name}</strong>
+                      {#each entryDetail(entry, state) as line, index (index)}
+                        <small class="faint" title={line}>{line}</small>
+                      {/each}
+                    </span>
+                    <span class="when num faint" title={stamp(entry.occurred_at)}>
+                      {since(entry.occurred_at)}
+                    </span>
+                  </a>
+                {:else}
+                  <div class="empty">
+                    <strong>{t('inbox.empty')}</strong>
+                    <span class="faint">{t('inbox.emptyHint')}</span>
+                  </div>
+                {/each}
+              </div>
+            </div>
           </div>
-        {/each}
-      </div>
-    </div>
-  {/if}
+        {/if}
+      {/snippet}
+    </Popover.Content>
+  </Popover.Root>
   <span class="visually-hidden" role="status">{status}</span>
 </div>
 
@@ -180,7 +166,7 @@
   }
 
   .trigger:hover,
-  .trigger[aria-expanded='true'] {
+  .trigger[data-state='open'] {
     background: var(--surface-2);
     color: var(--ink);
   }
@@ -203,12 +189,8 @@
   }
 
   .panel {
-    position: absolute;
-    top: calc(100% + 0.375rem);
-    right: 0;
     width: 22rem;
     max-width: calc(100vw - 1.5rem);
-    z-index: 40;
     border-radius: var(--r-l);
     background: var(--surface);
     box-shadow: var(--shadow);

@@ -1,7 +1,10 @@
 <script lang="ts">
-  let focused = $state(false);
-  let hovered = $state(false);
-  let dismissed = $state(false);
+  import { Tooltip } from 'bits-ui';
+
+  /* Aide contextuelle d'un champ ou d'un repère. Le Tooltip de Bits UI l'ouvre
+   * au survol comme au clavier, la referme sur Échap avant toute couche
+   * parente, et la garde dans l'écran. Un toucher la laisse ouverte : sur
+   * mobile, le tap est le seul moyen de la lire. */
 
   let {
     id,
@@ -12,45 +15,26 @@
     ariaLabel: string;
     text: string;
   } = $props();
-
-  let visible = $derived((focused || hovered) && !dismissed);
-
-  function showFromFocus() {
-    focused = true;
-    dismissed = false;
-  }
-
-  function showFromHover() {
-    hovered = true;
-    dismissed = false;
-  }
-
-  function dismiss(event: KeyboardEvent) {
-    if (event.key !== 'Escape') return;
-    dismissed = true;
-    event.preventDefault();
-    event.stopPropagation();
-  }
 </script>
 
-<span
-  class="info-hint"
-  role="group"
-  onmouseenter={showFromHover}
-  onmouseleave={() => (hovered = false)}
->
-  <button
-    type="button"
-    aria-label={ariaLabel}
-    aria-describedby={id}
-    aria-controls={id}
-    aria-expanded={visible}
-    onfocus={showFromFocus}
-    onblur={() => (focused = false)}
-    onkeydown={dismiss}
-  >i</button>
-  <span class:visible class="tooltip" {id} role="tooltip">{text}</span>
-</span>
+<Tooltip.Provider delayDuration={0} disableCloseOnTriggerClick>
+  <Tooltip.Root>
+    <span class="info-hint">
+      <Tooltip.Trigger>
+        {#snippet child({ props })}
+          <button {...props} type="button" aria-label={ariaLabel} aria-describedby={id}>i</button>
+        {/snippet}
+      </Tooltip.Trigger>
+    </span>
+    <Tooltip.Content side="bottom" align="start" sideOffset={4} collisionPadding={16} forceMount>
+      {#snippet child({ wrapperProps, props, open })}
+        <div {...wrapperProps}>
+          <span {...props} class="tooltip" class:visible={open} {id} role="tooltip">{text}</span>
+        </div>
+      {/snippet}
+    </Tooltip.Content>
+  </Tooltip.Root>
+</Tooltip.Provider>
 
 <style>
   .info-hint {
@@ -90,10 +74,7 @@
   }
 
   .tooltip {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    z-index: 20;
+    display: block;
     width: min(19rem, calc(100vw - 4rem));
     padding: 0.5rem 0.625rem;
     border: 1px solid var(--line-strong);

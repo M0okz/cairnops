@@ -2,6 +2,7 @@
   import Brand from './Brand.svelte';
   import ReconciliationNavigation from './ReconciliationNavigation.svelte';
   import { page } from '$app/state';
+  import { Popover } from 'bits-ui';
   import Icon, { type IconName } from './Icon.svelte';
   import Odometer from './Odometer.svelte';
   import SegmentedControl from './ui/SegmentedControl.svelte';
@@ -18,7 +19,6 @@
   const roleLabel = $derived(session.user ? t(`role.${session.user.role}`) : '');
 
   let menuOpen = $state(false);
-  let anchor = $state<HTMLDivElement | null>(null);
   let navigation = $state<HTMLElement | null>(null);
 
   /* Sur une fenêtre étroite, la navigation devient un ruban horizontal. La
@@ -42,25 +42,6 @@
       });
     });
     return () => cancelAnimationFrame(frame);
-  });
-
-  /* Le menu se referme sur Échap et sur tout clic à l'extérieur. */
-  $effect(() => {
-    if (!menuOpen) return;
-
-    const away = (event: MouseEvent) => {
-      if (anchor && !anchor.contains(event.target as Node)) menuOpen = false;
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { menuOpen = false; anchor?.querySelector<HTMLButtonElement>('.account-button')?.focus(); }
-    };
-
-    document.addEventListener('pointerdown', away);
-    document.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('pointerdown', away);
-      document.removeEventListener('keydown', escape);
-    };
   });
 
   const initials = $derived(
@@ -197,58 +178,69 @@
 
     <!-- Le compte et ses réglages de confort. Rien ici n'agit sur la
          supervision : thème, documentation, session. -->
-    <div class="account" bind:this={anchor}>
-      {#if menuOpen}
-        <div class="menu" aria-label={t('rail.account')}>
-          <div class="menu-head">
-            <span class="workspace-mark">{initials}</span>
-            <span class="who">
-              <strong>{session.user?.display_name ?? '—'}</strong>
-              <small class="faint">{session.user?.username ?? ''}</small>
-            </span>
-          </div>
+    <div class="account">
+      <Popover.Root bind:open={menuOpen}>
+        <Popover.Trigger>
+          {#snippet child({ props })}
+            <button {...props} class="account-button" type="button" aria-label={t('rail.account')}>
+              <span class="workspace-mark">{initials}</span>
+              <span class="who">
+                <strong>{session.user?.display_name ?? t('rail.account')}</strong>
+                <small class="faint">{roleLabel}</small>
+              </span>
+              <span class="account-menu-icon" aria-hidden="true"><Icon name="more" size={18} /></span>
+            </button>
+          {/snippet}
+        </Popover.Trigger>
 
-          <div class="account-appearance"><AppearanceSettings /></div>
+        <Popover.Content side="top" align="start" sideOffset={6} collisionPadding={12}>
+          {#snippet child({ wrapperProps, props, open })}
+            {#if open}
+              <div {...wrapperProps}>
+                <div {...props} class="menu" aria-label={t('rail.account')}>
+                  <div class="menu-head">
+                    <span class="workspace-mark">{initials}</span>
+                    <span class="who">
+                      <strong>{session.user?.display_name ?? '—'}</strong>
+                      <small class="faint">{session.user?.username ?? ''}</small>
+                    </span>
+                  </div>
 
-          <!-- La langue vit à côté du thème : ce sont les deux réglages qui
-               changent l'écran sans rien changer à la supervision. -->
-          <div class="menu-row theme">
-            <span><Icon name="book" size={15} />{t('rail.language')}</span>
-            <SegmentedControl
-              label={t('rail.language')}
-              value={i18n.locale}
-              items={locales.map((choice) => ({ ...choice, lang: choice.value }))}
-              size="compact"
-              onValueChange={(value) => i18n.choose(value)}
-            />
-          </div>
+                  <div class="account-appearance"><AppearanceSettings /></div>
 
-          <a class="menu-row" href={CHANGELOG_URL} target="_blank" rel="noreferrer noopener">
-            <span><Icon name="changelog" size={15} />Changelog</span>
-            <i class="ext" aria-hidden="true">↗</i>
-          </a>
+                  <!-- La langue vit à côté du thème : ce sont les deux réglages qui
+                       changent l'écran sans rien changer à la supervision. -->
+                  <div class="menu-row theme">
+                    <span><Icon name="book" size={15} />{t('rail.language')}</span>
+                    <SegmentedControl
+                      label={t('rail.language')}
+                      value={i18n.locale}
+                      items={locales.map((choice) => ({ ...choice, lang: choice.value }))}
+                      size="compact"
+                      onValueChange={(value) => i18n.choose(value)}
+                    />
+                  </div>
 
-          <a class="menu-row" href={DOCS_URL} target="_blank" rel="noreferrer noopener">
-            <span><Icon name="book" size={15} />Documentation</span>
-            <i class="ext" aria-hidden="true">↗</i>
-          </a>
+                  <a class="menu-row" href={CHANGELOG_URL} target="_blank" rel="noreferrer noopener">
+                    <span><Icon name="changelog" size={15} />Changelog</span>
+                    <i class="ext" aria-hidden="true">↗</i>
+                  </a>
 
-          <button class="menu-row danger" type="button"
-            onclick={() => { menuOpen = false; void session.logout(); }}>
-            <span><Icon name="logout" size={15} />{t('rail.logout')}</span>
-          </button>
-        </div>
-      {/if}
+                  <a class="menu-row" href={DOCS_URL} target="_blank" rel="noreferrer noopener">
+                    <span><Icon name="book" size={15} />Documentation</span>
+                    <i class="ext" aria-hidden="true">↗</i>
+                  </a>
 
-      <button class="account-button" type="button" aria-label={t('rail.account')} aria-expanded={menuOpen}
-        onclick={() => (menuOpen = !menuOpen)}>
-        <span class="workspace-mark">{initials}</span>
-        <span class="who">
-          <strong>{session.user?.display_name ?? t('rail.account')}</strong>
-          <small class="faint">{roleLabel}</small>
-        </span>
-        <span class="account-menu-icon" aria-hidden="true"><Icon name="more" size={18} /></span>
-      </button>
+                  <button class="menu-row danger" type="button"
+                    onclick={() => { menuOpen = false; void session.logout(); }}>
+                    <span><Icon name="logout" size={15} />{t('rail.logout')}</span>
+                  </button>
+                </div>
+              </div>
+            {/if}
+          {/snippet}
+        </Popover.Content>
+      </Popover.Root>
     </div>
   </div>
 </aside>
@@ -285,7 +277,7 @@
   }
 
   .account-button:hover,
-  .account-button[aria-expanded='true'] {
+  .account-button[data-state='open'] {
     background: var(--surface-2);
   }
 
@@ -319,13 +311,9 @@
   /* Le menu déborde volontairement la largeur du rail : la ligne Thème ne
      tient pas dans 204 px une fois son étiquette et ses deux segments posés. */
   .menu {
-    position: absolute;
-    bottom: calc(100% + 0.375rem);
-    left: 0;
     width: 22rem;
     max-width: calc(100vw - 1.5rem);
-    z-index: 40;
-    max-height: calc(100dvh - 7rem);
+    max-height: min(calc(100dvh - 7rem), var(--bits-floating-available-height, 100dvh));
     overflow-y: auto;
     display: grid;
     gap: 1px;
@@ -398,14 +386,4 @@
     .account-button { justify-content: center; padding: var(--s3); }
   }
 
-  @media (max-width: 48rem) {
-    /* Sur téléphone, le compte est dans l'en-tête : son menu s'ouvre donc
-       sous le déclencheur et reste calé sur le bord de l'écran. */
-    .menu {
-      inset-block-start: calc(100% + 0.375rem);
-      inset-inline-end: 0;
-      inset-block-end: auto;
-      inset-inline-start: auto;
-    }
-  }
 </style>
