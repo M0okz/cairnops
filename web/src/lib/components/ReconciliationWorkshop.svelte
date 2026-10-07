@@ -7,6 +7,7 @@
   import { natureLabel } from '$lib/format';
   import Checkbox from './ui/Checkbox.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let {
     primaryTargetId = '',
@@ -129,7 +130,7 @@
           <h2 id="reconciliation-title">{source ? t('reconciliation.attachSource') : t('reconciliation.mergeTargets')}</h2>
           <p>{source ? t('reconciliation.sourceLead') : t('reconciliation.mergeLead')}</p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={submitting} aria-label="Fermer"><Icon name="close" size={14} /></button>
+        <Button variant="close" onclick={onclose} disabled={submitting} aria-label="Fermer"><Icon name="close" size={14} /></Button>
       </header>
 
       <div class="modal-body">
@@ -221,10 +222,10 @@
 
       <footer>
         <span class="note">{t('reconciliation.supervisionContinues')}</span>
-        <button class="btn" type="button" onclick={onclose} disabled={submitting}>{t('common.cancel')}</button>
-        <button class="btn primary" type="button" onclick={submit} disabled={!valid}>
+        <Button onclick={onclose} disabled={submitting}>{t('common.cancel')}</Button>
+        <Button variant="primary" onclick={submit} disabled={!valid}>
           {submitting ? t('reconciliation.starting') : source ? t('reconciliation.attachDefinitely') : t('reconciliation.mergeDefinitely')}
-        </button>
+        </Button>
       </footer>
     </div>
   {/snippet}

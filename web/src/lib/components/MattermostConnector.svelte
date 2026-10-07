@@ -2,6 +2,7 @@
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
   import { api, type IncidentSeverity, type NotificationChannel } from '$lib/api';
 
   let {
@@ -69,9 +70,9 @@
               : t('mattermost.connectSay')}
           </p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label="Fermer">
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       {#if created}
@@ -98,7 +99,7 @@
           </dl>
         </div>
         <footer>
-          <button class="btn primary" type="button" onclick={onclose}>{t('mattermost.backToWatch')}</button>
+          <Button variant="primary" onclick={onclose}>{t('mattermost.backToWatch')}</Button>
         </footer>
       {:else}
         <form onsubmit={submit}>
@@ -147,10 +148,10 @@
 
           <footer>
             <span class="faint note">{t('mattermost.probeNote')}</span>
-            <button class="btn" type="button" onclick={onclose} disabled={busy}>Annuler</button>
-            <button class="btn primary" type="submit" disabled={busy}>
+            <Button onclick={onclose} disabled={busy}>Annuler</Button>
+            <Button variant="primary" type="submit" disabled={busy}>
               {busy ? t('gate.verifying') : t('mattermost.verifyAndConnect')}
-            </button>
+            </Button>
           </footer>
         </form>
       {/if}

@@ -15,6 +15,7 @@
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let {
     onclose,
@@ -180,9 +181,9 @@
           <h2 id="patchmon-title">{imported ? t('wizard.linked') : preview ? t('wizard.chooseWhatEnters') : t('patchmon.connect')}</h2>
           <p>{t('patchmon.lead')}</p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       {#if imported}
@@ -200,14 +201,14 @@
             <div class="fig"><b>{imported.targets.filter((target) => target.disposition === 'already_imported').length}</b><span>{t('wizard.alreadyLinked')}</span></div>
           </div>
         </div>
-        <footer><button class="btn primary" type="button" onclick={onclose}>{t('patchmon.backToTargets')}</button></footer>
+        <footer><Button variant="primary" onclick={onclose}>{t('patchmon.backToTargets')}</Button></footer>
       {:else if preview}
         <div class="modal-body">
           <div class="checks">
             <div><span class="faint">API</span><strong>PatchMon</strong><small class="ok">{preview.compatibility_label}</small></div>
             <div><span class="faint">Transport</span><strong>{preview.encrypted_transport ? 'TLS' : 'HTTP'}</strong><small class={preview.encrypted_transport ? 'ok' : 'warn'}>{preview.encrypted_transport ? t('wizard.certificateValid') : t('wizard.trustedNetworkOnly')}</small></div>
             <div><span class="faint">{t('wizard.scope')}</span><strong>{plural('patchmon.hostsVisible', preview.hosts.length)}</strong><small class="faint">{t('patchmon.postureOnly')}</small></div>
-            <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
+            <Button size="sm" onclick={resetPreview}>{t('wizard.changeAccess')}</Button>
           </div>
 
           <ConnectorAccessPlan access={preview.access} product="patchmon" />
@@ -216,9 +217,9 @@
 
           <div class="listbar">
             <div class="field search"><input aria-label={t('patchmon.filter')} id="patchmon-filter" bind:value={query} placeholder={t('patchmon.filter')} /></div>
-            <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleImportableHosts().length === 0}>
+            <Button size="sm" onclick={toggleAllVisible} disabled={visibleImportableHosts().length === 0}>
               {visibleImportableHosts().length > 0 && visibleImportableHosts().every((host) => selected.includes(host.external_id)) ? t('patchmon.removeAll') : t('wizard.selectAll')}
-            </button>
+            </Button>
             <span class="faint num">{selected.length} / {importableHosts().length} · {t('wizard.validUntil', { time: clock(preview.expires_at) })}</span>
           </div>
 
@@ -249,9 +250,9 @@
         </div>
         <footer>
           <span class="faint note">{t('patchmon.noActionNote')}</span>
-          <button class="btn primary" type="button" onclick={importHosts} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
+          <Button variant="primary" onclick={importHosts} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
             {busy ? t('wizard.importing') : reconciliation.review > 0 ? plural('wizard.confirmChoices', reconciliation.review) : plural('patchmon.importHosts', selected.length)}
-          </button>
+          </Button>
         </footer>
       {:else}
         <form onsubmit={inspect}>
@@ -287,8 +288,8 @@
           </div>
           <footer>
             <span class="faint note">{t('patchmon.noActionNote')}</span>
-            <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-            <button class="btn primary" type="submit" disabled={busy}>{busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}</button>
+            <Button onclick={onclose} disabled={busy}>{t('common.cancel')}</Button>
+            <Button variant="primary" type="submit" disabled={busy}>{busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}</Button>
           </footer>
         </form>
       {/if}
@@ -308,7 +309,7 @@
   .checks { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s5); padding: var(--s4); margin-bottom: var(--s4); border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--bg); }
   .checks span, .checks small { display: block; font-size: .6875rem; }
   .checks strong { display: block; margin-top: 2px; font-size: .75rem; }
-  .checks > .btn { margin-left: auto; }
+  .checks > :global(.btn) { margin-left: auto; }
   .listbar { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s3); flex-wrap: wrap; }
   .search { flex: 1; min-width: 10rem; margin: 0; }
   .rack { margin: 0; padding: 0; max-height: 25rem; overflow: auto; list-style: none; border: 1px solid var(--line-strong); border-radius: var(--r-m); }

@@ -7,6 +7,7 @@
   import Checkbox from './ui/Checkbox.svelte';
   import SegmentedControl from './ui/SegmentedControl.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let {
     onclose,
@@ -123,9 +124,9 @@
               : existingTarget ? t('workshop.addCheckSay', { name: existingTarget.name }) : t('workshop.createSay')}
           </p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       {#if receipt?.heartbeat_path}
@@ -140,13 +141,13 @@
           <div class="credential">
             <span class="label faint">{t('workshop.heartbeatAddress')}</span>
             <code>{location.origin}{receipt.heartbeat_path}</code>
-            <button class="btn sm" type="button" onclick={copyHeartbeat}>
+            <Button size="sm" onclick={copyHeartbeat}>
               {copied ? t('workshop.copied') : t('workshop.copy')}
-            </button>
+            </Button>
           </div>
         </div>
         <footer>
-          <button class="btn primary" type="button" onclick={onclose}>{t('workshop.addressKept')}</button>
+          <Button variant="primary" onclick={onclose}>{t('workshop.addressKept')}</Button>
         </footer>
       {:else}
         <form onsubmit={submit}>
@@ -299,14 +300,14 @@
 
           <footer>
             <span class="faint note">{t('workshop.runFromInstance')}</span>
-            <button class="btn" type="button" onclick={onclose} disabled={busy}>Annuler</button>
-            <button class="btn primary" type="submit" disabled={busy}>
+            <Button onclick={onclose} disabled={busy}>Annuler</Button>
+            <Button variant="primary" type="submit" disabled={busy}>
               {busy
                 ? t('workshop.creating')
                 : createdTarget
                   ? t('workshop.retrySource')
                   : t('workshop.startSupervising')}
-            </button>
+            </Button>
           </footer>
         </form>
       {/if}

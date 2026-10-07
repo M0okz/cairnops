@@ -7,6 +7,7 @@
   import Odometer from './Odometer.svelte';
   import SegmentedControl from './ui/SegmentedControl.svelte';
   import AppearanceSettings from './AppearanceSettings.svelte';
+  import Button from './ui/Button.svelte';
   import { session } from '$lib/session.svelte';
   import { i18n, locales, t } from '$lib/i18n.svelte';
 
@@ -131,9 +132,10 @@
   </a>
 
   {#if session.availableVersion}
-    <button
-      class="btn sm primary update-cta"
-      type="button"
+    <Button
+      variant="primary"
+      size="sm"
+      class="update-cta"
       title={t('rail.updateAvailableVersion', { version: session.availableVersion })}
       aria-label={`${t('rail.updateAction')} · ${t('rail.updateAvailableVersion', { version: session.availableVersion })}`}
       onclick={() => session.reloadForUpdate()}
@@ -141,7 +143,7 @@
       <Icon name="worker" size={18} />
       <span>{t('rail.updateAction')}</span>
       <small>{session.availableVersion}</small>
-    </button>
+    </Button>
   {/if}
 
   <div class="instance-card" title={session.instanceLabel}>

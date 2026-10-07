@@ -12,6 +12,7 @@
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
   import SwitchControl from './ui/Switch.svelte';
+  import Button from './ui/Button.svelte';
 
   let { connector, onclose, onsuccess }: { connector: Connector; onclose: () => void; onsuccess: () => Promise<void> | void } = $props();
   let loading = $state(true);
@@ -137,24 +138,24 @@
     <div {...dialog} class="connector-config modal" aria-labelledby="connector-config-title">
       <header>
         <div><h2 id="connector-config-title">Configurer · {connector.name}</h2><p>Choisissez un équipement ou un service, puis ses sources et ses indicateurs.</p></div>
-        <button class="close" type="button" onclick={requestClose} disabled={saving} aria-label="Fermer"><Icon name="close" size={16} /></button>
+        <Button variant="close" onclick={requestClose} disabled={saving} aria-label="Fermer"><Icon name="close" size={16} /></Button>
       </header>
       {#if discarding}
         <section class="discard" aria-labelledby="discard-title">
           <h3 id="discard-title">Des modifications ne sont pas enregistrées</h3><p>Revenez aux réglages pour les conserver, ou abandonnez les changements en attente.</p>
-          <div class="actions"><button class="btn" onclick={() => (discarding = false)}>Continuer les modifications</button><button class="btn danger" onclick={() => { saved = true; onclose(); }}>Abandonner les modifications</button></div>
+          <div class="actions"><Button onclick={() => (discarding = false)}>Continuer les modifications</Button><Button variant="danger" onclick={() => { saved = true; onclose(); }}>Abandonner les modifications</Button></div>
         </section>
       {:else if loading}
         <div class="empty" role="status"><strong>Lecture des équipements…</strong>Découverte des sources et des indicateurs disponibles.</div>
       {:else}
         {#if error}<p class="error message" role="alert">{error}</p>{/if}
         {#if indicatorError}<p class="message muted" role="status">{indicatorError}</p>{/if}
-        {#if !drafts.length}<div class="empty"><strong>Aucun équipement disponible</strong><button class="btn" onclick={load}>Réessayer la découverte</button></div>
+        {#if !drafts.length}<div class="empty"><strong>Aucun équipement disponible</strong><Button onclick={load}>Réessayer la découverte</Button></div>
         {:else}
           <div class="equipment-workbench">
             <aside aria-label="Équipements et services">
               <label class="filter"><Icon name="search" size={14} /><input bind:value={search} placeholder="Rechercher un équipement" aria-label="Rechercher un équipement" /></label>
-              <div class="selection-heading"><strong>{visible.length} équipement(s)</strong><button class="btn sm" onclick={selectVisible} disabled={saving || !visible.length}>{visible.length && visible.every(item => selectedIds.includes(item.equipment.external_id)) ? 'Désélectionner' : 'Tout sélectionner'}</button></div>
+              <div class="selection-heading"><strong>{visible.length} équipement(s)</strong><Button size="sm" onclick={selectVisible} disabled={saving || !visible.length}>{visible.length && visible.every(item => selectedIds.includes(item.equipment.external_id)) ? 'Désélectionner' : 'Tout sélectionner'}</Button></div>
               <div class="equipment-list">
                 {#each visible as item (item.equipment.external_id)}
                   <div class="equipment-row" class:active={activeId === item.equipment.external_id}>
@@ -166,7 +167,7 @@
             </aside>
             <div class="equipment-detail">
               {#if selected.length}
-                <section class="bulk" aria-label="Actions groupées"><strong>{selected.length} sélectionné(s)</strong><div class="actions"><button class="btn sm" onclick={superviseSelected} disabled={saving || !preview}>Ajouter à la supervision</button>{#if supportsIndicators}<button class="btn sm" disabled={saving || !indicatorEditable} onclick={() => collectSelected(true)}>Activer la collecte</button><button class="btn sm" disabled={saving || !indicatorEditable} onclick={() => collectSelected(false)}>Désactiver la collecte</button><button class="btn sm" onclick={systemIndicators} disabled={saving || !indicatorEditable}>Ajouter CPU · RAM · disques</button>{#each profiles as profile (profile.id ?? profile.name)}<button class="btn sm" disabled={saving || !indicatorEditable} onclick={() => applyProfile(profile.specification)}>Appliquer « {profile.name} »</button>{/each}{/if}</div></section>
+                <section class="bulk" aria-label="Actions groupées"><strong>{selected.length} sélectionné(s)</strong><div class="actions"><Button size="sm" onclick={superviseSelected} disabled={saving || !preview}>Ajouter à la supervision</Button>{#if supportsIndicators}<Button size="sm" disabled={saving || !indicatorEditable} onclick={() => collectSelected(true)}>Activer la collecte</Button><Button size="sm" disabled={saving || !indicatorEditable} onclick={() => collectSelected(false)}>Désactiver la collecte</Button><Button size="sm" onclick={systemIndicators} disabled={saving || !indicatorEditable}>Ajouter CPU · RAM · disques</Button>{#each profiles as profile (profile.id ?? profile.name)}<Button size="sm" disabled={saving || !indicatorEditable} onclick={() => applyProfile(profile.specification)}>Appliquer « {profile.name} »</Button>{/each}{/if}</div></section>
               {/if}
               {#if notice}<p class="muted" role="status">{notice}</p>{/if}
               {#if active}
@@ -201,7 +202,7 @@
                             </Checkbox>
                           {:else}<p class="muted">Aucun indicateur disponible pour cet équipement.</p>{/each}
                         </div>
-                        <details><summary>Réutiliser cette sélection</summary><div class="actions"><input bind:value={profileName} aria-label="Nom du profil" placeholder="Nom du profil" maxlength="100" disabled={saving || !indicatorEditable} /><button class="btn sm" disabled={saving || !indicatorEditable || !profileName.trim()} onclick={addProfile}>Préparer le profil</button></div><p class="muted">Le profil sera enregistré avec les autres modifications.</p></details>
+                        <details><summary>Réutiliser cette sélection</summary><div class="actions"><input bind:value={profileName} aria-label="Nom du profil" placeholder="Nom du profil" maxlength="100" disabled={saving || !indicatorEditable} /><Button size="sm" disabled={saving || !indicatorEditable || !profileName.trim()} onclick={addProfile}>Préparer le profil</Button></div><p class="muted">Le profil sera enregistré avec les autres modifications.</p></details>
                         <p class="muted">Collecte chaque minute · détail 24 h · agrégats 7 j.</p>
                       {/if}
                     {:else}<p class="muted">Aucun catalogue d’indicateurs disponible. Pour une nouvelle ressource Proxmox, enregistrez d’abord sa supervision.</p>{/if}
@@ -218,7 +219,7 @@
           </div>
         {/if}
       {/if}
-      <footer><span class="note" role="status">{dirty ? `${newSources} équipement(s) à superviser · Modifications non enregistrées` : 'Aucune modification en attente'}</span><button class="btn" onclick={requestClose} disabled={saving}>Fermer</button><button class="btn primary" onclick={save} disabled={saving || loading || !dirty || discarding}>{saving ? 'Enregistrement…' : 'Enregistrer les modifications'}</button></footer>
+      <footer><span class="note" role="status">{dirty ? `${newSources} équipement(s) à superviser · Modifications non enregistrées` : 'Aucune modification en attente'}</span><Button onclick={requestClose} disabled={saving}>Fermer</Button><Button variant="primary" onclick={save} disabled={saving || loading || !dirty || discarding}>{saving ? 'Enregistrement…' : 'Enregistrer les modifications'}</Button></footer>
     </div>
   {/snippet}
 </Modal>

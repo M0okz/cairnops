@@ -3,6 +3,7 @@
   import { messageFrom, session } from '$lib/session.svelte';
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
+  import Button from './ui/Button.svelte';
 
   let configurations = $state<OIDCConfigurationSet>({ active: null, draft: null });
   let label = $state('');
@@ -140,7 +141,7 @@
       <h2 id="oidc-title">{t('oidc.title')}</h2>
       <p>{t('oidc.note')}</p>
     </div>
-    <button class="btn sm" type="button" aria-expanded={providerOpen} onclick={() => (providerOpen = !providerOpen)}>{providerOpen ? t('common.close') : t('oidc.configure')}</button>
+    <Button size="sm" aria-expanded={providerOpen} onclick={() => (providerOpen = !providerOpen)}>{providerOpen ? t('common.close') : t('oidc.configure')}</Button>
   </header>
 
   <div class="oidc-card">
@@ -251,17 +252,17 @@
         </span>
 
         {#if needsConfiguration && !providerOpen}
-          <button class="btn" type="button" onclick={() => (providerOpen = true)}>{t('oidc.configure')}</button>
+          <Button onclick={() => (providerOpen = true)}>{t('oidc.configure')}</Button>
         {:else if needsConfiguration}
-          <button class="btn primary" type="submit" disabled={saving}>
+          <Button variant="primary" type="submit" disabled={saving}>
             {saving ? t('oidc.saving') : t('oidc.saveAndTest')}
-          </button>
+          </Button>
         {:else if activatable}
-          <button class="btn primary" type="button" disabled={activating} onclick={activate}>
+          <Button variant="primary" disabled={activating} onclick={activate}>
             {activating ? t('oidc.activating') : configurations.active ? t('oidc.applyChanges') : t('oidc.activate')}
-          </button>
+          </Button>
         {:else if configurations.draft}
-          <a class="btn primary" href="/api/v1/oidc/configuration/test">{t('oidc.testConnection')}</a>
+          <Button variant="primary" href="/api/v1/oidc/configuration/test">{t('oidc.testConnection')}</Button>
         {/if}
       </footer>{/if}
     </form>
@@ -488,7 +489,7 @@
     background: var(--bg);
   }
 
-  .flow-footer .btn {
+  .flow-footer :global(.btn) {
     flex: none;
     justify-content: center;
   }
@@ -524,7 +525,7 @@
       text-align: start;
     }
 
-    .flow-footer .btn {
+    .flow-footer :global(.btn) {
       width: 100%;
     }
   }

@@ -7,6 +7,7 @@
 
   import Icon from './Icon.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
   import { api, type Connector, type ConnectorRemoval } from '$lib/api';
 
   let {
@@ -58,9 +59,9 @@
             {t('removal.lead', { origin: origins[connector.kind] })}
           </p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label="Fermer">
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <div class="modal-body">
@@ -98,10 +99,10 @@
         <span class="faint note">
           {t('removal.note')}
         </span>
-        <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-        <button class="btn danger" type="button" onclick={remove} disabled={busy}>
+        <Button onclick={onclose} disabled={busy}>{t('common.cancel')}</Button>
+        <Button variant="danger" onclick={remove} disabled={busy}>
           {busy ? 'Suppression…' : 'Supprimer le Connecteur'}
-        </button>
+        </Button>
       </footer>
     </div>
   {/snippet}

@@ -5,6 +5,7 @@
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let { connector, onclose, onsuccess }: { connector: Connector; onclose: () => void; onsuccess: () => Promise<void> | void } = $props();
   let name = $state('');
@@ -76,7 +77,7 @@
     <div {...dialog} class="connection-dialog modal" aria-labelledby="connection-title">
       <header>
         <div><h2 id="connection-title">{t('connection.title', { name: connector.name })}</h2><p>{t('connection.lead')}</p></div>
-        <button class="close" type="button" onclick={close} disabled={!!busy} aria-label={t('common.close')}><Icon name="close" size={16} /></button>
+        <Button variant="close" onclick={close} disabled={!!busy} aria-label={t('common.close')}><Icon name="close" size={16} /></Button>
       </header>
       <form onsubmit={test} oninput={invalidate}>
         <div class="modal-body">
@@ -108,7 +109,7 @@
             {/if}
             {#if connector.kind === 'proxmox'}
               <section class="certificate" aria-label={t('connection.certificate')}>
-                <button class="btn" type="button" onclick={inspectCertificate}>{busy === 'certificate' ? t('connection.checking') : t('connection.checkCertificate')}</button>
+                <Button onclick={inspectCertificate}>{busy === 'certificate' ? t('connection.checking') : t('connection.checkCertificate')}</Button>
                 {#if certificate}
                   <p>{certificate.subject}</p>
                   <p class="fingerprint">SHA-256 · {certificate.fingerprint}</p>
@@ -128,11 +129,11 @@
           {#if error}<p class="error" role="alert">{error}</p>{/if}
         </div>
         <footer>
-          <button class="btn" type="button" onclick={close} disabled={!!busy}>{t('common.cancel')}</button>
+          <Button onclick={close} disabled={!!busy}>{t('common.cancel')}</Button>
           {#if tested}
-            <button class="btn primary" type="button" onclick={save} disabled={!!busy}>{busy === 'save' ? t('connection.saving') : t('connection.save')}</button>
+            <Button variant="primary" onclick={save} disabled={!!busy}>{busy === 'save' ? t('connection.saving') : t('connection.save')}</Button>
           {:else}
-            <button class="btn primary" type="submit" disabled={!!busy}>{busy === 'test' ? t('connection.testing') : t('connection.test')}</button>
+            <Button variant="primary" type="submit" disabled={!!busy}>{busy === 'test' ? t('connection.testing') : t('connection.test')}</Button>
           {/if}
         </footer>
       </form>
@@ -146,7 +147,7 @@
   .field { min-width: 0; }
   .muted, .certificate, .test-result { font-size: .8125rem; }
   .certificate { display: grid; gap: var(--s3); }
-  .certificate .btn { justify-self: start; }
+  .certificate :global(.btn) { justify-self: start; }
   .fingerprint, .test-result p { overflow-wrap: anywhere; }
   .approval { display: flex; gap: var(--s2); align-items: center; }
   .approval input { width: auto; }

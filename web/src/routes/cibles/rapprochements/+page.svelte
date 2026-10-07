@@ -7,6 +7,7 @@
   import { session, messageFrom } from '$lib/session.svelte';
   import { plural, t, type MessageKey } from '$lib/i18n.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
 
   let review = $state<ReconciliationSuggestion | null>(null);
   let manualOpen = $state(false);
@@ -80,7 +81,7 @@
 <div class="page">
   <div class="page-head">
     <div><h1>{t('reconciliation.title')}</h1><p>{t('reconciliation.lead')}</p></div>
-    <div class="page-actions"><button class="btn primary" type="button" onclick={() => (manualOpen = true)}>{t('reconciliation.manual')}</button></div>
+    <div class="page-actions"><Button variant="primary" onclick={() => (manualOpen = true)}>{t('reconciliation.manual')}</Button></div>
   </div>
 
   {#if session.user?.role !== 'administrator'}
@@ -131,11 +132,11 @@
               {/each}
             </div>
             <div class="actions">
-              <button class="btn sm" type="button" disabled={acting === item.id} onclick={() => reject(item)}>{t('reconciliation.reject')}</button>
-              <button class="btn sm" type="button" disabled={acting === item.id} onclick={() => snooze(item, 7)}>{t('reconciliation.snooze7')}</button>
-              <button class="btn sm" type="button" disabled={acting === item.id} onclick={() => snooze(item, 30)}>{t('reconciliation.snooze30')}</button>
-              <button class="btn sm" type="button" disabled={acting === item.id} onclick={() => openCustomSnooze(item)}>{t('reconciliation.snoozeOther')}</button>
-              <button class="btn sm primary" type="button" onclick={() => (review = item)}>{t('reconciliation.review')}</button>
+              <Button size="sm" disabled={acting === item.id} onclick={() => reject(item)}>{t('reconciliation.reject')}</Button>
+              <Button size="sm" disabled={acting === item.id} onclick={() => snooze(item, 7)}>{t('reconciliation.snooze7')}</Button>
+              <Button size="sm" disabled={acting === item.id} onclick={() => snooze(item, 30)}>{t('reconciliation.snooze30')}</Button>
+              <Button size="sm" disabled={acting === item.id} onclick={() => openCustomSnooze(item)}>{t('reconciliation.snoozeOther')}</Button>
+              <Button variant="primary" size="sm" onclick={() => (review = item)}>{t('reconciliation.review')}</Button>
             </div>
           </article>
         {/each}
@@ -169,7 +170,7 @@
       <div {...dialog} class="modal narrow" aria-labelledby="snooze-title">
         <header><div><h2 id="snooze-title">{t('reconciliation.snoozeTitle')}</h2><p>{t('reconciliation.snoozeHint')}</p></div></header>
         <div class="modal-body"><div class="field"><label for="snooze-until">{t('reconciliation.until')}</label><input id="snooze-until" type="date" bind:value={snoozeUntil} required /></div></div>
-        <footer><button class="btn" type="button" onclick={() => (snoozeFor = null)}>{t('common.cancel')}</button><button class="btn primary" type="button" disabled={!snoozeUntil || acting !== ''} onclick={snoozeCustom}>{t('reconciliation.snooze')}</button></footer>
+        <footer><Button onclick={() => (snoozeFor = null)}>{t('common.cancel')}</Button><Button variant="primary" disabled={!snoozeUntil || acting !== ''} onclick={snoozeCustom}>{t('reconciliation.snooze')}</Button></footer>
       </div>
     {/snippet}
   </Modal>

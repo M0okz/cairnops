@@ -2,6 +2,7 @@
   import { plural, t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
   import { onMount } from 'svelte';
   import { api, type Connector, type Target, type WebhookApproval, type WebhookQuarantine } from '$lib/api';
 
@@ -73,9 +74,9 @@
             {t('quarantine.lead', { name: connector.name })}
           </p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={Boolean(busy)} aria-label="Fermer">
+        <Button variant="close" onclick={onclose} disabled={Boolean(busy)} aria-label="Fermer">
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <div class="modal-body">
@@ -127,9 +128,9 @@
                       {/each}
                     </select>
                   </div>
-                  <button class="btn primary" type="button" onclick={() => approve(item)} disabled={Boolean(busy)}>
+                  <Button variant="primary" onclick={() => approve(item)} disabled={Boolean(busy)}>
                     {busy === item.id ? 'Autorisation…' : 'Autoriser et rejouer'}
-                  </button>
+                  </Button>
                 </div>
               </li>
             {/each}

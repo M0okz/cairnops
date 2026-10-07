@@ -18,6 +18,7 @@
   import SoftwareAISettings from '$lib/components/SoftwareAISettings.svelte';
   import OIDCSettings from '$lib/components/OIDCSettings.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
   import { Tabs } from 'bits-ui';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Account, type Role } from '$lib/api';
@@ -370,9 +371,9 @@
             autocomplete="off"
             placeholder={t('settings.instanceNamePlaceholder')}
           />
-          <button class="btn sm" type="submit" disabled={!renameable || renaming}>
+          <Button size="sm" type="submit" disabled={!renameable || renaming}>
             {renaming ? t('settings.renaming') : t('common.save')}
-          </button>
+          </Button>
         </form>
       {:else}
         <span class="means">{session.instanceLabel}</span>
@@ -424,8 +425,8 @@
   <aside class="settings-aside card" aria-label={t('settings.about')}>
     <div class="aside-block"><span class="settings-icon"><Icon name="health" size={16} /></span><div><strong>{t('settings.about')}</strong><p>{t('settings.workspaceNote')}</p></div></div>
     <div class="aside-block"><span class="settings-icon"><Icon name="server" size={16} /></span><div><strong>{t('health.instance')}</strong><p><span class="dot {session.health === 'ready' ? 'ok' : 'idle'}"></span> v{session.version}</p><small>{t('settings.lastSignal')} {freshness}</small></div></div>
-    <div class="aside-block"><span class="settings-icon"><Icon name="book" size={16} /></span><div><strong>{t('settings.help')}</strong><p>{t('settings.helpHint')}</p><a class="btn sm" href="https://github.com/M0okz/cairnops#readme" target="_blank" rel="noopener noreferrer">{t('settings.documentation')} ↗</a></div></div>
-    <div class="aside-block"><span class="settings-icon"><Icon name="changelog" size={16} /></span><div><strong>{t('settings.export')}</strong><button class="btn sm" type="button" onclick={exportConfiguration}>{t('settings.exportJSON')}</button></div></div>
+    <div class="aside-block"><span class="settings-icon"><Icon name="book" size={16} /></span><div><strong>{t('settings.help')}</strong><p>{t('settings.helpHint')}</p><Button size="sm" href="https://github.com/M0okz/cairnops#readme" target="_blank" rel="noopener noreferrer">{t('settings.documentation')} ↗</Button></div></div>
+    <div class="aside-block"><span class="settings-icon"><Icon name="changelog" size={16} /></span><div><strong>{t('settings.export')}</strong><Button size="sm" onclick={exportConfiguration}>{t('settings.exportJSON')}</Button></div></div>
   </aside>
       </div>
     {/snippet}
@@ -440,7 +441,7 @@
       <div><strong>{t('settings.version')}</strong><span class="num"><span class="dot {session.health === 'ready' ? 'ok' : 'idle'}"></span> v{session.version}</span></div>
       <div><strong>{t('settings.realtime')}</strong><span>{session.realtime === 'online' ? t('settings.realtimeOn') : t('settings.realtimeOff')}</span><small>{t('settings.lastSignal')} {freshness}</small></div>
       <div><strong>{t('settings.activeConnectors')}</strong><span class="num">{session.connectors.filter((connector) => connector.status === 'connected').length} / {session.connectors.length}</span></div>
-      <a class="btn sm" href="/connecteurs">{t('settings.manageConnectors')} →</a>
+      <Button size="sm" href="/connecteurs">{t('settings.manageConnectors')} →</Button>
     </div>
   </section>
       </div>
@@ -469,14 +470,14 @@
           · {plural('settings.sessionsActive', session.activeSessions)}
         {/if}
       </span>
-      <button class="act btn sm" type="button" onclick={() => session.logout()}>{t('rail.logout')}</button>
+      <Button size="sm" class="act" onclick={() => session.logout()}>{t('rail.logout')}</Button>
     </div>
 
     {#if session.user?.authorization_regime === 'local'}
     <div class="password-toggle">
       <span class="settings-icon"><Icon name="health" size={16} /></span>
       <span><strong>{t('settings.changePassword')}</strong><small>{t('settings.changePasswordHint')}</small></span>
-      <button class="btn sm" type="button" aria-expanded={passwordOpen} onclick={() => (passwordOpen = !passwordOpen)}>{passwordOpen ? t('common.close') : t('settings.edit')} →</button>
+      <Button size="sm" aria-expanded={passwordOpen} onclick={() => (passwordOpen = !passwordOpen)}>{passwordOpen ? t('common.close') : t('settings.edit')} →</Button>
     </div>
     {#if passwordOpen}<form class="card-body password-form" onsubmit={changePassword}>
 
@@ -501,9 +502,9 @@
       <!-- Le bouton reste sous la première colonne, et ce qui lui manque se dit
            à côté de lui plutôt qu'à l'autre bout de la dalle. -->
       <div class="submit">
-        <button class="btn primary" type="submit" disabled={changing || !canSubmitChange}>
+        <Button variant="primary" type="submit" disabled={changing || !canSubmitChange}>
           {changing ? t('settings.replacing') : t('settings.replacePassword')}
-        </button>
+        </Button>
         {#if !canSubmitChange && !changing}
           <span class="faint">{t('settings.submitHint')}</span>
         {/if}
@@ -545,7 +546,7 @@
     {/if}
 
     <section id="accounts" class="card accounts" aria-labelledby="accounts-title">
-      <header class="settings-card-head"><span class="settings-icon"><Icon name="user" size={18} /></span><span><h2 id="accounts-title">{t('settings.accounts')}</h2><small>{t('settings.accountsHint')}</small></span>{#if isLocalAdministrator}<button class="btn sm account-create" type="button" onclick={() => { creating = true; createError = ''; }}>{t('settings.openAccount')}</button>{/if}</header>
+      <header class="settings-card-head"><span class="settings-icon"><Icon name="user" size={18} /></span><span><h2 id="accounts-title">{t('settings.accounts')}</h2><small>{t('settings.accountsHint')}</small></span>{#if isLocalAdministrator}<Button size="sm" class="account-create" onclick={() => { creating = true; createError = ''; }}>{t('settings.openAccount')}</Button>{/if}</header>
       {#if usersError}
         <div class="empty">
           <strong>{t('settings.accountsUnread')}</strong>
@@ -610,26 +611,24 @@
                 <span class="faint self">{t('common.you')}</span>
               {:else if isLocalAdministrator}
                 {#if user.authorization_regime === 'local'}
-                  <button
-                    class="btn sm"
-                    type="button"
+                  <Button
+                    size="sm"
                     onclick={() => { resetFor = user; resetPassword = ''; resetError = ''; }}
                   >
                     {t('settings.reset')}
-                  </button>
+                  </Button>
                 {/if}
                 {#if off}
-                  <button class="btn sm" type="button" onclick={() => reactivate(user)}>
+                  <Button size="sm" onclick={() => reactivate(user)}>
                     {t('settings.reactivate')}
-                  </button>
+                  </Button>
                 {:else}
-                  <button
-                    class="btn sm"
-                    type="button"
+                  <Button
+                    size="sm"
                     onclick={() => { deactivating = user; deactivateError = ''; }}
                   >
                     {t('settings.deactivate')}
-                  </button>
+                  </Button>
                 {/if}
               {/if}
             </span>
@@ -690,9 +689,9 @@
             <h2 id="reset-title">{t('settings.resetHeading', { name: resetAccount.display_name })}</h2>
             <p>{t('settings.resetLead')}</p>
           </div>
-          <button class="close" type="button" onclick={() => (resetFor = null)} aria-label={t('common.close')}>
+          <Button variant="close" onclick={() => (resetFor = null)} aria-label={t('common.close')}>
             <Icon name="close" size={14} />
-          </button>
+          </Button>
         </header>
 
         <form onsubmit={submitReset}>
@@ -703,16 +702,16 @@
                 autocomplete="off" required minlength="12" maxlength="128" class="mono" />
               <small>{t('settings.resetBounds')}</small>
             </div>
-            <button class="btn sm" type="button" onclick={suggest}>{t('settings.suggestPassword')}</button>
+            <Button size="sm" onclick={suggest}>{t('settings.suggestPassword')}</Button>
             {#if resetError}<p class="error" role="alert">{resetError}</p>{/if}
           </div>
           <footer>
-            <button class="btn" type="button" onclick={() => (resetFor = null)} disabled={resetting}>
+            <Button onclick={() => (resetFor = null)} disabled={resetting}>
               {t('common.cancel')}
-            </button>
-            <button class="btn primary" type="submit" disabled={resetting || resetPassword.length < 12}>
+            </Button>
+            <Button variant="primary" type="submit" disabled={resetting || resetPassword.length < 12}>
               {resetting ? t('settings.resetting') : t('settings.reset')}
-            </button>
+            </Button>
           </footer>
         </form>
       </div>
@@ -737,7 +736,7 @@
   .settings-card-head small { display: block; margin-top: var(--s1); color: var(--faint); font-size: var(--text-xs); line-height: 1.4; }
   .settings-icon { display: inline-grid; place-items: center; flex: none; width: 2.25rem; height: 2.25rem; border-radius: var(--r-m); background: var(--surface-2); color: var(--ink); }
   .general-card .row { grid-template-columns: minmax(10rem, 12rem) minmax(0, 1fr); gap: var(--s4); padding: var(--s4) var(--s5); }
-  .general-card .row > .act { grid-column: 2; justify-self: stretch; }
+  .general-card .row > .act, .general-card .row > :global(.act) { grid-column: 2; justify-self: stretch; }
   .general-card .id strong { color: var(--ink); }
   .general-card .id small { margin-top: var(--s1); color: var(--faint); line-height: 1.4; }
   .general-card .rename input { width: auto; flex: 1; min-width: 0; }
@@ -756,7 +755,7 @@
   .aside-block .settings-icon { width: 2rem; height: 2rem; }
   .aside-block strong { display: block; font-size: var(--text-sm); font-weight: 600; }
   .aside-block p, .aside-block small { display: block; margin-top: var(--s3); color: var(--faint); font-size: var(--text-xs); line-height: 1.55; }
-  .aside-block .btn { margin-top: var(--s3); }
+  .aside-block :global(.btn) { margin-top: var(--s3); }
   .aside-block .dot { display: inline-block; }
   .status-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: center; gap: 0; padding: var(--s3) var(--s5); }
   .status-grid > div { display: grid; align-content: start; gap: var(--s3); min-height: 4.25rem; padding: var(--s2) var(--s5); border-right: 1px solid var(--line); }
@@ -765,9 +764,9 @@
   .status-grid strong { font-size: var(--text-xs); font-weight: 600; }
   .status-grid span { font-size: var(--text-sm); }
   .status-grid small { color: var(--faint); font-size: var(--text-xs); }
-  .status-grid .btn { margin-left: var(--s4); }
+  .status-grid :global(.btn) { margin-left: var(--s4); }
   .account-card > .row { grid-template-columns: minmax(0, 1fr) auto auto; }
-  .account-card > .row .act { grid-column: 3; }
+  .account-card > .row .act, .account-card > .row :global(.act) { grid-column: 3; }
   .password-toggle { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) var(--s5); }
   .password-toggle > span:nth-child(2) { flex: 1; min-width: 0; }
   .password-toggle strong, .password-toggle small { display: block; }
@@ -775,7 +774,7 @@
   .password-toggle small { margin-top: var(--s1); color: var(--faint); font-size: var(--text-xs); }
   .password-toggle .settings-icon { width: 2rem; height: 2rem; }
   .password-form { border-top: 1px solid var(--line); }
-  .account-create { margin-left: auto; }
+  .settings-card-head :global(.account-create) { margin-left: auto; }
   .accounts .settings-card-head { border-bottom: 1px solid var(--line); }
   .accounts .footnote { margin: 0; }
 
@@ -814,7 +813,7 @@
     border-bottom: 0;
   }
 
-  .row > .act {
+  .row > .act, .row > :global(.act) {
     grid-column: 3;
     justify-self: end;
   }
@@ -990,14 +989,14 @@
     .settings-aside { grid-template-columns: minmax(0, 1fr); }
     .aside-block { border-right: 0; }
     .general-card .row { grid-template-columns: minmax(0, 1fr); }
-    .general-card .row > .act, .general-card .row > .setting-value { grid-column: 1; }
+    .general-card .row > .act, .general-card .row > :global(.act), .general-card .row > .setting-value { grid-column: 1; }
     .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
     .status-grid > div { padding: var(--s2); }
     .status-grid > div:nth-child(2) { border-right: 0; }
-    .status-grid .btn { justify-self: start; margin-left: 0; }
+    .status-grid :global(.btn) { justify-self: start; margin-left: 0; }
     .account-card > .row { grid-template-columns: minmax(0, 1fr) auto; }
     .account-card > .row .means { grid-row: 2; }
-    .account-card > .row .act { grid-column: 2; grid-row: 1; }
+    .account-card > .row .act, .account-card > .row :global(.act) { grid-column: 2; grid-row: 1; }
     .row {
       grid-template-columns: minmax(0, 1fr);
       align-items: start;
@@ -1005,7 +1004,7 @@
     }
 
     .row > .means,
-    .row > .act {
+    .row > .act, .row > :global(.act) {
       grid-column: 1;
       justify-self: start;
     }

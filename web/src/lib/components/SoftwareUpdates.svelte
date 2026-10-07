@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from './ui/Button.svelte';
   import { api } from "$lib/api";
   import { t, type MessageKey } from "$lib/i18n.svelte";
   import { messageFrom } from "$lib/session.svelte";
@@ -130,7 +131,7 @@
 <div class="software-updates">
   {#if error}<div role="alert">
       {error}
-      <button class="btn" onclick={() => reload++}>{t("updates.retry")}</button>
+      <Button onclick={() => reload++}>{t("updates.retry")}</Button>
     </div>{/if}
   {#if loading}<p role="status">{t("updates.loading")}</p>
   {:else if !services.length}<div class="card empty">
@@ -205,11 +206,9 @@
                       {/if}
                     </div>
                     <p class="status" class:attention={service.group === "review"}>{statusLabel(service)}</p>
-                    <button
-                      class="btn"
+                    <Button
                       onclick={(event) => openDetail(service.id, event)}
-                      >{t("updates.details")}</button
-                    >
+                      >{t("updates.details")}</Button>
                   </div>
                 </li>
               {/each}
@@ -284,7 +283,7 @@
     column-gap: var(--s5);
     padding: var(--s4) var(--s5);
   }
-  .row-main > button {
+  .row-main > :global(.btn) {
     justify-self: end;
   }
   .update-list,
@@ -358,7 +357,7 @@
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: var(--s3) var(--s5);
     }
-    .row-main > button {
+    .row-main > :global(.btn) {
       justify-self: end;
     }
   }
@@ -367,7 +366,7 @@
       grid-template-columns: minmax(0, 1fr);
       padding: var(--s4);
     }
-    .row-main > button {
+    .row-main > :global(.btn) {
       justify-self: stretch;
     }
   }

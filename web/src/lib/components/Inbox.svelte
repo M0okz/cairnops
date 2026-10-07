@@ -11,6 +11,7 @@
 
   import { Popover } from 'bits-ui';
   import Icon from './Icon.svelte';
+  import Button from './ui/Button.svelte';
   import { incidentHref } from '$lib/incident-detail';
   import { inboxEntryState, unreadEntryIds, type InboxEntryState } from '$lib/inbox';
   import { session } from '$lib/session.svelte';
@@ -98,13 +99,14 @@
                   <strong>{t('inbox.title')}</strong>
                   <span class="faint">{t('inbox.note')}</span>
                 </span>
-                <button
-                  class="btn sm quiet clear"
-                  type="button"
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  class="clear"
                   disabled={clearing || (session.inbox.length === 0 && session.unread === 0)}
                   aria-busy={clearing}
                   onclick={clearInbox}
-                >{t('inbox.clear')}</button>
+                >{t('inbox.clear')}</Button>
               </header>
 
               <div class="entries">
@@ -225,7 +227,7 @@
     white-space: nowrap;
   }
 
-  .clear {
+  .panel :global(.clear) {
     flex: none;
   }
 

@@ -2,6 +2,7 @@
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
   import { onMount } from 'svelte';
   import { api, type GenericWebhookCreated } from '$lib/api';
 
@@ -86,9 +87,9 @@
               : t('webhook.createSay')}
           </p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label="Fermer">
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       {#if created}
@@ -104,17 +105,17 @@
           <div class="credential">
             <span class="label faint">{t('webhook.endpointLabel')}</span>
             <code>{created.endpoint}</code>
-            <button class="btn sm" type="button" onclick={() => copyCredential('endpoint')}>
+            <Button size="sm" onclick={() => copyCredential('endpoint')}>
               {copied === 'endpoint' ? t('webhook.copied') : t('workshop.copy')}
-            </button>
+            </Button>
           </div>
 
           <div class="credential secret">
             <span class="label faint">Jeton Bearer — affichage unique</span>
             <code>{created.token}</code>
-            <button class="btn sm" type="button" onclick={() => copyCredential('token')}>
+            <Button size="sm" onclick={() => copyCredential('token')}>
               {copied === 'token' ? t('webhook.copied') : t('workshop.copy')}
-            </button>
+            </Button>
           </div>
 
           <div class="contract">
@@ -132,7 +133,7 @@
 
         <footer>
           <span class="faint note">Aucun signal inconnu ne devient un Incident sans votre autorisation.</span>
-          <button class="btn primary" type="button" onclick={onclose}>{t('webhook.secretKept')}</button>
+          <Button variant="primary" onclick={onclose}>{t('webhook.secretKept')}</Button>
         </footer>
       {:else}
         <form onsubmit={create}>
@@ -154,10 +155,10 @@
           </div>
 
           <footer>
-            <button class="btn" type="button" onclick={onclose} disabled={busy}>Annuler</button>
-            <button class="btn primary" type="submit" disabled={busy}>
+            <Button onclick={onclose} disabled={busy}>Annuler</Button>
+            <Button variant="primary" type="submit" disabled={busy}>
               {busy ? t('webhook.generating') : t('webhook.createEntry')}
-            </button>
+            </Button>
           </footer>
         </form>
       {/if}

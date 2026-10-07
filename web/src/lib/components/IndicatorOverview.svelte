@@ -3,6 +3,7 @@
   import IndicatorPersonalizer from './IndicatorPersonalizer.svelte';
   import Icon from './Icon.svelte';
   import SegmentedControl from './ui/SegmentedControl.svelte';
+  import Button from './ui/Button.svelte';
   import type { ContextIndicator } from '$lib/api';
   import { session } from '$lib/session.svelte';
   import { formatIndicator } from '$lib/indicator-format';
@@ -92,7 +93,7 @@
           { value: '1h', label: t('chart.1h') }, { value: '24h', label: t('dashboard.24h') }, { value: '7d', label: t('dashboard.7d') }
         ]} onValueChange={(value) => (period = value)} />
       {/if}
-      <button class="btn sm personalize" bind:this={personalizerTrigger} type="button" aria-label={t('overview.indicators.personalize')} title={t('overview.indicators.personalize')} onclick={() => (personalizing = true)}><Icon name="settings" size={18} /></button>
+      <Button size="sm" class="personalize" bind:ref={personalizerTrigger} aria-label={t('overview.indicators.personalize')} title={t('overview.indicators.personalize')} onclick={() => (personalizing = true)}><Icon name="settings" size={18} /></Button>
     </div>
   </div>
   {#if selected}
@@ -113,7 +114,7 @@
     {/if}
     <div class="analysis-chart" aria-busy={loading}>
       {#if failed || loading || points.length === 0}
-        <div class="series-message" role="status"><p>{t(failed ? 'dashboard.seriesError' : loading ? 'dashboard.loading' : 'dashboard.noSeries')}</p>{#if failed}<button class="btn sm" type="button" onclick={() => retry += 1}>{t('chart.retry')}</button>{/if}</div>
+        <div class="series-message" role="status"><p>{t(failed ? 'dashboard.seriesError' : loading ? 'dashboard.loading' : 'dashboard.noSeries')}</p>{#if failed}<Button size="sm" onclick={() => retry += 1}>{t('chart.retry')}</Button>{/if}</div>
       {:else}
         <IndicatorHistoryChart {points} {timeBounds} unit={selected.indicator.unit} {label} hourly={period === '7d'} />
       {/if}
@@ -127,7 +128,7 @@
       <Icon name="activity" size={32} />
       <strong>{t('dashboard.noIndicators')}</strong>
       <p>{t('dashboard.noIndicatorsHint')}</p>
-      <button class="btn" type="button" onclick={() => (personalizing = true)}>{t('overview.indicators.personalize')}</button>
+      <Button onclick={() => (personalizing = true)}>{t('overview.indicators.personalize')}</Button>
     </div>
   {/if}
 </section>
@@ -141,7 +142,7 @@
   h2 { font-size: 1.125rem; font-weight: 600; overflow-wrap: anywhere; }
   .analysis-copy p { font-size: var(--text-sm); color: var(--faint); margin-top: var(--s2); }
   .analysis-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
-  .personalize { width: var(--ctl-h); padding: 0; justify-content: center; }
+  .analysis-controls :global(.personalize) { width: var(--ctl-h); padding: 0; justify-content: center; }
   .analysis-value { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s3) var(--s4); padding: 0 var(--s5) var(--s4); }
   .chart-legend { display: flex; flex-wrap: wrap; gap: var(--s3) var(--s4); }
   .latest-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s3); color: var(--faint); font-size: var(--text-xs); }

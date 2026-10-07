@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import IndicatorHistoryChart from './IndicatorHistoryChart.svelte';
   import SegmentedControl from './ui/SegmentedControl.svelte';
+  import Button from './ui/Button.svelte';
   import { session } from '$lib/session.svelte';
   import { formatIndicator } from '$lib/indicator-format';
   import { indicatorTimeBounds, indicatorWindowPoints, type IndicatorPeriod } from '$lib/indicator-history';
@@ -85,7 +86,7 @@
   {#if loading || failed || !detail?.indicators.length}
     <div class="series-message card" role="status" aria-busy={loading}>
       <p>{t(failed ? 'dashboard.seriesError' : loading ? 'dashboard.loading' : 'dashboard.noIndicators')}</p>
-      {#if failed}<button class="btn" type="button" onclick={() => retry += 1}>{t('chart.retry')}</button>{/if}
+      {#if failed}<Button onclick={() => retry += 1}>{t('chart.retry')}</Button>{/if}
     </div>
   {:else}
     <div class="indicator-list">

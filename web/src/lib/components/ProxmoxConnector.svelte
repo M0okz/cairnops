@@ -8,6 +8,7 @@
   import TargetDecision from './TargetDecision.svelte';
   import ReconciliationSummary from './ReconciliationSummary.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let { onclose, onsuccess, connectorId = '', initialName = '', initialAddress = '' }: {
     onclose: () => void;
@@ -107,12 +108,12 @@
     <div {...dialog} class="modal" aria-labelledby="proxmox-title">
       <header>
         <div><h2 id="proxmox-title">{t(preview ? 'wizard.chooseWhatEnters' : 'proxmox.connect')}</h2><p>{t('proxmox.lead')}</p></div>
-        <button class="close" type="button" disabled={busy} onclick={onclose} aria-label={t('common.close')}><Icon name="close" size={14} /></button>
+        <Button variant="close" disabled={busy} onclick={onclose} aria-label={t('common.close')}><Icon name="close" size={14} /></Button>
       </header>
 
       {#if preview}
         <div class="modal-body">
-          <div class="checks"><strong>Proxmox VE {preview.version}</strong><span>{t('proxmox.https')}</span><button class="btn sm" disabled={busy} onclick={() => { if (connectorId) void inspectExisting(); else { preview = null; stage = 'authorization'; } }}>{t('proxmox.refresh')}</button></div>
+          <div class="checks"><strong>Proxmox VE {preview.version}</strong><span>{t('proxmox.https')}</span><Button size="sm" disabled={busy} onclick={() => { if (connectorId) void inspectExisting(); else { preview = null; stage = 'authorization'; } }}>{t('proxmox.refresh')}</Button></div>
           {#if preview.access.will_provision}
             <aside><strong>{t('proxmox.onConfirm')}</strong><p>{t('proxmox.accessPlan')}</p><p>{t('proxmox.cleanupHint')}</p></aside>
           {:else}<aside>{t('proxmox.existingAccess')}</aside>{/if}
@@ -120,7 +121,7 @@
           <ReconciliationSummary counts={counts} />
           <div class="listbar">
             <div class="field search"><label class="sr-only" for="pve-search">{t('proxmox.filter')}</label><input id="pve-search" bind:value={query} placeholder={t('proxmox.filter')} /></div>
-            <button class="btn sm" type="button" onclick={toggleVisible}>{t('proxmox.toggleVisible')}</button>
+            <Button size="sm" onclick={toggleVisible}>{t('proxmox.toggleVisible')}</Button>
             <span class="faint num">{selected.length} / {preview.importable_count}</span>
           </div>
           <ul class="rack">
@@ -144,7 +145,7 @@
           {#if stoppedAlerts}<p class="warn" role="status">{t('proxmox.stoppedWarning', { count: stoppedAlerts })}</p>{/if}
           {#if error}<p class="error" role="alert">{error}</p>{/if}
         </div>
-        <footer><span class="faint note">{t('proxmox.observes')}</span><button class="btn primary" onclick={save} disabled={busy || !selected.length || counts.review > 0}>{busy ? t('wizard.importing') : counts.review ? plural('wizard.confirmChoices', counts.review) : t('proxmox.apply')}</button></footer>
+        <footer><span class="faint note">{t('proxmox.observes')}</span><Button variant="primary" onclick={save} disabled={busy || !selected.length || counts.review > 0}>{busy ? t('wizard.importing') : counts.review ? plural('wizard.confirmChoices', counts.review) : t('proxmox.apply')}</Button></footer>
       {:else if stage === 'address'}
         <form onsubmit={probe}>
           <div class="modal-body">
@@ -158,21 +159,21 @@
             {#if error}<p class="error" role="alert">{error}</p>{/if}
           </div>
           <footer><span class="faint note">{t('proxmox.certificateHint')}</span>
-            {#if certificate && (!certificate.trusted || connectorId)}<button class="btn primary" type="button" disabled={busy || !approved} onclick={acceptCertificate}>{t('proxmox.continue')}</button>
-            {:else}<button class="btn primary" type="submit" disabled={busy}>{busy ? t('gate.verifying') : t('proxmox.checkAddress')}</button>{/if}
+            {#if certificate && (!certificate.trusted || connectorId)}<Button variant="primary" disabled={busy || !approved} onclick={acceptCertificate}>{t('proxmox.continue')}</Button>
+            {:else}<Button variant="primary" type="submit" disabled={busy}>{busy ? t('gate.verifying') : t('proxmox.checkAddress')}</Button>{/if}
           </footer>
         </form>
       {:else}
         <form onsubmit={inspect}>
           <div class="modal-body">
-            <div class="checks"><span>{address}</span><button class="btn sm" type="button" onclick={() => { stage = 'address'; certificate = null; secret = ''; }}>{t('proxmox.changeAddress')}</button></div>
+            <div class="checks"><span>{address}</span><Button size="sm" onclick={() => { stage = 'address'; certificate = null; secret = ''; }}>{t('proxmox.changeAddress')}</Button></div>
             <div class="field"><label for="pve-mode">{t('wizard.authorisation')}</label><select id="pve-mode" bind:value={mode}><option value="automatic">{t('proxmox.automatic')}</option><option value="provided">{t('proxmox.provided')}</option></select></div>
             <p class="lead">{t(mode === 'automatic' ? 'proxmox.automaticHint' : 'proxmox.providedHint')}</p>
             <div class="fields"><div class="field"><label for="pve-token-id">{t('proxmox.tokenID')}</label><input id="pve-token-id" bind:value={tokenID} placeholder="user@pve!token" required maxlength="256" autocomplete="off" spellcheck="false" /></div>
             <div class="field"><label for="pve-secret">{t('proxmox.tokenSecret')}</label><input id="pve-secret" type="password" bind:value={secret} required maxlength="4096" autocomplete="off" spellcheck="false" /></div></div>
             {#if error}<p class="error" role="alert">{error}</p>{/if}
           </div>
-          <footer><span class="faint note">{t('proxmox.previewHint')}</span><button class="btn primary" type="submit" disabled={busy}>{busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}</button></footer>
+          <footer><span class="faint note">{t('proxmox.previewHint')}</span><Button variant="primary" type="submit" disabled={busy}>{busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}</Button></footer>
         </form>
       {/if}
     </div>
@@ -183,7 +184,7 @@
   .modal { max-width: var(--connector-modal-max); }
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--connector-field-min)), 1fr)); gap: var(--s4); }
   .checks, .listbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s3); margin-bottom: var(--s4); }
-  .checks > button { margin-left: auto; }
+  .checks > :global(.btn) { margin-left: auto; }
   aside { padding: var(--s4); margin: var(--s3) 0; border: var(--line-width) solid var(--line-strong); border-radius: var(--r-m); background: var(--bg); font-size: var(--text-sm); }
   aside p { margin: var(--s2) 0; color: var(--muted); }
   .fingerprint { display: block; overflow-wrap: anywhere; font-size: var(--text-xs); margin: var(--s3) 0; }

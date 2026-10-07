@@ -19,6 +19,7 @@
   import TargetIndicators from '$lib/components/TargetIndicators.svelte';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
   import ReconciliationWorkshop from '$lib/components/ReconciliationWorkshop.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
   import { reconciliationState } from '$lib/reconciliation.svelte';
   import { incidentHref } from '$lib/incident-detail';
   import { latencyHabit } from '$lib/latency-profile';
@@ -379,17 +380,17 @@
         </p>
       </div>
       <div class="page-actions">
-        <button class="btn" type="button" onclick={() => (maintenanceOpen = true)}>
+        <Button onclick={() => (maintenanceOpen = true)}>
           {t('target.putUnderMaintenance')}
-        </button>
+        </Button>
         {#if admin}
-          <button class="btn" type="button" disabled={structureBusy} onclick={() => (reconciliationOpen = true)}>{t('target.reconcile')}</button>
-          <button class="btn" type="button" onclick={() => (tab = 'settings')}>{t('target.edit')}</button>
+          <Button disabled={structureBusy} onclick={() => (reconciliationOpen = true)}>{t('target.reconcile')}</Button>
+          <Button onclick={() => (tab = 'settings')}>{t('target.edit')}</Button>
         {/if}
         {#if lead && !lead.acknowledged_at}
-          <button class="btn primary" type="button" disabled={acknowledging} onclick={acknowledge}>
+          <Button variant="primary" disabled={acknowledging} onclick={acknowledge}>
             {acknowledging ? t('incident.acknowledging') : t('incident.acknowledge')}
-          </button>
+          </Button>
         {/if}
       </div>
     </div>
@@ -441,7 +442,7 @@
               {/if}
             </p>
           </div>
-          <a class="btn" href={incidentHref(lead.id)}>{t('target.openIncident')}</a>
+          <Button href={incidentHref(lead.id)}>{t('target.openIncident')}</Button>
         </div>
       {/if}
 
@@ -518,16 +519,16 @@
                 </span>
 
                 {#if !dead && session.user?.role !== 'observer'}
-                  <button
-                    class="btn sm proof-action"
-                    type="button"
+                  <Button
+                    size="sm"
+                    class="proof-action"
                     title={t('target.invalidateHint')}
                     disabled={invalidating === proof.signal.id}
                     onclick={() => {
                       invalidationFor = { incidentId: proof.incident.id, signal: proof.signal };
                       invalidationReason = '';
                     }}
-                  >{t('target.invalidate')}</button>
+                  >{t('target.invalidate')}</Button>
                 {:else if dead}
                   <span class="faint reason" title={proof.signal.invalidation_reason}>
                     {proof.signal.invalidation_reason ?? t('target.noReason')}
@@ -548,13 +549,13 @@
             <header>
               <h2>{observationsOpen ? t('target.observations') : t('target.activityLog')}</h2>
               {#if observationsOpen}
-                <button class="btn sm" type="button" onclick={() => (observationsOpen = false)}>
+                <Button size="sm" onclick={() => (observationsOpen = false)}>
                   {t('target.backToLog')}
-                </button>
+                </Button>
               {:else}
-                <button class="btn sm" type="button" onclick={showObservations}>
+                <Button size="sm" onclick={showObservations}>
                   {t('target.showObservations')}
-                </button>
+                </Button>
               {/if}
             </header>
             <div class:card-body={observationsOpen} class:log={observationsOpen}>
@@ -678,9 +679,9 @@
                 </p>
               {:else}
                 <p class="explain">{t('target.noWindow')}</p>
-                <button class="btn window-action" type="button" onclick={() => (maintenanceOpen = true)}>
+                <Button class="window-action" onclick={() => (maintenanceOpen = true)}>
                   {t('maintenance.plan')}
-                </button>
+                </Button>
               {/if}
             </div>
           </div>
@@ -765,7 +766,7 @@
             <span class="cell-name source-cell">
               <i class="dot {source.latest_outcome === 'healthy' ? 'ok' : source.latest_outcome === 'unhealthy' ? 'crit' : 'idle'}"></i>
               <span><strong>{source.name}</strong></span>
-              {#if admin}<button class="btn sm source-move" type="button" disabled={structureBusy} onclick={() => (sourceForMove = { id: source.id, target_id: target.id, name: source.name, kind: source.kind, origin: 'native' })}>{t('target.attachSource')}</button>{/if}
+              {#if admin}<Button size="sm" class="source-move" disabled={structureBusy} onclick={() => (sourceForMove = { id: source.id, target_id: target.id, name: source.name, kind: source.kind, origin: 'native' })}>{t('target.attachSource')}</Button>{/if}
             </span>
             <span class="pill">{kindLabels[source.kind] ?? source.kind}</span>
             <span class="hide-sm">{outcomeLabels[source.latest_outcome ?? 'unknown']}</span>
@@ -807,7 +808,7 @@
                 <strong>{source.name}</strong>
                 <small class="nature">{t('target.fromConnector')}</small>
               </span>
-              {#if admin}<button class="btn sm source-move" type="button" disabled={structureBusy} onclick={() => (sourceForMove = { id: source.source_id, target_id: target.id, name: source.name, kind: source.kind, origin: 'integration' })}>{t('target.attachSource')}</button>{/if}
+              {#if admin}<Button size="sm" class="source-move" disabled={structureBusy} onclick={() => (sourceForMove = { id: source.source_id, target_id: target.id, name: source.name, kind: source.kind, origin: 'integration' })}>{t('target.attachSource')}</Button>{/if}
             </span>
             <span class="pill info">{kindLabels[source.kind] ?? source.kind}</span>
             <span class="hide-sm">{outcomeLabels[source.latest_outcome ?? 'unknown']}</span>
@@ -832,7 +833,7 @@
       </div>
     {:else if tab === 'checks'}
       {#if admin}
-        <div class="section-actions"><button class="btn primary" type="button" disabled={structureBusy} onclick={() => (controlOpen = true)}>{t('target.addCheck')}</button></div>
+        <div class="section-actions"><Button variant="primary" disabled={structureBusy} onclick={() => (controlOpen = true)}>{t('target.addCheck')}</Button></div>
       {/if}
       <div class="card cols-check">
         <div class="thead">
@@ -860,16 +861,15 @@
               <!-- Suspendre arrête la sonde sans rien perdre ; retirer emporte
                    ses Observations, d'où la confirmation. -->
               <span class="row-actions">
-                <button class="btn sm" type="button" disabled={saving || structureBusy} onclick={() => (sourceForMove = { id: source.id, target_id: target.id, name: source.name, kind: source.kind, origin: 'native' })}>{t('target.attachSource')}</button>
-                <button class="btn sm" type="button" disabled={saving || structureBusy} onclick={() => toggleSource(source)}>
+                <Button size="sm" disabled={saving || structureBusy} onclick={() => (sourceForMove = { id: source.id, target_id: target.id, name: source.name, kind: source.kind, origin: 'native' })}>{t('target.attachSource')}</Button>
+                <Button size="sm" disabled={saving || structureBusy} onclick={() => toggleSource(source)}>
                   {source.enabled ? t('target.suspend') : t('target.resume')}
-                </button>
-                <button
-                  class="btn sm"
-                  type="button"
+                </Button>
+                <Button
+                  size="sm"
                   disabled={saving || structureBusy}
                   onclick={() => (removalFor = { id: source.id, name: source.name })}
-                >{t('target.remove')}</button>
+                >{t('target.remove')}</Button>
               </span>
             {:else}
               <span></span>
@@ -916,12 +916,12 @@
                 <input id="target-description" bind:value={draftDescription} maxlength="2000" />
               </div>
               <div class="settings-actions">
-                <button class="btn primary" type="submit" disabled={saving || structureBusy || draftName.trim().length === 0}>
+                <Button variant="primary" type="submit" disabled={saving || structureBusy || draftName.trim().length === 0}>
                   {saving ? t('common.saving') : t('common.save')}
-                </button>
-                <button class="btn" type="button" disabled={saving} onclick={resetDraft}>
+                </Button>
+                <Button disabled={saving} onclick={resetDraft}>
                   {t('common.cancel')}
-                </button>
+                </Button>
               </div>
             </form>
 
@@ -930,9 +930,9 @@
                 <strong>{t('target.identity')}</strong>
                 <p>{t('target.identityHint')}</p>
               </div>
-              <button class="btn" type="button" disabled={saving || structureBusy} onclick={() => (reconciliationOpen = true)}>
+              <Button disabled={saving || structureBusy} onclick={() => (reconciliationOpen = true)}>
                 {t('target.reconcileAnother')}
-              </button>
+              </Button>
             </div>
 
             <div class="danger">
@@ -940,9 +940,9 @@
                 <strong>{t('target.archiveTitle')}</strong>
                 <p>{t('target.archiveSay')}</p>
               </div>
-              <button class="btn" type="button" disabled={saving || structureBusy} onclick={() => (archiveOpen = true)}>
+              <Button disabled={saving || structureBusy} onclick={() => (archiveOpen = true)}>
                 {t('target.archive')}
-              </button>
+              </Button>
             </div>
           {:else}
             <p class="pending">{t('target.adminOnly')}</p>
@@ -976,13 +976,12 @@
           </div>
         </div>
         <footer>
-          <button class="btn" type="button" onclick={() => (invalidationFor = null)}>{t('common.cancel')}</button>
-          <button
-            class="btn primary"
-            type="button"
+          <Button onclick={() => (invalidationFor = null)}>{t('common.cancel')}</Button>
+          <Button
+            variant="primary"
             disabled={invalidationReason.trim().length < 8 || invalidating !== ''}
             onclick={confirmInvalidation}
-          >{invalidating ? t('common.saving') : t('target.invalidateConfirm')}</button>
+          >{invalidating ? t('common.saving') : t('target.invalidateConfirm')}</Button>
         </footer>
       </div>
     {/snippet}
@@ -1003,12 +1002,12 @@
           <p class="explain">{t('target.archiveExplain')}</p>
         </div>
         <footer>
-          <button class="btn" type="button" disabled={saving} onclick={() => (archiveOpen = false)}>
+          <Button disabled={saving} onclick={() => (archiveOpen = false)}>
             {t('common.cancel')}
-          </button>
-          <button class="btn primary" type="button" disabled={saving || structureBusy} onclick={confirmArchive}>
+          </Button>
+          <Button variant="primary" disabled={saving || structureBusy} onclick={confirmArchive}>
             {saving ? t('target.archiving') : t('target.archiveConfirm')}
-          </button>
+          </Button>
         </footer>
       </div>
     {/snippet}
@@ -1030,12 +1029,12 @@
           <p class="explain">{t('target.removeExplain')}</p>
         </div>
         <footer>
-          <button class="btn" type="button" disabled={saving} onclick={() => (removalFor = null)}>
+          <Button disabled={saving} onclick={() => (removalFor = null)}>
             {t('common.cancel')}
-          </button>
-          <button class="btn primary" type="button" disabled={saving || structureBusy} onclick={() => removalFor && removeSource(removalFor.id)}>
+          </Button>
+          <Button variant="primary" disabled={saving || structureBusy} onclick={() => removalFor && removeSource(removalFor.id)}>
             {saving ? t('target.removing') : t('target.removeConfirm')}
-          </button>
+          </Button>
         </footer>
       </div>
     {/snippet}
@@ -1091,8 +1090,8 @@
 
   .section-actions { display: flex; justify-content: flex-end; margin-bottom: var(--s4); }
   .source-cell { min-width: 0; }
-  .source-move { margin-left: auto; opacity: 0; transition: opacity var(--d1) var(--ease); }
-  .trow:hover .source-move, .trow:focus-within .source-move { opacity: 1; }
+  .trow :global(.source-move) { margin-left: auto; opacity: 0; transition: opacity var(--d1) var(--ease); }
+  .trow:hover :global(.source-move), .trow:focus-within :global(.source-move) { opacity: 1; }
 
   .tabs button {
     padding: 0 0 0.625rem;
@@ -1136,7 +1135,7 @@
     font-size: 0.75rem;
   }
 
-  .banner .btn {
+  .banner :global(.btn) {
     flex: none;
   }
 
@@ -1283,7 +1282,7 @@
     font-size: 0.6875rem;
   }
 
-  .window-action {
+  .card-body :global(.window-action) {
     margin-top: var(--s4);
   }
 
@@ -1309,7 +1308,7 @@
   .cols-source { --cols: minmax(0, 1.4fr) 6rem 7.5rem 5.25rem 5.25rem 5.75rem 8.125rem }
   .cols-check  { --cols: minmax(0, 1.4fr) 7.5rem 5.25rem 5.25rem 8.75rem 5.25rem auto }
 
-  .proof-action {
+  .trow :global(.proof-action) {
     justify-self: end;
   }
 
@@ -1332,7 +1331,7 @@
       display: none;
     }
 
-    .proof-action {
+    .trow :global(.proof-action) {
       grid-column: 2;
     }
   }
@@ -1382,7 +1381,7 @@
     font-size: 0.75rem;
   }
 
-  .danger button {
+  .danger :global(.btn) {
     margin-left: auto;
     flex: none;
   }
@@ -1539,7 +1538,7 @@
     width: 3.75rem;
   }
 
-  .journal header .btn {
+  .journal header :global(.btn) {
     margin-left: auto;
   }
 
@@ -1580,7 +1579,7 @@
       align-items: start;
     }
 
-    .banner .btn {
+    .banner :global(.btn) {
       grid-column: 2;
       justify-self: start;
     }

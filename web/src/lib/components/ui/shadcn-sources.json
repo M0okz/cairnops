@@ -10,9 +10,5 @@
   "input": {
     "url": "https://shadcn-svelte.com/registry/input.json",
     "sha256": "d45adc6adcaab47170be808a6cc76cc9944c7cf9bf6920008cc343a2545510a8"
-  },
-  "button": {
-    "url": "https://shadcn-svelte.com/registry/button.json",
-    "sha256": "95869e8a59206a941268ba21cdf1e053d80e064c92ec9432b2d00e41bce9a281"
   }
 }

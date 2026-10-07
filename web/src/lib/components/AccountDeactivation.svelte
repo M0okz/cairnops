@@ -10,6 +10,7 @@
   import type { Account } from '$lib/api';
   import { t } from '$lib/i18n.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let {
     account,
@@ -46,9 +47,9 @@
           </h2>
           <p>{t('account.deactivateLead')}</p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <div class="modal-body">
@@ -76,10 +77,10 @@
 
       <footer>
         <span class="faint note">{t('account.reactivationNote')}</span>
-        <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-        <button class="btn primary" type="button" onclick={deactivate} disabled={busy}>
+        <Button onclick={onclose} disabled={busy}>{t('common.cancel')}</Button>
+        <Button variant="primary" onclick={deactivate} disabled={busy}>
           {busy ? t('account.deactivating') : t('account.deactivateConfirm')}
-        </button>
+        </Button>
       </footer>
     </div>
   {/snippet}

@@ -14,6 +14,7 @@
   import ConnectorConnection from '$lib/components/ConnectorConnection.svelte';
   import MattermostConnector from '$lib/components/MattermostConnector.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
   import { goto } from '$app/navigation';
   import { session } from '$lib/session.svelte';
   import { since } from '$lib/format';
@@ -167,9 +168,9 @@
     </div>
     <div class="page-actions">
       {#if isAdministrator && !hasMattermost}
-        <button class="btn" type="button" onclick={() => (mattermostOpen = true)}>Relier Mattermost</button>
+        <Button onclick={() => (mattermostOpen = true)}>Relier Mattermost</Button>
       {/if}
-      <button class="btn primary" type="button" onclick={() => (chooserOpen = true)}>Ajouter un Connecteur</button>
+      <Button variant="primary" onclick={() => (chooserOpen = true)}>Ajouter un Connecteur</Button>
     </div>
   </div>
 
@@ -233,20 +234,19 @@
             {#if isAdministrator}
               <div class="connector-actions">
               {#if connector.kind !== 'generic_webhook'}
-                <button class="btn sm" type="button" onclick={() => (configurationFor = connector)}>Configurer</button>
-                <button class="btn sm" type="button" onclick={() => (connectionFor = connector)}>{t('connection.edit')}</button>
+                <Button size="sm" onclick={() => (configurationFor = connector)}>Configurer</Button>
+                <Button size="sm" onclick={() => (connectionFor = connector)}>{t('connection.edit')}</Button>
               {/if}
-              <button
-                class="btn sm"
-                type="button"
+              <Button
+                size="sm"
                 disabled={suspending === connector.id}
                 onclick={() => askSuspension(connector)}
               >
                 {connector.status === 'disabled' ? 'Reprendre' : 'Suspendre'}
-              </button>
-              <button class="btn sm danger" type="button" onclick={() => (removalFor = connector)}>
+              </Button>
+              <Button variant="danger" size="sm" onclick={() => (removalFor = connector)}>
                 Supprimer
-              </button>
+              </Button>
               </div>
             {/if}
           </div>
@@ -349,9 +349,9 @@
           <span class="num hide-sm"><Odometer value={t('overview.ago', { duration: since(row.last_seen_at, now) })} /></span>
           <span class="faint payload hide-sm" title={row.summary}>{row.summary}</span>
           {#if isAdministrator}
-            <button class="btn sm attach" type="button" onclick={() => (quarantineFor = connector)}>
+            <Button size="sm" class="attach" onclick={() => (quarantineFor = connector)}>
               {t('connectors.attachToTarget')}
-            </button>
+            </Button>
           {:else}
             <span></span>
           {/if}
@@ -575,7 +575,7 @@
 
   /* Rattacher est la seule action qui fasse entrer une preuve : elle porte
      l'accent, sans devenir l'action dominante de l'écran. */
-  .attach {
+  .trow :global(.attach) {
     border-color: var(--accent);
     color: var(--accent);
   }

@@ -13,6 +13,7 @@
   import { t } from '$lib/i18n.svelte';
   import { messageFrom } from '$lib/session.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let {
     onclose,
@@ -178,9 +179,9 @@
           <h2 id="pairing-title">{t('devices.pairingTitle')}</h2>
           <p>{t('devices.pairingLead')}</p>
         </div>
-        <button class="close" type="button" onclick={() => void close()} disabled={busy} aria-label={t('common.close')}>
+        <Button variant="close" onclick={() => void close()} disabled={busy} aria-label={t('common.close')}>
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <div class="modal-body">
@@ -190,7 +191,7 @@
           <div class="pairing-failure">
             <strong>{t('devices.pairingUnavailable')}</strong>
             {#if error}<p class="error" role="alert">{error}</p>{/if}
-            <button class="btn primary" type="button" onclick={start}>{t('common.retry')}</button>
+            <Button variant="primary" onclick={start}>{t('common.retry')}</Button>
           </div>
         {:else}
           <ol class="pairing-steps" aria-label={t('devices.pairingSteps')}>
@@ -248,9 +249,9 @@
                   <label for="pairing-link">{t('devices.manualLink')}</label>
                   <div>
                     <input id="pairing-link" value={invitation.qr_payload} readonly onclick={(event) => event.currentTarget.select()} />
-                    <button class="btn sm" type="button" onclick={copyLink}>
+                    <Button size="sm" onclick={copyLink}>
                       {copied ? t('devices.copied') : t('common.copy')}
-                    </button>
+                    </Button>
                   </div>
                   <small>{t('devices.manualLinkHint')}</small>
                 </div>
@@ -278,18 +279,18 @@
         <footer>
           {#if pairing.status === 'awaiting_scan'}
             <span class="faint note">{t('devices.expiresIn', { time: duration(remaining) })}</span>
-            <button class="btn" type="button" onclick={() => void close()}>{t('devices.cancelInvitation')}</button>
+            <Button onclick={() => void close()}>{t('devices.cancelInvitation')}</Button>
           {:else if pairing.status === 'awaiting_confirmation'}
             <span class="faint note">{t('devices.webConfirmationRequired')}</span>
-            <button class="btn" type="button" onclick={() => void close()} disabled={busy}>{t('common.cancel')}</button>
-            <button class="btn primary" type="button" onclick={confirm} disabled={busy}>
+            <Button onclick={() => void close()} disabled={busy}>{t('common.cancel')}</Button>
+            <Button variant="primary" onclick={confirm} disabled={busy}>
               {busy ? t('devices.confirming') : t('devices.confirmDevice')}
-            </button>
+            </Button>
           {:else if pairing.status === 'expired' || pairing.status === 'cancelled'}
-            <button class="btn primary" type="button" onclick={start}>{t('devices.createAnother')}</button>
+            <Button variant="primary" onclick={start}>{t('devices.createAnother')}</Button>
           {:else}
             <span class="faint note">{pairing.status === 'confirmed' ? t('devices.phoneCollecting') : t('devices.pairingDone')}</span>
-            <button class="btn primary" type="button" onclick={() => void close()}>{t('common.close')}</button>
+            <Button variant="primary" onclick={() => void close()}>{t('common.close')}</Button>
           {/if}
         </footer>
       {/if}

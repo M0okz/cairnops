@@ -12,7 +12,7 @@
   import SoftwareUpdateJournal from "./SoftwareUpdateJournal.svelte";
   import SegmentedControl from "./ui/SegmentedControl.svelte";
   import { Input } from "./ui/input";
-  import { Button } from "./ui/button";
+  import Button from "./ui/Button.svelte";
   let { id }: { id: string } = $props();
   let service = $state<SoftwareService | null>(null);
   let error = $state("");
@@ -115,7 +115,7 @@
             {/if}
           </div>
           {#if effectiveSource && session.user?.role === "administrator" && !editingSource}
-            <div class="shadcn-control"><Button variant="outline" onclick={() => { source = { ...effectiveSource }; editingSource = true; }}>{t("updates.editSource")}</Button></div>
+            <div><Button onclick={() => { source = { ...effectiveSource }; editingSource = true; }}>{t("updates.editSource")}</Button></div>
           {/if}
         </div>
         {#if session.user?.role === "administrator" && (editingSource || !effectiveSource)}
@@ -129,7 +129,7 @@
             ]} onValueChange={(value) => (source.kind = value)} />
             <label for={`software-name-${id}`}>{t("updates.software")}<Input id={`software-name-${id}`} required maxlength={160} bind:value={source.software} /></label>
             <label for={`software-source-${id}`}>{t("updates.sourceURL")}<Input id={`software-source-${id}`} required type="url" bind:value={source.url} /></label>
-            <div><Button type="submit" disabled={busy}>{busy ? t("updates.saving") : t("updates.confirm")}</Button></div>
+            <div><Button variant="primary" type="submit" disabled={busy}>{busy ? t("updates.saving") : t("updates.confirm")}</Button></div>
           </form>
         {/if}
       </section>

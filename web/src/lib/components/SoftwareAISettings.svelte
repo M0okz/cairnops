@@ -5,9 +5,9 @@
   import { messageFrom } from "$lib/session.svelte";
   import type { SoftwareAIConfig, SoftwareAIUsageHistory } from "$lib/software-updates";
   import { Input } from "./ui/input";
-  import { Button } from "./ui/button";
   import Switch from "./ui/Switch.svelte";
   import Icon from './Icon.svelte';
+  import Button from './ui/Button.svelte';
   let config = $state<SoftwareAIConfig | null>(null);
   let key = $state("");
   let providerID = $state("");
@@ -197,7 +197,7 @@
         /></label
       >
       <div>
-        <Button type="submit" disabled={busy || !providerID}
+        <Button variant="primary" type="submit" disabled={busy || !providerID}
           >{busy ? t("updates.saving") : t("updates.save")}</Button
         >
         {#if saved}<span role="status">{t("updates.saved")}</span>{/if}
@@ -229,9 +229,9 @@
         {:else}<p class="usage-note">{t("updates.usageEmpty")}</p>{/if}
       {:else if !usageError}<p class="usage-note" role="status">{t("updates.loading")}</p>{/if}
     </div>
-  {:else if error}<button class="btn" onclick={load}
-      >{t("updates.retry")}</button
-    >{:else}<p role="status">{t("updates.loading")}</p>{/if}
+  {:else if error}<Button
+      onclick={load}
+      >{t("updates.retry")}</Button>{:else}<p role="status">{t("updates.loading")}</p>{/if}
 </section>
 
 <style>

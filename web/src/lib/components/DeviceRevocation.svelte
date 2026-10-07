@@ -3,6 +3,7 @@
   import type { Device } from '$lib/api';
   import { t } from '$lib/i18n.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let {
     device,
@@ -37,9 +38,9 @@
           <h2 id="revoke-device-title">{t('devices.revokeTitle', { name: device.name })}</h2>
           <p>{t('devices.revokeLead')}</p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <div class="modal-body">
@@ -53,10 +54,10 @@
 
       <footer>
         <span class="faint note">{t('devices.revokeScope')}</span>
-        <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-        <button class="btn danger" type="button" onclick={revoke} disabled={busy}>
+        <Button onclick={onclose} disabled={busy}>{t('common.cancel')}</Button>
+        <Button variant="danger" onclick={revoke} disabled={busy}>
           {busy ? t('devices.revoking') : t('devices.revokeConfirm')}
-        </button>
+        </Button>
       </footer>
     </div>
   {/snippet}

@@ -10,6 +10,7 @@
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let {
     onclose,
@@ -174,7 +175,7 @@
           <h2 id="argus-title">{imported ? t('wizard.linked') : preview ? t('wizard.chooseWhatEnters') : t('argus.connect')}</h2>
           <p>{t('argus.lead')}</p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}><Icon name="close" size={14} /></button>
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label={t('common.close')}><Icon name="close" size={14} /></Button>
       </header>
 
       {#if imported}
@@ -186,14 +187,14 @@
             <div class="fig"><b>{imported.targets.filter((target) => target.disposition === 'already_imported').length}</b><span>{t('wizard.alreadyLinked')}</span></div>
           </div>
         </div>
-        <footer><button class="btn primary" type="button" onclick={onclose}>{t('argus.backToTargets')}</button></footer>
+        <footer><Button variant="primary" onclick={onclose}>{t('argus.backToTargets')}</Button></footer>
       {:else if preview}
         <div class="modal-body">
           <div class="checks">
             <div><span class="faint">API</span><strong>Argus {preview.version}</strong><small class="ok">{preview.compatibility_label}</small></div>
             <div><span class="faint">Transport</span><strong>{preview.encrypted_transport ? 'TLS' : 'HTTP'}</strong><small class={preview.encrypted_transport ? 'ok' : 'warn'}>{preview.encrypted_transport ? t('wizard.certificateValid') : t('wizard.trustedNetworkOnly')}</small></div>
             <div><span class="faint">{t('wizard.scope')}</span><strong>{plural('argus.servicesImportable', preview.importable_count)}</strong><small class="faint">{t('argus.postureOnly')}</small></div>
-            <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
+            <Button size="sm" onclick={resetPreview}>{t('wizard.changeAccess')}</Button>
           </div>
 
           <ReconciliationSummary counts={reconciliation} />
@@ -201,9 +202,9 @@
 
           <div class="listbar">
             <div class="field service-filter"><input id="argus-filter" aria-label={t('argus.filter')} bind:value={query} placeholder={t('argus.filter')} /></div>
-            <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleSelectableServices().length === 0}>
+            <Button size="sm" onclick={toggleAllVisible} disabled={visibleSelectableServices().length === 0}>
               {visibleSelectableServices().length > 0 && visibleSelectableServices().every((service) => selected.includes(service.external_id)) ? t('argus.removeAll') : t('wizard.selectAll')}
-            </button>
+            </Button>
             <span class="faint num">{selected.length} / {selectableServices().length} · {t('wizard.validUntil', { time: clock(preview.expires_at) })}</span>
           </div>
 
@@ -240,9 +241,9 @@
         </div>
         <footer>
           <span class="faint note">{t('argus.noActionNote')}</span>
-          <button class="btn primary" type="button" onclick={importServices} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
+          <Button variant="primary" onclick={importServices} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
             {busy ? t('wizard.importing') : reconciliation.review > 0 ? plural('wizard.confirmChoices', reconciliation.review) : plural('argus.importServices', selected.length)}
-          </button>
+          </Button>
         </footer>
       {:else}
         <form onsubmit={inspect}>
@@ -269,8 +270,8 @@
           </div>
           <footer>
             <span class="faint note">{t('argus.noActionNote')}</span>
-            <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-            <button class="btn primary" type="submit" disabled={busy || authIncomplete}>{busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}</button>
+            <Button onclick={onclose} disabled={busy}>{t('common.cancel')}</Button>
+            <Button variant="primary" type="submit" disabled={busy || authIncomplete}>{busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}</Button>
           </footer>
         </form>
       {/if}
@@ -293,7 +294,7 @@
   .checks { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s5); padding: var(--s4); margin-bottom: var(--s4); border: var(--line-width) solid var(--line-strong); border-radius: var(--r-m); background: var(--bg); }
   .checks span, .checks small { display: block; font-size: var(--text-xs); }
   .checks strong { display: block; margin-top: var(--s1); font-size: var(--text-sm); }
-  .checks > .btn { margin-left: auto; }
+  .checks > :global(.btn) { margin-left: auto; }
   .listbar { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s3); flex-wrap: wrap; }
   .service-filter { flex: 1 1 var(--connector-filter-min); min-width: 0; margin: 0; }
   .listbar > .num { font-size: var(--text-xs); overflow-wrap: anywhere; }

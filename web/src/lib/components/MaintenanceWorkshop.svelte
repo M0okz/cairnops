@@ -4,6 +4,7 @@
   import SegmentedControl from './ui/SegmentedControl.svelte';
   import Odometer from './Odometer.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
   import { api, type Maintenance, type Target } from '$lib/api';
 
   let {
@@ -88,9 +89,9 @@
           <h2 id="maintenance-title">{t('workshop.maintenanceTitle')}</h2>
           <p>{t('workshop.maintenanceLead')}</p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <form onsubmit={submit}>
@@ -169,10 +170,10 @@
         </div>
 
         <footer>
-          <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-          <button class="btn primary" type="submit" disabled={busy}>
+          <Button onclick={onclose} disabled={busy}>{t('common.cancel')}</Button>
+          <Button variant="primary" type="submit" disabled={busy}>
             {busy ? t('workshop.logging') : recurrence === 'weekly' ? t('maintenance.planSeries') : timing === 'planned' ? t('maintenance.plan') : t('workshop.activateWindow')}
-          </button>
+          </Button>
         </footer>
       </form>
     </div>

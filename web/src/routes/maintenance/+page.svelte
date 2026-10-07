@@ -7,6 +7,7 @@
   import MaintenanceWorkshop from '$lib/components/MaintenanceWorkshop.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
   import { session } from '$lib/session.svelte';
   import { since, stamp, until } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
@@ -83,9 +84,9 @@
       <p>{t('maintenance.lead')}</p>
     </div>
     {#if canOperate}<div class="page-actions">
-      <button class="btn primary" type="button" onclick={() => (workshopOpen = true)}>
+      <Button variant="primary" onclick={() => (workshopOpen = true)}>
         {t('maintenance.plan')}
-      </button>
+      </Button>
     </div>{/if}
   </div>
 
@@ -109,10 +110,10 @@
       </div>
       {#if canOperate}
         <div class="maintenance-actions">
-          <button class="btn sm" type="button" disabled={!!busy} onclick={() => change(item, 'extension')}>{t('maintenance.extend')}</button>
-          <button class="btn sm" type="button" disabled={!!busy} onclick={() => session.cancelMaintenance(item)}>
+          <Button size="sm" disabled={!!busy} onclick={() => change(item, 'extension')}>{t('maintenance.extend')}</Button>
+          <Button size="sm" disabled={!!busy} onclick={() => session.cancelMaintenance(item)}>
             {item.series_id ? t('maintenance.endOccurrence') : t('maintenance.endNow')}
-          </button>
+          </Button>
         </div>
       {/if}
     </div>
@@ -172,10 +173,10 @@
 
         {#if canOperate && (item.state === 'active' || item.state === 'upcoming')}
           <div class="maintenance-actions">
-          <button class="btn sm" type="button" onclick={() => session.cancelMaintenance(item)}>
+          <Button size="sm" onclick={() => session.cancelMaintenance(item)}>
             {item.series_id ? (item.state === 'active' ? t('maintenance.endOccurrence') : t('maintenance.cancelOccurrence')) : item.state === 'active' ? t('maintenance.end') : t('common.cancel')}
-          </button>
-          {#if item.series_id}<button class="btn sm" type="button" disabled={!!busy} onclick={() => (cancelSeriesID = item.id)}>{t('maintenance.cancelSeries')}</button>{/if}
+          </Button>
+          {#if item.series_id}<Button size="sm" disabled={!!busy} onclick={() => (cancelSeriesID = item.id)}>{t('maintenance.cancelSeries')}</Button>{/if}
           </div>
         {:else}
           <span></span>
@@ -185,8 +186,8 @@
         <div class="series-confirm" role="group" aria-label={t('maintenance.cancelSeries')}>
           <p>{t('maintenance.cancelSeriesHint', { name: item.name })}</p>
           <div class="maintenance-actions">
-            <button class="btn sm" type="button" disabled={!!busy} onclick={() => (cancelSeriesID = '')}>{t('common.cancel')}</button>
-            <button class="btn sm" type="button" disabled={!!busy} onclick={() => change(item, 'series-cancellation')}>{t('maintenance.confirmCancelSeries')}</button>
+            <Button size="sm" disabled={!!busy} onclick={() => (cancelSeriesID = '')}>{t('common.cancel')}</Button>
+            <Button size="sm" disabled={!!busy} onclick={() => change(item, 'series-cancellation')}>{t('maintenance.confirmCancelSeries')}</Button>
           </div>
         </div>
       {/if}

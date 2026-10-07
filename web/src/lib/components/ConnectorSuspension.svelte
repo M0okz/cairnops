@@ -8,6 +8,7 @@
   import type { Connector } from '$lib/api';
   import { plural, t } from '$lib/i18n.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let {
     connector,
@@ -45,9 +46,9 @@
           <h2 id="suspension-title">{t('suspension.title', { name: connector.name })}</h2>
           <p>{t('suspension.lead', { origin: origins[connector.kind] })}</p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <div class="modal-body">
@@ -79,10 +80,10 @@
         <span class="faint note">
           {t('suspension.note')}
         </span>
-        <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-        <button class="btn primary" type="button" onclick={suspend} disabled={busy}>
+        <Button onclick={onclose} disabled={busy}>{t('common.cancel')}</Button>
+        <Button variant="primary" onclick={suspend} disabled={busy}>
           {busy ? t('suspension.busy') : t('suspension.confirm')}
-        </button>
+        </Button>
       </footer>
     </div>
   {/snippet}

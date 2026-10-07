@@ -8,6 +8,7 @@
 
   import Icon from './Icon.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
   import type { Role } from '$lib/api';
   import { t } from '$lib/i18n.svelte';
 
@@ -81,9 +82,9 @@
           <h2 id="creation-title">{t('settings.openAccount')}</h2>
           <p>{t('settings.resetLead')}</p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <form onsubmit={submit}>
@@ -144,16 +145,16 @@
             />
             <small>{t('settings.passwordBounds')}</small>
           </div>
-          <button class="btn sm" type="button" onclick={suggest}>{t('settings.suggestPassword')}</button>
+          <Button size="sm" onclick={suggest}>{t('settings.suggestPassword')}</Button>
 
           {#if error}<p class="error" role="alert">{error}</p>{/if}
         </div>
 
         <footer>
-          <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-          <button class="btn primary" type="submit" disabled={!canSubmit}>
+          <Button onclick={onclose} disabled={busy}>{t('common.cancel')}</Button>
+          <Button variant="primary" type="submit" disabled={!canSubmit}>
             {busy ? t('account.opening') : t('account.open')}
-          </button>
+          </Button>
         </footer>
       </form>
     </div>

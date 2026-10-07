@@ -6,6 +6,7 @@
   import Modal from './ui/Modal.svelte';
   import ActivityTimeline from './ActivityTimeline.svelte';
   import IndicatorHistoryChart from './IndicatorHistoryChart.svelte';
+  import Button from './ui/Button.svelte';
   import { APIError, api, type Incident, type IncidentEvidence, type IncidentIndicators } from '$lib/api';
   import {
     diverges,
@@ -354,11 +355,11 @@
         </span>
       </p>
     {:else if incident?.status === 'active' && signal.active && session.user?.role !== 'observer'}
-      <button
-        class="btn sm source-action"
-        type="button"
+      <Button
+        size="sm"
+        class="source-action"
         onclick={(event) => beginInvalidation(signal, event.currentTarget)}
-      >{t('target.invalidate')}</button>
+      >{t('target.invalidate')}</Button>
     {/if}
 
     {#if signal.external_event_id || signal.external_object_id}
@@ -397,10 +398,10 @@
           {/if}
         </div>
         <div class="form-actions">
-          <button class="btn" type="button" onclick={cancelInvalidation}>{t('common.cancel')}</button>
-          <button class="btn danger" type="submit" disabled={invalidating}>
+          <Button onclick={cancelInvalidation}>{t('common.cancel')}</Button>
+          <Button variant="danger" type="submit" disabled={invalidating}>
             {invalidating ? t('common.saving') : t('target.invalidateConfirm')}
-          </button>
+          </Button>
         </div>
       </form>
     {/if}
@@ -453,14 +454,13 @@
             <p id={descriptionID}>{t('incidents.detail.loading')}</p>
           {/if}
         </div>
-        <button
-          class="close"
-          type="button"
+        <Button
+          variant="close"
           onclick={requestDismiss}
           aria-label={invalidationFor ? t('incidents.detail.cancelInvalidation') : t('common.close')}
         >
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <div class="drawer-body">
@@ -469,7 +469,7 @@
         {:else if incidentError && !incident}
           <div class="detail-state error-state" role="alert">
             <strong>{incidentError}</strong>
-            <button class="btn" type="button" onclick={() => loadIncident()}>{t('common.retry')}</button>
+            <Button onclick={() => loadIncident()}>{t('common.retry')}</Button>
           </div>
         {:else if incident}
           {#if hasNotes}
@@ -544,7 +544,7 @@
             {#if indicatorsError}
               <div class="finding-state error-state" role="alert">
                 <span>{indicatorsError}</span>
-                <button class="btn sm" type="button" onclick={loadIndicators}>{t('common.retry')}</button>
+                <Button size="sm" onclick={loadIndicators}>{t('common.retry')}</Button>
               </div>
             {:else if indicatorsLoading && measurable(primary?.fact)}
               <div class="finding-state" role="status">{t('incidents.detail.metricsLoading')}</div>
@@ -647,12 +647,12 @@
               : t('incidents.detail.resolvedNote')}
           </span>
           {#if firstImpact}
-            <a class="btn" href="/cibles/{firstImpact.target_id}">{t('incidents.detail.viewTarget')}</a>
+            <Button href="/cibles/{firstImpact.target_id}">{t('incidents.detail.viewTarget')}</Button>
           {/if}
           {#if incident.status === 'active' && !incident.acknowledged_at && session.user?.role !== 'observer'}
-            <button class="btn primary" type="button" disabled={acknowledging} onclick={acknowledge}>
+            <Button variant="primary" disabled={acknowledging} onclick={acknowledge}>
               {acknowledging ? t('incident.acknowledging') : t('incident.acknowledge')}
-            </button>
+            </Button>
           {/if}
         </footer>
       {/if}
@@ -728,7 +728,7 @@
     min-width: 0;
   }
 
-  .close {
+  .drawer-head :global(.close) {
     position: relative;
     width: var(--ctl-h-lg);
     height: var(--ctl-h-lg);
@@ -741,7 +741,7 @@
     flex: none;
   }
 
-  .close:hover {
+  .drawer-head :global(.close:hover) {
     background: var(--surface-2);
     color: var(--ink);
   }
@@ -1144,7 +1144,7 @@
 
   .source-original,
   .source-dates,
-  .source-action,
+  .source-row :global(.source-action),
   .invalidation-copy,
   .source-ids,
   .invalidation-form {
@@ -1177,7 +1177,7 @@
     font-size: var(--chart-text-size);
   }
 
-  .source-action {
+  .source-row :global(.source-action) {
     justify-self: start;
   }
 
@@ -1268,7 +1268,7 @@
       padding-top: max(var(--s4), env(safe-area-inset-top));
     }
 
-    .close {
+    .drawer-head :global(.close) {
       width: 2.75rem;
       height: 2.75rem;
     }

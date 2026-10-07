@@ -10,6 +10,7 @@
   import IncidentDetailDrawer from '$lib/components/IncidentDetailDrawer.svelte';
   import { Input } from '$lib/components/ui/input/index.js';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
   import { session } from '$lib/session.svelte';
   import { dashboardCoverage, dashboardHealth, type HealthState } from '$lib/dashboard';
   import { i18n, localeTag, plural, t } from '$lib/i18n.svelte';
@@ -136,7 +137,7 @@
           <div class="incident-meta"><span class="severity {severityTone(incident.severity)}"><i class="dot {severityTone(incident.severity)}"></i>{severityLabel(incident.severity)}</span><time datetime={incident.opened_at}>{since(incident.opened_at, now)}</time></div>
           <button class="incident-open" type="button" data-incident-trigger={incident.id} aria-label={t('dashboard.incidentOpen', { name })} onclick={() => selectedIncidentID = incident.id}><strong>{name}</strong><span>{natureLabel(incident)}</span></button>
           <div class="incident-action"><span>{incident.acknowledged_at ? t('overview.acknowledgedShort') : t('dashboard.pending', { count: 1 })}</span>
-            {#if !incident.acknowledged_at && canAcknowledge}<button class="btn sm" type="button" disabled={acknowledging === incident.id} onclick={() => acknowledge(incident)}>{t('incident.acknowledge')}<Icon name="acknowledge" size={16} /></button>{/if}
+            {#if !incident.acknowledged_at && canAcknowledge}<Button size="sm" disabled={acknowledging === incident.id} onclick={() => acknowledge(incident)}>{t('incident.acknowledge')}<Icon name="acknowledge" size={16} /></Button>{/if}
           </div>
         </article>
       {:else}<div class="incidents-empty"><Icon name="state-healthy" size={28} /><strong>{t('dashboard.noIncidents')}</strong><p>{t('dashboard.noIncidentsHint')}</p></div>{/each}
@@ -160,7 +161,7 @@
         <span class="target-availability"><span class="availability-top"><span class="num">{ratio(row.measure.availability)}</span><Uptime values={row.trend} /></span><small>{t('dashboard.coverageValue', { value: ratio(row.measure.coverage) })}</small></span>
         <span class="target-sources num">{row.target.sources.length + row.target.external_source_count}</span><span class="row-arrow" aria-hidden="true">↗</span>
       </a>
-    {:else}<div class="targets-empty"><strong>{t(health.total ? 'dashboard.noMatch' : 'dashboard.noTargets')}</strong>{#if !health.total}<p>{t('dashboard.emptyHint')}</p><a class="btn" href="/cibles">{t('targets.new')} →</a>{/if}</div>{/each}
+    {:else}<div class="targets-empty"><strong>{t(health.total ? 'dashboard.noMatch' : 'dashboard.noTargets')}</strong>{#if !health.total}<p>{t('dashboard.emptyHint')}</p><Button href="/cibles">{t('targets.new')} →</Button>{/if}</div>{/each}
     <footer><span>{t('dashboard.results', { shown: Math.min(targetRows.length, 6), total: targetRows.length })}</span><a href="/cibles">{t('dashboard.viewTargets')} →</a></footer>
   </section>
 
@@ -213,7 +214,7 @@
   .tally { font-family: var(--font-num); font-size: var(--text-xs); color: var(--crit); background: var(--crit-bg); padding: var(--s1) var(--s3); border-radius: var(--r-s); }
   .incident-list { display: grid; gap: var(--s3); }
   .incident-summary, .incidents-empty { padding: var(--s4); border-radius: var(--r-overview); background: var(--surface); }
-  .incident-action .btn { border-radius: var(--r-button); }
+  .incident-action :global(.btn) { border-radius: var(--r-button); }
   .incident-meta, .incident-action { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); font-size: var(--text-xs); color: var(--faint); }
   .severity { font-family: var(--font-num); display: inline-flex; align-items: center; gap: var(--s2); border-radius: var(--r-s); padding: var(--s1) var(--s2); background: var(--surface-2); font-size: 0.75rem; }
   .incident-open { display: block; width: 100%; border: 0; background: none; text-align: left; padding: var(--s4) 0; }

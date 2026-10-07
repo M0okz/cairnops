@@ -10,6 +10,7 @@
   import { clock } from '$lib/format';
   import { plural, t, type MessageKey } from '$lib/i18n.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
   import {
     prepareTargetAssignments,
     reconciliationCounts,
@@ -210,9 +211,9 @@
           </h2>
           <p>{productText('lead')}</p>
         </div>
-        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
+        <Button variant="close" onclick={onclose} disabled={busy} aria-label="Fermer">
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <ol class="stepper">
@@ -269,7 +270,7 @@
           </div>
         </div>
         <footer>
-          <button class="btn primary" type="button" onclick={onclose}>Revenir aux Cibles</button>
+          <Button variant="primary" onclick={onclose}>Revenir aux Cibles</Button>
         </footer>
       {:else if preview}
         <div class="modal-body">
@@ -291,7 +292,7 @@
               <strong>{productPlural(kind === 'zabbix' ? 'hostsVisible' : 'monitorsVisible', preview.items.length)}</strong>
               <small class="faint">{t('wizard.readOnlyPreview')}</small>
             </div>
-            <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
+            <Button size="sm" onclick={resetPreview}>{t('wizard.changeAccess')}</Button>
           </div>
 
           <ConnectorAccessPlan access={preview.access} product={kind} />
@@ -303,13 +304,13 @@
               <label class="sr-only" for="item-filter">{kind === 'zabbix' ? productText('filterHosts') : 'Filtrer les moniteurs'}</label>
               <input id="item-filter" bind:value={query} placeholder="Filtrer par nom ou adresse" />
             </div>
-            <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleImportableItems().length === 0}>
+            <Button size="sm" onclick={toggleAllVisible} disabled={visibleImportableItems().length === 0}>
               {visibleImportableItems().length === 0
                 ? t('wizard.nothingToSelect')
                 : visibleImportableItems().every((item) => selected.includes(item.external_id))
                   ? 'Tout retirer'
                   : t('wizard.selectAll')}
-            </button>
+            </Button>
             <span class="faint num">
               {selected.length} / {importableItems().length} importables ·
               {t('wizard.validUntil', { time: clock(preview.expires_at) })}
@@ -353,7 +354,7 @@
 
         <footer>
           <span class="faint note">{t('wizard.matchesNote')}</span>
-          <button class="btn primary" type="button" onclick={importItems} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
+          <Button variant="primary" onclick={importItems} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
             {busy
               ? t('wizard.importing')
               : selected.length === 0
@@ -361,7 +362,7 @@
                 : reconciliation.review > 0
                   ? plural('wizard.confirmChoices', reconciliation.review)
                   : productPlural(kind === 'zabbix' ? 'importHosts' : 'importMonitors', selected.length)}
-          </button>
+          </Button>
         </footer>
       {:else}
         <form onsubmit={inspect}>
@@ -419,10 +420,10 @@
 
           <footer>
             <span class="faint note">{productText('noChangeNote')}</span>
-            <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-            <button class="btn primary" type="submit" disabled={busy}>
+            <Button onclick={onclose} disabled={busy}>{t('common.cancel')}</Button>
+            <Button variant="primary" type="submit" disabled={busy}>
               {busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}
-            </button>
+            </Button>
           </footer>
         </form>
       {/if}
@@ -601,7 +602,7 @@
     font-size: 0.6875rem;
   }
 
-  .checks > .btn {
+  .checks > :global(.btn) {
     margin-left: auto;
   }
 

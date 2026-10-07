@@ -4,6 +4,7 @@
   import Modal from './ui/Modal.svelte';
   import { Input } from './ui/input';
   import Odometer from './Odometer.svelte';
+  import Button from './ui/Button.svelte';
   import { formatIndicator } from '$lib/indicator-format';
   import { plural, t } from '$lib/i18n.svelte';
   import { pinnedIndicatorIDs } from '$lib/overview';
@@ -84,14 +85,13 @@
           <h2 id="indicator-personalizer-title">{t('overview.indicators.personalizerTitle')}</h2>
           <p id="indicator-personalizer-hint">{t('overview.indicators.personalizerHint')}</p>
         </div>
-        <button
-          class="close"
-          type="button"
+        <Button
+          variant="close"
           aria-label={t('common.close')}
           onclick={ondismiss}
         >
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <div class="personalizer-tools shadcn-control">
@@ -137,20 +137,19 @@
       {/if}
 
       <footer>
-        <button
-          class="btn automatic"
-          type="button"
+        <Button
+          class="automatic"
           onclick={() => {
             selectedIDs = [];
             selectionError = '';
           }}
         >
           {t('overview.indicators.automatic')}
-        </button>
-        <button class="btn" type="button" onclick={ondismiss}>{t('common.cancel')}</button>
-        <button class="btn primary" type="button" disabled={saving || loading || loadFailed} onclick={save}>
+        </Button>
+        <Button onclick={ondismiss}>{t('common.cancel')}</Button>
+        <Button variant="primary" disabled={saving || loading || loadFailed} onclick={save}>
           {t('overview.indicators.save')}
-        </button>
+        </Button>
       </footer>
     </div>
   {/snippet}
@@ -198,7 +197,7 @@
     text-wrap: pretty;
   }
 
-  .close {
+  .personalizer :global(.close) {
     position: relative;
     width: var(--ctl-h-lg);
     height: var(--ctl-h-lg);
@@ -211,7 +210,7 @@
     flex: none;
   }
 
-  .close:hover {
+  .personalizer :global(.close:hover) {
     background: var(--surface-2);
     color: var(--ink);
   }
@@ -346,7 +345,7 @@
     border-top: 1px solid var(--line);
   }
 
-  footer .automatic {
+  footer :global(.automatic) {
     margin-right: auto;
   }
 
@@ -365,7 +364,7 @@
       flex-wrap: wrap;
     }
 
-    footer .automatic {
+    footer :global(.automatic) {
       width: 100%;
       margin-right: 0;
     }

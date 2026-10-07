@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from './ui/Button.svelte';
   import { t } from "$lib/i18n.svelte";
   import { serviceTitle, type SoftwareService } from "$lib/software-updates";
   import Icon from "./Icon.svelte";
@@ -24,9 +25,9 @@
             <span class="visually-hidden">{t("updates.target")}</span>{service.target_version || "—"}
           </p>
         </div>
-        <button class="close" type="button" aria-label={t("updates.close")} onclick={onclose}>
+        <Button variant="close" aria-label={t("updates.close")} onclick={onclose}>
           <Icon name="close" size={16} />
-        </button>
+        </Button>
       </header>
       <div class="drawer-body">
         <SoftwareServiceDetail id={service.id} />
@@ -73,7 +74,7 @@
   h2 { margin-block: var(--s1); font-size: var(--text-md); overflow-wrap: anywhere; }
   .title-copy p { color: var(--muted); font-size: var(--text-sm); }
   .version-pair { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2); margin-top: var(--s2); font-weight: var(--weight-semibold); }
-  .close {
+  .drawer-head :global(.close) {
     display: grid;
     flex: none;
     place-items: center;
@@ -85,7 +86,7 @@
     color: var(--muted);
     cursor: pointer;
   }
-  .close:hover { background: var(--surface-2); color: var(--ink); }
+  .drawer-head :global(.close:hover) { background: var(--surface-2); color: var(--ink); }
   .drawer-body {
     flex: 1;
     min-height: 0;

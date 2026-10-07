@@ -7,6 +7,7 @@
   import Topbar from '$lib/components/Topbar.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Incident, type IncidentSeverity, type ResolvedIncidentPage } from '$lib/api';
   import { incidentHref, visibleIncidentActivity } from '$lib/incident-detail';
@@ -261,13 +262,13 @@
 
   <div class="results-summary">
     <p role="status">{scope === 'resolved' && resolvedLoading ? t('incidents.history.loading') : plural('incidents.results', shown.length)}</p>
-    {#if hasFilters}<button class="btn sm" type="button" onclick={clearFilters}>{t('incidents.filters.clear')}</button>{/if}
+    {#if hasFilters}<Button size="sm" onclick={clearFilters}>{t('incidents.filters.clear')}</Button>{/if}
   </div>
 
   {#if scope === 'resolved' && historyChanged}
     <div class="history-refresh">
       <p role="status">{t('incidents.history.changed')}</p>
-      <button class="btn sm" type="button" disabled={resolvedLoading} onclick={() => loadResolved(historyURL)}>{t('incidents.history.refresh')}</button>
+      <Button size="sm" disabled={resolvedLoading} onclick={() => loadResolved(historyURL)}>{t('incidents.history.refresh')}</Button>
     </div>
   {/if}
 
@@ -344,20 +345,20 @@
         <span class="faint log hide-sm">{lastEntry(incident)}</span>
 
         {#if scope !== 'resolved' && !incident.acknowledged_at && session.user?.role !== 'observer'}
-          <button
-            class="btn primary sm"
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             disabled={acknowledging === incident.id}
             onclick={() => acknowledge(incident)}
           >
             {acknowledging === incident.id ? '…' : t('incident.acknowledge')}
-          </button>
+          </Button>
         {:else}
-          <a
-            class="btn sm"
+          <Button
+            size="sm"
             href={incidentHref(incident.id)}
             data-incident-trigger={incident.id}
-          >{t('incidents.detail.open')}</a>
+          >{t('incidents.detail.open')}</Button>
         {/if}
       </div>
     {:else}
@@ -385,14 +386,14 @@
   {#if scope === 'resolved' && resolvedError}
     <div class="history-error" role="alert">
       <span>{resolvedError}</span>
-      <button class="btn" type="button" onclick={() => failedResolvedRequest && loadResolved(failedResolvedRequest.url, failedResolvedRequest.append)}>{t('common.retry')}</button>
+      <Button onclick={() => failedResolvedRequest && loadResolved(failedResolvedRequest.url, failedResolvedRequest.append)}>{t('common.retry')}</Button>
     </div>
   {/if}
   {#if scope === 'resolved' && nextCursor}
     <div class="history-pagination">
-      <button class="btn" type="button" disabled={resolvedLoading} onclick={loadMore}>
+      <Button disabled={resolvedLoading} onclick={loadMore}>
         {resolvedLoading ? t('incidents.history.loading') : t('incidents.history.loadMore')}
-      </button>
+      </Button>
     </div>
   {/if}
 

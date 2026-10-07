@@ -3,6 +3,7 @@
   import DevicePairingDialog from './DevicePairingDialog.svelte';
   import DeviceRevocation from './DeviceRevocation.svelte';
   import Icon from './Icon.svelte';
+  import Button from './ui/Button.svelte';
   import { api, type Device } from '$lib/api';
   import { since } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
@@ -66,9 +67,9 @@
     <h2 id="devices-title">{t('devices.title')}</h2>
     <p>{t('devices.lead')}</p>
   </div>
-  <button class="btn primary sm" type="button" onclick={() => (pairing = true)}>
+  <Button variant="primary" size="sm" onclick={() => (pairing = true)}>
     {t('devices.pairAction')}
-  </button>
+  </Button>
 </header>
   {#if loading}
     <div class="empty">{t('devices.loading')}</div>
@@ -76,7 +77,7 @@
     <div class="empty">
       <strong>{t('devices.unavailable')}</strong>
       <p>{error}</p>
-      <button class="btn sm" type="button" onclick={load}>{t('common.retry')}</button>
+      <Button size="sm" onclick={load}>{t('common.retry')}</Button>
     </div>
   {:else if devices.length === 0}
     <div class="empty">
@@ -112,7 +113,7 @@
 
         <span class="device-actions">
           {#if !device.revoked_at}
-            <button class="btn sm" type="button" onclick={() => openRevocation(device)}>{t('devices.revoke')}</button>
+            <Button size="sm" onclick={() => openRevocation(device)}>{t('devices.revoke')}</Button>
           {/if}
         </span>
       </div>

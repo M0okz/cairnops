@@ -3,6 +3,7 @@
   import Icon, { type IconName } from './Icon.svelte';
   import BrandMark, { type BrandName } from './BrandMark.svelte';
   import Modal from './ui/Modal.svelte';
+  import Button from './ui/Button.svelte';
 
   let {
     onclose,
@@ -66,9 +67,9 @@
           <h2 id="chooser-title">{t('chooser.title')}</h2>
           <p>{t('chooser.lead')}</p>
         </div>
-        <button class="close" type="button" onclick={onclose} aria-label={t('common.close')}>
+        <Button variant="close" onclick={onclose} aria-label={t('common.close')}>
           <Icon name="close" size={14} />
-        </button>
+        </Button>
       </header>
 
       <div class="modal-body">

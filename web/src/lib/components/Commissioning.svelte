@@ -3,6 +3,7 @@
   import { t } from '$lib/i18n.svelte';
   import type { User } from '$lib/api';
   import InfoHint from '$lib/components/InfoHint.svelte';
+  import Button from './ui/Button.svelte';
 
   /* Les Écrans ne couvrent pas les portes d'entrée. Elles reprennent donc les
    * mêmes jetons, la même densité et les mêmes contrôles que le reste, sans
@@ -105,9 +106,9 @@
            que voit quelqu'un qui garde plusieurs instances ouvertes. -->
       <strong>{instance}</strong>
       <span class="version">v{version}</span>
-      <button class="btn sm quiet" type="button" onclick={ontoggletheme}>
+      <Button variant="quiet" size="sm" onclick={ontoggletheme}>
         {lightTheme ? t('rail.dark') : t('rail.light')}
-      </button>
+      </Button>
     </div>
 
     <div class="gate-state">
@@ -128,9 +129,9 @@
       <h1>{t('gate.unavailableTitle')}</h1>
       <p>{t('gate.unavailableSay')}</p>
       {#if error}<p class="error" role="alert">{error}</p>{/if}
-      <button class="btn primary" type="button" onclick={() => location.reload()}>
+      <Button variant="primary" onclick={() => location.reload()}>
         {t('common.retry')}
-      </button>
+      </Button>
     {:else if mode === 'setup'}
       <h1>{t('gate.setupTitle')}</h1>
       <p>{t('gate.setupSay')}</p>
@@ -182,9 +183,9 @@
         {#if localError || error}<p class="error" role="alert">{localError || error}</p>{/if}
         <div class="gate-submit">
           <small>{t('gate.sessionNote')}</small>
-          <button class="btn primary" type="submit" disabled={busy}>
+          <Button variant="primary" type="submit" disabled={busy}>
             {busy ? t('gate.sealing') : t('gate.initialise')}
-          </button>
+          </Button>
         </div>
       </form>
     {:else}
@@ -212,21 +213,21 @@
           </div>
           {#if localError || error}<p class="error" role="alert">{localError || error}</p>{/if}
           <div class="gate-submit">
-            <button class="btn sm quiet" type="button" onclick={() => { recovering = false; localError = ''; }}>
+            <Button variant="quiet" size="sm" onclick={() => { recovering = false; localError = ''; }}>
               {t('gate.backToLogin')}
-            </button>
-            <button class="btn primary" type="submit" disabled={busy}>
+            </Button>
+            <Button variant="primary" type="submit" disabled={busy}>
               {busy ? t('gate.restoring') : t('gate.restoreAccess')}
-            </button>
+            </Button>
           </div>
         </form>
       {:else}
       <h1>{t('gate.loginTitle')}</h1>
       <p>{t('gate.loginSay')}</p>
       {#if oidcEnabled}
-        <button class="btn primary oidc" type="button" onclick={onoidc}>
+        <Button variant="primary" class="oidc" onclick={onoidc}>
           {t('gate.oidcContinue', { provider: oidcLabel })}
-        </button>
+        </Button>
         <div class="gate-divider"><span>{t('gate.localFallback')}</span></div>
       {/if}
       <form onsubmit={submitLogin}>
@@ -241,9 +242,9 @@
         {#if localError || error}<p class="error" role="alert">{localError || error}</p>{/if}
         <div class="gate-submit">
           <small>{t('gate.credentialsNote')}</small>
-          <button class="btn primary" type="submit" disabled={busy}>
+          <Button variant="primary" type="submit" disabled={busy}>
             {busy ? t('gate.verifying') : t('gate.signIn')}
-          </button>
+          </Button>
         </div>
       </form>
       <p class="lost">
@@ -276,7 +277,7 @@
     text-overflow: ellipsis;
   }
 
-  .gate-head .btn {
+  .gate-head :global(.btn) {
     margin-left: var(--s2);
   }
 
@@ -293,7 +294,7 @@
     margin-top: var(--s6);
   }
 
-  .oidc {
+  .gate-card :global(.oidc) {
     justify-content: center;
     width: 100%;
     margin-top: var(--s6);
@@ -365,7 +366,7 @@
     font-size: 0.75rem;
   }
 
-  .gate-submit .btn {
+  .gate-submit :global(.btn) {
     height: 2.375rem;
     padding: 0 var(--s5);
     font-size: 0.8125rem;
@@ -381,7 +382,7 @@
       line-height: 1.5;
     }
 
-    .gate-submit .btn {
+    .gate-submit :global(.btn) {
       justify-content: center;
       width: 100%;
     }
