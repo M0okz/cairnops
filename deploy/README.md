@@ -87,6 +87,14 @@ docker compose ps
 Watchtower utilise le fork maintenu `nickfedor/watchtower:1.21.0`. Le projet
 historique `containrrr/watchtower` est archivé et n'est pas utilisé.
 
+Le redémarrage progressif (`WATCHTOWER_ROLLING_RESTART`) reste désactivé :
+`worker` dépend de `server`, et Watchtower 1.21.0 refuse alors de démarrer
+(« Rolling restart compatibility validation failed »). Cette validation n'a
+lieu qu'au lancement : le défaut n'apparaît qu'après un redémarrage de l'hôte,
+et plus aucune mise à jour n'est déployée ensuite. Les conteneurs mis à jour
+sont donc arrêtés puis relancés ensemble, au prix de quelques secondes
+d'indisponibilité.
+
 ## Retour arrière
 
 Pour revenir temporairement à une révision connue, remplacer `latest` par le
