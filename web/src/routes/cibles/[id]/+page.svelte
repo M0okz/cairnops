@@ -13,6 +13,7 @@
   import Uptime from '$lib/components/Uptime.svelte';
   import Odometer from '$lib/components/Odometer.svelte';
   import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
+  import Modal from '$lib/components/ui/Modal.svelte';
   import MaintenanceWorkshop from '$lib/components/MaintenanceWorkshop.svelte';
   import TargetIndicators from '$lib/components/TargetIndicators.svelte';
   import TargetWorkshop from '$lib/components/TargetWorkshop.svelte';
@@ -947,81 +948,88 @@
 {/if}
 
 {#if invalidationFor}
-  <div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && (invalidationFor = null)}>
-    <div class="modal narrow" role="dialog" aria-modal="true" aria-labelledby="invalidation-title">
-      <header>
-        <div>
-          <h2 id="invalidation-title">{t('target.invalidateTitle')}</h2>
-          <p>{t('target.invalidateSay')}</p>
+  <Modal dismissible={invalidating === ''} onclose={() => (invalidationFor = null)}>
+    {#snippet children(dialog)}
+      <div {...dialog} class="modal narrow" aria-labelledby="invalidation-title">
+        <header>
+          <div>
+            <h2 id="invalidation-title">{t('target.invalidateTitle')}</h2>
+            <p>{t('target.invalidateSay')}</p>
+          </div>
+        </header>
+        <div class="modal-body">
+          <div class="field">
+            <label for="reason">{t('target.reason')}</label>
+            <textarea id="reason" bind:value={invalidationReason} rows="3" required minlength="8"
+              placeholder={t('target.reasonPlaceholder')}></textarea>
+            <small>{t('target.reasonHint')}</small>
+          </div>
         </div>
-      </header>
-      <div class="modal-body">
-        <div class="field">
-          <label for="reason">{t('target.reason')}</label>
-          <textarea id="reason" bind:value={invalidationReason} rows="3" required minlength="8"
-            placeholder={t('target.reasonPlaceholder')}></textarea>
-          <small>{t('target.reasonHint')}</small>
-        </div>
+        <footer>
+          <button class="btn" type="button" onclick={() => (invalidationFor = null)}>{t('common.cancel')}</button>
+          <button
+            class="btn primary"
+            type="button"
+            disabled={invalidationReason.trim().length < 8 || invalidating !== ''}
+            onclick={confirmInvalidation}
+          >{invalidating ? t('common.saving') : t('target.invalidateConfirm')}</button>
+        </footer>
       </div>
-      <footer>
-        <button class="btn" type="button" onclick={() => (invalidationFor = null)}>{t('common.cancel')}</button>
-        <button
-          class="btn primary"
-          type="button"
-          disabled={invalidationReason.trim().length < 8 || invalidating !== ''}
-          onclick={confirmInvalidation}
-        >{invalidating ? t('common.saving') : t('target.invalidateConfirm')}</button>
-      </footer>
-    </div>
-  </div>
+    {/snippet}
+  </Modal>
 {/if}
 
 {#if archiveOpen && target}
-  <div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && (archiveOpen = false)}>
-    <div class="modal narrow" role="dialog" aria-modal="true" aria-labelledby="archive-title">
-      <header>
-        <div>
-          <h2 id="archive-title">{t('target.archiveHeading', { name: target.name })}</h2>
-          <p>{t('target.archiveLead')}</p>
+  <Modal dismissible={!saving} onclose={() => (archiveOpen = false)}>
+    {#snippet children(dialog)}
+      <div {...dialog} class="modal narrow" aria-labelledby="archive-title">
+        <header>
+          <div>
+            <h2 id="archive-title">{t('target.archiveHeading', { name: target.name })}</h2>
+            <p>{t('target.archiveLead')}</p>
+          </div>
+        </header>
+        <div class="modal-body">
+          <p class="explain">{t('target.archiveExplain')}</p>
         </div>
-      </header>
-      <div class="modal-body">
-        <p class="explain">{t('target.archiveExplain')}</p>
+        <footer>
+          <button class="btn" type="button" disabled={saving} onclick={() => (archiveOpen = false)}>
+            {t('common.cancel')}
+          </button>
+          <button class="btn primary" type="button" disabled={saving || structureBusy} onclick={confirmArchive}>
+            {saving ? t('target.archiving') : t('target.archiveConfirm')}
+          </button>
+        </footer>
       </div>
-      <footer>
-        <button class="btn" type="button" disabled={saving} onclick={() => (archiveOpen = false)}>
-          {t('common.cancel')}
-        </button>
-        <button class="btn primary" type="button" disabled={saving || structureBusy} onclick={confirmArchive}>
-          {saving ? t('target.archiving') : t('target.archiveConfirm')}
-        </button>
-      </footer>
-    </div>
-  </div>
+    {/snippet}
+  </Modal>
 {/if}
 
 {#if removalFor}
-  <div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && (removalFor = null)}>
-    <div class="modal narrow" role="dialog" aria-modal="true" aria-labelledby="removal-title">
-      <header>
-        <div>
-          <h2 id="removal-title">{t('target.removeHeading', { name: removalFor.name })}</h2>
-          <p>{t('target.removeLead')}</p>
+  {@const removal = removalFor}
+  <Modal dismissible={!saving} onclose={() => (removalFor = null)}>
+    {#snippet children(dialog)}
+      <div {...dialog} class="modal narrow" aria-labelledby="removal-title">
+        <header>
+          <div>
+            <h2 id="removal-title">{t('target.removeHeading', { name: removal.name })}</h2>
+            <p>{t('target.removeLead')}</p>
+          </div>
+        </header>
+        <div class="modal-body">
+          <p class="explain">{t('target.removeExplain')}</p>
         </div>
-      </header>
-      <div class="modal-body">
-        <p class="explain">{t('target.removeExplain')}</p>
+        <footer>
+          <button class="btn" type="button" disabled={saving} onclick={() => (removalFor = null)}>
+            {t('common.cancel')}
+          </button>
+          <button class="btn primary" type="button" disabled={saving || structureBusy} onclick={() => removalFor && removeSource(removalFor.id)}>
+            {saving ? t('target.removing') : t('target.removeConfirm')}
+          </button>
+        </footer>
       </div>
-      <footer>
-        <button class="btn" type="button" disabled={saving} onclick={() => (removalFor = null)}>
-          {t('common.cancel')}
-        </button>
-        <button class="btn primary" type="button" disabled={saving || structureBusy} onclick={() => removalFor && removeSource(removalFor.id)}>
-          {saving ? t('target.removing') : t('target.removeConfirm')}
-        </button>
-      </footer>
-    </div>
-  </div>
+    {/snippet}
+  </Modal>
 {/if}
 
 {#if maintenanceOpen}

@@ -6,6 +6,7 @@
   import type { ReconciliationSuggestion } from '$lib/api';
   import { session, messageFrom } from '$lib/session.svelte';
   import { plural, t, type MessageKey } from '$lib/i18n.svelte';
+  import Modal from '$lib/components/ui/Modal.svelte';
 
   let review = $state<ReconciliationSuggestion | null>(null);
   let manualOpen = $state(false);
@@ -163,13 +164,15 @@
 {/if}
 
 {#if snoozeFor}
-  <div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && (snoozeFor = null)}>
-    <div class="modal narrow" role="dialog" aria-modal="true" aria-labelledby="snooze-title">
-      <header><div><h2 id="snooze-title">{t('reconciliation.snoozeTitle')}</h2><p>{t('reconciliation.snoozeHint')}</p></div></header>
-      <div class="modal-body"><div class="field"><label for="snooze-until">{t('reconciliation.until')}</label><input id="snooze-until" type="date" bind:value={snoozeUntil} required /></div></div>
-      <footer><button class="btn" type="button" onclick={() => (snoozeFor = null)}>{t('common.cancel')}</button><button class="btn primary" type="button" disabled={!snoozeUntil || acting !== ''} onclick={snoozeCustom}>{t('reconciliation.snooze')}</button></footer>
-    </div>
-  </div>
+  <Modal onclose={() => (snoozeFor = null)}>
+    {#snippet children(dialog)}
+      <div {...dialog} class="modal narrow" aria-labelledby="snooze-title">
+        <header><div><h2 id="snooze-title">{t('reconciliation.snoozeTitle')}</h2><p>{t('reconciliation.snoozeHint')}</p></div></header>
+        <div class="modal-body"><div class="field"><label for="snooze-until">{t('reconciliation.until')}</label><input id="snooze-until" type="date" bind:value={snoozeUntil} required /></div></div>
+        <footer><button class="btn" type="button" onclick={() => (snoozeFor = null)}>{t('common.cancel')}</button><button class="btn primary" type="button" disabled={!snoozeUntil || acting !== ''} onclick={snoozeCustom}>{t('reconciliation.snooze')}</button></footer>
+      </div>
+    {/snippet}
+  </Modal>
 {/if}
 
 <style>

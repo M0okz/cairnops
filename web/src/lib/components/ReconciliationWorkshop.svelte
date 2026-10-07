@@ -6,6 +6,7 @@
   import { t } from '$lib/i18n.svelte';
   import { natureLabel } from '$lib/format';
   import Checkbox from './ui/Checkbox.svelte';
+  import Modal from './ui/Modal.svelte';
 
   let {
     primaryTargetId = '',
@@ -120,114 +121,114 @@
   }
 </script>
 
-<svelte:window onkeydown={(event) => event.key === 'Escape' && !submitting && onclose()} />
+<Modal dismissible={!submitting} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal reconciliation-modal" aria-labelledby="reconciliation-title">
+      <header>
+        <div>
+          <h2 id="reconciliation-title">{source ? t('reconciliation.attachSource') : t('reconciliation.mergeTargets')}</h2>
+          <p>{source ? t('reconciliation.sourceLead') : t('reconciliation.mergeLead')}</p>
+        </div>
+        <button class="close" type="button" onclick={onclose} disabled={submitting} aria-label="Fermer"><Icon name="close" size={14} /></button>
+      </header>
 
-<div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && !submitting && onclose()}>
-  <div class="modal reconciliation-modal" role="dialog" aria-modal="true" aria-labelledby="reconciliation-title">
-    <header>
-      <div>
-        <h2 id="reconciliation-title">{source ? t('reconciliation.attachSource') : t('reconciliation.mergeTargets')}</h2>
-        <p>{source ? t('reconciliation.sourceLead') : t('reconciliation.mergeLead')}</p>
+      <div class="modal-body">
+        {#if source}
+          <section class="source-line">
+            <span class="key">{source.kind}</span>
+            <div><strong>{source.name}</strong><small>{source.origin === 'native' ? t('reconciliation.nativeSource') : t('reconciliation.integrationSource')}</small></div>
+          </section>
+          <div class="field">
+            <label for="destination-target">{t('reconciliation.destination')}</label>
+            <select id="destination-target" bind:value={primaryID} disabled={submitting}>
+              <option value="">{t('reconciliation.chooseTarget')}</option>
+              {#each availablePrimary as target (target.id)}<option value={target.id}>{target.name}</option>{/each}
+            </select>
+          </div>
+        {:else}
+          <div class="pickers">
+            <div class="field">
+              <label for="primary-target">{t('reconciliation.firstTarget')}</label>
+              <select id="primary-target" bind:value={primaryID} disabled={submitting}>
+                <option value="">{t('reconciliation.choose')}</option>
+                {#each session.targets as target (target.id)}<option value={target.id}>{target.name}</option>{/each}
+              </select>
+            </div>
+            <div class="field">
+              <label for="secondary-target">{t('reconciliation.secondTarget')}</label>
+              <select id="secondary-target" bind:value={secondaryID} disabled={submitting}>
+                <option value="">{t('reconciliation.choose')}</option>
+                {#each availableSecondary as target (target.id)}<option value={target.id}>{target.name}</option>{/each}
+              </select>
+            </div>
+          </div>
+        {/if}
+
+        {#if loading}
+          <div class="working" role="status"><i></i><span><strong>{t('reconciliation.previewLoading')}</strong><small>{t('reconciliation.previewLoadingHint')}</small></span></div>
+        {:else if preview}
+          <section class="comparison">
+            <article class:survivor={true}>
+              <label>
+                {#if !source}<input type="radio" name="survivor" checked onchange={() => choosePreviewSide('primary')} />{/if}
+                <span><strong>{preview.primary.name}</strong><small>{t('reconciliation.survivor')}</small></span>
+              </label>
+              <dl>
+                <div><dt>{t('reconciliation.sources')}</dt><dd>{preview.primary.source_count}</dd></div>
+                <div><dt>{t('reconciliation.incidents')}</dt><dd>{preview.primary.incident_count}</dd></div>
+                <div><dt>{t('reconciliation.observations')}</dt><dd>{preview.primary.observation_count}</dd></div>
+                <div><dt>{t('reconciliation.identity')}</dt><dd>{preview.primary.human_managed ? t('reconciliation.managed') : t('reconciliation.discovered')}</dd></div>
+              </dl>
+            </article>
+            <span class="direction">←</span>
+            <article>
+              <label>
+                {#if !source}<input type="radio" name="survivor" onchange={() => choosePreviewSide('secondary')} />{/if}
+                <span><strong>{preview.secondary.name}</strong><small>{source ? t('reconciliation.origin') : t('reconciliation.absorbed')}</small></span>
+              </label>
+              <dl>
+                <div><dt>{t('reconciliation.sources')}</dt><dd>{preview.secondary.source_count}</dd></div>
+                <div><dt>{t('reconciliation.incidents')}</dt><dd>{preview.secondary.incident_count}</dd></div>
+                <div><dt>{t('reconciliation.observations')}</dt><dd>{preview.secondary.observation_count}</dd></div>
+                <div><dt>{t('reconciliation.identity')}</dt><dd>{preview.secondary.human_managed ? t('reconciliation.managed') : t('reconciliation.discovered')}</dd></div>
+              </dl>
+            </article>
+          </section>
+
+          {#if preview.warnings.length > 0}
+            <div class="warnings">{#each preview.warnings as warning}<p><i></i>{warning}</p>{/each}</div>
+          {/if}
+          {#if preview.incident_conflicts.length > 0}
+            <section class="conflicts"><strong>{t('reconciliation.incidentsCombined')}</strong>{#each preview.incident_conflicts as conflict}<span>{natureLabel(conflict)}</span>{/each}</section>
+          {/if}
+
+          {#if source && preview.secondary.source_count === 1}
+            <div class="archive-option"><Checkbox bind:checked={archiveOrigin}>{t('reconciliation.archiveEmpty', { name: preview.secondary.name })}</Checkbox></div>
+          {/if}
+
+          <div class="field">
+            <label for="reconciliation-reason">{t('reconciliation.reason')}</label>
+            <textarea id="reconciliation-reason" bind:value={reason} maxlength="1000" rows="3" placeholder={t('reconciliation.reasonPlaceholder')}></textarea>
+          </div>
+          <div class="field confirmation">
+            <label for="reconciliation-confirmation">{t('reconciliation.confirm', { name: preview.primary.name })}</label>
+            <input id="reconciliation-confirmation" bind:value={confirmation} autocomplete="off" />
+            <small>{t('reconciliation.irreversible')}</small>
+          </div>
+        {/if}
+        {#if error}<p class="error" role="alert">{error}</p>{/if}
       </div>
-      <button class="close" type="button" onclick={onclose} disabled={submitting} aria-label="Fermer"><Icon name="close" size={14} /></button>
-    </header>
 
-    <div class="modal-body">
-      {#if source}
-        <section class="source-line">
-          <span class="key">{source.kind}</span>
-          <div><strong>{source.name}</strong><small>{source.origin === 'native' ? t('reconciliation.nativeSource') : t('reconciliation.integrationSource')}</small></div>
-        </section>
-        <div class="field">
-          <label for="destination-target">{t('reconciliation.destination')}</label>
-          <select id="destination-target" bind:value={primaryID} disabled={submitting}>
-            <option value="">{t('reconciliation.chooseTarget')}</option>
-            {#each availablePrimary as target (target.id)}<option value={target.id}>{target.name}</option>{/each}
-          </select>
-        </div>
-      {:else}
-        <div class="pickers">
-          <div class="field">
-            <label for="primary-target">{t('reconciliation.firstTarget')}</label>
-            <select id="primary-target" bind:value={primaryID} disabled={submitting}>
-              <option value="">{t('reconciliation.choose')}</option>
-              {#each session.targets as target (target.id)}<option value={target.id}>{target.name}</option>{/each}
-            </select>
-          </div>
-          <div class="field">
-            <label for="secondary-target">{t('reconciliation.secondTarget')}</label>
-            <select id="secondary-target" bind:value={secondaryID} disabled={submitting}>
-              <option value="">{t('reconciliation.choose')}</option>
-              {#each availableSecondary as target (target.id)}<option value={target.id}>{target.name}</option>{/each}
-            </select>
-          </div>
-        </div>
-      {/if}
-
-      {#if loading}
-        <div class="working" role="status"><i></i><span><strong>{t('reconciliation.previewLoading')}</strong><small>{t('reconciliation.previewLoadingHint')}</small></span></div>
-      {:else if preview}
-        <section class="comparison">
-          <article class:survivor={true}>
-            <label>
-              {#if !source}<input type="radio" name="survivor" checked onchange={() => choosePreviewSide('primary')} />{/if}
-              <span><strong>{preview.primary.name}</strong><small>{t('reconciliation.survivor')}</small></span>
-            </label>
-            <dl>
-              <div><dt>{t('reconciliation.sources')}</dt><dd>{preview.primary.source_count}</dd></div>
-              <div><dt>{t('reconciliation.incidents')}</dt><dd>{preview.primary.incident_count}</dd></div>
-              <div><dt>{t('reconciliation.observations')}</dt><dd>{preview.primary.observation_count}</dd></div>
-              <div><dt>{t('reconciliation.identity')}</dt><dd>{preview.primary.human_managed ? t('reconciliation.managed') : t('reconciliation.discovered')}</dd></div>
-            </dl>
-          </article>
-          <span class="direction">←</span>
-          <article>
-            <label>
-              {#if !source}<input type="radio" name="survivor" onchange={() => choosePreviewSide('secondary')} />{/if}
-              <span><strong>{preview.secondary.name}</strong><small>{source ? t('reconciliation.origin') : t('reconciliation.absorbed')}</small></span>
-            </label>
-            <dl>
-              <div><dt>{t('reconciliation.sources')}</dt><dd>{preview.secondary.source_count}</dd></div>
-              <div><dt>{t('reconciliation.incidents')}</dt><dd>{preview.secondary.incident_count}</dd></div>
-              <div><dt>{t('reconciliation.observations')}</dt><dd>{preview.secondary.observation_count}</dd></div>
-              <div><dt>{t('reconciliation.identity')}</dt><dd>{preview.secondary.human_managed ? t('reconciliation.managed') : t('reconciliation.discovered')}</dd></div>
-            </dl>
-          </article>
-        </section>
-
-        {#if preview.warnings.length > 0}
-          <div class="warnings">{#each preview.warnings as warning}<p><i></i>{warning}</p>{/each}</div>
-        {/if}
-        {#if preview.incident_conflicts.length > 0}
-          <section class="conflicts"><strong>{t('reconciliation.incidentsCombined')}</strong>{#each preview.incident_conflicts as conflict}<span>{natureLabel(conflict)}</span>{/each}</section>
-        {/if}
-
-        {#if source && preview.secondary.source_count === 1}
-          <div class="archive-option"><Checkbox bind:checked={archiveOrigin}>{t('reconciliation.archiveEmpty', { name: preview.secondary.name })}</Checkbox></div>
-        {/if}
-
-        <div class="field">
-          <label for="reconciliation-reason">{t('reconciliation.reason')}</label>
-          <textarea id="reconciliation-reason" bind:value={reason} maxlength="1000" rows="3" placeholder={t('reconciliation.reasonPlaceholder')}></textarea>
-        </div>
-        <div class="field confirmation">
-          <label for="reconciliation-confirmation">{t('reconciliation.confirm', { name: preview.primary.name })}</label>
-          <input id="reconciliation-confirmation" bind:value={confirmation} autocomplete="off" />
-          <small>{t('reconciliation.irreversible')}</small>
-        </div>
-      {/if}
-      {#if error}<p class="error" role="alert">{error}</p>{/if}
+      <footer>
+        <span class="note">{t('reconciliation.supervisionContinues')}</span>
+        <button class="btn" type="button" onclick={onclose} disabled={submitting}>{t('common.cancel')}</button>
+        <button class="btn primary" type="button" onclick={submit} disabled={!valid}>
+          {submitting ? t('reconciliation.starting') : source ? t('reconciliation.attachDefinitely') : t('reconciliation.mergeDefinitely')}
+        </button>
+      </footer>
     </div>
-
-    <footer>
-      <span class="note">{t('reconciliation.supervisionContinues')}</span>
-      <button class="btn" type="button" onclick={onclose} disabled={submitting}>{t('common.cancel')}</button>
-      <button class="btn primary" type="button" onclick={submit} disabled={!valid}>
-        {submitting ? t('reconciliation.starting') : source ? t('reconciliation.attachDefinitely') : t('reconciliation.mergeDefinitely')}
-      </button>
-    </footer>
-  </div>
-</div>
+  {/snippet}
+</Modal>
 
 <style>
   .reconciliation-modal { width: min(52rem, calc(100vw - 2 * var(--s5))); }

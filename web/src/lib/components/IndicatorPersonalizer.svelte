@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Icon from './Icon.svelte';
+  import Modal from './ui/Modal.svelte';
   import { Input } from './ui/input';
   import Odometer from './Odometer.svelte';
   import { formatIndicator } from '$lib/indicator-format';
@@ -10,8 +11,6 @@
 
   let { ondismiss }: { ondismiss: () => void } = $props();
 
-  let dialog = $state<HTMLDialogElement | null>(null);
-  let closeButton = $state<HTMLButtonElement | null>(null);
   let search = $state('');
   let selectedIDs = $state<string[]>([]);
   let loading = $state(true);
@@ -65,106 +64,97 @@
     selectedIDs = pinnedIndicatorIDs(
       Object.values(session.indicatorOverview).flatMap((target) => target.indicators)
     );
-    requestAnimationFrame(() => {
-      dialog?.showModal();
-      closeButton?.focus();
-    });
     void session.loadIndicatorCatalog().then((loaded) => {
       loading = false;
       loadFailed = !loaded;
     });
-    return () => {
-      if (dialog?.open) dialog.close();
-    };
   });
 </script>
 
-<dialog
-  bind:this={dialog}
-  class="personalizer"
-  aria-labelledby="indicator-personalizer-title"
-  aria-describedby="indicator-personalizer-hint"
-  oncancel={(event) => {
-    event.preventDefault();
-    ondismiss();
-  }}
-  onclick={(event) => event.currentTarget === event.target && ondismiss()}
->
-  <header>
-    <div>
-      <h2 id="indicator-personalizer-title">{t('overview.indicators.personalizerTitle')}</h2>
-      <p id="indicator-personalizer-hint">{t('overview.indicators.personalizerHint')}</p>
-    </div>
-    <button
-      bind:this={closeButton}
-      class="close"
-      type="button"
-      aria-label={t('common.close')}
-      onclick={ondismiss}
+<Modal onclose={ondismiss}>
+  {#snippet children(dialog)}
+    <div
+      {...dialog}
+      class="personalizer"
+      aria-labelledby="indicator-personalizer-title"
+      aria-describedby="indicator-personalizer-hint"
     >
-      <Icon name="close" size={14} />
-    </button>
-  </header>
-
-  <div class="personalizer-tools shadcn-control">
-    <Input
-      type="search"
-      bind:value={search}
-      placeholder={t('overview.indicators.personalizerSearch')}
-      aria-label={t('overview.indicators.personalizerSearch')}
-    />
-    <span class="selection-count">{plural('overview.indicators.selected', selectedIDs.length)}</span>
-  </div>
-
-  <div class="catalog" aria-live="polite">
-    {#if loading}
-      <div class="catalog-state">{t('overview.indicators.catalogLoading')}</div>
-    {:else if loadFailed}
-      <div class="catalog-state error">{t('overview.indicators.catalogFailed')}</div>
-    {:else if filteredRows.length === 0}
-      <div class="catalog-state">{t('overview.indicators.catalogEmpty')}</div>
-    {:else}
-      {#each filteredRows as row (row.indicator.id)}
-        {@const selected = selectedIDs.includes(row.indicator.id)}
+      <header>
+        <div>
+          <h2 id="indicator-personalizer-title">{t('overview.indicators.personalizerTitle')}</h2>
+          <p id="indicator-personalizer-hint">{t('overview.indicators.personalizerHint')}</p>
+        </div>
         <button
-          class="indicator-choice"
-          class:selected
+          class="close"
           type="button"
-          aria-pressed={selected}
-          onclick={() => toggle(row.indicator.id)}
+          aria-label={t('common.close')}
+          onclick={ondismiss}
         >
-          <span class="choice-copy">
-            <strong>{row.indicator.label}</strong>
-            <small>{row.targetName}{row.indicator.dimension ? ` · ${row.indicator.dimension}` : ''}</small>
-          </span>
-          <b class="num"><Odometer value={formatIndicator(row.indicator.last_value, row.indicator.unit)} /></b>
-          <i aria-hidden="true">{selected ? '✓' : '+'}</i>
+          <Icon name="close" size={14} />
         </button>
-      {/each}
-    {/if}
-  </div>
+      </header>
 
-  {#if selectionError}
-    <p class="selection-error" role="alert">{selectionError}</p>
-  {/if}
+      <div class="personalizer-tools shadcn-control">
+        <Input
+          type="search"
+          bind:value={search}
+          placeholder={t('overview.indicators.personalizerSearch')}
+          aria-label={t('overview.indicators.personalizerSearch')}
+        />
+        <span class="selection-count">{plural('overview.indicators.selected', selectedIDs.length)}</span>
+      </div>
 
-  <footer>
-    <button
-      class="btn automatic"
-      type="button"
-      onclick={() => {
-        selectedIDs = [];
-        selectionError = '';
-      }}
-    >
-      {t('overview.indicators.automatic')}
-    </button>
-    <button class="btn" type="button" onclick={ondismiss}>{t('common.cancel')}</button>
-    <button class="btn primary" type="button" disabled={saving || loading || loadFailed} onclick={save}>
-      {t('overview.indicators.save')}
-    </button>
-  </footer>
-</dialog>
+      <div class="catalog" aria-live="polite">
+        {#if loading}
+          <div class="catalog-state">{t('overview.indicators.catalogLoading')}</div>
+        {:else if loadFailed}
+          <div class="catalog-state error">{t('overview.indicators.catalogFailed')}</div>
+        {:else if filteredRows.length === 0}
+          <div class="catalog-state">{t('overview.indicators.catalogEmpty')}</div>
+        {:else}
+          {#each filteredRows as row (row.indicator.id)}
+            {@const selected = selectedIDs.includes(row.indicator.id)}
+            <button
+              class="indicator-choice"
+              class:selected
+              type="button"
+              aria-pressed={selected}
+              onclick={() => toggle(row.indicator.id)}
+            >
+              <span class="choice-copy">
+                <strong>{row.indicator.label}</strong>
+                <small>{row.targetName}{row.indicator.dimension ? ` · ${row.indicator.dimension}` : ''}</small>
+              </span>
+              <b class="num"><Odometer value={formatIndicator(row.indicator.last_value, row.indicator.unit)} /></b>
+              <i aria-hidden="true">{selected ? '✓' : '+'}</i>
+            </button>
+          {/each}
+        {/if}
+      </div>
+
+      {#if selectionError}
+        <p class="selection-error" role="alert">{selectionError}</p>
+      {/if}
+
+      <footer>
+        <button
+          class="btn automatic"
+          type="button"
+          onclick={() => {
+            selectedIDs = [];
+            selectionError = '';
+          }}
+        >
+          {t('overview.indicators.automatic')}
+        </button>
+        <button class="btn" type="button" onclick={ondismiss}>{t('common.cancel')}</button>
+        <button class="btn primary" type="button" disabled={saving || loading || loadFailed} onclick={save}>
+          {t('overview.indicators.save')}
+        </button>
+      </footer>
+    </div>
+  {/snippet}
+</Modal>
 
 <style>
   .personalizer {
@@ -179,15 +169,8 @@
     box-shadow: var(--shadow);
     overflow: hidden;
     overscroll-behavior: contain;
-  }
-
-  .personalizer[open] {
     display: flex;
     flex-direction: column;
-  }
-
-  .personalizer::backdrop {
-    background: rgb(0 0 0 / 0.55);
   }
 
   header {

@@ -3,6 +3,7 @@
   import { prefersReducedMotion } from 'svelte/motion';
   import Icon from './Icon.svelte';
   import InfoHint from './InfoHint.svelte';
+  import Modal from './ui/Modal.svelte';
   import ActivityTimeline from './ActivityTimeline.svelte';
   import IndicatorHistoryChart from './IndicatorHistoryChart.svelte';
   import { APIError, api, type Incident, type IncidentEvidence, type IncidentIndicators } from '$lib/api';
@@ -47,8 +48,7 @@
     webhook: 'Webhook'
   };
 
-  let dialog = $state<HTMLDialogElement | null>(null);
-  let closeButton = $state<HTMLButtonElement | null>(null);
+  let drawer = $state<HTMLDivElement | null>(null);
   let reasonField = $state<HTMLTextAreaElement | null>(null);
   let incident = $state<Incident | null>(null);
   let indicators = $state<IncidentIndicators | null>(null);
@@ -225,26 +225,6 @@
     (trigger ?? document.getElementById('main-content'))?.focus();
   }
 
-  function trapFocus(event: KeyboardEvent) {
-    if (event.key !== 'Tab' || !dialog) return;
-    const controls = Array.from(dialog.querySelectorAll<HTMLElement>(
-      'button, a[href], input, select, textarea, summary, [tabindex]'
-    )).filter((element) => {
-      if (element.tabIndex < 0 || element.matches(':disabled') || element.closest('[inert]')) return false;
-      const hiddenDetails = element.closest('details:not([open])');
-      if (hiddenDetails && hiddenDetails.querySelector('summary') !== element) return false;
-      const rect = element.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== 'hidden';
-    });
-    const first = controls[0];
-    const last = controls.at(-1);
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault(); last?.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault(); first?.focus();
-    }
-  }
-
   $effect(() => {
     if (projected) {
       incident = projected;
@@ -267,16 +247,11 @@
       projectedOnce = seed.status === 'active';
     }
     const timer = setInterval(() => (now = new Date()), 30_000);
-    requestAnimationFrame(() => {
-      dialog?.showModal();
-      closeButton?.focus();
-    });
     void Promise.all([loadIncident(false), loadIndicators()]);
     return () => {
       requestVersion += 1;
       clearInterval(timer);
       clearTimeout(dismissTimer);
-      if (dialog?.open) dialog.close();
       requestAnimationFrame(() => restoreFocus(mountedIncidentID));
     };
   });
@@ -432,256 +407,258 @@
   </article>
 {/snippet}
 
-<dialog
-  bind:this={dialog}
-  class="incident-drawer"
-  class:closing
-  ontransitionend={(event) => { if (closing && event.target === dialog && event.propertyName === 'opacity') finishDismiss(); }}
-  aria-labelledby={titleID}
-  aria-describedby={descriptionID}
-  aria-busy={incidentLoading || acknowledging || invalidating}
-  onkeydown={trapFocus}
-  oncancel={(event) => {
-    event.preventDefault();
-    requestDismiss();
-  }}
-  onclick={(event) => event.currentTarget === event.target && !invalidationFor && requestDismiss()}
+<Modal
+  side
+  onclose={requestDismiss}
+  onInteractOutside={(event) => { if (invalidationFor) event.preventDefault(); }}
 >
-  <header class="drawer-head">
-    <div class="title-copy">
-      <span class="eyebrow">{incidentTitle}</span>
-      <h2 id={titleID}>{incident?.summary?.[i18n.locale].title ?? (incident ? natureLabel(incident) : t('incidents.detail.title'))}</h2>
-      {#if incident}
-        <p id={descriptionID} class="head-meta">
-          <span class="pill {severityTone(incident.severity)}">{severityLabel(incident.severity)}</span>
-          {#if incident.status === 'resolved'}
-            <span class="pill ok">{t('incidents.detail.resolvedStatus')}</span>
-          {/if}
-          {#if maintainedImpacts.length > 0}
-            <span class="pill info">{t('state.maintenance')}</span>
-          {/if}
-          <!-- Le séparateur reste collé au mot qui le précède : une ligne ne commence jamais par « · ». -->
-          <span class="head-facts">
-            <span title={stamp(incident.opened_at)}>{incident.resolved_at
-              ? t('incidents.detail.resolvedAfter', { duration: since(incident.opened_at, new Date(incident.resolved_at)) })
-              : t('incidents.detail.openedAgo', { duration: since(incident.opened_at, now) })}</span>{'\u00a0·'}
-            <span
-              class:crit={!incident.acknowledged_at && incident.status === 'active'}
-              title={incident.acknowledged_at ? stamp(incident.acknowledged_at) : undefined}
-            >{incident.acknowledged_at
-              ? t('incidents.detail.acknowledgedBy', { who: incident.acknowledged_by ?? t('target.anOperator') })
-              : t('incident.unacknowledged')}</span>{#if sourceNames}{'\u00a0·'} <span>{sourceNames}</span>{/if}
-          </span>
-        </p>
-      {:else}
-        <p id={descriptionID}>{t('incidents.detail.loading')}</p>
-      {/if}
-    </div>
-    <button
-      bind:this={closeButton}
-      class="close"
-      type="button"
-      onclick={requestDismiss}
-      aria-label={invalidationFor ? t('incidents.detail.cancelInvalidation') : t('common.close')}
+  {#snippet children(dialog)}
+    <div
+      {...dialog}
+      bind:this={drawer}
+      class="incident-drawer"
+      class:closing
+      ontransitionend={(event) => { if (closing && event.target === drawer && event.propertyName === 'opacity') finishDismiss(); }}
+      aria-labelledby={titleID}
+      aria-describedby={descriptionID}
+      aria-busy={incidentLoading || acknowledging || invalidating}
     >
-      <Icon name="close" size={14} />
-    </button>
-  </header>
-
-  <div class="drawer-body">
-    {#if incidentLoading && !incident}
-      <div class="detail-state" role="status">{t('incidents.detail.loading')}</div>
-    {:else if incidentError && !incident}
-      <div class="detail-state error-state" role="alert">
-        <strong>{incidentError}</strong>
-        <button class="btn" type="button" onclick={() => loadIncident()}>{t('common.retry')}</button>
-      </div>
-    {:else if incident}
-      {#if hasNotes}
-        <div class="notes">
-          {#if incident.impact_count > 1}
-            <span class="propagation-state">
-              {t(`incidents.propagation.${incident.propagation_status}`)}
-              <InfoHint
-                id={`propagation-state-hint-${incident.id}`}
-                ariaLabel={t('incidents.propagation.help', { state: t(`incidents.propagation.${incident.propagation_status}`) })}
-                text={t(`incidents.propagation.${incident.propagation_status}Hint`)}
-              />
-            </span>
-          {/if}
-          {#if incident.acknowledgement_sync_status === 'pending'}
-            <span class="warn">{t('incidents.detail.syncPending')}</span>
-          {:else if incident.acknowledgement_sync_status === 'failed'}
-            <span class="crit" title={incident.acknowledgement_sync_error}>
-              {t('incidents.detail.syncFailed')}
-            </span>
-          {/if}
-          {#if maintainedImpacts[0]?.maintenance_ends_at}
-            <span>{t('incidents.detail.maintenanceUntil', { date: stamp(maintainedImpacts[0].maintenance_ends_at) })}</span>
+      <header class="drawer-head">
+        <div class="title-copy">
+          <span class="eyebrow">{incidentTitle}</span>
+          <h2 id={titleID}>{incident?.summary?.[i18n.locale].title ?? (incident ? natureLabel(incident) : t('incidents.detail.title'))}</h2>
+          {#if incident}
+            <p id={descriptionID} class="head-meta">
+              <span class="pill {severityTone(incident.severity)}">{severityLabel(incident.severity)}</span>
+              {#if incident.status === 'resolved'}
+                <span class="pill ok">{t('incidents.detail.resolvedStatus')}</span>
+              {/if}
+              {#if maintainedImpacts.length > 0}
+                <span class="pill info">{t('state.maintenance')}</span>
+              {/if}
+              <!-- Le séparateur reste collé au mot qui le précède : une ligne ne commence jamais par « · ». -->
+              <span class="head-facts">
+                <span title={stamp(incident.opened_at)}>{incident.resolved_at
+                  ? t('incidents.detail.resolvedAfter', { duration: since(incident.opened_at, new Date(incident.resolved_at)) })
+                  : t('incidents.detail.openedAgo', { duration: since(incident.opened_at, now) })}</span>{'\u00a0·'}
+                <span
+                  class:crit={!incident.acknowledged_at && incident.status === 'active'}
+                  title={incident.acknowledged_at ? stamp(incident.acknowledged_at) : undefined}
+                >{incident.acknowledged_at
+                  ? t('incidents.detail.acknowledgedBy', { who: incident.acknowledged_by ?? t('target.anOperator') })
+                  : t('incident.unacknowledged')}</span>{#if sourceNames}{'\u00a0·'} <span>{sourceNames}</span>{/if}
+              </span>
+            </p>
+          {:else}
+            <p id={descriptionID}>{t('incidents.detail.loading')}</p>
           {/if}
         </div>
-      {/if}
-
-      <section class="finding" aria-labelledby="incident-finding-title">
-        <h3 id="incident-finding-title" class="finding-label">
-          {t('incidents.detail.finding')}
-          {#if shape.kind === 'resource'}
-            · {t(`incidents.detail.noun.${shape.noun}`)} <span class="num">{shape.resource}</span>
-          {/if}
-        </h3>
-
-        {#if shape.kind === 'versions'}
-          <div class="versions">
-            <div>
-              <span>{t('incidents.detail.deployedVersion')}</span>
-              <b class="num">{shape.current}</b>
-            </div>
-            <span class="version-arrow" aria-hidden="true">→</span>
-            <div>
-              <span>{t('incidents.detail.availableVersion')}</span>
-              <b class="num {severityTone(incident.severity)}">{shape.available}</b>
-            </div>
-          </div>
-        {:else if shape.kind === 'count'}
-          <p class="finding-value">
-            <b class="num">{shape.count}</b>
-            {plural('incidents.detail.securityUpdates', shape.count)}
-          </p>
-        {:else if primary}
-          {#if shape.kind === 'plain' && primaryText?.description}
-            <p class="finding-text">{primaryText.description}</p>
-          {/if}
-          <p class="finding-original">{primary.name}</p>
-          <small class="finding-source">
-            {t('incidents.detail.sourceMessage', { source: primary.connector_name ?? origins[primary.origin] })}
-          </small>
-        {/if}
-
-        {#if primary?.invalidated_at}
-          <p class="finding-invalidated">
-            {t('incidents.detail.invalidatedBy', {
-              who: primary.invalidated_by ?? t('target.anOperator'),
-              date: stamp(primary.invalidated_at)
-            })}
-          </p>
-        {/if}
-
-        {#if indicatorsError}
-          <div class="finding-state error-state" role="alert">
-            <span>{indicatorsError}</span>
-            <button class="btn sm" type="button" onclick={loadIndicators}>{t('common.retry')}</button>
-          </div>
-        {:else if indicatorsLoading && measurable(primary?.fact)}
-          <div class="finding-state" role="status">{t('incidents.detail.metricsLoading')}</div>
-        {:else if indicatorSplit.relevant.length > 0}
-          <div class="finding-metrics">
-            {#each indicatorSplit.relevant as row (row.key)}
-              {@render metricCard(row, false)}
-            {/each}
-          </div>
-          <p class="correlation-note">{t('incidents.detail.correlationNote')}</p>
-        {:else if indicators && measurable(primary?.fact)}
-          <p class="finding-state">{t('incidents.detail.unmeasured')}</p>
-        {/if}
-      </section>
-
-      {#if incident.impact_count > 1}
-        <section class="detail-section impacts" aria-labelledby="incident-impacts-title">
-          <div class="section-head">
-            <h3 id="incident-impacts-title">{t('incidents.detail.affectedResources')}</h3>
-            {#if diverges(incident)}<span class="pill warn">{t('targets.divergence')}</span>{/if}
-            <span class="section-count num">{incident.active_impact_count}/{incident.impact_count}</span>
-          </div>
-          {#each incident.impacts as impact (impact.id)}
-            <div class="impact-row">
-              <div>
-                <a href="/cibles/{impact.target_id}"><strong>{impact.target_name}</strong></a>
-                <small>
-                  {impact.resolved_at
-                    ? t('incidents.detail.resolvedAfter', { duration: since(impact.opened_at, new Date(impact.resolved_at)) })
-                    : t('incidents.detail.openedAgo', { duration: since(impact.opened_at, now) })}
-                </small>
-              </div>
-              <span class="pill {impact.status === 'resolved' ? 'ok' : severityTone(impact.effective_severity)}">
-                {impact.status === 'resolved' ? t('target.verdict.recovered') : severityLabel(impact.effective_severity)}
-              </span>
-            </div>
-          {/each}
-          <p class="grouping-note">
-            {t('incidents.detail.groupingExplanation', {
-              nature: natureLabel(incident),
-              seconds: incident.propagation_window_seconds
-            })}
-          </p>
-        </section>
-      {/if}
-
-      <div class="folds">
-        {#if indicatorSplit.others.length > 0}
-          <details class="fold">
-            <summary>
-              <span>{t('incidents.detail.otherMetrics')}</span>
-              <small class="num">{otherPreview}</small>
-            </summary>
-            <div class="metric-grid">
-              {#each indicatorSplit.others as row (row.key)}
-                {@render metricCard(row)}
-              {/each}
-            </div>
-            <p class="correlation-note">{t('incidents.detail.correlationNote')}</p>
-          </details>
-        {/if}
-
-        <details class="fold" open={invalidationFor ? true : undefined}>
-          <summary>
-            <span>{plural('incidents.detail.sourceDetails', evidence.length)}</span>
-            <small class="num">{plural('incidents.detail.evidenceCount', evidence.length)}</small>
-          </summary>
-          {#each incident.impacts as impact (impact.id)}
-            {#if incident.impact_count > 1}
-              <h4 class="source-group">{impact.target_name}</h4>
-            {/if}
-            {#each impact.evidence as signal (signal.id)}
-              {@render sourceRow(signal)}
-            {:else}
-              <div class="section-state compact">{t('incidents.detail.sourcesEmpty')}</div>
-            {/each}
-          {:else}
-            <div class="section-state compact">{t('incidents.detail.sourcesEmpty')}</div>
-          {/each}
-        </details>
-
-        <details class="fold">
-          <summary>
-            <span>{t('target.activityLog')}</span>
-            <small class="num">{activity.length}</small>
-          </summary>
-          <div class="fold-body">
-            <ActivityTimeline entries={activity} />
-          </div>
-        </details>
-      </div>
-    {/if}
-  </div>
-
-  {#if incident}
-    <footer class="drawer-actions">
-      <span class="note">
-        {incident.status === 'active'
-          ? t('incidents.detail.liveNote')
-          : t('incidents.detail.resolvedNote')}
-      </span>
-      {#if firstImpact}
-        <a class="btn" href="/cibles/{firstImpact.target_id}">{t('incidents.detail.viewTarget')}</a>
-      {/if}
-      {#if incident.status === 'active' && !incident.acknowledged_at && session.user?.role !== 'observer'}
-        <button class="btn primary" type="button" disabled={acknowledging} onclick={acknowledge}>
-          {acknowledging ? t('incident.acknowledging') : t('incident.acknowledge')}
+        <button
+          class="close"
+          type="button"
+          onclick={requestDismiss}
+          aria-label={invalidationFor ? t('incidents.detail.cancelInvalidation') : t('common.close')}
+        >
+          <Icon name="close" size={14} />
         </button>
+      </header>
+
+      <div class="drawer-body">
+        {#if incidentLoading && !incident}
+          <div class="detail-state" role="status">{t('incidents.detail.loading')}</div>
+        {:else if incidentError && !incident}
+          <div class="detail-state error-state" role="alert">
+            <strong>{incidentError}</strong>
+            <button class="btn" type="button" onclick={() => loadIncident()}>{t('common.retry')}</button>
+          </div>
+        {:else if incident}
+          {#if hasNotes}
+            <div class="notes">
+              {#if incident.impact_count > 1}
+                <span class="propagation-state">
+                  {t(`incidents.propagation.${incident.propagation_status}`)}
+                  <InfoHint
+                    id={`propagation-state-hint-${incident.id}`}
+                    ariaLabel={t('incidents.propagation.help', { state: t(`incidents.propagation.${incident.propagation_status}`) })}
+                    text={t(`incidents.propagation.${incident.propagation_status}Hint`)}
+                  />
+                </span>
+              {/if}
+              {#if incident.acknowledgement_sync_status === 'pending'}
+                <span class="warn">{t('incidents.detail.syncPending')}</span>
+              {:else if incident.acknowledgement_sync_status === 'failed'}
+                <span class="crit" title={incident.acknowledgement_sync_error}>
+                  {t('incidents.detail.syncFailed')}
+                </span>
+              {/if}
+              {#if maintainedImpacts[0]?.maintenance_ends_at}
+                <span>{t('incidents.detail.maintenanceUntil', { date: stamp(maintainedImpacts[0].maintenance_ends_at) })}</span>
+              {/if}
+            </div>
+          {/if}
+
+          <section class="finding" aria-labelledby="incident-finding-title">
+            <h3 id="incident-finding-title" class="finding-label">
+              {t('incidents.detail.finding')}
+              {#if shape.kind === 'resource'}
+                · {t(`incidents.detail.noun.${shape.noun}`)} <span class="num">{shape.resource}</span>
+              {/if}
+            </h3>
+
+            {#if shape.kind === 'versions'}
+              <div class="versions">
+                <div>
+                  <span>{t('incidents.detail.deployedVersion')}</span>
+                  <b class="num">{shape.current}</b>
+                </div>
+                <span class="version-arrow" aria-hidden="true">→</span>
+                <div>
+                  <span>{t('incidents.detail.availableVersion')}</span>
+                  <b class="num {severityTone(incident.severity)}">{shape.available}</b>
+                </div>
+              </div>
+            {:else if shape.kind === 'count'}
+              <p class="finding-value">
+                <b class="num">{shape.count}</b>
+                {plural('incidents.detail.securityUpdates', shape.count)}
+              </p>
+            {:else if primary}
+              {#if shape.kind === 'plain' && primaryText?.description}
+                <p class="finding-text">{primaryText.description}</p>
+              {/if}
+              <p class="finding-original">{primary.name}</p>
+              <small class="finding-source">
+                {t('incidents.detail.sourceMessage', { source: primary.connector_name ?? origins[primary.origin] })}
+              </small>
+            {/if}
+
+            {#if primary?.invalidated_at}
+              <p class="finding-invalidated">
+                {t('incidents.detail.invalidatedBy', {
+                  who: primary.invalidated_by ?? t('target.anOperator'),
+                  date: stamp(primary.invalidated_at)
+                })}
+              </p>
+            {/if}
+
+            {#if indicatorsError}
+              <div class="finding-state error-state" role="alert">
+                <span>{indicatorsError}</span>
+                <button class="btn sm" type="button" onclick={loadIndicators}>{t('common.retry')}</button>
+              </div>
+            {:else if indicatorsLoading && measurable(primary?.fact)}
+              <div class="finding-state" role="status">{t('incidents.detail.metricsLoading')}</div>
+            {:else if indicatorSplit.relevant.length > 0}
+              <div class="finding-metrics">
+                {#each indicatorSplit.relevant as row (row.key)}
+                  {@render metricCard(row, false)}
+                {/each}
+              </div>
+              <p class="correlation-note">{t('incidents.detail.correlationNote')}</p>
+            {:else if indicators && measurable(primary?.fact)}
+              <p class="finding-state">{t('incidents.detail.unmeasured')}</p>
+            {/if}
+          </section>
+
+          {#if incident.impact_count > 1}
+            <section class="detail-section impacts" aria-labelledby="incident-impacts-title">
+              <div class="section-head">
+                <h3 id="incident-impacts-title">{t('incidents.detail.affectedResources')}</h3>
+                {#if diverges(incident)}<span class="pill warn">{t('targets.divergence')}</span>{/if}
+                <span class="section-count num">{incident.active_impact_count}/{incident.impact_count}</span>
+              </div>
+              {#each incident.impacts as impact (impact.id)}
+                <div class="impact-row">
+                  <div>
+                    <a href="/cibles/{impact.target_id}"><strong>{impact.target_name}</strong></a>
+                    <small>
+                      {impact.resolved_at
+                        ? t('incidents.detail.resolvedAfter', { duration: since(impact.opened_at, new Date(impact.resolved_at)) })
+                        : t('incidents.detail.openedAgo', { duration: since(impact.opened_at, now) })}
+                    </small>
+                  </div>
+                  <span class="pill {impact.status === 'resolved' ? 'ok' : severityTone(impact.effective_severity)}">
+                    {impact.status === 'resolved' ? t('target.verdict.recovered') : severityLabel(impact.effective_severity)}
+                  </span>
+                </div>
+              {/each}
+              <p class="grouping-note">
+                {t('incidents.detail.groupingExplanation', {
+                  nature: natureLabel(incident),
+                  seconds: incident.propagation_window_seconds
+                })}
+              </p>
+            </section>
+          {/if}
+
+          <div class="folds">
+            {#if indicatorSplit.others.length > 0}
+              <details class="fold">
+                <summary>
+                  <span>{t('incidents.detail.otherMetrics')}</span>
+                  <small class="num">{otherPreview}</small>
+                </summary>
+                <div class="metric-grid">
+                  {#each indicatorSplit.others as row (row.key)}
+                    {@render metricCard(row)}
+                  {/each}
+                </div>
+                <p class="correlation-note">{t('incidents.detail.correlationNote')}</p>
+              </details>
+            {/if}
+
+            <details class="fold" open={invalidationFor ? true : undefined}>
+              <summary>
+                <span>{plural('incidents.detail.sourceDetails', evidence.length)}</span>
+                <small class="num">{plural('incidents.detail.evidenceCount', evidence.length)}</small>
+              </summary>
+              {#each incident.impacts as impact (impact.id)}
+                {#if incident.impact_count > 1}
+                  <h4 class="source-group">{impact.target_name}</h4>
+                {/if}
+                {#each impact.evidence as signal (signal.id)}
+                  {@render sourceRow(signal)}
+                {:else}
+                  <div class="section-state compact">{t('incidents.detail.sourcesEmpty')}</div>
+                {/each}
+              {:else}
+                <div class="section-state compact">{t('incidents.detail.sourcesEmpty')}</div>
+              {/each}
+            </details>
+
+            <details class="fold">
+              <summary>
+                <span>{t('target.activityLog')}</span>
+                <small class="num">{activity.length}</small>
+              </summary>
+              <div class="fold-body">
+                <ActivityTimeline entries={activity} />
+              </div>
+            </details>
+          </div>
+        {/if}
+      </div>
+
+      {#if incident}
+        <footer class="drawer-actions">
+          <span class="note">
+            {incident.status === 'active'
+              ? t('incidents.detail.liveNote')
+              : t('incidents.detail.resolvedNote')}
+          </span>
+          {#if firstImpact}
+            <a class="btn" href="/cibles/{firstImpact.target_id}">{t('incidents.detail.viewTarget')}</a>
+          {/if}
+          {#if incident.status === 'active' && !incident.acknowledged_at && session.user?.role !== 'observer'}
+            <button class="btn primary" type="button" disabled={acknowledging} onclick={acknowledge}>
+              {acknowledging ? t('incident.acknowledging') : t('incident.acknowledge')}
+            </button>
+          {/if}
+        </footer>
       {/if}
-    </footer>
-  {/if}
-</dialog>
+    </div>
+  {/snippet}
+</Modal>
 
 <style>
   .incident-drawer {
@@ -704,15 +681,8 @@
     box-shadow: var(--shadow);
     overflow: hidden;
     overscroll-behavior: contain;
-  }
-
-  .incident-drawer[open] {
     display: flex;
     flex-direction: column;
-  }
-
-  .incident-drawer::backdrop {
-    background: var(--drawer-backdrop);
   }
 
   /* En-tête : la Ressource, le problème, puis une phrase d'état. */
@@ -1354,24 +1324,22 @@
     }
   }
 
-  :global(body:has(.incident-drawer[open])) { overflow: hidden; }
-
   @media (prefers-reduced-motion: no-preference) {
     .incident-drawer {
       opacity: 1;
       transform: translateX(0);
       transition: transform var(--d2) ease-out, opacity var(--d2) ease-out;
     }
-    .incident-drawer::backdrop { transition: background-color var(--d2) ease-out; }
+    :global(.scrim:has(> .incident-drawer)) { transition: background-color var(--d2) ease-out; }
     .incident-drawer.closing {
       opacity: 0;
       transform: translateX(var(--s4));
       transition-duration: var(--d1);
     }
-    .incident-drawer.closing::backdrop { background: transparent; }
+    :global(.scrim:has(> .incident-drawer.closing)) { background: transparent; }
     @starting-style {
-      .incident-drawer[open] { opacity: 0; transform: translateX(var(--s5)); }
-      .incident-drawer[open]::backdrop { background: transparent; }
+      .incident-drawer { opacity: 0; transform: translateX(var(--s5)); }
+      :global(.scrim:has(> .incident-drawer)) { background: transparent; }
     }
   }
 

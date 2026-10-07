@@ -6,6 +6,7 @@
    * suspendre suffit quand on veut seulement arrêter la lecture. */
 
   import Icon from './Icon.svelte';
+  import Modal from './ui/Modal.svelte';
   import { api, type Connector, type ConnectorRemoval } from '$lib/api';
 
   let {
@@ -32,9 +33,6 @@
     generic_webhook: t('suspension.webhookSender')
   };
 
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && !busy) onclose();
-  }
 
   async function remove() {
     busy = true;
@@ -50,64 +48,64 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<Modal dismissible={!busy} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal" aria-labelledby="removal-title">
+      <header>
+        <div>
+          <h2 id="removal-title">Supprimer « {connector.name} » ?</h2>
+          <p>
+            {t('removal.lead', { origin: origins[connector.kind] })}
+          </p>
+        </div>
+        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
+          <Icon name="close" size={14} />
+        </button>
+      </header>
 
-<div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && !busy && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="removal-title">
-    <header>
-      <div>
-        <h2 id="removal-title">Supprimer « {connector.name} » ?</h2>
-        <p>
-          {t('removal.lead', { origin: origins[connector.kind] })}
-        </p>
+      <div class="modal-body">
+        <div class="ledger">
+          <section class="gone">
+            <h3>{t('removal.goes')}</h3>
+            <ul>
+              <li>{plural('removal.bindings', connector.binding_count)}</li>
+              {#if connector.quarantine_count > 0}
+                <li>{plural('removal.quarantined', connector.quarantine_count)}</li>
+              {/if}
+              <li>{t('removal.evidence')}</li>
+            </ul>
+          </section>
+
+          <section class="kept">
+            <h3>{t('suspension.stays')}</h3>
+            <ul>
+              <li>{plural('removal.targets', connector.binding_count)}</li>
+              <li>{t('removal.keepChecks')}</li>
+            </ul>
+          </section>
+        </div>
+
+        {#if connector.kind === 'proxmox' && connector.credential_management === 'managed'}
+          <p>{t('proxmox.removalHint')}</p>
+          <p>{t('connection.cleanupAt', { endpoint: connector.managed_cleanup_endpoint || connector.endpoint })}</p>
+          <div class="field"><label for="remove-pve-token">{t('proxmox.tokenID')}</label><input id="remove-pve-token" bind:value={tokenID} autocomplete="off" /></div>
+          <div class="field"><label for="remove-pve-secret">{t('proxmox.tokenSecret')}</label><input id="remove-pve-secret" type="password" bind:value={secret} autocomplete="off" /></div>
+        {/if}
+        {#if error}<p class="error" role="alert">{error}</p>{/if}
       </div>
-      <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
-        <Icon name="close" size={14} />
-      </button>
-    </header>
 
-    <div class="modal-body">
-      <div class="ledger">
-        <section class="gone">
-          <h3>{t('removal.goes')}</h3>
-          <ul>
-            <li>{plural('removal.bindings', connector.binding_count)}</li>
-            {#if connector.quarantine_count > 0}
-              <li>{plural('removal.quarantined', connector.quarantine_count)}</li>
-            {/if}
-            <li>{t('removal.evidence')}</li>
-          </ul>
-        </section>
-
-        <section class="kept">
-          <h3>{t('suspension.stays')}</h3>
-          <ul>
-            <li>{plural('removal.targets', connector.binding_count)}</li>
-            <li>{t('removal.keepChecks')}</li>
-          </ul>
-        </section>
-      </div>
-
-      {#if connector.kind === 'proxmox' && connector.credential_management === 'managed'}
-        <p>{t('proxmox.removalHint')}</p>
-        <p>{t('connection.cleanupAt', { endpoint: connector.managed_cleanup_endpoint || connector.endpoint })}</p>
-        <div class="field"><label for="remove-pve-token">{t('proxmox.tokenID')}</label><input id="remove-pve-token" bind:value={tokenID} autocomplete="off" /></div>
-        <div class="field"><label for="remove-pve-secret">{t('proxmox.tokenSecret')}</label><input id="remove-pve-secret" type="password" bind:value={secret} autocomplete="off" /></div>
-      {/if}
-      {#if error}<p class="error" role="alert">{error}</p>{/if}
+      <footer>
+        <span class="faint note">
+          {t('removal.note')}
+        </span>
+        <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
+        <button class="btn danger" type="button" onclick={remove} disabled={busy}>
+          {busy ? 'Suppression…' : 'Supprimer le Connecteur'}
+        </button>
+      </footer>
     </div>
-
-    <footer>
-      <span class="faint note">
-        {t('removal.note')}
-      </span>
-      <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-      <button class="btn danger" type="button" onclick={remove} disabled={busy}>
-        {busy ? 'Suppression…' : 'Supprimer le Connecteur'}
-      </button>
-    </footer>
-  </div>
-</div>
+  {/snippet}
+</Modal>
 
 <style>
   .modal {

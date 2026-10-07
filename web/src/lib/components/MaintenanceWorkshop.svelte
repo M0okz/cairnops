@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import SegmentedControl from './ui/SegmentedControl.svelte';
   import Odometer from './Odometer.svelte';
+  import Modal from './ui/Modal.svelte';
   import { api, type Maintenance, type Target } from '$lib/api';
 
   let {
@@ -25,11 +25,6 @@
   let recurrence = $state<'once' | 'weekly'>('once');
   let recurrenceUntil = $state(toLocalInput(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)).slice(0, 10));
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  let dialog: HTMLDialogElement;
-  onMount(() => {
-    dialog.showModal();
-    return () => dialog.close();
-  });
   let busy = $state(false);
   let error = $state('');
 
@@ -85,112 +80,110 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="modal maintenance-dialog" aria-labelledby="maintenance-title" oncancel={(event) => { event.preventDefault(); if (!busy) onclose(); }}>
-    <header>
-      <div>
-        <h2 id="maintenance-title">{t('workshop.maintenanceTitle')}</h2>
-        <p>{t('workshop.maintenanceLead')}</p>
-      </div>
-      <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
-        <Icon name="close" size={14} />
-      </button>
-    </header>
-
-    <form onsubmit={submit}>
-      <div class="modal-body">
-        <div class="timing">
-          <SegmentedControl value={timing} label={t('workshop.windowKind')}
-            items={[{ value: 'now', label: t('workshop.immediate') }, { value: 'planned', label: t('workshop.scheduled') }]}
-            onValueChange={(value) => (timing = value)} />
+<Modal dismissible={!busy} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal maintenance-dialog" aria-labelledby="maintenance-title">
+      <header>
+        <div>
+          <h2 id="maintenance-title">{t('workshop.maintenanceTitle')}</h2>
+          <p>{t('workshop.maintenanceLead')}</p>
         </div>
+        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+          <Icon name="close" size={14} />
+        </button>
+      </header>
 
-        <div class="field">
-          <label for="mw-name">{t('workshop.interventionName')}</label>
-          <input id="mw-name" bind:value={name} minlength="3" maxlength="160" required
-            placeholder={t('workshop.interventionPlaceholder')} />
-        </div>
+      <form onsubmit={submit}>
+        <div class="modal-body">
+          <div class="timing">
+            <SegmentedControl value={timing} label={t('workshop.windowKind')}
+              items={[{ value: 'now', label: t('workshop.immediate') }, { value: 'planned', label: t('workshop.scheduled') }]}
+              onValueChange={(value) => (timing = value)} />
+          </div>
 
-        <div class="field">
-          <label for="mw-reason">{t('workshop.operationalReason')}</label>
-          <textarea id="mw-reason" bind:value={reason} minlength="8" maxlength="500" required rows="3"
-            placeholder={t('workshop.reasonPlaceholder')}></textarea>
-          <small>{t('workshop.reasonHint')}</small>
-        </div>
+          <div class="field">
+            <label for="mw-name">{t('workshop.interventionName')}</label>
+            <input id="mw-name" bind:value={name} minlength="3" maxlength="160" required
+              placeholder={t('workshop.interventionPlaceholder')} />
+          </div>
 
-        <div class="dates">
-          {#if timing === 'planned'}
+          <div class="field">
+            <label for="mw-reason">{t('workshop.operationalReason')}</label>
+            <textarea id="mw-reason" bind:value={reason} minlength="8" maxlength="500" required rows="3"
+              placeholder={t('workshop.reasonPlaceholder')}></textarea>
+            <small>{t('workshop.reasonHint')}</small>
+          </div>
+
+          <div class="dates">
+            {#if timing === 'planned'}
+              <div class="field">
+                <label for="mw-start">{t('workshop.start')}</label>
+                <input id="mw-start" type="datetime-local" bind:value={startsAt} required />
+              </div>
+            {/if}
             <div class="field">
-              <label for="mw-start">{t('workshop.start')}</label>
-              <input id="mw-start" type="datetime-local" bind:value={startsAt} required />
+              <label for="mw-end">{t('workshop.end')}</label>
+              <input id="mw-end" type="datetime-local" bind:value={endsAt} required />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="mw-recurrence">{t('maintenance.recurrence')}</label>
+            <select id="mw-recurrence" bind:value={recurrence}>
+              <option value="once">{t('maintenance.once')}</option>
+              <option value="weekly">{t('maintenance.weekly')}</option>
+            </select>
+          </div>
+          {#if recurrence === 'weekly'}
+            <div class="field">
+              <label for="mw-until">{t('maintenance.repeatUntil')}</label>
+              <input id="mw-until" type="date" bind:value={recurrenceUntil} required aria-describedby="mw-recurrence-hint" />
+              <small id="mw-recurrence-hint">{t('maintenance.recurrenceHint', { zone: timezone })}</small>
             </div>
           {/if}
-          <div class="field">
-            <label for="mw-end">{t('workshop.end')}</label>
-            <input id="mw-end" type="datetime-local" bind:value={endsAt} required />
-          </div>
+
+          <fieldset class="targets">
+            <legend>
+              {t('workshop.neutralisedTargets')}
+              <span class="faint num"><Odometer value={`${selectedTargets.length} / ${targets.length}`} /></span>
+            </legend>
+            <div class="chips">
+              {#each targets as target (target.id)}
+                <button
+                  class="chip-toggle"
+                  type="button"
+                  aria-pressed={selectedTargets.includes(target.id)}
+                  onclick={() => toggleTarget(target.id)}
+                >
+                  <i class="mark" aria-hidden="true">{selectedTargets.includes(target.id) ? '✓' : '+'}</i>
+                  {target.name}
+                </button>
+              {/each}
+            </div>
+            {#if targets.length === 0}
+              <p class="faint empty-note">{t('workshop.noTargetToNeutralise')}</p>
+            {/if}
+          </fieldset>
+
+          {#if error}<p class="error" role="alert">{error}</p>{/if}
         </div>
 
-        <div class="field">
-          <label for="mw-recurrence">{t('maintenance.recurrence')}</label>
-          <select id="mw-recurrence" bind:value={recurrence}>
-            <option value="once">{t('maintenance.once')}</option>
-            <option value="weekly">{t('maintenance.weekly')}</option>
-          </select>
-        </div>
-        {#if recurrence === 'weekly'}
-          <div class="field">
-            <label for="mw-until">{t('maintenance.repeatUntil')}</label>
-            <input id="mw-until" type="date" bind:value={recurrenceUntil} required aria-describedby="mw-recurrence-hint" />
-            <small id="mw-recurrence-hint">{t('maintenance.recurrenceHint', { zone: timezone })}</small>
-          </div>
-        {/if}
-
-        <fieldset class="targets">
-          <legend>
-            {t('workshop.neutralisedTargets')}
-            <span class="faint num"><Odometer value={`${selectedTargets.length} / ${targets.length}`} /></span>
-          </legend>
-          <div class="chips">
-            {#each targets as target (target.id)}
-              <button
-                class="chip-toggle"
-                type="button"
-                aria-pressed={selectedTargets.includes(target.id)}
-                onclick={() => toggleTarget(target.id)}
-              >
-                <i class="mark" aria-hidden="true">{selectedTargets.includes(target.id) ? '✓' : '+'}</i>
-                {target.name}
-              </button>
-            {/each}
-          </div>
-          {#if targets.length === 0}
-            <p class="faint empty-note">{t('workshop.noTargetToNeutralise')}</p>
-          {/if}
-        </fieldset>
-
-        {#if error}<p class="error" role="alert">{error}</p>{/if}
-      </div>
-
-      <footer>
-        <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-        <button class="btn primary" type="submit" disabled={busy}>
-          {busy ? t('workshop.logging') : recurrence === 'weekly' ? t('maintenance.planSeries') : timing === 'planned' ? t('maintenance.plan') : t('workshop.activateWindow')}
-        </button>
-      </footer>
-    </form>
-</dialog>
+        <footer>
+          <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
+          <button class="btn primary" type="submit" disabled={busy}>
+            {busy ? t('workshop.logging') : recurrence === 'weekly' ? t('maintenance.planSeries') : timing === 'planned' ? t('maintenance.plan') : t('workshop.activateWindow')}
+          </button>
+        </footer>
+      </form>
+    </div>
+  {/snippet}
+</Modal>
 
 <style>
   .maintenance-dialog {
-    margin: auto;
-    padding: 0;
-    width: min(42rem, calc(100vw - 2rem));
-    max-height: calc(100dvh - 2rem);
-    color: var(--ink);
+    max-width: 42rem;
     overscroll-behavior: contain;
   }
-  .maintenance-dialog:not([open]) { display: none; }
-  .maintenance-dialog::backdrop { background: rgb(0 0 0 / 45%); }
 
   .timing {
     width: 100%;

@@ -6,6 +6,7 @@
   import { api, type CreatedSource, type IncidentSeverity, type SourceKind, type Target } from '$lib/api';
   import Checkbox from './ui/Checkbox.svelte';
   import SegmentedControl from './ui/SegmentedControl.svelte';
+  import Modal from './ui/Modal.svelte';
 
   let {
     onclose,
@@ -59,9 +60,6 @@
 
   onMount(() => nameInput?.focus());
 
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && !busy) onclose();
-  }
 
   function sourceConfig(): Record<string, unknown> {
     if (kind === 'http') return { url: address, method: httpMethod, accepted_statuses: [acceptedStatus], ...(contains ? { contains } : {}) };
@@ -113,208 +111,208 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<Modal dismissible={!busy} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal" aria-labelledby="workshop-title">
+      <header>
+        <div>
+          <h2 id="workshop-title">{receipt ? t('workshop.keepSecret') : existingTarget ? t('target.addCheck') : t('workshop.createTarget')}</h2>
+          <p>
+            {receipt
+              ? t('workshop.secretSay')
+              : existingTarget ? t('workshop.addCheckSay', { name: existingTarget.name }) : t('workshop.createSay')}
+          </p>
+        </div>
+        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+          <Icon name="close" size={14} />
+        </button>
+      </header>
 
-<div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && !busy && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="workshop-title">
-    <header>
-      <div>
-        <h2 id="workshop-title">{receipt ? t('workshop.keepSecret') : existingTarget ? t('target.addCheck') : t('workshop.createTarget')}</h2>
-        <p>
-          {receipt
-            ? t('workshop.secretSay')
-            : existingTarget ? t('workshop.addCheckSay', { name: existingTarget.name }) : t('workshop.createSay')}
-        </p>
-      </div>
-      <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
-        <Icon name="close" size={14} />
-      </button>
-    </header>
-
-    {#if receipt?.heartbeat_path}
-      <div class="modal-body">
-        <div class="banner warn">
-          <i class="dot warn"></i>
-          <div>
-            <strong>{t('workshop.heartbeatReady')}</strong>
-            <p class="muted">{t('workshop.heartbeatOnce')}</p>
+      {#if receipt?.heartbeat_path}
+        <div class="modal-body">
+          <div class="banner warn">
+            <i class="dot warn"></i>
+            <div>
+              <strong>{t('workshop.heartbeatReady')}</strong>
+              <p class="muted">{t('workshop.heartbeatOnce')}</p>
+            </div>
+          </div>
+          <div class="credential">
+            <span class="label faint">{t('workshop.heartbeatAddress')}</span>
+            <code>{location.origin}{receipt.heartbeat_path}</code>
+            <button class="btn sm" type="button" onclick={copyHeartbeat}>
+              {copied ? t('workshop.copied') : t('workshop.copy')}
+            </button>
           </div>
         </div>
-        <div class="credential">
-          <span class="label faint">{t('workshop.heartbeatAddress')}</span>
-          <code>{location.origin}{receipt.heartbeat_path}</code>
-          <button class="btn sm" type="button" onclick={copyHeartbeat}>
-            {copied ? t('workshop.copied') : t('workshop.copy')}
-          </button>
-        </div>
-      </div>
-      <footer>
-        <button class="btn primary" type="button" onclick={onclose}>{t('workshop.addressKept')}</button>
-      </footer>
-    {:else}
-      <form onsubmit={submit}>
-        <div class="modal-body">
-          {#if !existingTarget}
+        <footer>
+          <button class="btn primary" type="button" onclick={onclose}>{t('workshop.addressKept')}</button>
+        </footer>
+      {:else}
+        <form onsubmit={submit}>
+          <div class="modal-body">
+            {#if !existingTarget}
+              <section>
+                <h3>{t('targets.column.target')}</h3>
+                <div class="grid">
+                  <div class="field">
+                    <label for="target-name">{t('workshop.targetName')}</label>
+                    <input id="target-name" bind:this={nameInput} bind:value={targetName} required maxlength="160"
+                      placeholder="Nextcloud" disabled={createdTarget !== null} />
+                  </div>
+                  <div class="field"><label for="new-resource-category">{t('resources.category')}</label>
+                    <select id="new-resource-category" bind:value={category} disabled={createdTarget !== null}>
+                      <option value="">{t('resources.category.auto')}</option>
+                      {#each resourceCategories as value}<option {value}>{t(`resources.category.${value}`)}</option>{/each}
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="target-description">{t('workshop.optionalHint')}</label>
+                    <input id="target-description" bind:value={description} maxlength="2000"
+                      placeholder="cloud.homeblack.fr" disabled={createdTarget !== null} />
+                  </div>
+                </div>
+              </section>
+            {/if}
+
             <section>
-              <h3>{t('targets.column.target')}</h3>
+              <h3>{t('workshop.signalSource')}</h3>
+              <div class="kinds">
+                <SegmentedControl value={kind} label={t('workshop.checkKind')}
+                  items={Object.entries(kindLabels).map(([value, label]) => ({ value: value as SourceKind, label }))}
+                  onValueChange={(value) => (kind = value)} />
+              </div>
+
               <div class="grid">
                 <div class="field">
-                  <label for="target-name">{t('workshop.targetName')}</label>
-                  <input id="target-name" bind:this={nameInput} bind:value={targetName} required maxlength="160"
-                    placeholder="Nextcloud" disabled={createdTarget !== null} />
+                  <label for="source-name">{t('workshop.sourceName')}</label>
+                  <input id="source-name" bind:value={sourceName} maxlength="160"
+                    placeholder={`${kindLabels[kind]} principal`} />
                 </div>
-                <div class="field"><label for="new-resource-category">{t('resources.category')}</label>
-                  <select id="new-resource-category" bind:value={category} disabled={createdTarget !== null}>
-                    <option value="">{t('resources.category.auto')}</option>
-                    {#each resourceCategories as value}<option {value}>{t(`resources.category.${value}`)}</option>{/each}
-                  </select>
+
+                {#if kind !== 'heartbeat'}
+                  <div class="field">
+                    <label for="address">
+                      {kind === 'http'
+                        ? t('workshop.absoluteUrl')
+                        : kind === 'tcp'
+                          ? t('workshop.hostAndPort')
+                          : kind === 'dns'
+                            ? t('workshop.nameToResolve')
+                            : t('workshop.hostOrIp')}
+                    </label>
+                    <input id="address" bind:value={address} required
+                      placeholder={kind === 'http' ? 'https://cloud.example.net/status.php' : kind === 'tcp' ? 'mail.example.net:443' : 'example.net'} />
+                  </div>
+                {/if}
+
+                {#if kind === 'http'}
+                  <div class="field">
+                    <label for="method">{t('workshop.method')}</label>
+                    <select id="method" bind:value={httpMethod}><option>GET</option><option>HEAD</option><option>POST</option></select>
+                  </div>
+                  <div class="field">
+                    <label for="status">{t('workshop.expectedStatus')}</label>
+                    <input id="status" type="number" bind:value={acceptedStatus} min="100" max="599" />
+                  </div>
+                  <div class="field wide">
+                    <label for="contains">{t('workshop.expectedText')}</label>
+                    <input id="contains" bind:value={contains} placeholder="status: ok" />
+                  </div>
+                {:else if kind === 'tcp'}
+                  <div class="field wide">
+                    <Checkbox id="tls" bind:checked={tls}>{t('workshop.negotiateTls')}</Checkbox>
+                  </div>
+                  {#if tls}
+                    <div class="field">
+                      <label for="server-name">{t('workshop.tlsName')}</label>
+                      <input id="server-name" bind:value={serverName} placeholder="mail.example.net" />
+                    </div>
+                  {/if}
+                {:else if kind === 'dns'}
+                  <div class="field">
+                    <label for="dns-type">{t('workshop.dnsType')}</label>
+                    <select id="dns-type" bind:value={dnsType}>
+                      <option>A</option><option>AAAA</option><option>CNAME</option>
+                      <option>MX</option><option>TXT</option><option>NS</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="dns-server">{t('workshop.resolver')}</label>
+                    <input id="dns-server" bind:value={dnsServer} placeholder="1.1.1.1:53" />
+                  </div>
+                  <div class="field wide">
+                    <label for="expected">{t('workshop.expectedValues')}</label>
+                    <input id="expected" bind:value={expected} />
+                  </div>
+                {:else if kind === 'icmp'}
+                  <div class="field">
+                    <label for="family">{t('workshop.ipFamily')}</label>
+                    <select id="family" bind:value={family}>
+                      <option value="auto">{t('workshop.automatic')}</option><option value="ipv4">IPv4</option><option value="ipv6">IPv6</option>
+                    </select>
+                  </div>
+                {:else}
+                  <div class="field">
+                    <label for="grace">{t('workshop.graceSeconds')}</label>
+                    <input id="grace" type="number" bind:value={graceSeconds} min="0" max="86400" />
+                  </div>
+                {/if}
+
+                <div class="field">
+                  <label for="interval">{t('workshop.intervalSeconds')}</label>
+                  <input id="interval" type="number" bind:value={intervalSeconds} min="20" max="86400" required />
                 </div>
                 <div class="field">
-                  <label for="target-description">{t('workshop.optionalHint')}</label>
-                  <input id="target-description" bind:value={description} maxlength="2000"
-                    placeholder="cloud.homeblack.fr" disabled={createdTarget !== null} />
+                  <label for="timeout">{t('workshop.timeoutMs')}</label>
+                  <input id="timeout" type="number" bind:value={timeoutMilliseconds} min="100" max="60000" required />
                 </div>
               </div>
             </section>
-          {/if}
 
-          <section>
-            <h3>{t('workshop.signalSource')}</h3>
-            <div class="kinds">
-              <SegmentedControl value={kind} label={t('workshop.checkKind')}
-                items={Object.entries(kindLabels).map(([value, label]) => ({ value: value as SourceKind, label }))}
-                onValueChange={(value) => (kind = value)} />
-            </div>
-
-            <div class="grid">
-              <div class="field">
-                <label for="source-name">{t('workshop.sourceName')}</label>
-                <input id="source-name" bind:value={sourceName} maxlength="160"
-                  placeholder={`${kindLabels[kind]} principal`} />
-              </div>
-
-              {#if kind !== 'heartbeat'}
+            <section>
+              <h3>{t('workshop.triggerPolicy')}</h3>
+              <div class="grid">
                 <div class="field">
-                  <label for="address">
-                    {kind === 'http'
-                      ? t('workshop.absoluteUrl')
-                      : kind === 'tcp'
-                        ? t('workshop.hostAndPort')
-                        : kind === 'dns'
-                          ? t('workshop.nameToResolve')
-                          : t('workshop.hostOrIp')}
-                  </label>
-                  <input id="address" bind:value={address} required
-                    placeholder={kind === 'http' ? 'https://cloud.example.net/status.php' : kind === 'tcp' ? 'mail.example.net:443' : 'example.net'} />
-                </div>
-              {/if}
-
-              {#if kind === 'http'}
-                <div class="field">
-                  <label for="method">{t('workshop.method')}</label>
-                  <select id="method" bind:value={httpMethod}><option>GET</option><option>HEAD</option><option>POST</option></select>
+                  <label for="failure-threshold">{t('workshop.failureThreshold')}</label>
+                  <input id="failure-threshold" type="number" bind:value={failureThreshold} min="1" max="10" required />
                 </div>
                 <div class="field">
-                  <label for="status">{t('workshop.expectedStatus')}</label>
-                  <input id="status" type="number" bind:value={acceptedStatus} min="100" max="599" />
+                  <label for="recovery-threshold">{t('workshop.recoveryThreshold')}</label>
+                  <input id="recovery-threshold" type="number" bind:value={recoveryThreshold} min="1" max="10" required />
                 </div>
-                <div class="field wide">
-                  <label for="contains">{t('workshop.expectedText')}</label>
-                  <input id="contains" bind:value={contains} placeholder="status: ok" />
-                </div>
-              {:else if kind === 'tcp'}
-                <div class="field wide">
-                  <Checkbox id="tls" bind:checked={tls}>{t('workshop.negotiateTls')}</Checkbox>
-                </div>
-                {#if tls}
-                  <div class="field">
-                    <label for="server-name">{t('workshop.tlsName')}</label>
-                    <input id="server-name" bind:value={serverName} placeholder="mail.example.net" />
-                  </div>
-                {/if}
-              {:else if kind === 'dns'}
                 <div class="field">
-                  <label for="dns-type">{t('workshop.dnsType')}</label>
-                  <select id="dns-type" bind:value={dnsType}>
-                    <option>A</option><option>AAAA</option><option>CNAME</option>
-                    <option>MX</option><option>TXT</option><option>NS</option>
+                  <label for="severity">{t('workshop.reportedSeverity')}</label>
+                  <select id="severity" bind:value={severity}>
+                    <option value="information">Information</option>
+                    <option value="warning">Avertissement</option>
+                    <option value="major">Majeur</option>
+                    <option value="critical">Critique</option>
                   </select>
                 </div>
-                <div class="field">
-                  <label for="dns-server">{t('workshop.resolver')}</label>
-                  <input id="dns-server" bind:value={dnsServer} placeholder="1.1.1.1:53" />
-                </div>
-                <div class="field wide">
-                  <label for="expected">{t('workshop.expectedValues')}</label>
-                  <input id="expected" bind:value={expected} />
-                </div>
-              {:else if kind === 'icmp'}
-                <div class="field">
-                  <label for="family">{t('workshop.ipFamily')}</label>
-                  <select id="family" bind:value={family}>
-                    <option value="auto">{t('workshop.automatic')}</option><option value="ipv4">IPv4</option><option value="ipv6">IPv6</option>
-                  </select>
-                </div>
-              {:else}
-                <div class="field">
-                  <label for="grace">{t('workshop.graceSeconds')}</label>
-                  <input id="grace" type="number" bind:value={graceSeconds} min="0" max="86400" />
-                </div>
-              {/if}
+              </div>
+              <p class="faint note">{t('workshop.unknownConcludes')}</p>
+            </section>
 
-              <div class="field">
-                <label for="interval">{t('workshop.intervalSeconds')}</label>
-                <input id="interval" type="number" bind:value={intervalSeconds} min="20" max="86400" required />
-              </div>
-              <div class="field">
-                <label for="timeout">{t('workshop.timeoutMs')}</label>
-                <input id="timeout" type="number" bind:value={timeoutMilliseconds} min="100" max="60000" required />
-              </div>
-            </div>
-          </section>
+            {#if error}<p class="error" role="alert">{error}</p>{/if}
+          </div>
 
-          <section>
-            <h3>{t('workshop.triggerPolicy')}</h3>
-            <div class="grid">
-              <div class="field">
-                <label for="failure-threshold">{t('workshop.failureThreshold')}</label>
-                <input id="failure-threshold" type="number" bind:value={failureThreshold} min="1" max="10" required />
-              </div>
-              <div class="field">
-                <label for="recovery-threshold">{t('workshop.recoveryThreshold')}</label>
-                <input id="recovery-threshold" type="number" bind:value={recoveryThreshold} min="1" max="10" required />
-              </div>
-              <div class="field">
-                <label for="severity">{t('workshop.reportedSeverity')}</label>
-                <select id="severity" bind:value={severity}>
-                  <option value="information">Information</option>
-                  <option value="warning">Avertissement</option>
-                  <option value="major">Majeur</option>
-                  <option value="critical">Critique</option>
-                </select>
-              </div>
-            </div>
-            <p class="faint note">{t('workshop.unknownConcludes')}</p>
-          </section>
-
-          {#if error}<p class="error" role="alert">{error}</p>{/if}
-        </div>
-
-        <footer>
-          <span class="faint note">{t('workshop.runFromInstance')}</span>
-          <button class="btn" type="button" onclick={onclose} disabled={busy}>Annuler</button>
-          <button class="btn primary" type="submit" disabled={busy}>
-            {busy
-              ? t('workshop.creating')
-              : createdTarget
-                ? t('workshop.retrySource')
-                : t('workshop.startSupervising')}
-          </button>
-        </footer>
-      </form>
-    {/if}
-  </div>
-</div>
+          <footer>
+            <span class="faint note">{t('workshop.runFromInstance')}</span>
+            <button class="btn" type="button" onclick={onclose} disabled={busy}>Annuler</button>
+            <button class="btn primary" type="submit" disabled={busy}>
+              {busy
+                ? t('workshop.creating')
+                : createdTarget
+                  ? t('workshop.retrySource')
+                  : t('workshop.startSupervising')}
+            </button>
+          </footer>
+        </form>
+      {/if}
+    </div>
+  {/snippet}
+</Modal>
 
 <style>
   .modal {

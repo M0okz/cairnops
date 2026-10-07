@@ -76,6 +76,7 @@
   --r-overview: var(--r-l);
   --incident-drawer-width: 52rem;
   --drawer-backdrop: rgb(0 0 0 / 0.3);
+  --scrim: rgb(0 0 0 / 0.55);
 
   /* Sémantique — réservée à l'État de santé et à la Gravité. */
   --ok: #53be70;
@@ -1101,8 +1102,17 @@ a.trow:hover .caret {
   display: grid;
   place-items: safe center;
   padding: var(--s5);
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrim);
   overflow-y: auto;
+}
+
+/* Les volets s'ancrent à droite sur toute la hauteur, derrière un voile plus
+ * léger : la liste d'origine doit rester lisible. */
+.scrim.side {
+  place-items: stretch end;
+  padding: 0;
+  background: var(--drawer-backdrop);
+  overflow: hidden;
 }
 
 /* La modale ne dépasse jamais l'écran : au-delà, c'est son corps qui défile,

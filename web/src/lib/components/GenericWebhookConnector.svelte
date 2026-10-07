@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
+  import Modal from './ui/Modal.svelte';
   import { onMount } from 'svelte';
   import { api, type GenericWebhookCreated } from '$lib/api';
 
@@ -21,9 +22,6 @@
 
   onMount(() => nameInput?.focus());
 
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && !busy) onclose();
-  }
 
   async function create(event: SubmitEvent) {
     event.preventDefault();
@@ -73,99 +71,99 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
-
-<div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && !busy && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="webhook-connector-title">
-    <header>
-      <span class="key"><Icon name="webhook" size={16} /></span>
-      <div>
-        <h2 id="webhook-connector-title">
-          {created ? t('webhook.airlockOpen') : t('webhook.createEntry')}
-        </h2>
-        <p>
-          {created
-            ? t('webhook.copySecretSay')
-            : t('webhook.createSay')}
-        </p>
-      </div>
-      <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
-        <Icon name="close" size={14} />
-      </button>
-    </header>
-
-    {#if created}
-      <div class="modal-body">
-        <div class="banner warn">
-          <i class="dot warn"></i>
-          <div>
-            <strong>Copiez le secret maintenant.</strong>
-            <p class="muted">{t('webhook.secretOnce')}</p>
-          </div>
-        </div>
-
-        <div class="credential">
-          <span class="label faint">{t('webhook.endpointLabel')}</span>
-          <code>{created.endpoint}</code>
-          <button class="btn sm" type="button" onclick={() => copyCredential('endpoint')}>
-            {copied === 'endpoint' ? t('webhook.copied') : t('workshop.copy')}
-          </button>
-        </div>
-
-        <div class="credential secret">
-          <span class="label faint">Jeton Bearer — affichage unique</span>
-          <code>{created.token}</code>
-          <button class="btn sm" type="button" onclick={() => copyCredential('token')}>
-            {copied === 'token' ? t('webhook.copied') : t('workshop.copy')}
-          </button>
-        </div>
-
-        <div class="contract">
-          <strong>{t('webhook.contract')}</strong>
-          <p class="muted">
-            {t('webhook.contractBefore')} <code class="inline">Authorization: Bearer …</code>.
-            {t('webhook.contractMiddle')} <code class="inline">event_key</code>
-            {t('webhook.contractAfter')}
+<Modal dismissible={!busy} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal" aria-labelledby="webhook-connector-title">
+      <header>
+        <span class="key"><Icon name="webhook" size={16} /></span>
+        <div>
+          <h2 id="webhook-connector-title">
+            {created ? t('webhook.airlockOpen') : t('webhook.createEntry')}
+          </h2>
+          <p>
+            {created
+              ? t('webhook.copySecretSay')
+              : t('webhook.createSay')}
           </p>
-          <pre>{payloadExample()}</pre>
         </div>
+        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
+          <Icon name="close" size={14} />
+        </button>
+      </header>
 
-        {#if error}<p class="error" role="alert">{error}</p>{/if}
-      </div>
-
-      <footer>
-        <span class="faint note">Aucun signal inconnu ne devient un Incident sans votre autorisation.</span>
-        <button class="btn primary" type="button" onclick={onclose}>{t('webhook.secretKept')}</button>
-      </footer>
-    {:else}
-      <form onsubmit={create}>
+      {#if created}
         <div class="modal-body">
-          <div class="field">
-            <label for="webhook-name">Nom du raccordement</label>
-            <input id="webhook-name" bind:this={nameInput} bind:value={name} maxlength="160" required
-              placeholder="Automations production" />
+          <div class="banner warn">
+            <i class="dot warn"></i>
+            <div>
+              <strong>Copiez le secret maintenant.</strong>
+              <p class="muted">{t('webhook.secretOnce')}</p>
+            </div>
           </div>
 
-          <ol class="steps">
-            <li><strong>{t('webhook.point1')}</strong><small class="faint">{t('webhook.point1Note')}</small></li>
-            <li><strong>{t('webhook.point2')}</strong><small class="faint">{t('webhook.point2Note')}</small></li>
-            <li><strong>{t('webhook.point3')}</strong><small class="faint">{t('webhook.point3Note')}</small></li>
-            <li><strong>{t('webhook.point4')}</strong><small class="faint">{t('webhook.point4Note')}</small></li>
-          </ol>
+          <div class="credential">
+            <span class="label faint">{t('webhook.endpointLabel')}</span>
+            <code>{created.endpoint}</code>
+            <button class="btn sm" type="button" onclick={() => copyCredential('endpoint')}>
+              {copied === 'endpoint' ? t('webhook.copied') : t('workshop.copy')}
+            </button>
+          </div>
+
+          <div class="credential secret">
+            <span class="label faint">Jeton Bearer — affichage unique</span>
+            <code>{created.token}</code>
+            <button class="btn sm" type="button" onclick={() => copyCredential('token')}>
+              {copied === 'token' ? t('webhook.copied') : t('workshop.copy')}
+            </button>
+          </div>
+
+          <div class="contract">
+            <strong>{t('webhook.contract')}</strong>
+            <p class="muted">
+              {t('webhook.contractBefore')} <code class="inline">Authorization: Bearer …</code>.
+              {t('webhook.contractMiddle')} <code class="inline">event_key</code>
+              {t('webhook.contractAfter')}
+            </p>
+            <pre>{payloadExample()}</pre>
+          </div>
 
           {#if error}<p class="error" role="alert">{error}</p>{/if}
         </div>
 
         <footer>
-          <button class="btn" type="button" onclick={onclose} disabled={busy}>Annuler</button>
-          <button class="btn primary" type="submit" disabled={busy}>
-            {busy ? t('webhook.generating') : t('webhook.createEntry')}
-          </button>
+          <span class="faint note">Aucun signal inconnu ne devient un Incident sans votre autorisation.</span>
+          <button class="btn primary" type="button" onclick={onclose}>{t('webhook.secretKept')}</button>
         </footer>
-      </form>
-    {/if}
-  </div>
-</div>
+      {:else}
+        <form onsubmit={create}>
+          <div class="modal-body">
+            <div class="field">
+              <label for="webhook-name">Nom du raccordement</label>
+              <input id="webhook-name" bind:this={nameInput} bind:value={name} maxlength="160" required
+                placeholder="Automations production" />
+            </div>
+
+            <ol class="steps">
+              <li><strong>{t('webhook.point1')}</strong><small class="faint">{t('webhook.point1Note')}</small></li>
+              <li><strong>{t('webhook.point2')}</strong><small class="faint">{t('webhook.point2Note')}</small></li>
+              <li><strong>{t('webhook.point3')}</strong><small class="faint">{t('webhook.point3Note')}</small></li>
+              <li><strong>{t('webhook.point4')}</strong><small class="faint">{t('webhook.point4Note')}</small></li>
+            </ol>
+
+            {#if error}<p class="error" role="alert">{error}</p>{/if}
+          </div>
+
+          <footer>
+            <button class="btn" type="button" onclick={onclose} disabled={busy}>Annuler</button>
+            <button class="btn primary" type="submit" disabled={busy}>
+              {busy ? t('webhook.generating') : t('webhook.createEntry')}
+            </button>
+          </footer>
+        </form>
+      {/if}
+    </div>
+  {/snippet}
+</Modal>
 
 <style>
   .modal {

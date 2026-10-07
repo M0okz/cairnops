@@ -9,6 +9,7 @@
   import { api, type ConnectorImportResult, type ZabbixPreview, type UptimeKumaPreview } from '$lib/api';
   import { clock } from '$lib/format';
   import { plural, t, type MessageKey } from '$lib/i18n.svelte';
+  import Modal from './ui/Modal.svelte';
   import {
     prepareTargetAssignments,
     reconciliationCounts,
@@ -106,9 +107,6 @@
     } finally { busy = false; }
   }
 
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && !busy) onclose();
-  }
 
   function stage() {
     if (imported) return 3;
@@ -202,235 +200,235 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
-
-<div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && !busy && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="connector-title">
-    <header>
-      <div>
-        <h2 id="connector-title">
-          {imported ? t('wizard.linked') : preview ? t('wizard.chooseWhatEnters') : productText('connect')}
-        </h2>
-        <p>{productText('lead')}</p>
-      </div>
-      <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
-        <Icon name="close" size={14} />
-      </button>
-    </header>
-
-    <ol class="stepper">
-      <li class:done={stage() > 1} class:on={stage() === 1}>
-        <i class="mark">{stage() > 1 ? '✓' : '1'}</i>
-        <span class="label">
-          <strong>{t('wizard.address')}</strong>
-          <small class="faint">{stage() > 1 ? t('wizard.serverVerified') : t('wizard.entryPoint')}</small>
-        </span>
-      </li>
-      <li class:done={stage() > 1} class:on={stage() === 1}>
-        <i class="mark">{stage() > 1 ? '✓' : '2'}</i>
-        <span class="label">
-          <strong>{t('wizard.authorisation')}</strong>
-          <small class="faint">{stage() > 1 ? t('wizard.readAccess') : productText(kind === 'zabbix' ? 'apiToken' : 'apiKey')}</small>
-        </span>
-      </li>
-      <li class:done={stage() > 2} class:on={stage() === 2}>
-        <i class="mark">{stage() > 2 ? '✓' : '3'}</i>
-        <span class="label">
-          <strong>{t('wizard.preview')}</strong>
-          <small class="faint">{t('wizard.explicitImport')}</small>
-        </span>
-      </li>
-    </ol>
-
-    {#if imported}
-      <div class="modal-body">
-        <div class="banner ok">
-          <i class="dot ok"></i>
-          <div>
-            <strong>
-              {plural('wizard.linkedTargets', imported.targets.length)}
-            </strong>
-            <p class="muted">
-              {productText(kind === 'zabbix' ? 'tokenSealed' : 'keySealed')}
-            </p>
-          </div>
+<Modal dismissible={!busy} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal" aria-labelledby="connector-title">
+      <header>
+        <div>
+          <h2 id="connector-title">
+            {imported ? t('wizard.linked') : preview ? t('wizard.chooseWhatEnters') : productText('connect')}
+          </h2>
+          <p>{productText('lead')}</p>
         </div>
-
-        <div class="figures tally">
-          <div class="fig">
-            <b>{imported.targets.filter((target) => target.disposition === 'created').length}</b>
-            <span>{t('wizard.created')}</span>
-          </div>
-          <div class="fig">
-            <b>{imported.targets.filter((target) => target.disposition === 'reused').length}</b>
-            <span>{t('wizard.reused')}</span>
-          </div>
-          <div class="fig">
-            <b>{imported.targets.filter((target) => target.disposition === 'already_imported').length}</b>
-            <span>{t('wizard.alreadyLinked')}</span>
-          </div>
-        </div>
-      </div>
-      <footer>
-        <button class="btn primary" type="button" onclick={onclose}>Revenir aux Cibles</button>
-      </footer>
-    {:else if preview}
-      <div class="modal-body">
-        <div class="checks">
-          <div class="check">
-            <span class="faint">Version du serveur</span>
-            <strong>{kind === 'zabbix' ? `Zabbix ${preview.version}` : 'Uptime Kuma'}</strong>
-            <small class={preview.compatibility === 'supported' ? 'ok' : 'warn'}>{preview.compatibility_label}</small>
-          </div>
-          <div class="check">
-            <span class="faint">Transport</span>
-            <strong>{preview.encrypted_transport ? t('mattermost.tlsVerified') : t('wizard.plainHttp')}</strong>
-            <small class={preview.encrypted_transport ? 'ok' : 'warn'}>
-              {preview.encrypted_transport ? t('wizard.certificateValid') : t('wizard.trustedNetworkOnly')}
-            </small>
-          </div>
-          <div class="check">
-            <span class="faint">{t('wizard.scope')}</span>
-            <strong>{productPlural(kind === 'zabbix' ? 'hostsVisible' : 'monitorsVisible', preview.items.length)}</strong>
-            <small class="faint">{t('wizard.readOnlyPreview')}</small>
-          </div>
-          <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
-        </div>
-
-        <ConnectorAccessPlan access={preview.access} product={kind} />
-        <ReconciliationSummary counts={reconciliation} />
-        <ConnectorDiscoveryNotice />
-
-        <div class="listbar">
-          <div class="field search">
-            <label class="sr-only" for="item-filter">{kind === 'zabbix' ? productText('filterHosts') : 'Filtrer les moniteurs'}</label>
-            <input id="item-filter" bind:value={query} placeholder="Filtrer par nom ou adresse" />
-          </div>
-          <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleImportableItems().length === 0}>
-            {visibleImportableItems().length === 0
-              ? t('wizard.nothingToSelect')
-              : visibleImportableItems().every((item) => selected.includes(item.external_id))
-                ? 'Tout retirer'
-                : t('wizard.selectAll')}
-          </button>
-          <span class="faint num">
-            {selected.length} / {importableItems().length} importables ·
-            {t('wizard.validUntil', { time: clock(preview.expires_at) })}
-          </span>
-        </div>
-
-        <ul class="rack">
-          {#each filteredItems() as item (item.external_id)}
-            {@const locked = Boolean(item.already_imported_to)}
-            <li class:picked={selected.includes(item.external_id)} class:locked>
-              <Checkbox variant="row" checked={selected.includes(item.external_id)}
-                onCheckedChange={() => toggleItem(item.external_id)} disabled={locked}>
-                <span class="rack-name">
-                  <strong>{item.name}</strong>
-                  <small class="faint mono">{item.subtitle}</small>
-                </span>
-              </Checkbox>
-              <div class="rack-decision">
-                {#if locked}
-                  <span class="pill">{t('wizard.alreadyBound')}</span>
-                  <small class="faint">{item.already_imported_to?.name}</small>
-                {:else}
-                  <TargetDecision
-                    name={item.name}
-                    value={targetAssignments[item.external_id] ?? ''}
-                    candidates={item.candidate_targets}
-                    availableTargets={preview.available_targets}
-                    disabled={!selected.includes(item.external_id)}
-                    onselect={(targetID) => assignTarget(item.external_id, targetID)}
-                  />
-                {/if}
-              </div>
-            </li>
-          {:else}
-            <li class="none faint">{productText(kind === 'zabbix' ? 'noHostMatches' : 'noMonitorMatches')}</li>
-          {/each}
-        </ul>
-
-        {#if error}<p class="error" role="alert">{error}</p>{/if}
-      </div>
-
-      <footer>
-        <span class="faint note">{t('wizard.matchesNote')}</span>
-        <button class="btn primary" type="button" onclick={importItems} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
-          {busy
-            ? t('wizard.importing')
-            : selected.length === 0
-              ? productText(kind === 'zabbix' ? 'noHostChosen' : 'noMonitorChosen')
-              : reconciliation.review > 0
-                ? plural('wizard.confirmChoices', reconciliation.review)
-                : productPlural(kind === 'zabbix' ? 'importHosts' : 'importMonitors', selected.length)}
+        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label="Fermer">
+          <Icon name="close" size={14} />
         </button>
-      </footer>
-    {:else}
-      <form onsubmit={inspect}>
+      </header>
+
+      <ol class="stepper">
+        <li class:done={stage() > 1} class:on={stage() === 1}>
+          <i class="mark">{stage() > 1 ? '✓' : '1'}</i>
+          <span class="label">
+            <strong>{t('wizard.address')}</strong>
+            <small class="faint">{stage() > 1 ? t('wizard.serverVerified') : t('wizard.entryPoint')}</small>
+          </span>
+        </li>
+        <li class:done={stage() > 1} class:on={stage() === 1}>
+          <i class="mark">{stage() > 1 ? '✓' : '2'}</i>
+          <span class="label">
+            <strong>{t('wizard.authorisation')}</strong>
+            <small class="faint">{stage() > 1 ? t('wizard.readAccess') : productText(kind === 'zabbix' ? 'apiToken' : 'apiKey')}</small>
+          </span>
+        </li>
+        <li class:done={stage() > 2} class:on={stage() === 2}>
+          <i class="mark">{stage() > 2 ? '✓' : '3'}</i>
+          <span class="label">
+            <strong>{t('wizard.preview')}</strong>
+            <small class="faint">{t('wizard.explicitImport')}</small>
+          </span>
+        </li>
+      </ol>
+
+      {#if imported}
         <div class="modal-body">
-          <section>
-            <h3>{t('wizard.connection')}</h3>
-            <p class="faint lead">{productText('addressHint')}</p>
-            <div class="grid">
-              <div class="field">
-                <label for="connector-name">{t('wizard.nameInCairnOps')}</label>
-                <input id="connector-name" bind:value={name} required maxlength="160" placeholder={kind === 'zabbix' ? 'Zabbix production' : 'Uptime Kuma'} />
-              </div>
-              <div class="field">
-                <label for="connector-address">{productText(kind === 'zabbix' ? 'frontendAddress' : 'instanceAddress')}</label>
-                <input id="connector-address" bind:this={addressInput} bind:value={address} required
-                  inputmode="url" placeholder={kind === 'zabbix' ? 'https://zabbix.example.net' : 'https://kuma.example.net'} />
-              </div>
+          <div class="banner ok">
+            <i class="dot ok"></i>
+            <div>
+              <strong>
+                {plural('wizard.linkedTargets', imported.targets.length)}
+              </strong>
+              <p class="muted">
+                {productText(kind === 'zabbix' ? 'tokenSealed' : 'keySealed')}
+              </p>
             </div>
-          </section>
+          </div>
 
-          <section>
-            <h3>{t('wizard.authorisation')}</h3>
-            <p class="faint lead">{productText('setupHint')}</p>
-            {#if manualAccess}
-              <div class="field">
-                <label for="connector-token">{productText(kind === 'zabbix' ? 'apiToken' : 'apiKey')}</label>
-                <input id="connector-token" type="password" bind:value={accessToken} required maxlength="4096"
-                  autocomplete="off" spellcheck="false" placeholder="••••••••••••••••••••••••" />
-                {#if kind === 'zabbix'}<small>{productText('tokenSmall')}</small>{/if}
-              </div>
-            {:else}
-              <div class="grid">
-                <div class="field"><label for="connector-user">{t('wizard.installerAccount')}</label><input id="connector-user" bind:value={username} required maxlength="4096" autocomplete="username" /></div>
-                <div class="field"><label for="connector-password">{t('wizard.temporaryPassword')}</label><input id="connector-password" type="password" bind:value={password} required maxlength="4096" autocomplete="current-password" /></div>
-                {#if kind === 'uptime_kuma'}<div class="field"><label for="connector-2fa">{t('wizard.secondFactor')}</label><input id="connector-2fa" bind:value={secondFactor} maxlength="32" inputmode="numeric" autocomplete="one-time-code" /></div>{/if}
-              </div>
-            {/if}
-            <button class="mode" type="button" onclick={() => manualAccess = !manualAccess}>
-              {productText(manualAccess ? 'useManagedAccess' : kind === 'zabbix' ? 'useExistingToken' : 'useExistingKey')}
+          <div class="figures tally">
+            <div class="fig">
+              <b>{imported.targets.filter((target) => target.disposition === 'created').length}</b>
+              <span>{t('wizard.created')}</span>
+            </div>
+            <div class="fig">
+              <b>{imported.targets.filter((target) => target.disposition === 'reused').length}</b>
+              <span>{t('wizard.reused')}</span>
+            </div>
+            <div class="fig">
+              <b>{imported.targets.filter((target) => target.disposition === 'already_imported').length}</b>
+              <span>{t('wizard.alreadyLinked')}</span>
+            </div>
+          </div>
+        </div>
+        <footer>
+          <button class="btn primary" type="button" onclick={onclose}>Revenir aux Cibles</button>
+        </footer>
+      {:else if preview}
+        <div class="modal-body">
+          <div class="checks">
+            <div class="check">
+              <span class="faint">Version du serveur</span>
+              <strong>{kind === 'zabbix' ? `Zabbix ${preview.version}` : 'Uptime Kuma'}</strong>
+              <small class={preview.compatibility === 'supported' ? 'ok' : 'warn'}>{preview.compatibility_label}</small>
+            </div>
+            <div class="check">
+              <span class="faint">Transport</span>
+              <strong>{preview.encrypted_transport ? t('mattermost.tlsVerified') : t('wizard.plainHttp')}</strong>
+              <small class={preview.encrypted_transport ? 'ok' : 'warn'}>
+                {preview.encrypted_transport ? t('wizard.certificateValid') : t('wizard.trustedNetworkOnly')}
+              </small>
+            </div>
+            <div class="check">
+              <span class="faint">{t('wizard.scope')}</span>
+              <strong>{productPlural(kind === 'zabbix' ? 'hostsVisible' : 'monitorsVisible', preview.items.length)}</strong>
+              <small class="faint">{t('wizard.readOnlyPreview')}</small>
+            </div>
+            <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
+          </div>
+
+          <ConnectorAccessPlan access={preview.access} product={kind} />
+          <ReconciliationSummary counts={reconciliation} />
+          <ConnectorDiscoveryNotice />
+
+          <div class="listbar">
+            <div class="field search">
+              <label class="sr-only" for="item-filter">{kind === 'zabbix' ? productText('filterHosts') : 'Filtrer les moniteurs'}</label>
+              <input id="item-filter" bind:value={query} placeholder="Filtrer par nom ou adresse" />
+            </div>
+            <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleImportableItems().length === 0}>
+              {visibleImportableItems().length === 0
+                ? t('wizard.nothingToSelect')
+                : visibleImportableItems().every((item) => selected.includes(item.external_id))
+                  ? 'Tout retirer'
+                  : t('wizard.selectAll')}
             </button>
-          </section>
+            <span class="faint num">
+              {selected.length} / {importableItems().length} importables ·
+              {t('wizard.validUntil', { time: clock(preview.expires_at) })}
+            </span>
+          </div>
 
-          <section class="last">
-            <h3>{t('wizard.checksTitle')}</h3>
-            <ol class="steps">
-              <li><strong>{t('wizard.tlsIdentity')}</strong><small class="faint">{t('wizard.tlsIdentityNote')}</small></li>
-              <li><strong>{kind === 'zabbix' ? t('wizard.apiCompatibility') : productText('metricsEndpoint')}</strong><small class="faint">{kind === 'zabbix' ? t('wizard.apiCompatibilityNote') : productText('metricsEndpointNote')}</small></li>
-              <li><strong>{kind === 'zabbix' ? t('wizard.tokenScope') : productText('keyScope')}</strong><small class="faint">{kind === 'zabbix' ? t('wizard.tokenScopeNote') : productText('keyScopeNote')}</small></li>
-              <li><strong>{t('wizard.exactDuplicates')}</strong><small class="faint">{t('wizard.exactDuplicatesNote')}</small></li>
-            </ol>
-          </section>
+          <ul class="rack">
+            {#each filteredItems() as item (item.external_id)}
+              {@const locked = Boolean(item.already_imported_to)}
+              <li class:picked={selected.includes(item.external_id)} class:locked>
+                <Checkbox variant="row" checked={selected.includes(item.external_id)}
+                  onCheckedChange={() => toggleItem(item.external_id)} disabled={locked}>
+                  <span class="rack-name">
+                    <strong>{item.name}</strong>
+                    <small class="faint mono">{item.subtitle}</small>
+                  </span>
+                </Checkbox>
+                <div class="rack-decision">
+                  {#if locked}
+                    <span class="pill">{t('wizard.alreadyBound')}</span>
+                    <small class="faint">{item.already_imported_to?.name}</small>
+                  {:else}
+                    <TargetDecision
+                      name={item.name}
+                      value={targetAssignments[item.external_id] ?? ''}
+                      candidates={item.candidate_targets}
+                      availableTargets={preview.available_targets}
+                      disabled={!selected.includes(item.external_id)}
+                      onselect={(targetID) => assignTarget(item.external_id, targetID)}
+                    />
+                  {/if}
+                </div>
+              </li>
+            {:else}
+              <li class="none faint">{productText(kind === 'zabbix' ? 'noHostMatches' : 'noMonitorMatches')}</li>
+            {/each}
+          </ul>
 
           {#if error}<p class="error" role="alert">{error}</p>{/if}
         </div>
 
         <footer>
-          <span class="faint note">{productText('noChangeNote')}</span>
-          <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-          <button class="btn primary" type="submit" disabled={busy}>
-            {busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}
+          <span class="faint note">{t('wizard.matchesNote')}</span>
+          <button class="btn primary" type="button" onclick={importItems} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
+            {busy
+              ? t('wizard.importing')
+              : selected.length === 0
+                ? productText(kind === 'zabbix' ? 'noHostChosen' : 'noMonitorChosen')
+                : reconciliation.review > 0
+                  ? plural('wizard.confirmChoices', reconciliation.review)
+                  : productPlural(kind === 'zabbix' ? 'importHosts' : 'importMonitors', selected.length)}
           </button>
         </footer>
-      </form>
-    {/if}
-  </div>
-</div>
+      {:else}
+        <form onsubmit={inspect}>
+          <div class="modal-body">
+            <section>
+              <h3>{t('wizard.connection')}</h3>
+              <p class="faint lead">{productText('addressHint')}</p>
+              <div class="grid">
+                <div class="field">
+                  <label for="connector-name">{t('wizard.nameInCairnOps')}</label>
+                  <input id="connector-name" bind:value={name} required maxlength="160" placeholder={kind === 'zabbix' ? 'Zabbix production' : 'Uptime Kuma'} />
+                </div>
+                <div class="field">
+                  <label for="connector-address">{productText(kind === 'zabbix' ? 'frontendAddress' : 'instanceAddress')}</label>
+                  <input id="connector-address" bind:this={addressInput} bind:value={address} required
+                    inputmode="url" placeholder={kind === 'zabbix' ? 'https://zabbix.example.net' : 'https://kuma.example.net'} />
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h3>{t('wizard.authorisation')}</h3>
+              <p class="faint lead">{productText('setupHint')}</p>
+              {#if manualAccess}
+                <div class="field">
+                  <label for="connector-token">{productText(kind === 'zabbix' ? 'apiToken' : 'apiKey')}</label>
+                  <input id="connector-token" type="password" bind:value={accessToken} required maxlength="4096"
+                    autocomplete="off" spellcheck="false" placeholder="••••••••••••••••••••••••" />
+                  {#if kind === 'zabbix'}<small>{productText('tokenSmall')}</small>{/if}
+                </div>
+              {:else}
+                <div class="grid">
+                  <div class="field"><label for="connector-user">{t('wizard.installerAccount')}</label><input id="connector-user" bind:value={username} required maxlength="4096" autocomplete="username" /></div>
+                  <div class="field"><label for="connector-password">{t('wizard.temporaryPassword')}</label><input id="connector-password" type="password" bind:value={password} required maxlength="4096" autocomplete="current-password" /></div>
+                  {#if kind === 'uptime_kuma'}<div class="field"><label for="connector-2fa">{t('wizard.secondFactor')}</label><input id="connector-2fa" bind:value={secondFactor} maxlength="32" inputmode="numeric" autocomplete="one-time-code" /></div>{/if}
+                </div>
+              {/if}
+              <button class="mode" type="button" onclick={() => manualAccess = !manualAccess}>
+                {productText(manualAccess ? 'useManagedAccess' : kind === 'zabbix' ? 'useExistingToken' : 'useExistingKey')}
+              </button>
+            </section>
+
+            <section class="last">
+              <h3>{t('wizard.checksTitle')}</h3>
+              <ol class="steps">
+                <li><strong>{t('wizard.tlsIdentity')}</strong><small class="faint">{t('wizard.tlsIdentityNote')}</small></li>
+                <li><strong>{kind === 'zabbix' ? t('wizard.apiCompatibility') : productText('metricsEndpoint')}</strong><small class="faint">{kind === 'zabbix' ? t('wizard.apiCompatibilityNote') : productText('metricsEndpointNote')}</small></li>
+                <li><strong>{kind === 'zabbix' ? t('wizard.tokenScope') : productText('keyScope')}</strong><small class="faint">{kind === 'zabbix' ? t('wizard.tokenScopeNote') : productText('keyScopeNote')}</small></li>
+                <li><strong>{t('wizard.exactDuplicates')}</strong><small class="faint">{t('wizard.exactDuplicatesNote')}</small></li>
+              </ol>
+            </section>
+
+            {#if error}<p class="error" role="alert">{error}</p>{/if}
+          </div>
+
+          <footer>
+            <span class="faint note">{productText('noChangeNote')}</span>
+            <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
+            <button class="btn primary" type="submit" disabled={busy}>
+              {busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}
+            </button>
+          </footer>
+        </form>
+      {/if}
+    </div>
+  {/snippet}
+</Modal>
 
 <style>
   .modal {

@@ -1,51 +1,39 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { t } from "$lib/i18n.svelte";
   import { serviceTitle, type SoftwareService } from "$lib/software-updates";
   import Icon from "./Icon.svelte";
+  import Modal from "./ui/Modal.svelte";
   import SoftwareServiceDetail from "./SoftwareServiceDetail.svelte";
 
   let { service, onclose }: { service: SoftwareService; onclose: () => void } = $props();
-  let dialog: HTMLDialogElement;
-  let closeButton: HTMLButtonElement;
-
-  onMount(() => {
-    dialog.showModal();
-    closeButton.focus();
-    return () => {
-      if (dialog.open) dialog.close();
-    };
-  });
 </script>
 
-<dialog
-  bind:this={dialog}
-  class="software-drawer"
-  aria-labelledby="software-drawer-title"
-  oncancel={(event) => { event.preventDefault(); onclose(); }}
-  onclick={(event) => event.currentTarget === event.target && onclose()}
->
-  <header class="drawer-head">
-    <div class="title-copy">
-      <span class="eyebrow">{t("updates.title")}</span>
-      <h2 id="software-drawer-title">{serviceTitle(service)}</h2>
-      {#if service.resource_name && service.resource_name !== service.name}
-        <p>{service.resource_name}</p>
-      {/if}
-      <p class="version-pair mono">
-        <span class="visually-hidden">{t("updates.installed")}</span>{service.installed_version || "—"}
-        <span aria-hidden="true">→</span>
-        <span class="visually-hidden">{t("updates.target")}</span>{service.target_version || "—"}
-      </p>
+<Modal side {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="software-drawer" aria-labelledby="software-drawer-title">
+      <header class="drawer-head">
+        <div class="title-copy">
+          <span class="eyebrow">{t("updates.title")}</span>
+          <h2 id="software-drawer-title">{serviceTitle(service)}</h2>
+          {#if service.resource_name && service.resource_name !== service.name}
+            <p>{service.resource_name}</p>
+          {/if}
+          <p class="version-pair mono">
+            <span class="visually-hidden">{t("updates.installed")}</span>{service.installed_version || "—"}
+            <span aria-hidden="true">→</span>
+            <span class="visually-hidden">{t("updates.target")}</span>{service.target_version || "—"}
+          </p>
+        </div>
+        <button class="close" type="button" aria-label={t("updates.close")} onclick={onclose}>
+          <Icon name="close" size={16} />
+        </button>
+      </header>
+      <div class="drawer-body">
+        <SoftwareServiceDetail id={service.id} />
+      </div>
     </div>
-    <button bind:this={closeButton} class="close" type="button" aria-label={t("updates.close")} onclick={onclose}>
-      <Icon name="close" size={16} />
-    </button>
-  </header>
-  <div class="drawer-body">
-    <SoftwareServiceDetail id={service.id} />
-  </div>
-</dialog>
+  {/snippet}
+</Modal>
 
 <style>
   .software-drawer {
@@ -68,9 +56,9 @@
     box-shadow: var(--shadow);
     overflow: hidden;
     overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
   }
-  .software-drawer[open] { display: flex; flex-direction: column; }
-  .software-drawer::backdrop { background: var(--drawer-backdrop); }
   .drawer-head {
     flex: none;
     display: flex;

@@ -2,6 +2,7 @@
   import { t, type MessageKey } from '$lib/i18n.svelte';
   import Icon, { type IconName } from './Icon.svelte';
   import BrandMark, { type BrandName } from './BrandMark.svelte';
+  import Modal from './ui/Modal.svelte';
 
   let {
     onclose,
@@ -55,50 +56,47 @@
     }
   ];
 
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') onclose();
-  }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<Modal {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal" aria-labelledby="chooser-title">
+      <header>
+        <div>
+          <h2 id="chooser-title">{t('chooser.title')}</h2>
+          <p>{t('chooser.lead')}</p>
+        </div>
+        <button class="close" type="button" onclick={onclose} aria-label={t('common.close')}>
+          <Icon name="close" size={14} />
+        </button>
+      </header>
 
-<div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="chooser-title">
-    <header>
-      <div>
-        <h2 id="chooser-title">{t('chooser.title')}</h2>
-        <p>{t('chooser.lead')}</p>
+      <div class="modal-body">
+        <div class="choices">
+          {#each choices as choice (choice.kind)}
+            <button class="choice" type="button" onclick={() => onselect(choice.kind)}>
+              {#if choice.brand}
+                <BrandMark name={choice.brand} size={38} />
+              {:else if choice.icon}
+                <span class="key"><Icon name={choice.icon} size={17} /></span>
+              {/if}
+              <span class="copy">
+                <strong>{choice.name}</strong>
+                <small class="faint">{t(choice.note)}</small>
+              </span>
+              <span class="access faint">{t(choice.access)}</span>
+              <span class="caret" aria-hidden="true">›</span>
+            </button>
+          {/each}
+        </div>
       </div>
-      <button class="close" type="button" onclick={onclose} aria-label={t('common.close')}>
-        <Icon name="close" size={14} />
-      </button>
-    </header>
 
-    <div class="modal-body">
-      <div class="choices">
-        {#each choices as choice (choice.kind)}
-          <button class="choice" type="button" onclick={() => onselect(choice.kind)}>
-            {#if choice.brand}
-              <BrandMark name={choice.brand} size={38} />
-            {:else if choice.icon}
-              <span class="key"><Icon name={choice.icon} size={17} /></span>
-            {/if}
-            <span class="copy">
-              <strong>{choice.name}</strong>
-              <small class="faint">{t(choice.note)}</small>
-            </span>
-            <span class="access faint">{t(choice.access)}</span>
-            <span class="caret" aria-hidden="true">›</span>
-          </button>
-        {/each}
-      </div>
+      <footer>
+        <span class="faint note">{t('chooser.note')}</span>
+      </footer>
     </div>
-
-    <footer>
-      <span class="faint note">{t('chooser.note')}</span>
-    </footer>
-  </div>
-</div>
+  {/snippet}
+</Modal>
 
 <style>
   .modal {

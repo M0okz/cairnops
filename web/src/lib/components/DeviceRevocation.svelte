@@ -2,6 +2,7 @@
   import Icon from './Icon.svelte';
   import type { Device } from '$lib/api';
   import { t } from '$lib/i18n.svelte';
+  import Modal from './ui/Modal.svelte';
 
   let {
     device,
@@ -26,43 +27,40 @@
     }
   }
 
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && !busy) onclose();
-  }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<Modal dismissible={!busy} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal revoke-modal" aria-labelledby="revoke-device-title">
+      <header>
+        <div>
+          <h2 id="revoke-device-title">{t('devices.revokeTitle', { name: device.name })}</h2>
+          <p>{t('devices.revokeLead')}</p>
+        </div>
+        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+          <Icon name="close" size={14} />
+        </button>
+      </header>
 
-<div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && !busy && onclose()}>
-  <div class="modal revoke-modal" role="dialog" aria-modal="true" aria-labelledby="revoke-device-title">
-    <header>
-      <div>
-        <h2 id="revoke-device-title">{t('devices.revokeTitle', { name: device.name })}</h2>
-        <p>{t('devices.revokeLead')}</p>
+      <div class="modal-body">
+        <div class="device-summary">
+          <strong>{device.name}</strong>
+          <span>{device.user_display_name} · {device.platform === 'ios' ? 'iOS' : 'Android'}</span>
+        </div>
+        <p>{t('devices.revokeExplain')}</p>
+        {#if error}<p class="error" role="alert">{error}</p>{/if}
       </div>
-      <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
-        <Icon name="close" size={14} />
-      </button>
-    </header>
 
-    <div class="modal-body">
-      <div class="device-summary">
-        <strong>{device.name}</strong>
-        <span>{device.user_display_name} · {device.platform === 'ios' ? 'iOS' : 'Android'}</span>
-      </div>
-      <p>{t('devices.revokeExplain')}</p>
-      {#if error}<p class="error" role="alert">{error}</p>{/if}
+      <footer>
+        <span class="faint note">{t('devices.revokeScope')}</span>
+        <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
+        <button class="btn danger" type="button" onclick={revoke} disabled={busy}>
+          {busy ? t('devices.revoking') : t('devices.revokeConfirm')}
+        </button>
+      </footer>
     </div>
-
-    <footer>
-      <span class="faint note">{t('devices.revokeScope')}</span>
-      <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-      <button class="btn danger" type="button" onclick={revoke} disabled={busy}>
-        {busy ? t('devices.revoking') : t('devices.revokeConfirm')}
-      </button>
-    </footer>
-  </div>
-</div>
+  {/snippet}
+</Modal>
 
 <style>
   .revoke-modal {

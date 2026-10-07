@@ -1,6 +1,7 @@
 <script lang="ts">
   import { plural, t } from '$lib/i18n.svelte';
   import Icon from './Icon.svelte';
+  import Modal from './ui/Modal.svelte';
   import { onMount } from 'svelte';
   import { api, type Connector, type Target, type WebhookApproval, type WebhookQuarantine } from '$lib/api';
 
@@ -24,9 +25,6 @@
 
   onMount(load);
 
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && !busy) onclose();
-  }
 
   async function load() {
     loading = true;
@@ -65,90 +63,90 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
-
-<div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && !busy && onclose()}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="quarantine-title">
-    <header>
-      <div>
-        <h2 id="quarantine-title">Qui peut produire une preuve ?</h2>
-        <p>
-          {t('quarantine.lead', { name: connector.name })}
-        </p>
-      </div>
-      <button class="close" type="button" onclick={onclose} disabled={Boolean(busy)} aria-label="Fermer">
-        <Icon name="close" size={14} />
-      </button>
-    </header>
-
-    <div class="modal-body">
-      {#if loading}
-        <p class="faint">{t('quarantine.loading')}</p>
-      {:else if items.length === 0}
-        <div class="empty">
-          <strong>{t('quarantine.empty')}</strong>
-          {t('quarantine.emptyHint')}
+<Modal dismissible={!busy} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal" aria-labelledby="quarantine-title">
+      <header>
+        <div>
+          <h2 id="quarantine-title">Qui peut produire une preuve ?</h2>
+          <p>
+            {t('quarantine.lead', { name: connector.name })}
+          </p>
         </div>
-      {:else}
-        <ul class="list">
-          {#each items as item (item.id)}
-            <li>
-              <div class="line">
-                <i class="dot {item.status === 'firing' ? 'crit' : 'ok'}"></i>
-                <span class="identity">
-                  <strong class="mono">{item.external_identity}</strong>
-                  <small class="faint">
-                    {plural('quarantine.messages', item.occurrences)} ·
-                    dernier {new Date(item.last_seen_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
-                  </small>
-                </span>
-                <span class="pill {item.status === 'firing' ? 'crit' : 'ok'}">
-                  {item.status === 'firing' ? t('quarantine.firing') : t('quarantine.resolved')}
-                </span>
-              </div>
+        <button class="close" type="button" onclick={onclose} disabled={Boolean(busy)} aria-label="Fermer">
+          <Icon name="close" size={14} />
+        </button>
+      </header>
 
-              <p class="summary">
-                {item.summary}
-                <span class="faint mono">· {item.severity} · {item.event_key}</span>
-              </p>
-
-              <div class="decide">
-                <div class="field">
-                  <label for={`target-${item.id}`}>Cible de confiance</label>
-                  <select
-                    id={`target-${item.id}`}
-                    value={choices[item.id] ?? ''}
-                    onchange={(event) => (choices[item.id] = event.currentTarget.value)}
-                  >
-                    <option value="">
-                      {exactTarget(item)
-                        ? t('quarantine.reuse', { name: exactTarget(item)?.name ?? '' })
-                        : t('quarantine.create', { name: item.target_name })}
-                    </option>
-                    {#each targets as target (target.id)}
-                      <option value={target.id}>{target.name}</option>
-                    {/each}
-                  </select>
+      <div class="modal-body">
+        {#if loading}
+          <p class="faint">{t('quarantine.loading')}</p>
+        {:else if items.length === 0}
+          <div class="empty">
+            <strong>{t('quarantine.empty')}</strong>
+            {t('quarantine.emptyHint')}
+          </div>
+        {:else}
+          <ul class="list">
+            {#each items as item (item.id)}
+              <li>
+                <div class="line">
+                  <i class="dot {item.status === 'firing' ? 'crit' : 'ok'}"></i>
+                  <span class="identity">
+                    <strong class="mono">{item.external_identity}</strong>
+                    <small class="faint">
+                      {plural('quarantine.messages', item.occurrences)} ·
+                      dernier {new Date(item.last_seen_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}
+                    </small>
+                  </span>
+                  <span class="pill {item.status === 'firing' ? 'crit' : 'ok'}">
+                    {item.status === 'firing' ? t('quarantine.firing') : t('quarantine.resolved')}
+                  </span>
                 </div>
-                <button class="btn primary" type="button" onclick={() => approve(item)} disabled={Boolean(busy)}>
-                  {busy === item.id ? 'Autorisation…' : 'Autoriser et rejouer'}
-                </button>
-              </div>
-            </li>
-          {/each}
-        </ul>
-      {/if}
 
-      {#if error}<p class="error" role="alert">{error}</p>{/if}
+                <p class="summary">
+                  {item.summary}
+                  <span class="faint mono">· {item.severity} · {item.event_key}</span>
+                </p>
+
+                <div class="decide">
+                  <div class="field">
+                    <label for={`target-${item.id}`}>Cible de confiance</label>
+                    <select
+                      id={`target-${item.id}`}
+                      value={choices[item.id] ?? ''}
+                      onchange={(event) => (choices[item.id] = event.currentTarget.value)}
+                    >
+                      <option value="">
+                        {exactTarget(item)
+                          ? t('quarantine.reuse', { name: exactTarget(item)?.name ?? '' })
+                          : t('quarantine.create', { name: item.target_name })}
+                      </option>
+                      {#each targets as target (target.id)}
+                        <option value={target.id}>{target.name}</option>
+                      {/each}
+                    </select>
+                  </div>
+                  <button class="btn primary" type="button" onclick={() => approve(item)} disabled={Boolean(busy)}>
+                    {busy === item.id ? 'Autorisation…' : 'Autoriser et rejouer'}
+                  </button>
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+
+        {#if error}<p class="error" role="alert">{error}</p>{/if}
+      </div>
+
+      <footer>
+        <span class="faint note">
+          {t('quarantine.note')}
+        </span>
+      </footer>
     </div>
-
-    <footer>
-      <span class="faint note">
-        {t('quarantine.note')}
-      </span>
-    </footer>
-  </div>
-</div>
+  {/snippet}
+</Modal>
 
 <style>
   .list {

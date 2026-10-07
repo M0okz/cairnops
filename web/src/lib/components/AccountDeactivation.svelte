@@ -9,6 +9,7 @@
   import Icon from './Icon.svelte';
   import type { Account } from '$lib/api';
   import { t } from '$lib/i18n.svelte';
+  import Modal from './ui/Modal.svelte';
 
   let {
     account,
@@ -24,9 +25,6 @@
 
   let busy = $state(false);
 
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && !busy) onclose();
-  }
 
   async function deactivate() {
     busy = true;
@@ -38,58 +36,54 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<Modal dismissible={!busy} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal" aria-labelledby="deactivation-title">
+      <header>
+        <div>
+          <h2 id="deactivation-title">
+            {t('account.deactivateHeading', { name: account.display_name })}
+          </h2>
+          <p>{t('account.deactivateLead')}</p>
+        </div>
+        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
+          <Icon name="close" size={14} />
+        </button>
+      </header>
 
-<div
-  class="scrim"
-  role="presentation"
-  onclick={(event) => event.currentTarget === event.target && !busy && onclose()}
->
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="deactivation-title">
-    <header>
-      <div>
-        <h2 id="deactivation-title">
-          {t('account.deactivateHeading', { name: account.display_name })}
-        </h2>
-        <p>{t('account.deactivateLead')}</p>
-      </div>
-      <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}>
-        <Icon name="close" size={14} />
-      </button>
-    </header>
+      <div class="modal-body">
+        <div class="ledger">
+          <section class="stops">
+            <h3>{t('suspension.stops')}</h3>
+            <ul>
+              <li>{t('account.stopSessions')}</li>
+              <li>{t('account.stopPassword')}</li>
+            </ul>
+          </section>
 
-    <div class="modal-body">
-      <div class="ledger">
-        <section class="stops">
-          <h3>{t('suspension.stops')}</h3>
-          <ul>
-            <li>{t('account.stopSessions')}</li>
-            <li>{t('account.stopPassword')}</li>
-          </ul>
-        </section>
+          <section class="kept">
+            <h3>{t('suspension.stays')}</h3>
+            <ul>
+              <li>{t('account.keepDecisions')}</li>
+              <li>{t('account.keepUsername')}</li>
+              <li>{t('account.keepPassword')}</li>
+            </ul>
+          </section>
+        </div>
 
-        <section class="kept">
-          <h3>{t('suspension.stays')}</h3>
-          <ul>
-            <li>{t('account.keepDecisions')}</li>
-            <li>{t('account.keepUsername')}</li>
-            <li>{t('account.keepPassword')}</li>
-          </ul>
-        </section>
+        {#if error}<p class="error" role="alert">{error}</p>{/if}
       </div>
 
-      {#if error}<p class="error" role="alert">{error}</p>{/if}
+      <footer>
+        <span class="faint note">{t('account.reactivationNote')}</span>
+        <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
+        <button class="btn primary" type="button" onclick={deactivate} disabled={busy}>
+          {busy ? t('account.deactivating') : t('account.deactivateConfirm')}
+        </button>
+      </footer>
     </div>
-
-    <footer>
-      <span class="faint note">{t('account.reactivationNote')}</span>
-      <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-      <button class="btn primary" type="button" onclick={deactivate} disabled={busy}>
-        {busy ? t('account.deactivating') : t('account.deactivateConfirm')}
-      </button>
-    </footer>
-  </div>
-</div>
+  {/snippet}
+</Modal>
 
 <style>
   .modal {

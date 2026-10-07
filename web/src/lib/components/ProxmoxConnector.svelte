@@ -7,6 +7,7 @@
   import Checkbox from './ui/Checkbox.svelte';
   import TargetDecision from './TargetDecision.svelte';
   import ReconciliationSummary from './ReconciliationSummary.svelte';
+  import Modal from './ui/Modal.svelte';
 
   let { onclose, onsuccess, connectorId = '', initialName = '', initialAddress = '' }: {
     onclose: () => void;
@@ -101,82 +102,82 @@
   }
 </script>
 
-<svelte:window onkeydown={(event) => { if (event.key === 'Escape' && !busy) onclose(); }} />
+<Modal dismissible={!busy} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal" aria-labelledby="proxmox-title">
+      <header>
+        <div><h2 id="proxmox-title">{t(preview ? 'wizard.chooseWhatEnters' : 'proxmox.connect')}</h2><p>{t('proxmox.lead')}</p></div>
+        <button class="close" type="button" disabled={busy} onclick={onclose} aria-label={t('common.close')}><Icon name="close" size={14} /></button>
+      </header>
 
-<div class="scrim" role="presentation" onclick={(event) => { if (event.currentTarget === event.target && !busy) onclose(); }}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="proxmox-title">
-    <header>
-      <div><h2 id="proxmox-title">{t(preview ? 'wizard.chooseWhatEnters' : 'proxmox.connect')}</h2><p>{t('proxmox.lead')}</p></div>
-      <button class="close" type="button" disabled={busy} onclick={onclose} aria-label={t('common.close')}><Icon name="close" size={14} /></button>
-    </header>
-
-    {#if preview}
-      <div class="modal-body">
-        <div class="checks"><strong>Proxmox VE {preview.version}</strong><span>{t('proxmox.https')}</span><button class="btn sm" disabled={busy} onclick={() => { if (connectorId) void inspectExisting(); else { preview = null; stage = 'authorization'; } }}>{t('proxmox.refresh')}</button></div>
-        {#if preview.access.will_provision}
-          <aside><strong>{t('proxmox.onConfirm')}</strong><p>{t('proxmox.accessPlan')}</p><p>{t('proxmox.cleanupHint')}</p></aside>
-        {:else}<aside>{t('proxmox.existingAccess')}</aside>{/if}
-        <p class="lead">{t('proxmox.stopHint')}</p>
-        <ReconciliationSummary counts={counts} />
-        <div class="listbar">
-          <div class="field search"><label class="sr-only" for="pve-search">{t('proxmox.filter')}</label><input id="pve-search" bind:value={query} placeholder={t('proxmox.filter')} /></div>
-          <button class="btn sm" type="button" onclick={toggleVisible}>{t('proxmox.toggleVisible')}</button>
-          <span class="faint num">{selected.length} / {preview.importable_count}</span>
-        </div>
-        <ul class="rack">
-          {#each visible as resource (resource.external_id)}
-            {@const picked = selected.includes(resource.external_id)}
-            <li class:picked>
-              <Checkbox variant="row" checked={picked} disabled={!resource.importable || busy} onCheckedChange={() => toggle(resource.external_id)}>
-                <span class="identity"><strong>{resource.name}</strong><small class="faint mono">{resource.external_id} · {resource.node} · {resource.host_unavailable ? t('proxmox.hostUnavailable') : resource.status}</small></span>
-              </Checkbox>
-              <div class="decision">
-                {#if resource.already_imported_to}<span class="faint">{t('wizard.alreadyBound')} · {resource.already_imported_to.name}</span>
-                {:else if !resource.importable}<span class="pill idle">{t('proxmox.template')}</span>
-                {:else}<TargetDecision name={resource.name} value={assignments[resource.external_id] ?? ''} candidates={resource.candidate_targets} availableTargets={preview.available_targets} disabled={!picked || busy} onselect={(targetID) => { assignments = { ...assignments, [resource.external_id]: targetID }; }} />{/if}
-                {#if resource.importable && (resource.type === 'qemu' || resource.type === 'lxc')}
-                  <Checkbox checked={expected.includes(resource.external_id)} disabled={!picked || busy} onCheckedChange={() => toggleExpected(resource.external_id)}>{t('proxmox.alertOnStop')}</Checkbox>
-                {/if}
-              </div>
-            </li>
-          {:else}<li class="empty">{t('proxmox.noMatch')}</li>{/each}
-        </ul>
-        {#if stoppedAlerts}<p class="warn" role="status">{t('proxmox.stoppedWarning', { count: stoppedAlerts })}</p>{/if}
-        {#if error}<p class="error" role="alert">{error}</p>{/if}
-      </div>
-      <footer><span class="faint note">{t('proxmox.observes')}</span><button class="btn primary" onclick={save} disabled={busy || !selected.length || counts.review > 0}>{busy ? t('wizard.importing') : counts.review ? plural('wizard.confirmChoices', counts.review) : t('proxmox.apply')}</button></footer>
-    {:else if stage === 'address'}
-      <form onsubmit={probe}>
+      {#if preview}
         <div class="modal-body">
-          <div class="fields"><div class="field"><label for="pve-name">{t('wizard.nameInCairnOps')}</label><input id="pve-name" bind:value={name} required maxlength="160" /></div>
-          <div class="field"><label for="pve-address">{t('proxmox.address')}</label><input id="pve-address" bind:value={address} oninput={() => { certificate = null; approved = false; }} required maxlength="2048" inputmode="url" placeholder="https://proxmox.example.net:8006" /></div></div>
-          {#if certificate && (!certificate.trusted || connectorId)}
-            <aside><strong>{t('proxmox.certificateReview')}</strong><p>{certificate.subject}</p><p>{t('proxmox.issuer')}: {certificate.issuer}</p><code class="fingerprint">SHA-256 {certificate.fingerprint}</code>
-              <Checkbox checked={approved} onCheckedChange={(value) => { approved = value; }}>{t('proxmox.approveCertificate')}</Checkbox>
-            </aside>
-          {/if}
+          <div class="checks"><strong>Proxmox VE {preview.version}</strong><span>{t('proxmox.https')}</span><button class="btn sm" disabled={busy} onclick={() => { if (connectorId) void inspectExisting(); else { preview = null; stage = 'authorization'; } }}>{t('proxmox.refresh')}</button></div>
+          {#if preview.access.will_provision}
+            <aside><strong>{t('proxmox.onConfirm')}</strong><p>{t('proxmox.accessPlan')}</p><p>{t('proxmox.cleanupHint')}</p></aside>
+          {:else}<aside>{t('proxmox.existingAccess')}</aside>{/if}
+          <p class="lead">{t('proxmox.stopHint')}</p>
+          <ReconciliationSummary counts={counts} />
+          <div class="listbar">
+            <div class="field search"><label class="sr-only" for="pve-search">{t('proxmox.filter')}</label><input id="pve-search" bind:value={query} placeholder={t('proxmox.filter')} /></div>
+            <button class="btn sm" type="button" onclick={toggleVisible}>{t('proxmox.toggleVisible')}</button>
+            <span class="faint num">{selected.length} / {preview.importable_count}</span>
+          </div>
+          <ul class="rack">
+            {#each visible as resource (resource.external_id)}
+              {@const picked = selected.includes(resource.external_id)}
+              <li class:picked>
+                <Checkbox variant="row" checked={picked} disabled={!resource.importable || busy} onCheckedChange={() => toggle(resource.external_id)}>
+                  <span class="identity"><strong>{resource.name}</strong><small class="faint mono">{resource.external_id} · {resource.node} · {resource.host_unavailable ? t('proxmox.hostUnavailable') : resource.status}</small></span>
+                </Checkbox>
+                <div class="decision">
+                  {#if resource.already_imported_to}<span class="faint">{t('wizard.alreadyBound')} · {resource.already_imported_to.name}</span>
+                  {:else if !resource.importable}<span class="pill idle">{t('proxmox.template')}</span>
+                  {:else}<TargetDecision name={resource.name} value={assignments[resource.external_id] ?? ''} candidates={resource.candidate_targets} availableTargets={preview.available_targets} disabled={!picked || busy} onselect={(targetID) => { assignments = { ...assignments, [resource.external_id]: targetID }; }} />{/if}
+                  {#if resource.importable && (resource.type === 'qemu' || resource.type === 'lxc')}
+                    <Checkbox checked={expected.includes(resource.external_id)} disabled={!picked || busy} onCheckedChange={() => toggleExpected(resource.external_id)}>{t('proxmox.alertOnStop')}</Checkbox>
+                  {/if}
+                </div>
+              </li>
+            {:else}<li class="empty">{t('proxmox.noMatch')}</li>{/each}
+          </ul>
+          {#if stoppedAlerts}<p class="warn" role="status">{t('proxmox.stoppedWarning', { count: stoppedAlerts })}</p>{/if}
           {#if error}<p class="error" role="alert">{error}</p>{/if}
         </div>
-        <footer><span class="faint note">{t('proxmox.certificateHint')}</span>
-          {#if certificate && (!certificate.trusted || connectorId)}<button class="btn primary" type="button" disabled={busy || !approved} onclick={acceptCertificate}>{t('proxmox.continue')}</button>
-          {:else}<button class="btn primary" type="submit" disabled={busy}>{busy ? t('gate.verifying') : t('proxmox.checkAddress')}</button>{/if}
-        </footer>
-      </form>
-    {:else}
-      <form onsubmit={inspect}>
-        <div class="modal-body">
-          <div class="checks"><span>{address}</span><button class="btn sm" type="button" onclick={() => { stage = 'address'; certificate = null; secret = ''; }}>{t('proxmox.changeAddress')}</button></div>
-          <div class="field"><label for="pve-mode">{t('wizard.authorisation')}</label><select id="pve-mode" bind:value={mode}><option value="automatic">{t('proxmox.automatic')}</option><option value="provided">{t('proxmox.provided')}</option></select></div>
-          <p class="lead">{t(mode === 'automatic' ? 'proxmox.automaticHint' : 'proxmox.providedHint')}</p>
-          <div class="fields"><div class="field"><label for="pve-token-id">{t('proxmox.tokenID')}</label><input id="pve-token-id" bind:value={tokenID} placeholder="user@pve!token" required maxlength="256" autocomplete="off" spellcheck="false" /></div>
-          <div class="field"><label for="pve-secret">{t('proxmox.tokenSecret')}</label><input id="pve-secret" type="password" bind:value={secret} required maxlength="4096" autocomplete="off" spellcheck="false" /></div></div>
-          {#if error}<p class="error" role="alert">{error}</p>{/if}
-        </div>
-        <footer><span class="faint note">{t('proxmox.previewHint')}</span><button class="btn primary" type="submit" disabled={busy}>{busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}</button></footer>
-      </form>
-    {/if}
-  </div>
-</div>
+        <footer><span class="faint note">{t('proxmox.observes')}</span><button class="btn primary" onclick={save} disabled={busy || !selected.length || counts.review > 0}>{busy ? t('wizard.importing') : counts.review ? plural('wizard.confirmChoices', counts.review) : t('proxmox.apply')}</button></footer>
+      {:else if stage === 'address'}
+        <form onsubmit={probe}>
+          <div class="modal-body">
+            <div class="fields"><div class="field"><label for="pve-name">{t('wizard.nameInCairnOps')}</label><input id="pve-name" bind:value={name} required maxlength="160" /></div>
+            <div class="field"><label for="pve-address">{t('proxmox.address')}</label><input id="pve-address" bind:value={address} oninput={() => { certificate = null; approved = false; }} required maxlength="2048" inputmode="url" placeholder="https://proxmox.example.net:8006" /></div></div>
+            {#if certificate && (!certificate.trusted || connectorId)}
+              <aside><strong>{t('proxmox.certificateReview')}</strong><p>{certificate.subject}</p><p>{t('proxmox.issuer')}: {certificate.issuer}</p><code class="fingerprint">SHA-256 {certificate.fingerprint}</code>
+                <Checkbox checked={approved} onCheckedChange={(value) => { approved = value; }}>{t('proxmox.approveCertificate')}</Checkbox>
+              </aside>
+            {/if}
+            {#if error}<p class="error" role="alert">{error}</p>{/if}
+          </div>
+          <footer><span class="faint note">{t('proxmox.certificateHint')}</span>
+            {#if certificate && (!certificate.trusted || connectorId)}<button class="btn primary" type="button" disabled={busy || !approved} onclick={acceptCertificate}>{t('proxmox.continue')}</button>
+            {:else}<button class="btn primary" type="submit" disabled={busy}>{busy ? t('gate.verifying') : t('proxmox.checkAddress')}</button>{/if}
+          </footer>
+        </form>
+      {:else}
+        <form onsubmit={inspect}>
+          <div class="modal-body">
+            <div class="checks"><span>{address}</span><button class="btn sm" type="button" onclick={() => { stage = 'address'; certificate = null; secret = ''; }}>{t('proxmox.changeAddress')}</button></div>
+            <div class="field"><label for="pve-mode">{t('wizard.authorisation')}</label><select id="pve-mode" bind:value={mode}><option value="automatic">{t('proxmox.automatic')}</option><option value="provided">{t('proxmox.provided')}</option></select></div>
+            <p class="lead">{t(mode === 'automatic' ? 'proxmox.automaticHint' : 'proxmox.providedHint')}</p>
+            <div class="fields"><div class="field"><label for="pve-token-id">{t('proxmox.tokenID')}</label><input id="pve-token-id" bind:value={tokenID} placeholder="user@pve!token" required maxlength="256" autocomplete="off" spellcheck="false" /></div>
+            <div class="field"><label for="pve-secret">{t('proxmox.tokenSecret')}</label><input id="pve-secret" type="password" bind:value={secret} required maxlength="4096" autocomplete="off" spellcheck="false" /></div></div>
+            {#if error}<p class="error" role="alert">{error}</p>{/if}
+          </div>
+          <footer><span class="faint note">{t('proxmox.previewHint')}</span><button class="btn primary" type="submit" disabled={busy}>{busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}</button></footer>
+        </form>
+      {/if}
+    </div>
+  {/snippet}
+</Modal>
 
 <style>
   .modal { max-width: var(--connector-modal-max); }

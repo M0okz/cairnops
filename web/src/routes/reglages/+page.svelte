@@ -17,6 +17,7 @@
   import DeviceManagement from '$lib/components/DeviceManagement.svelte';
   import SoftwareAISettings from '$lib/components/SoftwareAISettings.svelte';
   import OIDCSettings from '$lib/components/OIDCSettings.svelte';
+  import Modal from '$lib/components/ui/Modal.svelte';
   import { session, messageFrom } from '$lib/session.svelte';
   import { api, type Account, type Role } from '$lib/api';
   import { i18n, locales, plural, t } from '$lib/i18n.svelte';
@@ -666,40 +667,43 @@
 {/if}
 
 {#if resetFor}
-  <div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && !resetting && (resetFor = null)}>
-    <div class="modal narrow" role="dialog" aria-modal="true" aria-labelledby="reset-title">
-      <header>
-        <div>
-          <h2 id="reset-title">{t('settings.resetHeading', { name: resetFor.display_name })}</h2>
-          <p>{t('settings.resetLead')}</p>
-        </div>
-        <button class="close" type="button" onclick={() => (resetFor = null)} aria-label={t('common.close')}>
-          <Icon name="close" size={14} />
-        </button>
-      </header>
-
-      <form onsubmit={submitReset}>
-        <div class="modal-body">
-          <div class="field">
-            <label for="reset-password">{t('settings.newPassword')}</label>
-            <input id="reset-password" bind:value={resetPassword} type="text" spellcheck="false"
-              autocomplete="off" required minlength="12" maxlength="128" class="mono" />
-            <small>{t('settings.resetBounds')}</small>
+  {@const resetAccount = resetFor}
+  <Modal dismissible={!resetting} onclose={() => (resetFor = null)}>
+    {#snippet children(dialog)}
+      <div {...dialog} class="modal narrow" aria-labelledby="reset-title">
+        <header>
+          <div>
+            <h2 id="reset-title">{t('settings.resetHeading', { name: resetAccount.display_name })}</h2>
+            <p>{t('settings.resetLead')}</p>
           </div>
-          <button class="btn sm" type="button" onclick={suggest}>{t('settings.suggestPassword')}</button>
-          {#if resetError}<p class="error" role="alert">{resetError}</p>{/if}
-        </div>
-        <footer>
-          <button class="btn" type="button" onclick={() => (resetFor = null)} disabled={resetting}>
-            {t('common.cancel')}
+          <button class="close" type="button" onclick={() => (resetFor = null)} aria-label={t('common.close')}>
+            <Icon name="close" size={14} />
           </button>
-          <button class="btn primary" type="submit" disabled={resetting || resetPassword.length < 12}>
-            {resetting ? t('settings.resetting') : t('settings.reset')}
-          </button>
-        </footer>
-      </form>
-    </div>
-  </div>
+        </header>
+
+        <form onsubmit={submitReset}>
+          <div class="modal-body">
+            <div class="field">
+              <label for="reset-password">{t('settings.newPassword')}</label>
+              <input id="reset-password" bind:value={resetPassword} type="text" spellcheck="false"
+                autocomplete="off" required minlength="12" maxlength="128" class="mono" />
+              <small>{t('settings.resetBounds')}</small>
+            </div>
+            <button class="btn sm" type="button" onclick={suggest}>{t('settings.suggestPassword')}</button>
+            {#if resetError}<p class="error" role="alert">{resetError}</p>{/if}
+          </div>
+          <footer>
+            <button class="btn" type="button" onclick={() => (resetFor = null)} disabled={resetting}>
+              {t('common.cancel')}
+            </button>
+            <button class="btn primary" type="submit" disabled={resetting || resetPassword.length < 12}>
+              {resetting ? t('settings.resetting') : t('settings.reset')}
+            </button>
+          </footer>
+        </form>
+      </div>
+    {/snippet}
+  </Modal>
 {/if}
 
 <style>

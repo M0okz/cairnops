@@ -12,6 +12,7 @@
   import { duration } from '$lib/format';
   import { t } from '$lib/i18n.svelte';
   import { messageFrom } from '$lib/session.svelte';
+  import Modal from './ui/Modal.svelte';
 
   let {
     onclose,
@@ -149,10 +150,6 @@
     onclose();
   }
 
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') void close();
-  }
-
   onMount(() => {
     void start();
     const clock = setInterval(() => (now = new Date()), 1000);
@@ -168,142 +165,137 @@
   });
 </script>
 
-<svelte:window onkeydown={onKeydown} />
-
-<div
-  class="scrim"
-  role="presentation"
-  onclick={(event) => event.currentTarget === event.target && void close()}
->
-  <div
-    class="modal pairing-modal"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="pairing-title"
-    aria-busy={loading || busy}
-  >
-    <header>
-      <div>
-        <h2 id="pairing-title">{t('devices.pairingTitle')}</h2>
-        <p>{t('devices.pairingLead')}</p>
-      </div>
-      <button class="close" type="button" onclick={() => void close()} disabled={busy} aria-label={t('common.close')}>
-        <Icon name="close" size={14} />
-      </button>
-    </header>
-
-    <div class="modal-body">
-      {#if loading}
-        <div class="pairing-loading" role="status">{t('devices.pairingCreating')}</div>
-      {:else if !pairing || !invitation}
-        <div class="pairing-failure">
-          <strong>{t('devices.pairingUnavailable')}</strong>
-          {#if error}<p class="error" role="alert">{error}</p>{/if}
-          <button class="btn primary" type="button" onclick={start}>{t('common.retry')}</button>
+<Modal onclose={() => void close()}>
+  {#snippet children(dialog)}
+    <div
+      {...dialog}
+      class="modal pairing-modal"
+      aria-labelledby="pairing-title"
+      aria-busy={loading || busy}
+    >
+      <header>
+        <div>
+          <h2 id="pairing-title">{t('devices.pairingTitle')}</h2>
+          <p>{t('devices.pairingLead')}</p>
         </div>
-      {:else}
-        <ol class="pairing-steps" aria-label={t('devices.pairingSteps')}>
-          <li class:current={currentStep === 1} class:done={currentStep > 1}>
-            <span class="step-number">1</span>
-            <span><strong>{t('devices.stepScan')}</strong><small>{t('devices.stepScanHint')}</small></span>
-          </li>
-          <li class:current={currentStep === 2} class:done={currentStep > 2}>
-            <span class="step-number">2</span>
-            <span><strong>{t('devices.stepCheck')}</strong><small>{t('devices.stepCheckHint')}</small></span>
-          </li>
-          <li class:current={currentStep === 3} class:done={pairing.status === 'credential_consumed'}>
-            <span class="step-number">3</span>
-            <span><strong>{t('devices.stepConfirm')}</strong><small>{t('devices.stepConfirmHint')}</small></span>
-          </li>
-        </ol>
+        <button class="close" type="button" onclick={() => void close()} disabled={busy} aria-label={t('common.close')}>
+          <Icon name="close" size={14} />
+        </button>
+      </header>
 
-        <div class="pairing-grid">
-          <section class="qr-tile" aria-labelledby="qr-heading">
-            {#if pairing.status === 'awaiting_scan'}
-              <div class="qr-heading">
-                <h3 id="qr-heading">{t('devices.scanQRCode')}</h3>
-                <span class="pill warn">{duration(remaining)}</span>
-              </div>
-              {#if qrDataURL}
-                <img class="qr-code" src={qrDataURL} width="512" height="512" alt={t('devices.qrAlt')} />
-              {/if}
-              <p>{t('devices.scanInstruction')}</p>
-            {:else if pairing.status === 'awaiting_confirmation'}
-              <div class="claimed-mark" aria-hidden="true">{pairing.claimed_platform === 'ios' ? 'iOS' : 'Android'}</div>
-              <h3 id="qr-heading">{pairing.claimed_name ?? t('devices.unknownDevice')}</h3>
-              <p>{t('devices.claimedDevice', { platform: pairing.claimed_platform === 'ios' ? 'iOS' : 'Android' })}</p>
-            {:else if pairing.status === 'confirmed'}
-              <div class="claimed-mark confirmed" aria-hidden="true">✓</div>
-              <h3 id="qr-heading">{t('devices.identityCreated')}</h3>
-              <p>{t('devices.waitingForPhone')}</p>
-            {:else if pairing.status === 'credential_consumed'}
-              <div class="claimed-mark complete" aria-hidden="true">✓</div>
-              <h3 id="qr-heading">{t('devices.phonePaired')}</h3>
-              <p>{t('devices.phonePairedHint')}</p>
-            {:else}
-              <div class="claimed-mark" aria-hidden="true">—</div>
-              <h3 id="qr-heading">{statusLabel(pairing)}</h3>
-              <p>{t('devices.newInvitationHint')}</p>
-            {/if}
-          </section>
-
-          <section class="pairing-state" aria-labelledby="state-heading">
-            <span class="eyebrow">{t('devices.liveState')}</span>
-            <h3 id="state-heading" aria-live="polite">{statusLabel(pairing)}</h3>
-
-            {#if pairing.status === 'awaiting_scan'}
-              <p>{t('devices.threeConfirmations')}</p>
-              <div class="manual-link">
-                <label for="pairing-link">{t('devices.manualLink')}</label>
-                <div>
-                  <input id="pairing-link" value={invitation.qr_payload} readonly onclick={(event) => event.currentTarget.select()} />
-                  <button class="btn sm" type="button" onclick={copyLink}>
-                    {copied ? t('devices.copied') : t('common.copy')}
-                  </button>
-                </div>
-                <small>{t('devices.manualLinkHint')}</small>
-              </div>
-            {:else if pairing.status === 'awaiting_confirmation'}
-              <dl class="claim-details">
-                <div><dt>{t('devices.deviceName')}</dt><dd>{pairing.claimed_name}</dd></div>
-                <div><dt>{t('devices.platform')}</dt><dd>{pairing.claimed_platform === 'ios' ? 'iOS' : 'Android'}</dd></div>
-              </dl>
-              <p class="security-note">{t('devices.confirmOnlyIfExpected')}</p>
-            {:else if pairing.status === 'confirmed'}
-              <p>{t('devices.keepOpen')}</p>
-            {:else if pairing.status === 'credential_consumed'}
-              <p>{t('devices.revokeReminder')}</p>
-            {:else}
-              <p>{t('devices.invitationEnded')}</p>
-            {/if}
-
+      <div class="modal-body">
+        {#if loading}
+          <div class="pairing-loading" role="status">{t('devices.pairingCreating')}</div>
+        {:else if !pairing || !invitation}
+          <div class="pairing-failure">
+            <strong>{t('devices.pairingUnavailable')}</strong>
             {#if error}<p class="error" role="alert">{error}</p>{/if}
-          </section>
-        </div>
+            <button class="btn primary" type="button" onclick={start}>{t('common.retry')}</button>
+          </div>
+        {:else}
+          <ol class="pairing-steps" aria-label={t('devices.pairingSteps')}>
+            <li class:current={currentStep === 1} class:done={currentStep > 1}>
+              <span class="step-number">1</span>
+              <span><strong>{t('devices.stepScan')}</strong><small>{t('devices.stepScanHint')}</small></span>
+            </li>
+            <li class:current={currentStep === 2} class:done={currentStep > 2}>
+              <span class="step-number">2</span>
+              <span><strong>{t('devices.stepCheck')}</strong><small>{t('devices.stepCheckHint')}</small></span>
+            </li>
+            <li class:current={currentStep === 3} class:done={pairing.status === 'credential_consumed'}>
+              <span class="step-number">3</span>
+              <span><strong>{t('devices.stepConfirm')}</strong><small>{t('devices.stepConfirmHint')}</small></span>
+            </li>
+          </ol>
+
+          <div class="pairing-grid">
+            <section class="qr-tile" aria-labelledby="qr-heading">
+              {#if pairing.status === 'awaiting_scan'}
+                <div class="qr-heading">
+                  <h3 id="qr-heading">{t('devices.scanQRCode')}</h3>
+                  <span class="pill warn">{duration(remaining)}</span>
+                </div>
+                {#if qrDataURL}
+                  <img class="qr-code" src={qrDataURL} width="512" height="512" alt={t('devices.qrAlt')} />
+                {/if}
+                <p>{t('devices.scanInstruction')}</p>
+              {:else if pairing.status === 'awaiting_confirmation'}
+                <div class="claimed-mark" aria-hidden="true">{pairing.claimed_platform === 'ios' ? 'iOS' : 'Android'}</div>
+                <h3 id="qr-heading">{pairing.claimed_name ?? t('devices.unknownDevice')}</h3>
+                <p>{t('devices.claimedDevice', { platform: pairing.claimed_platform === 'ios' ? 'iOS' : 'Android' })}</p>
+              {:else if pairing.status === 'confirmed'}
+                <div class="claimed-mark confirmed" aria-hidden="true">✓</div>
+                <h3 id="qr-heading">{t('devices.identityCreated')}</h3>
+                <p>{t('devices.waitingForPhone')}</p>
+              {:else if pairing.status === 'credential_consumed'}
+                <div class="claimed-mark complete" aria-hidden="true">✓</div>
+                <h3 id="qr-heading">{t('devices.phonePaired')}</h3>
+                <p>{t('devices.phonePairedHint')}</p>
+              {:else}
+                <div class="claimed-mark" aria-hidden="true">—</div>
+                <h3 id="qr-heading">{statusLabel(pairing)}</h3>
+                <p>{t('devices.newInvitationHint')}</p>
+              {/if}
+            </section>
+
+            <section class="pairing-state" aria-labelledby="state-heading">
+              <span class="eyebrow">{t('devices.liveState')}</span>
+              <h3 id="state-heading" aria-live="polite">{statusLabel(pairing)}</h3>
+
+              {#if pairing.status === 'awaiting_scan'}
+                <p>{t('devices.threeConfirmations')}</p>
+                <div class="manual-link">
+                  <label for="pairing-link">{t('devices.manualLink')}</label>
+                  <div>
+                    <input id="pairing-link" value={invitation.qr_payload} readonly onclick={(event) => event.currentTarget.select()} />
+                    <button class="btn sm" type="button" onclick={copyLink}>
+                      {copied ? t('devices.copied') : t('common.copy')}
+                    </button>
+                  </div>
+                  <small>{t('devices.manualLinkHint')}</small>
+                </div>
+              {:else if pairing.status === 'awaiting_confirmation'}
+                <dl class="claim-details">
+                  <div><dt>{t('devices.deviceName')}</dt><dd>{pairing.claimed_name}</dd></div>
+                  <div><dt>{t('devices.platform')}</dt><dd>{pairing.claimed_platform === 'ios' ? 'iOS' : 'Android'}</dd></div>
+                </dl>
+                <p class="security-note">{t('devices.confirmOnlyIfExpected')}</p>
+              {:else if pairing.status === 'confirmed'}
+                <p>{t('devices.keepOpen')}</p>
+              {:else if pairing.status === 'credential_consumed'}
+                <p>{t('devices.revokeReminder')}</p>
+              {:else}
+                <p>{t('devices.invitationEnded')}</p>
+              {/if}
+
+              {#if error}<p class="error" role="alert">{error}</p>{/if}
+            </section>
+          </div>
+        {/if}
+      </div>
+
+      {#if pairing && invitation}
+        <footer>
+          {#if pairing.status === 'awaiting_scan'}
+            <span class="faint note">{t('devices.expiresIn', { time: duration(remaining) })}</span>
+            <button class="btn" type="button" onclick={() => void close()}>{t('devices.cancelInvitation')}</button>
+          {:else if pairing.status === 'awaiting_confirmation'}
+            <span class="faint note">{t('devices.webConfirmationRequired')}</span>
+            <button class="btn" type="button" onclick={() => void close()} disabled={busy}>{t('common.cancel')}</button>
+            <button class="btn primary" type="button" onclick={confirm} disabled={busy}>
+              {busy ? t('devices.confirming') : t('devices.confirmDevice')}
+            </button>
+          {:else if pairing.status === 'expired' || pairing.status === 'cancelled'}
+            <button class="btn primary" type="button" onclick={start}>{t('devices.createAnother')}</button>
+          {:else}
+            <span class="faint note">{pairing.status === 'confirmed' ? t('devices.phoneCollecting') : t('devices.pairingDone')}</span>
+            <button class="btn primary" type="button" onclick={() => void close()}>{t('common.close')}</button>
+          {/if}
+        </footer>
       {/if}
     </div>
-
-    {#if pairing && invitation}
-      <footer>
-        {#if pairing.status === 'awaiting_scan'}
-          <span class="faint note">{t('devices.expiresIn', { time: duration(remaining) })}</span>
-          <button class="btn" type="button" onclick={() => void close()}>{t('devices.cancelInvitation')}</button>
-        {:else if pairing.status === 'awaiting_confirmation'}
-          <span class="faint note">{t('devices.webConfirmationRequired')}</span>
-          <button class="btn" type="button" onclick={() => void close()} disabled={busy}>{t('common.cancel')}</button>
-          <button class="btn primary" type="button" onclick={confirm} disabled={busy}>
-            {busy ? t('devices.confirming') : t('devices.confirmDevice')}
-          </button>
-        {:else if pairing.status === 'expired' || pairing.status === 'cancelled'}
-          <button class="btn primary" type="button" onclick={start}>{t('devices.createAnother')}</button>
-        {:else}
-          <span class="faint note">{pairing.status === 'confirmed' ? t('devices.phoneCollecting') : t('devices.pairingDone')}</span>
-          <button class="btn primary" type="button" onclick={() => void close()}>{t('common.close')}</button>
-        {/if}
-      </footer>
-    {/if}
-  </div>
-</div>
+  {/snippet}
+</Modal>
 
 <style>
   .pairing-modal {

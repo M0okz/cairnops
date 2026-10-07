@@ -9,6 +9,7 @@
   import ReconciliationSummary from './ReconciliationSummary.svelte';
   import TargetDecision from './TargetDecision.svelte';
   import Checkbox from './ui/Checkbox.svelte';
+  import Modal from './ui/Modal.svelte';
 
   let {
     onclose,
@@ -71,9 +72,6 @@
     } finally { busy = false; }
   }
 
-  function onKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && !busy) onclose();
-  }
 
   function filteredServices() {
     const needle = query.trim().toLocaleLowerCase();
@@ -168,117 +166,117 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
-
-<div class="scrim" role="presentation" onclick={(event) => event.currentTarget === event.target && !busy && onclose()}>
-  <div class="modal argus-modal" role="dialog" aria-modal="true" aria-labelledby="argus-title">
-    <header>
-      <div>
-        <h2 id="argus-title">{imported ? t('wizard.linked') : preview ? t('wizard.chooseWhatEnters') : t('argus.connect')}</h2>
-        <p>{t('argus.lead')}</p>
-      </div>
-      <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}><Icon name="close" size={14} /></button>
-    </header>
-
-    {#if imported}
-      <div class="modal-body">
-        <div class="banner ok"><i class="dot ok"></i><div><strong>{plural('wizard.linkedTargets', imported.targets.length)}</strong><p class="muted">{t('argus.credentialsSealed')}</p></div></div>
-        <div class="figures tally">
-          <div class="fig"><b>{imported.targets.filter((target) => target.disposition === 'created').length}</b><span>{t('wizard.created')}</span></div>
-          <div class="fig"><b>{imported.targets.filter((target) => target.disposition === 'reused').length}</b><span>{t('wizard.reused')}</span></div>
-          <div class="fig"><b>{imported.targets.filter((target) => target.disposition === 'already_imported').length}</b><span>{t('wizard.alreadyLinked')}</span></div>
+<Modal dismissible={!busy} {onclose}>
+  {#snippet children(dialog)}
+    <div {...dialog} class="modal argus-modal" aria-labelledby="argus-title">
+      <header>
+        <div>
+          <h2 id="argus-title">{imported ? t('wizard.linked') : preview ? t('wizard.chooseWhatEnters') : t('argus.connect')}</h2>
+          <p>{t('argus.lead')}</p>
         </div>
-      </div>
-      <footer><button class="btn primary" type="button" onclick={onclose}>{t('argus.backToTargets')}</button></footer>
-    {:else if preview}
-      <div class="modal-body">
-        <div class="checks">
-          <div><span class="faint">API</span><strong>Argus {preview.version}</strong><small class="ok">{preview.compatibility_label}</small></div>
-          <div><span class="faint">Transport</span><strong>{preview.encrypted_transport ? 'TLS' : 'HTTP'}</strong><small class={preview.encrypted_transport ? 'ok' : 'warn'}>{preview.encrypted_transport ? t('wizard.certificateValid') : t('wizard.trustedNetworkOnly')}</small></div>
-          <div><span class="faint">{t('wizard.scope')}</span><strong>{plural('argus.servicesImportable', preview.importable_count)}</strong><small class="faint">{t('argus.postureOnly')}</small></div>
-          <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
-        </div>
+        <button class="close" type="button" onclick={onclose} disabled={busy} aria-label={t('common.close')}><Icon name="close" size={14} /></button>
+      </header>
 
-        <ReconciliationSummary counts={reconciliation} />
-        <ConnectorDiscoveryNotice />
-
-        <div class="listbar">
-          <div class="field service-filter"><input id="argus-filter" aria-label={t('argus.filter')} bind:value={query} placeholder={t('argus.filter')} /></div>
-          <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleSelectableServices().length === 0}>
-            {visibleSelectableServices().length > 0 && visibleSelectableServices().every((service) => selected.includes(service.external_id)) ? t('argus.removeAll') : t('wizard.selectAll')}
-          </button>
-          <span class="faint num">{selected.length} / {selectableServices().length} · {t('wizard.validUntil', { time: clock(preview.expires_at) })}</span>
-        </div>
-
-        <ul class="rack argus-rack">
-          {#each filteredServices() as service (service.external_id)}
-            {@const locked = Boolean(service.already_imported_to) || !service.importable}
-            <li class:picked={selected.includes(service.external_id)} class:locked>
-              <Checkbox class="argus-service-choice" variant="row" checked={selected.includes(service.external_id)} onCheckedChange={() => toggleService(service.external_id)} disabled={locked}>
-                <span class="service argus-service-summary">
-                  <span class="service-title"><strong>{service.name}</strong><small class="faint mono">{service.external_id}</small></span>
-                  <span class="versions argus-versions mono"><span>{service.deployed_version || '—'}</span><span aria-hidden="true">→</span><strong>{service.latest_version || '—'}</strong></span>
-                  <small class:warn={service.importable && service.deployed_version !== service.latest_version && !service.skipped} class:unknown={service.unknown} class="state">{stateLabel(service)}</small>
-                </span>
-              </Checkbox>
-              <div class="decision">
-                {#if service.version_url}<a class="version-link" href={service.version_url} target="_blank" rel="noreferrer">{t('argus.viewVersion')} <span aria-hidden="true">↗</span></a>{/if}
-                {#if service.already_imported_to}
-                  <span class="pill">{t('wizard.alreadyBound')}</span> <small class="faint">{service.already_imported_to.name}</small>
-                {:else if !service.importable}
-                  <span class="pill idle">{stateLabel(service)}</span>
-                {:else}
-                  <TargetDecision compact name={service.name} value={targetAssignments[service.external_id] ?? ''} candidates={service.candidate_targets} availableTargets={preview.available_targets} disabled={!selected.includes(service.external_id)} onselect={(targetID) => assignTarget(service.external_id, targetID)} />
-                {/if}
-              </div>
-            </li>
-          {:else}
-            <li class="none faint">{t('argus.noServiceMatches')}</li>
-          {/each}
-        </ul>
-        {#if selectedPendingCount > 0}
-          <div class="banner impact" role="status"><i class="dot info"></i><div><strong>{plural('argus.pendingUpdates', selectedPendingCount)}</strong><p class="muted">{t('argus.securityIncidentsOnly')}</p></div></div>
-        {/if}
-        {#if error}<p class="error" role="alert" aria-live="assertive">{error}</p>{/if}
-      </div>
-      <footer>
-        <span class="faint note">{t('argus.noActionNote')}</span>
-        <button class="btn primary" type="button" onclick={importServices} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
-          {busy ? t('wizard.importing') : reconciliation.review > 0 ? plural('wizard.confirmChoices', reconciliation.review) : plural('argus.importServices', selected.length)}
-        </button>
-      </footer>
-    {:else}
-      <form onsubmit={inspect}>
+      {#if imported}
         <div class="modal-body">
-          <section>
-            <h3>{t('wizard.connection')}</h3>
-            <p class="faint lead">{t('argus.addressHint')}</p>
-            <div class="grid">
-              <div class="field"><label for="argus-name">{t('wizard.nameInCairnOps')}</label><input id="argus-name" bind:value={name} required maxlength="160" /></div>
-              <div class="field"><label for="argus-address">{t('argus.instanceAddress')}</label><input id="argus-address" bind:this={addressInput} bind:value={address} required maxlength="2048" inputmode="url" placeholder="https://argus.example.net" /></div>
-            </div>
-          </section>
-          <section class="last">
-            <h3>{t('wizard.authorisation')}</h3>
-            <p class="faint lead">{t('argus.authHint')}</p>
-            <div class="grid">
-              <div class="field"><label for="argus-username">{t('argus.username')}</label><input id="argus-username" bind:value={username} maxlength="4096" autocomplete="username" spellcheck="false" aria-invalid={authIncomplete} aria-describedby={authIncomplete ? 'argus-auth-error' : undefined} /></div>
-              <div class="field"><label for="argus-password">{t('argus.password')}</label><input id="argus-password" type="password" bind:value={password} maxlength="4096" autocomplete="current-password" spellcheck="false" aria-invalid={authIncomplete} aria-describedby={authIncomplete ? 'argus-auth-error' : undefined} /></div>
-            </div>
-            {#if authIncomplete}<p id="argus-auth-error" class="error auth-error" role="status">{t('argus.authPairRequired')}</p>{/if}
-            <p class="security-note"><strong>{t('argus.basicAuthWarning')}</strong> {t('argus.basicAuthWarningDetail')}</p>
-          </section>
+          <div class="banner ok"><i class="dot ok"></i><div><strong>{plural('wizard.linkedTargets', imported.targets.length)}</strong><p class="muted">{t('argus.credentialsSealed')}</p></div></div>
+          <div class="figures tally">
+            <div class="fig"><b>{imported.targets.filter((target) => target.disposition === 'created').length}</b><span>{t('wizard.created')}</span></div>
+            <div class="fig"><b>{imported.targets.filter((target) => target.disposition === 'reused').length}</b><span>{t('wizard.reused')}</span></div>
+            <div class="fig"><b>{imported.targets.filter((target) => target.disposition === 'already_imported').length}</b><span>{t('wizard.alreadyLinked')}</span></div>
+          </div>
+        </div>
+        <footer><button class="btn primary" type="button" onclick={onclose}>{t('argus.backToTargets')}</button></footer>
+      {:else if preview}
+        <div class="modal-body">
+          <div class="checks">
+            <div><span class="faint">API</span><strong>Argus {preview.version}</strong><small class="ok">{preview.compatibility_label}</small></div>
+            <div><span class="faint">Transport</span><strong>{preview.encrypted_transport ? 'TLS' : 'HTTP'}</strong><small class={preview.encrypted_transport ? 'ok' : 'warn'}>{preview.encrypted_transport ? t('wizard.certificateValid') : t('wizard.trustedNetworkOnly')}</small></div>
+            <div><span class="faint">{t('wizard.scope')}</span><strong>{plural('argus.servicesImportable', preview.importable_count)}</strong><small class="faint">{t('argus.postureOnly')}</small></div>
+            <button class="btn sm" type="button" onclick={resetPreview}>{t('wizard.changeAccess')}</button>
+          </div>
+
+          <ReconciliationSummary counts={reconciliation} />
+          <ConnectorDiscoveryNotice />
+
+          <div class="listbar">
+            <div class="field service-filter"><input id="argus-filter" aria-label={t('argus.filter')} bind:value={query} placeholder={t('argus.filter')} /></div>
+            <button class="btn sm" type="button" onclick={toggleAllVisible} disabled={visibleSelectableServices().length === 0}>
+              {visibleSelectableServices().length > 0 && visibleSelectableServices().every((service) => selected.includes(service.external_id)) ? t('argus.removeAll') : t('wizard.selectAll')}
+            </button>
+            <span class="faint num">{selected.length} / {selectableServices().length} · {t('wizard.validUntil', { time: clock(preview.expires_at) })}</span>
+          </div>
+
+          <ul class="rack argus-rack">
+            {#each filteredServices() as service (service.external_id)}
+              {@const locked = Boolean(service.already_imported_to) || !service.importable}
+              <li class:picked={selected.includes(service.external_id)} class:locked>
+                <Checkbox class="argus-service-choice" variant="row" checked={selected.includes(service.external_id)} onCheckedChange={() => toggleService(service.external_id)} disabled={locked}>
+                  <span class="service argus-service-summary">
+                    <span class="service-title"><strong>{service.name}</strong><small class="faint mono">{service.external_id}</small></span>
+                    <span class="versions argus-versions mono"><span>{service.deployed_version || '—'}</span><span aria-hidden="true">→</span><strong>{service.latest_version || '—'}</strong></span>
+                    <small class:warn={service.importable && service.deployed_version !== service.latest_version && !service.skipped} class:unknown={service.unknown} class="state">{stateLabel(service)}</small>
+                  </span>
+                </Checkbox>
+                <div class="decision">
+                  {#if service.version_url}<a class="version-link" href={service.version_url} target="_blank" rel="noreferrer">{t('argus.viewVersion')} <span aria-hidden="true">↗</span></a>{/if}
+                  {#if service.already_imported_to}
+                    <span class="pill">{t('wizard.alreadyBound')}</span> <small class="faint">{service.already_imported_to.name}</small>
+                  {:else if !service.importable}
+                    <span class="pill idle">{stateLabel(service)}</span>
+                  {:else}
+                    <TargetDecision compact name={service.name} value={targetAssignments[service.external_id] ?? ''} candidates={service.candidate_targets} availableTargets={preview.available_targets} disabled={!selected.includes(service.external_id)} onselect={(targetID) => assignTarget(service.external_id, targetID)} />
+                  {/if}
+                </div>
+              </li>
+            {:else}
+              <li class="none faint">{t('argus.noServiceMatches')}</li>
+            {/each}
+          </ul>
+          {#if selectedPendingCount > 0}
+            <div class="banner impact" role="status"><i class="dot info"></i><div><strong>{plural('argus.pendingUpdates', selectedPendingCount)}</strong><p class="muted">{t('argus.securityIncidentsOnly')}</p></div></div>
+          {/if}
           {#if error}<p class="error" role="alert" aria-live="assertive">{error}</p>{/if}
         </div>
         <footer>
           <span class="faint note">{t('argus.noActionNote')}</span>
-          <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
-          <button class="btn primary" type="submit" disabled={busy || authIncomplete}>{busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}</button>
+          <button class="btn primary" type="button" onclick={importServices} disabled={busy || selected.length === 0 || reconciliation.review > 0}>
+            {busy ? t('wizard.importing') : reconciliation.review > 0 ? plural('wizard.confirmChoices', reconciliation.review) : plural('argus.importServices', selected.length)}
+          </button>
         </footer>
-      </form>
-    {/if}
-  </div>
-</div>
+      {:else}
+        <form onsubmit={inspect}>
+          <div class="modal-body">
+            <section>
+              <h3>{t('wizard.connection')}</h3>
+              <p class="faint lead">{t('argus.addressHint')}</p>
+              <div class="grid">
+                <div class="field"><label for="argus-name">{t('wizard.nameInCairnOps')}</label><input id="argus-name" bind:value={name} required maxlength="160" /></div>
+                <div class="field"><label for="argus-address">{t('argus.instanceAddress')}</label><input id="argus-address" bind:this={addressInput} bind:value={address} required maxlength="2048" inputmode="url" placeholder="https://argus.example.net" /></div>
+              </div>
+            </section>
+            <section class="last">
+              <h3>{t('wizard.authorisation')}</h3>
+              <p class="faint lead">{t('argus.authHint')}</p>
+              <div class="grid">
+                <div class="field"><label for="argus-username">{t('argus.username')}</label><input id="argus-username" bind:value={username} maxlength="4096" autocomplete="username" spellcheck="false" aria-invalid={authIncomplete} aria-describedby={authIncomplete ? 'argus-auth-error' : undefined} /></div>
+                <div class="field"><label for="argus-password">{t('argus.password')}</label><input id="argus-password" type="password" bind:value={password} maxlength="4096" autocomplete="current-password" spellcheck="false" aria-invalid={authIncomplete} aria-describedby={authIncomplete ? 'argus-auth-error' : undefined} /></div>
+              </div>
+              {#if authIncomplete}<p id="argus-auth-error" class="error auth-error" role="status">{t('argus.authPairRequired')}</p>{/if}
+              <p class="security-note"><strong>{t('argus.basicAuthWarning')}</strong> {t('argus.basicAuthWarningDetail')}</p>
+            </section>
+            {#if error}<p class="error" role="alert" aria-live="assertive">{error}</p>{/if}
+          </div>
+          <footer>
+            <span class="faint note">{t('argus.noActionNote')}</span>
+            <button class="btn" type="button" onclick={onclose} disabled={busy}>{t('common.cancel')}</button>
+            <button class="btn primary" type="submit" disabled={busy || authIncomplete}>{busy ? t('gate.verifying') : t('wizard.verifyAndPreview')}</button>
+          </footer>
+        </form>
+      {/if}
+    </div>
+  {/snippet}
+</Modal>
 
 <style>
   .modal { max-width: var(--connector-modal-max); }
