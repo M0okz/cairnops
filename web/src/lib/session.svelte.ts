@@ -28,6 +28,7 @@ import {
   type User
 } from './api';
 import { i18n, t } from './i18n.svelte';
+import { observationRefreshInterval, projectionsFor, throttled } from './realtime-refresh';
 import { pinnedIndicatorIDs } from './overview';
 import { incidentMembershipChanged } from './resolved-incidents';
 import { absorbObservedVersion } from './version-state';
@@ -132,6 +133,9 @@ class Session {
   #refreshTimer: ReturnType<typeof setInterval> | undefined;
   #versionTimer: ReturnType<typeof setInterval> | undefined;
   #dirty = new Set<string>();
+  /* Chaque cycle de Contrôle dépose une rafale d'Observations ; la liste des
+   * Ressources n'a pas à se recharger pour chacune. */
+  #observationRefresh = throttled(() => void this.loadTargets(), observationRefreshInterval, 90);
   #versionKnown = false;
   #visibilityProbe = () => {
     this.evaluatedAt = Date.now();
@@ -801,21 +805,17 @@ class Session {
     this.#refreshTimer = undefined;
     if (this.#versionTimer) clearInterval(this.#versionTimer);
     this.#versionTimer = undefined;
+    this.#observationRefresh.cancel();
     const socket = this.#socket;
     this.#socket = null;
     if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, 'session closed');
   }
 
   #scheduleRefresh(kind: RealtimeMessage['kind']) {
-    if (kind === 'component.heartbeat') this.#dirty.add('health');
-    else if (kind === 'connector.changed') this.#dirty.add('connectors');
-    else if (kind === 'incident.changed') this.#dirty.add('incidents');
-    else if (kind === 'indicator.changed') this.#dirty.add('indicators');
-    else if (kind === 'maintenance.changed') {
-      this.#dirty.add('maintenances');
-      this.#dirty.add('incidents');
-    } else if (kind === 'notification.changed') this.#dirty.add('notifications');
-    else this.#dirty.add('targets');
+    if (kind === 'observation.created') this.#observationRefresh.request();
+    const projections = projectionsFor(kind);
+    if (projections.length === 0) return;
+    for (const projection of projections) this.#dirty.add(projection);
 
     if (this.#projectionTimer) clearTimeout(this.#projectionTimer);
     this.#projectionTimer = setTimeout(() => {
