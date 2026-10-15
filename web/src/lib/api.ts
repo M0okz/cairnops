@@ -977,6 +977,8 @@ export type RealtimeMessage = {
   entity_type?: 'target' | 'source' | 'component' | 'connector' | 'incident' | 'maintenance' | 'notification' | 'device' | 'indicator' | 'reconciliation';
   entity_id?: string;
   occurred_at?: string;
+  /** Sur ready : le curseur n'a pas pu être repris, la projection est à recharger. */
+  resync?: boolean;
 };
 
 export class APIError extends Error {

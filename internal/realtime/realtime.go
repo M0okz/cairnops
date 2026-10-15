@@ -32,6 +32,17 @@ func (store *Store) LatestVersion(ctx context.Context) (int64, error) {
 	return version, nil
 }
 
+// OldestVersion rend la plus ancienne version encore conservée, ou zéro si
+// aucune ne l'est. La rétention efface les événements anciens : un curseur
+// antérieur ne peut plus être repris événement par événement.
+func (store *Store) OldestVersion(ctx context.Context) (int64, error) {
+	var version int64
+	if err := store.pool.QueryRow(ctx, "SELECT COALESCE(min(version), 0) FROM cairnops_events").Scan(&version); err != nil {
+		return 0, fmt.Errorf("read oldest event version: %w", err)
+	}
+	return version, nil
+}
+
 func (store *Store) ListAfter(ctx context.Context, version int64, limit int) ([]Event, error) {
 	rows, err := store.pool.Query(ctx, `
 		SELECT version, kind, entity_type, entity_id, occurred_at
