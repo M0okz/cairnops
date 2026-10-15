@@ -32,8 +32,12 @@ type EventStream interface {
 }
 
 type realtimeHandler struct {
-	events       EventStream
-	logger       *slog.Logger
+	events EventStream
+	logger *slog.Logger
+	// publicOrigin est l'origine que requireSameOrigin a déjà vérifiée. Un
+	// relais qui réécrit Host (nginx vers l'adresse interne, par exemple) ne
+	// doit pas faire refuser au WebSocket ce que l'API REST accepte.
+	publicOrigin string
 	pingInterval time.Duration
 	pongTimeout  time.Duration
 }
@@ -81,9 +85,11 @@ func (handler realtimeHandler) stream(w http.ResponseWriter, r *http.Request) {
 		after = subscription.Version()
 	}
 
-	connection, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		CompressionMode: websocket.CompressionDisabled,
-	})
+	acceptOptions := &websocket.AcceptOptions{CompressionMode: websocket.CompressionDisabled}
+	if handler.publicOrigin != "" {
+		acceptOptions.OriginPatterns = []string{handler.publicOrigin}
+	}
+	connection, err := websocket.Accept(w, r, acceptOptions)
 	if err != nil {
 		handler.logger.Warn("accept realtime connection", "error", err)
 		return

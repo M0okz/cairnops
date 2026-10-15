@@ -375,3 +375,55 @@ func TestRealtimeClosesStreamsWhenTheHubStops(t *testing.T) {
 		t.Fatalf("expected a going-away close, got %v (%v)", status, err)
 	}
 }
+
+// Derrière un relais qui réécrit Host vers l'adresse interne, le navigateur
+// présente toujours l'origine publique. Le flux doit l'accepter, comme l'API
+// REST, et refuser toute autre origine.
+func TestRealtimeAcceptsThePublicOriginBehindAHostRewritingProxy(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const publicOrigin = "http://cairnops.example.net"
+	server := NewServer(ServerOptions{PublicURL: publicOrigin, Identity: &fakeIdentity{}, Events: runEventHub(t, &fakeEventStream{})})
+	serveErrors := make(chan error, 1)
+	go func() { serveErrors <- server.Serve(listener) }()
+	t.Cleanup(func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
+		<-serveErrors
+	})
+
+	dial := func(origin string) (*websocket.Conn, *http.Response, error) {
+		headers := http.Header{}
+		headers.Set("Origin", origin)
+		headers.Set("Cookie", (&http.Cookie{Name: "cairnops_session", Value: testSessionToken}).String())
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		t.Cleanup(cancel)
+		return websocket.Dial(ctx, "ws://"+listener.Addr().String()+"/api/v1/events", &websocket.DialOptions{HTTPHeader: headers})
+	}
+
+	connection, response, err := dial(publicOrigin)
+	if err != nil {
+		status := 0
+		if response != nil {
+			status = response.StatusCode
+		}
+		t.Fatalf("the public origin must open the stream despite a rewritten Host: %v (status %d)", err, status)
+	}
+	defer connection.CloseNow()
+	readCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if ready := readRealtime(t, readCtx, connection); ready.Type != "ready" {
+		t.Fatalf("unexpected first message: %#v", ready)
+	}
+
+	if _, response, err := dial("http://intruder.example.net"); err == nil || response == nil || response.StatusCode != http.StatusForbidden {
+		status := 0
+		if response != nil {
+			status = response.StatusCode
+		}
+		t.Fatalf("a foreign origin must be refused with 403, got status %d (%v)", status, err)
+	}
+}

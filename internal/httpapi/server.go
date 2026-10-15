@@ -213,7 +213,7 @@ func NewServer(options ServerOptions) *http.Server {
 		mux.Handle("POST /api/v1/notifications/read", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(handler.markRead))))
 	}
 	if options.Events != nil && options.Identity != nil {
-		handler := realtimeHandler{events: options.Events, logger: logger}
+		handler := realtimeHandler{events: options.Events, logger: logger, publicOrigin: identityHTTP.security.origin}
 		mux.Handle("GET /api/v1/events", identityHTTP.requireSameOrigin(identityHTTP.requireSession(http.HandlerFunc(handler.stream))))
 	}
 	if options.SystemHealth != nil && options.Identity != nil {
