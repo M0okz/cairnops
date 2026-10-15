@@ -48,9 +48,20 @@ func TestRealtimeResumeAfterRetentionFallsBackToFullProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	readCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	connection := dialRealtime(t, readCtx, events, "?after="+strconv.FormatInt(cursor, 10))
+	hub := realtime.NewHub(events, realtime.NewPostgresListener(pool), realtime.HubOptions{})
+	hubCtx, stopHub := context.WithCancel(ctx)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		hub.Run(hubCtx)
+	}()
+	t.Cleanup(func() {
+		stopHub()
+		<-stopped
+	})
+	awaitEventHub(t, hub)
+
+	connection, readCtx := dialRealtime(t, hub, "?after="+strconv.FormatInt(cursor, 10))
 	var ready realtimeMessage
 	if err := wsjson.Read(readCtx, connection, &ready); err != nil {
 		t.Fatalf("read ready message: %v", err)
@@ -69,9 +80,9 @@ func TestRealtimeResumeAfterRetentionFallsBackToFullProjection(t *testing.T) {
 	}
 
 	// Un curseur encore couvert par la fenêtre se reprend sans rechargement.
-	resumed := dialRealtime(t, readCtx, events, "?after="+strconv.FormatInt(latest, 10))
+	resumed, resumedCtx := dialRealtime(t, hub, "?after="+strconv.FormatInt(latest, 10))
 	var resumedReady realtimeMessage
-	if err := wsjson.Read(readCtx, resumed, &resumedReady); err != nil {
+	if err := wsjson.Read(resumedCtx, resumed, &resumedReady); err != nil {
 		t.Fatalf("read ready message: %v", err)
 	}
 	if resumedReady.Type != "ready" || resumedReady.Resync || resumedReady.Version != latest {

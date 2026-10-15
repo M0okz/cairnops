@@ -100,6 +100,7 @@ func run(logger *slog.Logger) error {
 	identityStore := identity.NewStore(pool)
 	oidcService := oidcauth.NewService(pool, secrets, identityStore, cfg.PublicURL, &http.Client{Timeout: 15 * time.Second})
 	oidcSync := oidcauth.NewSynchronizer(oidcService, "server:"+hostname, logger)
+	eventHub := realtime.NewHub(realtime.NewStore(pool), realtime.NewPostgresListener(pool), realtime.HubOptions{Logger: logger})
 
 	server := httpapi.NewServer(httpapi.ServerOptions{
 		SoftwareUpdates:     softwareupdates.NewStore(pool, secrets),
@@ -124,7 +125,7 @@ func run(logger *slog.Logger) error {
 		Maintenances:        maintenanceService,
 		Notifications:       notificationService,
 		Devices:             deviceStore,
-		Events:              realtime.NewStore(pool),
+		Events:              eventHub,
 		SystemHealth:        systemhealth.NewStore(pool),
 		Reconciliations:     reconciliationStore,
 	})
@@ -139,6 +140,7 @@ func run(logger *slog.Logger) error {
 			errCh <- err
 		}
 	}()
+	go eventHub.Run(ctx)
 
 	select {
 	case <-ctx.Done():
