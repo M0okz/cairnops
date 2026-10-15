@@ -42,6 +42,18 @@ export type RealtimeState = 'connecting' | 'online' | 'offline';
  * devienne un trait illisible. */
 const incidentWindowDays = 14;
 
+/* Un genre d'événement par projection : une resynchronisation les recharge
+ * toutes, par le même chemin qu'un événement isolé. */
+const everyProjection: RealtimeMessage['kind'][] = [
+  'component.heartbeat',
+  'target.changed',
+  'connector.changed',
+  'incident.changed',
+  'maintenance.changed',
+  'notification.changed',
+  'indicator.changed'
+];
+
 export function messageFrom(cause: unknown): string {
   if (cause instanceof APIError) return cause.message;
   if (cause instanceof Error) return cause.message;
@@ -776,11 +788,16 @@ class Session {
       try {
         const message = JSON.parse(String(event.data)) as RealtimeMessage;
         if ((message.type !== 'ready' && message.type !== 'event') || !Number.isSafeInteger(message.version)) return;
-        this.#cursor = Math.max(this.#cursor ?? 0, message.version);
+        // Une reprise impossible — événements effacés par la rétention, ou
+        // base restaurée depuis — repart de la version courante du serveur,
+        // même plus basse, et recharge toute la projection (ADR 0022).
+        const resync = message.type === 'ready' && message.resync === true;
+        this.#cursor = resync ? message.version : Math.max(this.#cursor ?? 0, message.version);
         this.realtime = 'online';
         this.lastEventAt = new Date();
         this.#attempt = 0;
-        if (message.type === 'event') this.#scheduleRefresh(message.kind);
+        if (resync) for (const kind of everyProjection) this.#scheduleRefresh(kind);
+        else if (message.type === 'event') this.#scheduleRefresh(message.kind);
       } catch {
         // Un message inconnu n'invalide pas la dernière projection valable.
       }

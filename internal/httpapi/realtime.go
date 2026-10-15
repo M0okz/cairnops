@@ -21,6 +21,7 @@ const (
 
 type EventStream interface {
 	LatestVersion(context.Context) (int64, error)
+	OldestVersion(context.Context) (int64, error)
 	ListAfter(context.Context, int64, int) ([]realtime.Event, error)
 }
 
@@ -36,6 +37,9 @@ type realtimeMessage struct {
 	EntityType string    `json:"entity_type,omitempty"`
 	EntityID   string    `json:"entity_id,omitempty"`
 	OccurredAt time.Time `json:"occurred_at,omitempty"`
+	// Resync signale, sur le message ready, que le curseur demandé ne peut
+	// plus être repris : le client recharge une projection complète.
+	Resync bool `json:"resync,omitempty"`
 }
 
 func (handler realtimeHandler) stream(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +47,18 @@ func (handler realtimeHandler) stream(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
+	}
+	resync := false
+	if resumes {
+		lookupCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		resumes, err = handler.resumable(lookupCtx, after)
+		cancel()
+		if err != nil {
+			handler.logger.Error("read event horizon", "error", err)
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "event stream unavailable", "code": "event_stream_unavailable"})
+			return
+		}
+		resync = !resumes
 	}
 	if !resumes {
 		lookupCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
@@ -68,7 +84,7 @@ func (handler realtimeHandler) stream(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	streamCtx = connection.CloseRead(streamCtx)
 
-	if err := writeRealtime(streamCtx, connection, realtimeMessage{Type: "ready", Version: after}); err != nil {
+	if err := writeRealtime(streamCtx, connection, realtimeMessage{Type: "ready", Version: after, Resync: resync}); err != nil {
 		return
 	}
 	if next, ok := handler.sendPending(streamCtx, connection, after); ok {
@@ -92,6 +108,23 @@ func (handler realtimeHandler) stream(w http.ResponseWriter, r *http.Request) {
 			after = next
 		}
 	}
+}
+
+// resumable dit si les événements postérieurs au curseur sont tous encore
+// conservés. Un curseur antérieur aux plus anciens a perdu des événements à la
+// rétention ; un curseur postérieur au plus récent vient d'une autre base,
+// restaurée depuis. Dans les deux cas, rejouer la suite tairait des
+// changements : le client doit recharger une projection complète (ADR 0022).
+func (handler realtimeHandler) resumable(ctx context.Context, after int64) (bool, error) {
+	oldest, err := handler.events.OldestVersion(ctx)
+	if err != nil {
+		return false, err
+	}
+	latest, err := handler.events.LatestVersion(ctx)
+	if err != nil {
+		return false, err
+	}
+	return after <= latest && (oldest == 0 || after >= oldest-1), nil
 }
 
 func (handler realtimeHandler) sendPending(ctx context.Context, connection *websocket.Conn, after int64) (int64, bool) {

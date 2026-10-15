@@ -2063,6 +2063,11 @@ components:
         entity_type: { type: string, enum: [target, source, component, connector, incident, maintenance, notification, device, indicator, reconciliation] }
         entity_id: { type: string }
         occurred_at: { type: string, format: date-time }
+        resync:
+          type: boolean
+          description: >-
+            Sur le message ready seulement : le curseur demandé ne peut plus être repris
+            événement par événement. Absent ou faux, la reprise est complète.
     BuildInfo:
       type: object
       description: >-
@@ -2489,8 +2494,11 @@ paths:
       description: >-
         Établit un WebSocket authentifié. Sans curseur, le premier message ready fixe la
         version courante. Avec after, les événements postérieurs sont rejoués dans l'ordre,
-        puis diffusés au fil de leur enregistrement. Ce canal signale les changements ; les
-        lectures et commandes restent dans l'API REST.
+        puis diffusés au fil de leur enregistrement. Les événements ne sont conservés que
+        pendant une fenêtre de reprise : si after précède les plus anciens, ou dépasse la
+        version courante, le message ready porte resync à true et la version courante, et
+        le client recharge une projection complète avant de suivre le flux. Ce canal
+        signale les changements ; les lectures et commandes restent dans l'API REST.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: query

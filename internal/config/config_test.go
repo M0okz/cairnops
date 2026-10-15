@@ -3,6 +3,9 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
+
+	"github.com/M0okz/cairnops/internal/retention"
 )
 
 func TestLoadServerRejectsEmptyAddress(t *testing.T) {
@@ -91,6 +94,56 @@ func TestLoadWorkerRejectsUnencryptedPushRelay(t *testing.T) {
 	t.Setenv("CAIRNOPS_PUSH_RELAY_URL", "http://push.cairnops.example")
 	if _, err := LoadWorker(); err == nil {
 		t.Fatal("an unencrypted Push Relay URL was accepted")
+	}
+}
+
+func TestLoadWorkerKeepsDefaultRetention(t *testing.T) {
+	t.Setenv("CAIRNOPS_INSTANCE_ID", "worker-retention")
+	cfg, err := LoadWorker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Retention != retention.DefaultPolicy() {
+		t.Fatalf("unexpected default retention: %#v", cfg.Retention)
+	}
+}
+
+func TestLoadWorkerReadsRetention(t *testing.T) {
+	t.Setenv("CAIRNOPS_INSTANCE_ID", "worker-retention")
+	t.Setenv("CAIRNOPS_OBSERVATION_RETENTION_DAYS", "45")
+	t.Setenv("CAIRNOPS_OBSERVATION_HOUR_RETENTION_MONTHS", "24")
+	t.Setenv("CAIRNOPS_EVENT_RETENTION_HOURS", "72")
+	t.Setenv("CAIRNOPS_DELIVERY_RETENTION_DAYS", "7")
+	cfg, err := LoadWorker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := retention.Policy{
+		Observations: 45 * 24 * time.Hour, ObservationHourMonths: 24,
+		Events: 72 * time.Hour, Deliveries: 7 * 24 * time.Hour,
+	}
+	if cfg.Retention != want {
+		t.Fatalf("unexpected retention: %#v", cfg.Retention)
+	}
+}
+
+// Une rétention ne descend pas sous ce que CairnOps relit lui-même : le Profil
+// de latence apprend sur 29 jours d'Observations brutes, la fenêtre de 30 jours
+// se lit sur les agrégats horaires.
+func TestLoadWorkerRejectsUnsafeRetention(t *testing.T) {
+	for name, value := range map[string]string{
+		"CAIRNOPS_OBSERVATION_RETENTION_DAYS":        "7",
+		"CAIRNOPS_OBSERVATION_HOUR_RETENTION_MONTHS": "1",
+		"CAIRNOPS_EVENT_RETENTION_HOURS":             "0",
+		"CAIRNOPS_DELIVERY_RETENTION_DAYS":           "trente",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("CAIRNOPS_INSTANCE_ID", "worker-retention")
+			t.Setenv(name, value)
+			if _, err := LoadWorker(); err == nil {
+				t.Fatalf("%s=%s was accepted", name, value)
+			}
+		})
 	}
 }
 
