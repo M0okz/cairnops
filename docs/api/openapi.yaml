@@ -2490,7 +2490,11 @@ paths:
         Établit un WebSocket authentifié. Sans curseur, le premier message ready fixe la
         version courante. Avec after, les événements postérieurs sont rejoués dans l'ordre,
         puis diffusés au fil de leur enregistrement. Ce canal signale les changements ; les
-        lectures et commandes restent dans l'API REST.
+        lectures et commandes restent dans l'API REST. Le serveur envoie un ping WebSocket
+        toutes les 30 secondes et ferme la connexion d'un client qui n'y répond plus. Il la
+        ferme avec le code 1013 si le client lit trop lentement pour suivre la diffusion, et
+        avec le code 1001 quand il s'arrête ; dans les deux cas, le client se reconnecte avec
+        after fixé à la dernière version reçue.
       security: [{ SessionCookie: [] }, { DeviceBearer: [] }]
       parameters:
         - in: query
@@ -2504,7 +2508,7 @@ paths:
         '400': { description: Curseur invalide }
         '401': { description: Authentification requise }
         '403': { description: Origine Web non autorisée }
-        '503': { description: Suite d'événements indisponible }
+        '503': { description: "Suite d'événements indisponible, notamment tant que le serveur démarre" }
   /api/v1/connectors:
     get:
       operationId: listConnectors

@@ -217,6 +217,11 @@ Le WebSocket ne transporte aucune commande : il annonce les changements avec
 un numéro de version monotone, puis l'interface recharge la projection REST
 concernée. Après une coupure, le client reprend à sa dernière version connue ;
 un premier chargement démarre au curseur courant sans rejouer tout l'historique.
+Chaque serveur lit la suite d'événements une seule fois pour toutes ses
+connexions, au signal `NOTIFY` de PostgreSQL, et la rediffuse ; un sondage lent
+rattrape ce qu'une écoute interrompue aurait manqué. Le serveur envoie un ping
+toutes les 30 secondes et ferme un client qui ne répond plus, ou qui lit trop
+lentement pour suivre : ce client se reconnecte et reprend à sa dernière version.
 
 La création d'un Contrôle Heartbeat renvoie son secret et son chemin une seule
 fois. CairnOps n'en conserve qu'une empreinte SHA-256 et masque ce chemin dans

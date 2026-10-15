@@ -2,9 +2,11 @@ package httpapi
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -48,10 +50,58 @@ func (fake *fakeEventStream) append(event realtime.Event) {
 	fake.latest = event.Version
 }
 
+// idleListener établit l'écoute sans jamais notifier : la diffusion repose
+// alors sur le sondage de secours, raccourci pour les tests.
+type idleListener struct{}
+
+func (idleListener) Listen(ctx context.Context, listening func(), _ func(string)) error {
+	listening()
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func newEventHub(stream *fakeEventStream) *realtime.Hub {
+	return realtime.NewHub(stream, idleListener{}, realtime.HubOptions{FallbackInterval: 10 * time.Millisecond})
+}
+
+// runEventHub démarre le hub et attend qu'il accepte des abonnements.
+func runEventHub(t *testing.T, stream *fakeEventStream) *realtime.Hub {
+	t.Helper()
+	hub := newEventHub(stream)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		hub.Run(ctx)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	awaitEventHub(t, hub)
+	return hub
+}
+
+func awaitEventHub(t *testing.T, hub *realtime.Hub) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		subscription, err := hub.Subscribe()
+		if err == nil {
+			subscription.Close()
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the event hub never became ready: %v", err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestRealtimeRequiresAuthentication(t *testing.T) {
 	t.Parallel()
 
-	server := NewServer(ServerOptions{Identity: &fakeIdentity{}, Events: &fakeEventStream{}})
+	server := NewServer(ServerOptions{Identity: &fakeIdentity{}, Events: newEventHub(&fakeEventStream{})})
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/events", nil)
 	response := httptest.NewRecorder()
 	server.Handler.ServeHTTP(response, request)
@@ -64,7 +114,7 @@ func TestRealtimeRequiresAuthentication(t *testing.T) {
 func TestRealtimeRejectsInvalidCursorBeforeUpgrade(t *testing.T) {
 	t.Parallel()
 
-	server := NewServer(ServerOptions{Identity: &fakeIdentity{}, Events: &fakeEventStream{}})
+	server := NewServer(ServerOptions{Identity: &fakeIdentity{}, Events: newEventHub(&fakeEventStream{})})
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/events?after=-1", nil)
 	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
 	response := httptest.NewRecorder()
@@ -75,14 +125,15 @@ func TestRealtimeRejectsInvalidCursorBeforeUpgrade(t *testing.T) {
 	}
 }
 
-func TestRealtimeStreamsEventsAfterReadyCursor(t *testing.T) {
-	stream := &fakeEventStream{latest: 7}
+// dialRealtime ouvre le flux d'un serveur complet, authentification comprise.
+func dialRealtime(t *testing.T, events EventStream, query string) (*websocket.Conn, context.Context) {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	origin := "http://" + listener.Addr().String()
-	server := NewServer(ServerOptions{PublicURL: origin, Identity: &fakeIdentity{}, Events: stream})
+	server := NewServer(ServerOptions{PublicURL: origin, Identity: &fakeIdentity{}, Events: events})
 	serveErrors := make(chan error, 1)
 	go func() { serveErrors <- server.Serve(listener) }()
 	t.Cleanup(func() {
@@ -92,12 +143,12 @@ func TestRealtimeStreamsEventsAfterReadyCursor(t *testing.T) {
 		<-serveErrors
 	})
 
-	websocketURL := "ws://" + listener.Addr().String() + "/api/v1/events"
+	websocketURL := "ws://" + listener.Addr().String() + "/api/v1/events" + query
 	headers := http.Header{}
 	headers.Set("Origin", origin)
 	headers.Set("Cookie", (&http.Cookie{Name: "cairnops_session", Value: testSessionToken}).String())
 	readCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 	connection, response, err := websocket.Dial(readCtx, websocketURL, &websocket.DialOptions{HTTPHeader: headers})
 	if err != nil {
 		if response != nil {
@@ -105,26 +156,174 @@ func TestRealtimeStreamsEventsAfterReadyCursor(t *testing.T) {
 		}
 		t.Fatalf("dial realtime stream: %v", err)
 	}
-	defer connection.CloseNow()
+	t.Cleanup(func() { connection.CloseNow() })
+	return connection, readCtx
+}
 
-	var ready realtimeMessage
-	if err := wsjson.Read(readCtx, connection, &ready); err != nil {
-		t.Fatalf("read ready message: %v", err)
+func readRealtime(t *testing.T, ctx context.Context, connection *websocket.Conn) realtimeMessage {
+	t.Helper()
+	var message realtimeMessage
+	if err := wsjson.Read(ctx, connection, &message); err != nil {
+		t.Fatalf("read realtime message: %v", err)
 	}
-	if ready.Type != "ready" || ready.Version != 7 {
+	return message
+}
+
+func targetEvent(version int64) realtime.Event {
+	return realtime.Event{
+		Version: version, Kind: "observation.created", EntityType: "target",
+		EntityID: "d4e45e1c-4d14-4fb8-8ddc-8c04ea259214", OccurredAt: time.Now().UTC(),
+	}
+}
+
+func TestRealtimeStreamsEventsAfterReadyCursor(t *testing.T) {
+	stream := &fakeEventStream{latest: 7}
+	connection, readCtx := dialRealtime(t, runEventHub(t, stream), "")
+
+	if ready := readRealtime(t, readCtx, connection); ready.Type != "ready" || ready.Version != 7 {
 		t.Fatalf("unexpected ready message: %#v", ready)
 	}
-
-	stream.append(realtime.Event{
-		Version: 8, Kind: "observation.created", EntityType: "target",
-		EntityID: "d4e45e1c-4d14-4fb8-8ddc-8c04ea259214", OccurredAt: time.Now().UTC(),
-	})
-	var event realtimeMessage
-	if err := wsjson.Read(readCtx, connection, &event); err != nil {
-		t.Fatalf("read event message: %v", err)
-	}
-	if event.Type != "event" || event.Version != 8 || event.Kind != "observation.created" {
+	stream.append(targetEvent(8))
+	if event := readRealtime(t, readCtx, connection); event.Type != "event" || event.Version != 8 || event.Kind != "observation.created" {
 		t.Fatalf("unexpected event message: %#v", event)
 	}
 	_ = connection.Close(websocket.StatusNormalClosure, "")
+}
+
+func TestRealtimeResumeReplaysMissedEventsOnceThenStreams(t *testing.T) {
+	stream := &fakeEventStream{}
+	for version := int64(1); version <= 5; version++ {
+		stream.append(targetEvent(version))
+	}
+	hub := runEventHub(t, stream)
+	connection, readCtx := dialRealtime(t, hub, "?after=2")
+
+	if ready := readRealtime(t, readCtx, connection); ready.Type != "ready" || ready.Version != 2 {
+		t.Fatalf("unexpected ready message: %#v", ready)
+	}
+	stream.append(targetEvent(6))
+	// Les versions 3 à 5 viennent du rejeu, la 6 de la diffusion ou du rejeu
+	// selon l'instant : chacune doit arriver exactement une fois, dans l'ordre.
+	for want := int64(3); want <= 6; want++ {
+		if event := readRealtime(t, readCtx, connection); event.Type != "event" || event.Version != want {
+			t.Fatalf("expected event %d, got %#v", want, event)
+		}
+	}
+	stream.append(targetEvent(7))
+	if event := readRealtime(t, readCtx, connection); event.Version != 7 {
+		t.Fatalf("expected event 7, got %#v", event)
+	}
+}
+
+func TestRealtimeIsUnavailableUntilTheHubIsReady(t *testing.T) {
+	t.Parallel()
+
+	server := NewServer(ServerOptions{Identity: &fakeIdentity{}, Events: newEventHub(&fakeEventStream{})})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/events", nil)
+	request.AddCookie(&http.Cookie{Name: "cairnops_session", Value: testSessionToken})
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
+// pingedStream sert le flux sans authentification, avec un ping rapide, et
+// signale la fin du handler.
+func pingedStream(t *testing.T, hub *realtime.Hub) (string, <-chan struct{}) {
+	t.Helper()
+	handler := realtimeHandler{
+		events: hub, logger: slog.New(slog.DiscardHandler),
+		pingInterval: 20 * time.Millisecond, pongTimeout: 50 * time.Millisecond,
+	}
+	ended := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(ended)
+		handler.stream(w, r)
+	}))
+	t.Cleanup(server.Close)
+	return "ws" + strings.TrimPrefix(server.URL, "http"), ended
+}
+
+func TestRealtimeKeepsAClientThatAnswersPings(t *testing.T) {
+	stream := &fakeEventStream{}
+	url, ended := pingedStream(t, runEventHub(t, stream))
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	connection, _, err := websocket.Dial(ctx, url, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer connection.CloseNow()
+
+	// Le client lit en continu, comme un navigateur : c'est ce qui lui fait
+	// répondre aux pings.
+	messages := make(chan realtimeMessage, 4)
+	go func() {
+		defer close(messages)
+		for {
+			var message realtimeMessage
+			if err := wsjson.Read(ctx, connection, &message); err != nil {
+				return
+			}
+			messages <- message
+		}
+	}()
+	if ready := <-messages; ready.Type != "ready" {
+		t.Fatalf("unexpected first message: %#v", ready)
+	}
+	time.Sleep(200 * time.Millisecond)
+	select {
+	case <-ended:
+		t.Fatal("the server dropped a responsive client")
+	default:
+	}
+	stream.append(targetEvent(1))
+	if event := <-messages; event.Version != 1 {
+		t.Fatalf("expected event 1, got %#v", event)
+	}
+}
+
+func TestRealtimeDropsAClientThatStopsAnsweringPings(t *testing.T) {
+	url, ended := pingedStream(t, runEventHub(t, &fakeEventStream{}))
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	// Un client qui ne lit jamais ne traite pas les pings : il ne répond pas.
+	connection, _, err := websocket.Dial(ctx, url, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer connection.CloseNow()
+
+	select {
+	case <-ended:
+	case <-ctx.Done():
+		t.Fatal("the server kept a client that never answered its pings")
+	}
+}
+
+func TestRealtimeClosesStreamsWhenTheHubStops(t *testing.T) {
+	stream := &fakeEventStream{}
+	hub := newEventHub(stream)
+	hubCtx, stopHub := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		hub.Run(hubCtx)
+	}()
+	t.Cleanup(func() {
+		stopHub()
+		<-stopped
+	})
+	awaitEventHub(t, hub)
+	connection, readCtx := dialRealtime(t, hub, "")
+	readRealtime(t, readCtx, connection)
+
+	stopHub()
+	var message realtimeMessage
+	err := wsjson.Read(readCtx, connection, &message)
+	if status := websocket.CloseStatus(err); status != websocket.StatusGoingAway {
+		t.Fatalf("expected a going-away close, got %v (%v)", status, err)
+	}
 }
