@@ -25,6 +25,7 @@ import (
 	"github.com/M0okz/cairnops/internal/notifications"
 	"github.com/M0okz/cairnops/internal/push"
 	"github.com/M0okz/cairnops/internal/reconciliation"
+	"github.com/M0okz/cairnops/internal/retention"
 	"github.com/M0okz/cairnops/internal/secretbox"
 	"github.com/M0okz/cairnops/internal/softwareupdates"
 	"github.com/M0okz/cairnops/internal/worker"
@@ -119,6 +120,7 @@ func run(logger *slog.Logger) error {
 			connectorSync, uptimeKumaSync, patchMonSync, argusSync, proxmoxSync,
 			indicatorCollector, incidentRuntime, softwareupdates.NewWorker(softwareStore, logger),
 			latency.NewBuilder(pool, logger),
+			retention.NewPurger(pool, cfg.Retention, logger),
 		)
 		errCh <- runtime.Run(ctx)
 	}()

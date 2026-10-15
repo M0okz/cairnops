@@ -135,6 +135,14 @@ seule et n'entre jamais dans une image. Chaque inscription conserve aussi
 l'environnement APNs du profil signé, afin qu'un build de développement et un
 build de production utilisent automatiquement le bon endpoint Apple.
 
+Le worker purge ce que CairnOps ne conserve pas
+([ADR 0056](docs/adr/0056-purger-par-lots-ce-qui-n-est-plus-conserve.md)) :
+les Observations brutes consolidées après 30 jours, les agrégats horaires après
+13 mois, les événements temps réel après 24 heures et les livraisons closes des
+Incidents résolus après 30 jours. `CAIRNOPS_OBSERVATION_RETENTION_DAYS`,
+`CAIRNOPS_OBSERVATION_HOUR_RETENTION_MONTHS`, `CAIRNOPS_EVENT_RETENTION_HOURS`
+et `CAIRNOPS_DELIVERY_RETENTION_DAYS` règlent ces durées.
+
 Endpoints utiles :
 
 - `GET /api/v1/health/live` : processus serveur actif ;

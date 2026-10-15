@@ -5,7 +5,11 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/M0okz/cairnops/internal/retention"
 )
 
 const defaultDatabaseURL = "postgres://cairnops:cairnops@127.0.0.1:5432/cairnops?sslmode=disable"
@@ -26,6 +30,7 @@ type Worker struct {
 	PublicURL     string
 	MasterKeyFile string
 	PushRelayURL  string
+	Retention     retention.Policy
 }
 
 type PushRelay struct {
@@ -92,7 +97,57 @@ func LoadWorker() (Worker, error) {
 			return Worker{}, fmt.Errorf("CAIRNOPS_PUSH_RELAY_URL: %w", err)
 		}
 	}
+	if cfg.Retention, err = loadRetention(); err != nil {
+		return Worker{}, err
+	}
 	return cfg, nil
+}
+
+// loadRetention lit les durées de conservation (ADR 0008). Chacune garde sa
+// valeur par défaut tant que l'Administrateur ne la renseigne pas.
+func loadRetention() (retention.Policy, error) {
+	policy := retention.DefaultPolicy()
+	durations := []struct {
+		name   string
+		unit   time.Duration
+		target *time.Duration
+	}{
+		{"CAIRNOPS_OBSERVATION_RETENTION_DAYS", 24 * time.Hour, &policy.Observations},
+		{"CAIRNOPS_EVENT_RETENTION_HOURS", time.Hour, &policy.Events},
+		{"CAIRNOPS_DELIVERY_RETENTION_DAYS", 24 * time.Hour, &policy.Deliveries},
+	}
+	for _, duration := range durations {
+		count, err := envCount(duration.name, int(*duration.target/duration.unit), int(maximumRetention/duration.unit))
+		if err != nil {
+			return retention.Policy{}, err
+		}
+		*duration.target = time.Duration(count) * duration.unit
+	}
+	months, err := envCount("CAIRNOPS_OBSERVATION_HOUR_RETENTION_MONTHS", policy.ObservationHourMonths, 120)
+	if err != nil {
+		return retention.Policy{}, err
+	}
+	policy.ObservationHourMonths = months
+	if err := policy.Validate(); err != nil {
+		return retention.Policy{}, fmt.Errorf("retention: %w", err)
+	}
+	return policy, nil
+}
+
+// Au-delà de dix ans, une durée de conservation n'est plus une rétention mais
+// une faute de frappe.
+const maximumRetention = 10 * 366 * 24 * time.Hour
+
+func envCount(name string, fallback, maximum int) (int, error) {
+	raw := envOr(name, "")
+	if raw == "" {
+		return fallback, nil
+	}
+	count, err := strconv.Atoi(raw)
+	if err != nil || count <= 0 || count > maximum {
+		return 0, fmt.Errorf("%s must be an integer between 1 and %d", name, maximum)
+	}
+	return count, nil
 }
 
 func LoadPushRelay() (PushRelay, error) {
