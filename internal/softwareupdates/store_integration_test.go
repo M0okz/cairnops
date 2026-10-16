@@ -307,3 +307,55 @@ func TestSecurityAssessmentFollowsTheCurrentComparison(t *testing.T) {
 		t.Fatalf("an up-to-date service has no pending security fix nor impact: %+v", got)
 	}
 }
+
+// La liste dit ce qui change en une phrase : le premier point de la synthèse
+// courante. Une nouvelle cible l'efface jusqu'à sa propre synthèse.
+func TestListCarriesTheHeadlineOfTheCurrentAnalysis(t *testing.T) {
+	s, id, actor := fixture(t)
+	ctx := context.Background()
+	if err := s.Confirm(ctx, id, actor, Source{Kind: "github", URL: "https://github.com/example/project", Software: "Project"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveConfig(ctx, AIConfig{Enabled: true, Endpoint: "https://provider.example/v1", Model: "test", APIKey: "private-key"}); err != nil {
+		t.Fatal(err)
+	}
+	headline := func() string {
+		t.Helper()
+		services, err := s.List(ctx, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, service := range services {
+			if service.ID == id {
+				return service.Headline
+			}
+		}
+		t.Fatalf("service %s missing from the list", id)
+		return ""
+	}
+	if got := headline(); got != "" {
+		t.Fatalf("an unanalysed comparison has no headline, got %q", got)
+	}
+	w := NewWorker(s, slog.Default())
+	w.client = &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method == "POST" {
+			return response(`{"choices":[{"finish_reason":"stop","message":{"content":"{\"overview\":[{\"category\":\"feature\",\"text\":\"Ajout de l'export CSV des rapports\",\"evidence_id\":\"e1\"},{\"category\":\"fix\",\"text\":\"Correction du fuseau horaire\",\"evidence_id\":\"e1\"}],\"details\":[]}"}}]}`), nil
+		}
+		if strings.HasSuffix(r.URL.Path, "/tags") {
+			return response(`[]`), nil
+		}
+		return response(`[{"tag_name":"2.9.1","body":"Added CSV export. Fixed time zone handling."}]`), nil
+	})}
+	if err := w.tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := headline(); got != "Ajout de l'export CSV des rapports" {
+		t.Fatalf("the list must carry the first overview point, got %q", got)
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE cairnops_connector_bindings SET metadata=metadata||'{"latest_version":"2.10.0"}' WHERE id=$1::uuid`, id); err != nil {
+		t.Fatal(err)
+	}
+	if got := headline(); got != "" {
+		t.Fatalf("a new target must not reuse the previous headline, got %q", got)
+	}
+}

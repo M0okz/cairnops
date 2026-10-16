@@ -29,7 +29,10 @@ const serviceSelect = `SELECT s.binding_id::text,b.target_id::text,t.name,b.exte
    CROSS JOIN LATERAL jsonb_array_elements(coalesce(a.result->'overview','[]'::jsonb) || coalesce(a.result->'details','[]'::jsonb)) point
    WHERE a.binding_id=s.binding_id AND a.revision=s.revision AND a.content_hash=s.content_hash AND point->>'category'='security'),
 s.source,s.source_origin,s.confirmed_at,s.revision,s.state,s.last_error,s.checked_at,s.collection,s.collection_revision,s.content_hash,
- coalesce(nullif(b.metadata->>'release_source_url',''),b.metadata->>'version_url',''),s.next_check_at
+ coalesce(nullif(b.metadata->>'release_source_url',''),b.metadata->>'version_url',''),s.next_check_at,
+ coalesce((SELECT coalesce(a.result->'overview'->0->>'text',a.result->'details'->0->>'text') FROM cairnops_software_analyses a
+   WHERE s.state = 'ready' AND a.binding_id=s.binding_id AND a.revision=s.revision AND a.content_hash=s.content_hash
+   ORDER BY a.id DESC LIMIT 1),'')
  FROM cairnops_software_services s JOIN cairnops_connector_bindings b ON b.id=s.binding_id
  JOIN cairnops_connectors c ON c.id=b.connector_id JOIN cairnops_targets t ON t.id=b.target_id `
 
@@ -41,7 +44,7 @@ func scanService(row pgx.Row) (Service, error) {
 	err := row.Scan(&s.ID, &s.TargetID, &s.ResourceName, &s.Name, &s.Installed, &s.Target, &s.ObservedAt,
 		&known, &facts.reachable, &facts.unknownReason, &facts.installedOK, &facts.targetOK,
 		&s.Approved, &s.Skipped, &s.SecurityMentioned,
-		&s.Source, &s.SourceOrigin, &s.ConfirmedAt, &s.Revision, &s.State, &s.LastError, &s.CheckedAt, &s.Collection, &s.CollectionRevision, &s.ContentHash, &candidate, &s.NextCheckAt)
+		&s.Source, &s.SourceOrigin, &s.ConfirmedAt, &s.Revision, &s.State, &s.LastError, &s.CheckedAt, &s.Collection, &s.CollectionRevision, &s.ContentHash, &candidate, &s.NextCheckAt, &s.Headline)
 	s.Suggested = Suggest(candidate)
 	s.Analyses = []Analysis{}
 	s.Archives = []NoteArchive{}

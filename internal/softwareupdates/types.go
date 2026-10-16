@@ -66,22 +66,26 @@ type History struct {
 	ObservedAt time.Time `json:"observed_at"`
 }
 type Service struct {
-	ContentHash        string        `json:"-"`
-	ID                 string        `json:"id"`
-	TargetID           string        `json:"target_id"`
-	ResourceName       string        `json:"resource_name"`
-	Name               string        `json:"name"`
-	Installed          string        `json:"installed_version"`
-	Target             string        `json:"target_version"`
-	ObservedAt         *time.Time    `json:"observed_at"`
-	Known              bool          `json:"known"`
-	Situation          string        `json:"situation"`
-	Level              string        `json:"level,omitempty"`
-	Group              string        `json:"group"`
-	VerificationIssue  string        `json:"verification_issue,omitempty"`
-	Approved           bool          `json:"approved"`
-	Skipped            bool          `json:"skipped"`
-	SecurityMentioned  bool          `json:"security_mentioned"`
+	ContentHash       string     `json:"-"`
+	ID                string     `json:"id"`
+	TargetID          string     `json:"target_id"`
+	ResourceName      string     `json:"resource_name"`
+	Name              string     `json:"name"`
+	Installed         string     `json:"installed_version"`
+	Target            string     `json:"target_version"`
+	ObservedAt        *time.Time `json:"observed_at"`
+	Known             bool       `json:"known"`
+	Situation         string     `json:"situation"`
+	Level             string     `json:"level,omitempty"`
+	Group             string     `json:"group"`
+	VerificationIssue string     `json:"verification_issue,omitempty"`
+	Approved          bool       `json:"approved"`
+	Skipped           bool       `json:"skipped"`
+	SecurityMentioned bool       `json:"security_mentioned"`
+	// Headline est le premier point de la synthèse courante : ce qui change,
+	// en une phrase, sans ouvrir le détail. Vide tant qu'aucune synthèse
+	// ne correspond à la version détectée.
+	Headline           string        `json:"headline,omitempty"`
 	Source             Source        `json:"source"`
 	SourceOrigin       string        `json:"source_origin"`
 	Suggested          *Source       `json:"suggested_source"`

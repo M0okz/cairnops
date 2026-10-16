@@ -105,7 +105,7 @@
       case "awaiting_ai":
         return t("updates.awaiting_ai");
       case "ready":
-        return t("updates.ready");
+        return headlineOf(s) || t("updates.ready");
       case "notes_unavailable":
         return t("updates.notesUnavailable");
       case "retry":
@@ -113,6 +113,12 @@
       default:
         return t("updates.processing");
     }
+  }
+  /** Ce qui change, en une phrase, quand la synthèse courante le dit. */
+  function headlineOf(s: SoftwareService): string {
+    return s.group === "apply" && s.state === "ready" && !rateLimitedHost(s)
+      ? (s.headline?.trim() ?? "")
+      : "";
   }
   function levelLabel(s: SoftwareService): string | undefined {
     if (s.situation === "prerelease") return t("updates.level.prerelease");
@@ -186,6 +192,7 @@
             <ul class="card update-list">
               {#each section.items as service (service.id)}
                 {@const level = levelLabel(service)}
+                {@const headline = headlineOf(service)}
                 <li class="update-row">
                   <div class="row-main">
                     <div class="identity">
@@ -206,7 +213,7 @@
                         </span>
                       {/if}
                     </div>
-                    <p class="status" class:attention={service.group === "review"}>{statusLabel(service)}</p>
+                    <p class="status" class:attention={service.group === "review"} class:headline={!!headline} title={headline || undefined}>{statusLabel(service)}</p>
                     <Button
                       onclick={(event) => openDetail(service.id, event)}
                       >{t("updates.details")}</Button>
@@ -317,6 +324,17 @@
   }
   .status.attention {
     color: var(--ink);
+  }
+  /* La phrase de la synthèse se lit d'un coup d'œil : deux lignes au plus,
+     le reste dans le détail. */
+  .status.headline {
+    color: var(--ink);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: break-word;
   }
   .versions {
     display: grid;

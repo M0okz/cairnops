@@ -276,6 +276,11 @@ components:
         security_mentioned:
           type: boolean
           description: La synthèse courante cite au moins un point de sécurité.
+        headline:
+          type: string
+          description: >-
+            Ce qui change, en une phrase : le premier point de la synthèse courante.
+            Absent tant qu'aucune synthèse ne correspond à la comparaison détectée.
         source:
           description: Objet vide avant adoption, sinon source officielle reprise d’Argus ou personnalisée.
           anyOf:

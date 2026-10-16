@@ -77,6 +77,8 @@ export type SoftwareService = {
   approved: boolean;
   skipped: boolean;
   security_mentioned: boolean;
+  /** Ce qui change, en une phrase, quand une synthèse courante existe. */
+  headline?: string;
   source: ReleaseSource;
   source_origin: "argus" | "manual";
   suggested_source: ReleaseSource | null;
